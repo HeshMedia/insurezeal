@@ -37,10 +37,9 @@ class AgentRegistrationCreate(BaseModel):
     mother_name: str = Field(..., min_length=2, max_length=100)
     date_of_birth: date = Field(...)
     gender: GenderEnum = Field(...)
-    
-    # Contact Information
-    mobile_number: str = Field(..., regex=r"^[6-9]\d{9}$")
-    alternate_mobile: Optional[str] = Field(None, regex=r"^[6-9]\d{9}$")
+      # Contact Information
+    mobile_number: str = Field(..., pattern=r"^[6-9]\d{9}$")
+    alternate_mobile: Optional[str] = Field(None, pattern=r"^[6-9]\d{9}$")
     email: EmailStr = Field(...)
     alternate_email: Optional[EmailStr] = None
     
@@ -49,19 +48,18 @@ class AgentRegistrationCreate(BaseModel):
     permanent_address_line2: Optional[str] = Field(None, max_length=200)
     permanent_city: str = Field(..., min_length=2, max_length=50)
     permanent_state: str = Field(..., min_length=2, max_length=50)
-    permanent_pincode: str = Field(..., regex=r"^\d{6}$")
-    
-    # Communication Address (same as permanent if not provided)
+    permanent_pincode: str = Field(..., pattern=r"^\d{6}$")
+      # Communication Address (same as permanent if not provided)
     communication_same_as_permanent: bool = Field(default=True)
     communication_address_line1: Optional[str] = Field(None, max_length=200)
     communication_address_line2: Optional[str] = Field(None, max_length=200)
     communication_city: Optional[str] = Field(None, max_length=50)
     communication_state: Optional[str] = Field(None, max_length=50)
-    communication_pincode: Optional[str] = Field(None, regex=r"^\d{6}$")
+    communication_pincode: Optional[str] = Field(None, pattern=r"^\d{6}$")
     
     # Identity Information
-    aadhaar_number: str = Field(..., regex=r"^\d{12}$")
-    pan_number: str = Field(..., regex=r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$")
+    aadhaar_number: str = Field(..., pattern=r"^\d{12}$")
+    pan_number: str = Field(..., pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$")
       # Professional Information
     education_level: EducationLevelEnum = Field(...)
     specialization: Optional[str] = Field(None, max_length=100)
@@ -72,7 +70,7 @@ class AgentRegistrationCreate(BaseModel):
     # Bank Information
     bank_name: str = Field(..., min_length=2, max_length=100)
     account_number: str = Field(..., min_length=9, max_length=18)
-    ifsc_code: str = Field(..., regex=r"^[A-Z]{4}0[A-Z0-9]{6}$")
+    ifsc_code: str = Field(..., pattern=r"^[A-Z]{4}0[A-Z0-9]{6}$")
     branch_name: str = Field(..., min_length=2, max_length=100)
     
     # Nominee Information
@@ -105,8 +103,8 @@ class UserProfileUpdate(BaseModel):
     gender: Optional[GenderEnum] = None
     
     # Contact Information
-    mobile_number: Optional[str] = Field(None, regex=r"^[6-9]\d{9}$")
-    alternate_mobile: Optional[str] = Field(None, regex=r"^[6-9]\d{9}$")
+    mobile_number: Optional[str] = Field(None, pattern=r"^[6-9]\d{9}$")
+    alternate_mobile: Optional[str] = Field(None, pattern=r"^[6-9]\d{9}$")
     alternate_email: Optional[EmailStr] = None
     
     # Address Information
@@ -114,14 +112,14 @@ class UserProfileUpdate(BaseModel):
     permanent_address_line2: Optional[str] = Field(None, max_length=200)
     permanent_city: Optional[str] = Field(None, max_length=50)
     permanent_state: Optional[str] = Field(None, max_length=50)
-    permanent_pincode: Optional[str] = Field(None, regex=r"^\d{6}$")
+    permanent_pincode: Optional[str] = Field(None, pattern=r"^\d{6}$")
     
     communication_same_as_permanent: Optional[bool] = None
     communication_address_line1: Optional[str] = Field(None, max_length=200)
     communication_address_line2: Optional[str] = Field(None, max_length=200)
     communication_city: Optional[str] = Field(None, max_length=50)
     communication_state: Optional[str] = Field(None, max_length=50)
-    communication_pincode: Optional[str] = Field(None, regex=r"^\d{6}$")
+    communication_pincode: Optional[str] = Field(None, pattern=r"^\d{6}$")
     
     # Professional Information
     education_level: Optional[EducationLevelEnum] = None
@@ -133,7 +131,7 @@ class UserProfileUpdate(BaseModel):
     # Bank Information
     bank_name: Optional[str] = Field(None, max_length=100)
     account_number: Optional[str] = Field(None, min_length=9, max_length=18)
-    ifsc_code: Optional[str] = Field(None, regex=r"^[A-Z]{4}0[A-Z0-9]{6}$")
+    ifsc_code: Optional[str] = Field(None, pattern=r"^[A-Z]{4}0[A-Z0-9]{6}$")
     branch_name: Optional[str] = Field(None, max_length=100)
     
     # Nominee Information
