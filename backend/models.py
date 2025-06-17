@@ -194,14 +194,13 @@ class UserProfile(Base):
     nominee_name: Mapped[Optional[str]] = mapped_column(String(100))
     nominee_relationship: Mapped[Optional[str]] = mapped_column(String(50))
     nominee_date_of_birth: Mapped[Optional[DateTime]] = mapped_column(DateTime(True))
-    
-    # Preferences
+      # Preferences
     preferred_language: Mapped[Optional[str]] = mapped_column(String(20))
     territory_preference: Mapped[Optional[str]] = mapped_column(String(100))
     
     # Agent System Fields
     agent_code: Mapped[Optional[str]] = mapped_column(String(8), unique=True, index=True)
-    registration_status: Mapped[Optional[str]] = mapped_column(String(20), default="pending")
+    user_role: Mapped[str] = mapped_column(String(20), default="agent", nullable=False)
     
     preferences: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     
@@ -245,6 +244,63 @@ class UserDocument(Base):
         server_default=text("CURRENT_TIMESTAMP"),
         nullable=False
     )
+    
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+
+
+class ChildIdRequest(Base):
+    """
+    Child ID requests table for insurance broker/agent child ID management
+    """
+    __tablename__ = "child_id_requests"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    
+    # Request Details
+    insurance_company: Mapped[str] = mapped_column(String(100), nullable=False)
+    broker: Mapped[str] = mapped_column(String(100), nullable=False)
+    location: Mapped[str] = mapped_column(String(200), nullable=False)
+    phone_number: Mapped[str] = mapped_column(String(15), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    preferred_rm_name: Mapped[Optional[str]] = mapped_column(String(100))
+    
+    # Status: pending, accepted, rejected, suspended
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    
+    # Assigned Details (filled by admin during approval)
+    child_id: Mapped[Optional[str]] = mapped_column(String(50), unique=True, index=True)
+    broker_code: Mapped[Optional[str]] = mapped_column(String(20))
+    branch_code: Mapped[Optional[str]] = mapped_column(String(20))
+    region: Mapped[Optional[str]] = mapped_column(String(50))
+    manager_name: Mapped[Optional[str]] = mapped_column(String(100))
+    manager_email: Mapped[Optional[str]] = mapped_column(String(255))
+    commission_percentage: Mapped[Optional[float]] = mapped_column()
+    policy_limit: Mapped[Optional[int]] = mapped_column()
+    
+    # Admin notes
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text)
+    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        nullable=True
+    )
+    approved_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(True))
     
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(True), 

@@ -86,7 +86,6 @@ async def update_current_user_profile(
         if is_agent_registration and not getattr(profile, 'agent_code', None):
             agent_code = await user_helpers.generate_agent_code(db)
             setattr(profile, 'agent_code', agent_code)
-            setattr(profile, 'registration_status', 'active')
         
         update_data = profile_update.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -203,7 +202,8 @@ async def delete_profile_image(
         logger.error(f"Error deleting profile image: {str(e)}")
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            detail="Failed to delete profile image"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
+            detail="Failed to delete profile image"
         )
 
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
@@ -237,7 +237,8 @@ async def upload_document(
             file, 
             document_type, 
             document_name,
-            db        )        
+            db
+        )
         return DocumentUploadResponse.model_validate({
             **{column.name: getattr(document_record, column.name) for column in document_record.__table__.columns},
             "document_id": str(document_record.id),  
@@ -289,7 +290,7 @@ async def delete_document(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a document atomically from both storage and database"""
+    """Delete a document automatically from both storage and database"""
     try:
         profile = current_user["profile"]
         

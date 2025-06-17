@@ -138,12 +138,13 @@ class UserProfileUpdate(BaseModel):
     nominee_name: Optional[str] = Field(None, max_length=100)
     nominee_relationship: Optional[str] = Field(None, max_length=50)
     nominee_date_of_birth: Optional[date] = None
-    
-    # Preferences
+      # Preferences
     preferred_language: Optional[str] = Field(None, max_length=20)
     territory_preference: Optional[str] = Field(None, max_length=100)
     
-    # Legacy fields for backward compatibility
+    # User role
+    user_role: Optional[str] = Field(None, max_length=20)
+    
     username: Optional[str] = None
     display_name: Optional[str] = None
     bio: Optional[str] = None
@@ -214,7 +215,8 @@ class UserProfileResponse(BaseModel):
     # Identity Information
     aadhaar_number: Optional[str] = None
     pan_number: Optional[str] = None
-      # Professional Information
+
+    # Professional Information
     education_level: Optional[EducationLevelEnum] = None
     specialization: Optional[str] = None
     previous_insurance_experience: Optional[bool] = None
@@ -241,9 +243,10 @@ class UserProfileResponse(BaseModel):
     preferences: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
-      # Agent specific fields
+    
+    # Agent specific fields
     agent_code: Optional[str] = None
-    registration_status: Optional[str] = None
+    user_role: Optional[str] = None
     
     # Document URLs
     document_urls: Optional[Dict[str, str]] = None
@@ -254,7 +257,7 @@ class UserProfileResponse(BaseModel):
     timezone: Optional[str] = None
     language: Optional[str] = None
 
-    class Config:
+    class Config:        
         from_attributes = True
 
 
