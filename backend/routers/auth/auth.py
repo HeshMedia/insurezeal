@@ -21,7 +21,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Create router
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 security = HTTPBearer()
@@ -94,22 +93,10 @@ async def register(
         await db.commit()
         await db.refresh(new_user_profile)
         
-        user_response = UserResponse(
-            id=str(new_user_profile.id),
-            user_id=str(new_user_profile.user_id),
-            username=new_user_profile.username,
-            first_name=new_user_profile.first_name,
-            last_name=new_user_profile.last_name,
-            display_name=new_user_profile.display_name,
-            bio=new_user_profile.bio,
-            avatar_url=new_user_profile.avatar_url,
-            date_of_birth=new_user_profile.date_of_birth,
-            timezone=new_user_profile.timezone,
-            language=new_user_profile.language,
-            preferences=new_user_profile.preferences,
-            created_at=new_user_profile.created_at,
-            updated_at=new_user_profile.updated_at
-        )
+        user_response = UserResponse.model_validate({
+            **{column.name: getattr(new_user_profile, column.name) for column in new_user_profile.__table__.columns},
+            "email": auth_response.user.email
+        })
         
         if auth_response.session is None:
             return AuthResponse(
@@ -159,25 +146,12 @@ async def login(
         if not user_profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User profile not found"
-            )
+                detail="User profile not found")
         
-        user_response = UserResponse(
-            id=str(user_profile.id),
-            user_id=str(user_profile.user_id),
-            username=user_profile.username,
-            first_name=user_profile.first_name,
-            last_name=user_profile.last_name,
-            display_name=user_profile.display_name,
-            bio=user_profile.bio,
-            avatar_url=user_profile.avatar_url,
-            date_of_birth=user_profile.date_of_birth,
-            timezone=user_profile.timezone,
-            language=user_profile.language,
-            preferences=user_profile.preferences,            
-            created_at=user_profile.created_at,
-            updated_at=user_profile.updated_at
-        )
+        user_response = UserResponse.model_validate({
+            **{column.name: getattr(user_profile, column.name) for column in user_profile.__table__.columns},
+            "email": auth_response.user.email
+        })
 
         return AuthResponse(
             access_token=auth_response.session.access_token,
@@ -254,7 +228,6 @@ async def verify_reset_token(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired reset tokens"
             )
-        
         
         return {
             "message": "Reset tokens are valid",

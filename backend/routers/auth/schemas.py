@@ -18,6 +18,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: str  
     user_id: str 
+    email: Optional[str] = None 
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -30,6 +31,9 @@ class UserResponse(BaseModel):
     preferences: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class AuthResponse(BaseModel):
     access_token: str

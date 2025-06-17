@@ -3,12 +3,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from config import get_db
-from models import UserProfile
+from models import UserProfile, UserDocument
 from routers.auth.auth import get_current_user
 from .schemas import (
     UserProfileUpdate,
     UserProfileResponse,
-    ProfileImageUpload
+    ProfileImageUpload,
+    DocumentUpload,
+    DocumentUploadResponse,
+    DocumentListResponse,
+    DocumentTypeEnum
 )
 from .helpers import user_helpers
 from typing import Optional
@@ -23,31 +27,25 @@ security = HTTPBearer()
 
 @router.get("/me", response_model=UserProfileResponse)
 async def get_current_user_profile(
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get current user's profile information"""
+    """Get current user's profile information with document URLs"""
     profile = current_user["profile"]
     supabase_user = current_user["supabase_user"]
     
-    return UserProfileResponse(
-        id=str(profile.id),
-        user_id=str(profile.user_id),
-        username=profile.username,
-        email=supabase_user.email,  
-        first_name=profile.first_name,
-        last_name=profile.last_name,
-        display_name=profile.display_name,
-        bio=profile.bio,
-        avatar_url=profile.avatar_url,
-        custom_font=profile.custom_font,
-        custom_colors=profile.custom_colors,
-        date_of_birth=profile.date_of_birth,
-        timezone=profile.timezone,
-        language=profile.language,
-        preferences=profile.preferences,
-        created_at=profile.created_at,
-        updated_at=profile.updated_at
-    )
+    try:
+        documents = await user_helpers.get_user_documents(str(profile.user_id), db)
+        document_urls = {doc.document_type: doc.document_url for doc in documents}
+    except Exception as e:
+        logger.warning(f"Could not fetch documents for user {profile.user_id}: {str(e)}")
+        document_urls = {}
+    
+    return UserProfileResponse.model_validate({
+        **{column.name: getattr(profile, column.name) for column in profile.__table__.columns},
+        "email": supabase_user.email,
+        "document_urls": document_urls
+    })
 
 @router.put("/me", response_model=UserProfileResponse)
 async def update_current_user_profile(
@@ -55,7 +53,7 @@ async def update_current_user_profile(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update current user's profile information"""
+    """Dual route for both creating and updating user profile"""
     try:
         profile = current_user["profile"]
         supabase_user = current_user["supabase_user"]
@@ -76,33 +74,40 @@ async def update_current_user_profile(
                     detail="Username already taken"
                 )
         
+        is_agent_registration = any([
+            profile_update.aadhaar_number,
+            profile_update.pan_number,
+            profile_update.bank_name,
+            profile_update.account_number,
+            profile_update.ifsc_code,
+            profile_update.education_level
+        ])
+        
+        if is_agent_registration and not getattr(profile, 'agent_code', None):
+            agent_code = await user_helpers.generate_agent_code(db)
+            setattr(profile, 'agent_code', agent_code)
+            setattr(profile, 'registration_status', 'active')
+        
         update_data = profile_update.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(profile, field, value)
         
-
         profile.updated_at = datetime.utcnow()
-        
         await db.commit()
         await db.refresh(profile)
         
-        return UserProfileResponse(
-            id=str(profile.id),
-            user_id=str(profile.user_id),
-            username=profile.username,
-            email=supabase_user.email,  
-            first_name=profile.first_name,
-            last_name=profile.last_name,
-            display_name=profile.display_name,
-            bio=profile.bio,
-            avatar_url=profile.avatar_url,
-            date_of_birth=profile.date_of_birth,
-            timezone=profile.timezone,
-            language=profile.language,
-            preferences=profile.preferences,
-            created_at=profile.created_at,
-            updated_at=profile.updated_at
-        )
+        try:
+            documents = await user_helpers.get_user_documents(str(profile.user_id), db)
+            document_urls = {doc.document_type: doc.document_url for doc in documents}
+        except Exception as e:
+            logger.warning(f"Could not fetch documents for user {profile.user_id}: {str(e)}")
+            document_urls = {}
+        
+        return UserProfileResponse.model_validate({
+            **{column.name: getattr(profile, column.name) for column in profile.__table__.columns},
+            "email": supabase_user.email,
+            "document_urls": document_urls
+        })
         
     except HTTPException:
         raise
@@ -198,5 +203,110 @@ async def delete_profile_image(
         logger.error(f"Error deleting profile image: {str(e)}")
         await db.rollback()
         raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            detail="Failed to delete profile image"
+        )
+
+@router.post("/documents/upload", response_model=DocumentUploadResponse)
+async def upload_document(
+    file: UploadFile = File(..., description="Document file (PDF, JPEG, PNG, max 10MB)"),
+    document_type: DocumentTypeEnum = Form(...),
+    document_name: str = Form(...),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Upload a document for agent registration
+    
+    Accepts document files in the following formats:
+    - PDF (.pdf)
+    - JPEG (.jpg, .jpeg)
+    - PNG (.png)
+    
+    Maximum file size: 5MB
+    """
+    try:
+        profile = current_user["profile"]
+        
+        if not file.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No file uploaded"
+            )
+        document_record = await user_helpers.upload_and_save_document(
+            str(profile.user_id), 
+            file, 
+            document_type, 
+            document_name,
+            db        )        
+        return DocumentUploadResponse.model_validate({
+            **{column.name: getattr(document_record, column.name) for column in document_record.__table__.columns},
+            "document_id": str(document_record.id),  
+            "message": "Document uploaded successfully"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading document: {str(e)}")
+        raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete profile image"        )
+            detail="Failed to upload document"
+        )
+
+@router.get("/documents", response_model=DocumentListResponse)
+async def get_user_documents(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all documents uploaded by the current user"""
+    try:
+        profile = current_user["profile"]
+        documents = await user_helpers.get_user_documents(str(profile.user_id), db)        
+        document_responses = [
+            DocumentUploadResponse.model_validate({
+                **{column.name: getattr(doc, column.name) for column in doc.__table__.columns},
+                "document_id": str(doc.id),  
+                "message": ""
+            })
+            for doc in documents
+        ]
+        
+        return DocumentListResponse(
+            documents=document_responses,
+            total_count=len(document_responses)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting user documents: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve documents"
+        )
+
+@router.delete("/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a document atomically from both storage and database"""
+    try:
+        profile = current_user["profile"]
+        
+        result = await user_helpers.delete_document_completely(
+            document_id, 
+            str(profile.user_id), 
+            db
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete document"
+        )

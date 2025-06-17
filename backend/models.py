@@ -148,6 +148,61 @@ class UserProfile(Base):
     timezone: Mapped[Optional[str]] = mapped_column(String(50))
     language: Mapped[Optional[str]] = mapped_column(String(10), default="en")
     
+    # Agent Registration Fields
+    middle_name: Mapped[Optional[str]] = mapped_column(String(50))
+    father_name: Mapped[Optional[str]] = mapped_column(String(100))
+    mother_name: Mapped[Optional[str]] = mapped_column(String(100))
+    gender: Mapped[Optional[str]] = mapped_column(String(10))
+    
+    # Contact Information
+    mobile_number: Mapped[Optional[str]] = mapped_column(String(15))
+    alternate_mobile: Mapped[Optional[str]] = mapped_column(String(15))
+    alternate_email: Mapped[Optional[str]] = mapped_column(String(255))
+    
+    # Address Information
+    permanent_address_line1: Mapped[Optional[str]] = mapped_column(String(200))
+    permanent_address_line2: Mapped[Optional[str]] = mapped_column(String(200))
+    permanent_city: Mapped[Optional[str]] = mapped_column(String(50))
+    permanent_state: Mapped[Optional[str]] = mapped_column(String(50))
+    permanent_pincode: Mapped[Optional[str]] = mapped_column(String(6))
+    
+    communication_same_as_permanent: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    communication_address_line1: Mapped[Optional[str]] = mapped_column(String(200))
+    communication_address_line2: Mapped[Optional[str]] = mapped_column(String(200))
+    communication_city: Mapped[Optional[str]] = mapped_column(String(50))
+    communication_state: Mapped[Optional[str]] = mapped_column(String(50))
+    communication_pincode: Mapped[Optional[str]] = mapped_column(String(6))
+    
+    # Identity Information
+    aadhaar_number: Mapped[Optional[str]] = mapped_column(String(12), unique=True)
+    pan_number: Mapped[Optional[str]] = mapped_column(String(10), unique=True)
+    
+    # Professional Information
+    education_level: Mapped[Optional[str]] = mapped_column(String(50))
+    specialization: Mapped[Optional[str]] = mapped_column(String(100))
+    previous_insurance_experience: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    years_of_experience: Mapped[Optional[int]] = mapped_column(SmallInteger)
+    previous_company_name: Mapped[Optional[str]] = mapped_column(String(100))
+    
+    # Banking Information
+    bank_name: Mapped[Optional[str]] = mapped_column(String(100))
+    account_number: Mapped[Optional[str]] = mapped_column(String(18))
+    ifsc_code: Mapped[Optional[str]] = mapped_column(String(11))
+    branch_name: Mapped[Optional[str]] = mapped_column(String(100))
+    
+    # Nominee Information
+    nominee_name: Mapped[Optional[str]] = mapped_column(String(100))
+    nominee_relationship: Mapped[Optional[str]] = mapped_column(String(50))
+    nominee_date_of_birth: Mapped[Optional[DateTime]] = mapped_column(DateTime(True))
+    
+    # Preferences
+    preferred_language: Mapped[Optional[str]] = mapped_column(String(20))
+    territory_preference: Mapped[Optional[str]] = mapped_column(String(100))
+    
+    # Agent System Fields
+    agent_code: Mapped[Optional[str]] = mapped_column(String(8), unique=True, index=True)
+    registration_status: Mapped[Optional[str]] = mapped_column(String(20), default="pending")
+    
     preferences: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     
     created_at: Mapped[DateTime] = mapped_column(
@@ -163,4 +218,43 @@ class UserProfile(Base):
     )
     
     user: Mapped["Users"] = relationship("Users", back_populates="user_profile")
+
+
+class UserDocument(Base):
+    """
+    User documents table for storing uploaded documents
+    Simplified without verification workflow
+    """
+    __tablename__ = "user_documents"
     
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    
+    document_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    document_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    document_url: Mapped[str] = mapped_column(Text, nullable=False)
+    file_size: Mapped[Optional[int]] = mapped_column(nullable=True)
+    
+    upload_date: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+
