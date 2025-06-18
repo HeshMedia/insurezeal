@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
 class ChildIdStatusEnum(str, Enum):
     PENDING = "pending"
@@ -20,8 +21,8 @@ class ChildIdRequestCreate(BaseModel):
 
 class ChildIdResponse(BaseModel):
     """Response schema for child ID requests"""
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     
     # Request details
     insurance_company: str
@@ -41,10 +42,9 @@ class ChildIdResponse(BaseModel):
     manager_email: Optional[str] = None
     commission_percentage: Optional[float] = None
     policy_limit: Optional[int] = None
-    
-    # Admin details
+      # Admin details
     admin_notes: Optional[str] = None
-    approved_by: Optional[str] = None
+    approved_by: Optional[UUID] = None
     approved_at: Optional[datetime] = None
     
     # Timestamps
@@ -54,9 +54,22 @@ class ChildIdResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ChildIdSummary(BaseModel):
+    """Summary schema for child ID requests (list/card view)"""
+    id: UUID
+    insurance_company: str
+    broker: str
+    location: str
+    status: ChildIdStatusEnum
+    child_id: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
 class ChildIdRequestList(BaseModel):
     """Response schema for paginated child ID request lists"""
-    requests: List[ChildIdResponse]
+    requests: List[ChildIdSummary]
     total_count: int
     page: int
     page_size: int

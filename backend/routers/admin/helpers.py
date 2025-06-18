@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc, or_
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 from models import UserProfile, UserDocument, ChildIdRequest
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Any, List
@@ -402,12 +403,19 @@ class AdminHelpers:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Child ID request not found"
                 )
-            
             if child_request.status != "pending":
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Only pending requests can be approved"
                 )
+            
+            if "child_id" in assignment_data and assignment_data["child_id"]:
+                child_id_exists = await self.check_child_id_exists(db, assignment_data["child_id"])
+                if child_id_exists:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Child ID already exists. Please choose a different child ID."
+                    )
             
             for field, value in assignment_data.items():
                 setattr(child_request, field, value)
@@ -425,9 +433,24 @@ class AdminHelpers:
             
         except HTTPException:
             raise
+        except IntegrityError as e:
+            await db.rollback()
+            logger.error(f"Integrity error approving child request: {str(e)}")
+            
+            if "duplicate key value violates unique constraint" in str(e) and "child_id" in str(e):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Child ID already exists. Please choose a different child ID."
+                )
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Data integrity error. Please check your input."
+            )
         except Exception as e:
             await db.rollback()
             logger.error(f"Error approving child request: {str(e)}")
+            
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to approve child ID request"
@@ -437,7 +460,8 @@ class AdminHelpers:
         self,
         db: AsyncSession,
         request_id: str,
-        admin_notes: str,        admin_user_id: str
+        admin_notes: str,        
+        admin_user_id: str
     ) -> ChildIdRequest:
         """
         Reject a child ID request
@@ -498,7 +522,8 @@ class AdminHelpers:
         self,
         db: AsyncSession,
         request_id: str,
-        admin_notes: str,        admin_user_id: str
+        admin_notes: str,       
+        admin_user_id: str
     ) -> ChildIdRequest:
         """
         Suspend an active child ID
@@ -597,3 +622,31 @@ class AdminHelpers:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch child ID statistics"
             )
+
+    async def check_child_id_exists(
+        self,
+        db: AsyncSession,
+        child_id: str
+    ) -> bool:
+        """
+        Check if a child ID already exists
+        
+        Args:
+            db: Database session
+            child_id: Child ID to check
+            
+        Returns:
+            True if child ID exists, False otherwise
+        """
+        try:
+            from models import ChildIdRequest
+            
+            query = select(ChildIdRequest).where(ChildIdRequest.child_id == child_id)
+            result = await db.execute(query)
+            existing_request = result.scalar_one_or_none()
+            
+            return existing_request is not None
+            
+        except Exception as e:
+            logger.error(f"Error checking child ID existence: {str(e)}")
+            return False

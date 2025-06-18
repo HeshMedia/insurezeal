@@ -11,7 +11,9 @@ from sqlalchemy import (
     Computed,
     text,
     ForeignKey,
-    Column
+    Column,
+    Numeric,
+    Date
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -173,10 +175,6 @@ class UserProfile(Base):
     communication_state: Mapped[Optional[str]] = mapped_column(String(50))
     communication_pincode: Mapped[Optional[str]] = mapped_column(String(6))
     
-    # Identity Information
-    aadhaar_number: Mapped[Optional[str]] = mapped_column(String(12), unique=True)
-    pan_number: Mapped[Optional[str]] = mapped_column(String(10), unique=True)
-    
     # Professional Information
     education_level: Mapped[Optional[str]] = mapped_column(String(50))
     specialization: Mapped[Optional[str]] = mapped_column(String(100))
@@ -302,6 +300,56 @@ class ChildIdRequest(Base):
     )
     approved_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(True))
     
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+
+
+class CutPay(Base):
+    """
+    Cut Pay Transactions - Admin only feature for managing cut pay transactions
+    """
+    __tablename__ = "cut_pay"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    policy_number: Mapped[str] = mapped_column(String(100), nullable=False)
+    agent_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    insurance_company: Mapped[str] = mapped_column(String(200), nullable=False)
+    broker: Mapped[str] = mapped_column(String(200), nullable=False)
+    
+    # Financial details
+    gross_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    net_premium: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    commission_grid: Mapped[str] = mapped_column(String(100), nullable=False)
+    agent_commission_given_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    cut_pay_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+      # Payment details
+    payment_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    amount_received: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(100), nullable=False)
+    payment_source: Mapped[str] = mapped_column(String(200), nullable=False)
+    
+    # Dates
+    transaction_date: Mapped[Date] = mapped_column(Date, nullable=False)
+    payment_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    
+    # Additional info
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Audit fields
+    created_by: Mapped[Optional[UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        nullable=True
+    )
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(True), 
         server_default=text("CURRENT_TIMESTAMP"),

@@ -1,32 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
+from fastapi import Depends, HTTPException, APIRouter, status, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
-from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_db
+from routers.auth.auth import get_current_user
+from routers.child.helpers import ChildHelpers
 from routers.auth.helpers import AuthHelpers
-from .helpers import ChildHelpers
-from .schemas import (
-    ChildIdRequestCreate,
-    ChildIdResponse,
-    ChildIdRequestList
-)
+from routers.child.schemas import ChildIdResponse, ChildIdRequestCreate, ChildIdRequestList, ChildIdSummary
 
-logger = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/child", tags=["child"])
+router = APIRouter(tags=["User Child ID Routes"])
 security = HTTPBearer()
 child_helpers = ChildHelpers()
 auth_helpers = AuthHelpers()
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
-) -> Dict[str, Any]:
-    """Get current user from token"""
-    return await auth_helpers.verify_token(credentials.credentials, db)
+logger = logging.getLogger(__name__)
 
 @router.post("/request", response_model=ChildIdResponse)
 async def create_child_id_request(
@@ -49,11 +37,11 @@ async def create_child_id_request(
         
         child_request = await child_helpers.create_child_id_request(
             db=db,
-            user_id=user_id,
+            user_id=user_id,            
             request_data=request_data.dict()
         )
         
-        return ChildIdResponse.from_orm(child_request)
+        return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
         raise
@@ -70,12 +58,14 @@ async def get_my_child_requests(
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
-):
+):    
     """
-    Get current user's child ID requests
+    Get current user's child ID requests (summary view)
     
-    - Returns paginated list of user's child ID requests
+    - Returns paginated list of user's child ID request summaries
+    - Shows basic info: company, broker, location, status, child_id
     - Ordered by creation date (newest first)
+    - Use GET /request/{request_id} to get full details of a specific request
     """
     try:
         user_id = current_user["supabase_user"].id
@@ -88,7 +78,7 @@ async def get_my_child_requests(
         )
         
         return ChildIdRequestList(
-            requests=[ChildIdResponse.from_orm(req) for req in result["requests"]],
+            requests=[ChildIdSummary.model_validate(req) for req in result["child_requests"]],
             total_count=result["total_count"],
             page=page,
             page_size=page_size,
@@ -120,16 +110,15 @@ async def get_child_request_details(
         child_request = await child_helpers.get_child_request_by_id(
             db=db,
             request_id=request_id,
-            user_id=user_id  # Ensures user can only see their own requests
+            user_id=user_id
         )
         
         if not child_request:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Child ID request not found"
-            )
+                detail="Child ID request not found"            )
         
-        return ChildIdResponse.from_orm(child_request)
+        return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
         raise
@@ -159,7 +148,7 @@ async def get_active_child_ids(
             user_id=user_id
         )
         
-        return [ChildIdResponse.from_orm(req) for req in active_requests]
+        return [ChildIdResponse.model_validate(req) for req in active_requests]
         
     except Exception as e:
         logger.error(f"Error fetching active child IDs: {str(e)}")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -15,6 +15,7 @@ from .schemas import (
     ResetPasswordRequest
 )
 from .helpers import auth_helpers
+from utils.model_utils import model_data_from_orm
 from typing import Optional
 from datetime import datetime
 import logging
@@ -27,6 +28,7 @@ security = HTTPBearer()
 supabase = get_supabase_client()
 
 async def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
@@ -45,10 +47,14 @@ async def get_current_user(
             detail="User profile not found"
         )
     
-    return {
+    current_user = {
         "supabase_user": supabase_user,
         "profile": user_profile
     }
+    
+    request.state.current_user = current_user
+    
+    return current_user
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(
@@ -91,12 +97,9 @@ async def register(
         
         db.add(new_user_profile)
         await db.commit()
-        await db.refresh(new_user_profile)
-        
-        user_response = UserResponse.model_validate({
-            **{column.name: getattr(new_user_profile, column.name) for column in new_user_profile.__table__.columns},
-            "email": auth_response.user.email
-        })
+        await db.refresh(new_user_profile)      
+        profile_data = model_data_from_orm(new_user_profile, {"email": auth_response.user.email})
+        user_response = UserResponse.model_validate(profile_data)
         
         if auth_response.session is None:
             return AuthResponse(
@@ -146,12 +149,9 @@ async def login(
         if not user_profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User profile not found")
-        
-        user_response = UserResponse.model_validate({
-            **{column.name: getattr(user_profile, column.name) for column in user_profile.__table__.columns},
-            "email": auth_response.user.email
-        })
+                detail="User profile not found")        
+        profile_data = model_data_from_orm(user_profile, {"email": auth_response.user.email})
+        user_response = UserResponse.model_validate(profile_data)
 
         return AuthResponse(
             access_token=auth_response.session.access_token,

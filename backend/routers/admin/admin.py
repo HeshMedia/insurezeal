@@ -3,6 +3,16 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_db
 from routers.auth.auth import get_current_user
+from dependencies.rbac import (
+    require_admin_agents, 
+    require_admin_agents_write, 
+    require_admin_agents_delete,
+    require_admin_read,
+    require_admin_stats,
+    require_admin_child_requests,
+    require_admin_child_requests_write,
+    require_admin_child_requests_update
+)
 from .schemas import (
     AgentListResponse, 
     AgentDetailResponse, 
@@ -15,6 +25,8 @@ from .schemas import (
     ChildIdStatusUpdate
 )
 from .helpers import AdminHelpers
+from .cutpay import router as cutpay_router
+from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
 from typing import Optional
 import logging
 
@@ -25,13 +37,16 @@ security = HTTPBearer()
 
 admin_helpers = AdminHelpers()
 
+router.include_router(cutpay_router)
+
 @router.get("/agents", response_model=AgentListResponse)
 async def list_all_agents(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     search: Optional[str] = Query(None, description="Search by name, email, or agent code"),
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_agents)
 ):
     """
     Get all agents with pagination and search
@@ -41,18 +56,15 @@ async def list_all_agents(
     - **page**: Page number (default: 1)
     - **page_size**: Number of items per page (default: 20, max: 100)
     - **search**: Optional search term for filtering agents
-    
-    Returns paginated list of all agents with basic information.
+      Returns paginated list of all agents with basic information.
     """   
-    admin_helpers.require_admin(current_user)
     
     try:
         agents_data = await admin_helpers.get_all_agents(db, page, page_size, search)
         agent_summaries = []
         for agent in agents_data["agents"]:
             email = await admin_helpers.get_user_email_from_supabase(str(agent.user_id))
-            agent_data = {column.name: getattr(agent, column.name) for column in agent.__table__.columns}
-            agent_data["email"] = email
+            agent_data = model_data_from_orm(agent, {"email": email})
             
             agent_summary = AgentSummary.model_validate(agent_data)
             agent_summaries.append(agent_summary)
@@ -77,7 +89,8 @@ async def list_all_agents(
 async def get_agent_details(
     agent_id: str,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_agents)
 ):
     """
     Get detailed information about a specific agent
@@ -85,15 +98,14 @@ async def get_agent_details(
     **Admin only endpoint**
     
     - **agent_id**: The ID of the agent to retrieve
-    
-    Returns complete agent profile including all personal, professional, 
-    and document information.
+      Returns complete agent profile including all personal, professional,    and document information.
     """    
-    admin_helpers.require_admin(current_user)
     
     try:
         agent_data = await admin_helpers.get_agent_with_documents(db, agent_id)
-        agent_detail = AgentDetailResponse.model_validate(agent_data)
+        converted_data = convert_uuids_to_strings(agent_data)
+        
+        agent_detail = AgentDetailResponse.model_validate(converted_data)
         
         return agent_detail
         
@@ -110,7 +122,8 @@ async def get_agent_details(
 async def delete_agent_by_id(
     agent_id: str,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_agents_delete)
 ):
     """
     Delete an agent and all related data
@@ -128,7 +141,6 @@ async def delete_agent_by_id(
     
     Returns confirmation of deletion.
     """   
-    admin_helpers.require_admin(current_user)
     
     try:
         deletion_result = await admin_helpers.delete_agent(db, agent_id)
@@ -148,10 +160,11 @@ async def delete_agent_by_id(
             detail="Failed to delete agent"
         )
 
-@router.get("/stats", response_model=AdminStatsResponse)
+@router.get("/agent-stats", response_model=AdminStatsResponse)
 async def get_admin_stats(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_stats)
 ):
     """
     Get admin dashboard statistics
@@ -160,7 +173,6 @@ async def get_admin_stats(
     
     Returns overview statistics for the admin dashboard.
     """   
-    admin_helpers.require_admin(current_user)
     
     try:
         stats = await admin_helpers.get_admin_statistics(db)
@@ -183,7 +195,8 @@ async def get_all_child_requests(
     status_filter: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search by company, broker, or email"),
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_child_requests)
 ):
     """
     Admin: Get all child ID requests with filtering
@@ -194,7 +207,6 @@ async def get_all_child_requests(
     - **search**: Search in company name, broker, or email
     - Returns paginated list with user details
     """
-    admin_helpers.require_admin(current_user)
     
     try:
         result = await admin_helpers.get_all_child_requests(
@@ -206,7 +218,7 @@ async def get_all_child_requests(
         )
         
         return ChildIdRequestList(
-            requests=[ChildIdResponse.from_orm(req) for req in result["requests"]],
+            requests=[ChildIdResponse.model_validate(req) for req in result["requests"]],
             total_count=result["total_count"],
             page=page,
             page_size=page_size,
@@ -225,7 +237,8 @@ async def assign_child_id(
     request_id: str,
     assignment_data: ChildIdAssignment,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_child_requests_update)
 ):
     """
     Admin: Assign child ID details and approve request
@@ -242,7 +255,6 @@ async def assign_child_id(
     - **policy_limit**: Optional policy limit
     - **admin_notes**: Optional admin notes
     """
-    admin_helpers.require_admin(current_user)
     
     try:
         admin_user_id = current_user["supabase_user"].id
@@ -252,9 +264,8 @@ async def assign_child_id(
             request_id=request_id,
             assignment_data=assignment_data.dict(),
             admin_user_id=admin_user_id
-        )
-        
-        return ChildIdResponse.from_orm(child_request)
+        )        
+        return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
         raise
@@ -270,7 +281,8 @@ async def reject_child_request(
     request_id: str,
     rejection_data: ChildIdStatusUpdate,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_child_requests_update)
 ):
     """
     Admin: Reject a child ID request
@@ -279,7 +291,6 @@ async def reject_child_request(
     
     - **admin_notes**: Required reason for rejection
     """
-    admin_helpers.require_admin(current_user)
     
     try:
         admin_user_id = current_user["supabase_user"].id
@@ -289,9 +300,8 @@ async def reject_child_request(
             request_id=request_id,
             admin_notes=rejection_data.admin_notes,
             admin_user_id=admin_user_id
-        )
-        
-        return ChildIdResponse.from_orm(child_request)
+        )        
+        return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
         raise
@@ -307,7 +317,8 @@ async def suspend_child_id(
     request_id: str,
     suspension_data: ChildIdStatusUpdate,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_child_requests_update)
 ):
     """
     Admin: Suspend an active child ID
@@ -317,7 +328,6 @@ async def suspend_child_id(
     - **admin_notes**: Required reason for suspension
     - Can only suspend accepted child IDs
     """
-    admin_helpers.require_admin(current_user)
     
     try:
         admin_user_id = current_user["supabase_user"].id
@@ -327,9 +337,8 @@ async def suspend_child_id(
             request_id=request_id,
             admin_notes=suspension_data.admin_notes,
             admin_user_id=admin_user_id
-        )
-        
-        return ChildIdResponse.from_orm(child_request)
+        )        
+        return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
         raise
@@ -343,7 +352,8 @@ async def suspend_child_id(
 @router.get("/child-statistics")
 async def get_child_id_statistics(
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_child_requests)
 ):
     """
     Admin: Get child ID management statistics
@@ -352,7 +362,6 @@ async def get_child_id_statistics(
     
     Returns counts by status, recent requests, etc.
     """
-    admin_helpers.require_admin(current_user)
     
     try:
         stats = await admin_helpers.get_child_id_statistics(db=db)

@@ -3,6 +3,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, date
 from routers.users.schemas import GenderEnum, EducationLevelEnum
 from enum import Enum
+from uuid import UUID
 
 # Child ID related schemas for admin management
 class ChildIdStatusEnum(str, Enum):
@@ -25,8 +26,8 @@ class ChildIdAssignment(BaseModel):
 
 class ChildIdResponse(BaseModel):
     """Response schema for child ID requests"""
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     
     # Request details
     insurance_company: str
@@ -46,10 +47,9 @@ class ChildIdResponse(BaseModel):
     manager_email: Optional[str] = None
     commission_percentage: Optional[float] = None
     policy_limit: Optional[int] = None
-    
-    # Admin details
+      # Admin details
     admin_notes: Optional[str] = None
-    approved_by: Optional[str] = None
+    approved_by: Optional[UUID] = None
     approved_at: Optional[datetime] = None
     
     # Timestamps

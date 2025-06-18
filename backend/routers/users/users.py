@@ -15,6 +15,7 @@ from .schemas import (
     DocumentTypeEnum
 )
 from .helpers import user_helpers
+from utils.model_utils import model_data_from_orm
 from typing import Optional
 import logging
 from datetime import datetime
@@ -41,11 +42,12 @@ async def get_current_user_profile(
         logger.warning(f"Could not fetch documents for user {profile.user_id}: {str(e)}")
         document_urls = {}
     
-    return UserProfileResponse.model_validate({
-        **{column.name: getattr(profile, column.name) for column in profile.__table__.columns},
+    profile_data = model_data_from_orm(profile, {
         "email": supabase_user.email,
         "document_urls": document_urls
     })
+    
+    return UserProfileResponse.model_validate(profile_data)
 
 @router.put("/me", response_model=UserProfileResponse)
 async def update_current_user_profile(
@@ -75,8 +77,6 @@ async def update_current_user_profile(
                 )
         
         is_agent_registration = any([
-            profile_update.aadhaar_number,
-            profile_update.pan_number,
             profile_update.bank_name,
             profile_update.account_number,
             profile_update.ifsc_code,
@@ -102,11 +102,12 @@ async def update_current_user_profile(
             logger.warning(f"Could not fetch documents for user {profile.user_id}: {str(e)}")
             document_urls = {}
         
-        return UserProfileResponse.model_validate({
-            **{column.name: getattr(profile, column.name) for column in profile.__table__.columns},
+        profile_data = model_data_from_orm(profile, {
             "email": supabase_user.email,
             "document_urls": document_urls
         })
+        
+        return UserProfileResponse.model_validate(profile_data)
         
     except HTTPException:
         raise

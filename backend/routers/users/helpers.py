@@ -285,7 +285,6 @@ class UserHelpers:
             
             try:
                 bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "insurezeal")
-                
                 if "/storage/v1/object/public/" in document.document_url:
                     parts = document.document_url.split("/storage/v1/object/public/")[1]
                     path_parts = parts.split("/", 1)
@@ -294,7 +293,18 @@ class UserHelpers:
                         
                         response = self.storage.from_(bucket_name).remove([file_path])
                         
-                        if response.get("error"):
+                        if isinstance(response, list):
+                            has_errors = any(
+                                isinstance(item, dict) and item.get("error") 
+                                for item in response 
+                                if isinstance(item, dict)
+                            )
+                            if has_errors:
+                                logger.warning(f"Failed to delete document from storage: {response}")
+                                storage_deleted = False
+                            else:
+                                storage_deleted = True
+                        elif isinstance(response, dict) and response.get("error"):
                             logger.warning(f"Failed to delete document from storage: {response['error']}")
                             storage_deleted = False
                         else:

@@ -100,7 +100,8 @@ class ChildHelpers:
                 "child_requests": requests,
                 "total_count": total_count or 0,
                 "page": page,
-                "page_size": page_size
+                "page_size": page_size,
+                "total_pages": (total_count + page_size - 1) // page_size if total_count else 0
             }
             
         except Exception as e:

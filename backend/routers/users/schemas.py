@@ -57,9 +57,6 @@ class AgentRegistrationCreate(BaseModel):
     communication_state: Optional[str] = Field(None, max_length=50)
     communication_pincode: Optional[str] = Field(None, pattern=r"^\d{6}$")
     
-    # Identity Information
-    aadhaar_number: str = Field(..., pattern=r"^\d{12}$")
-    pan_number: str = Field(..., pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$")
       # Professional Information
     education_level: EducationLevelEnum = Field(...)
     specialization: Optional[str] = Field(None, max_length=100)
@@ -211,10 +208,6 @@ class UserProfileResponse(BaseModel):
     communication_city: Optional[str] = None
     communication_state: Optional[str] = None
     communication_pincode: Optional[str] = None
-    
-    # Identity Information
-    aadhaar_number: Optional[str] = None
-    pan_number: Optional[str] = None
 
     # Professional Information
     education_level: Optional[EducationLevelEnum] = None
