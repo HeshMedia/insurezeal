@@ -11,8 +11,7 @@ from routers.auth.auth import get_current_user
 logger = logging.getLogger(__name__)
 
 RESOURCES_FOR_ROLES = {
-    'admin': {
-        'admin/agents': ['read', 'write', 'delete'],
+    'admin': {        'admin/agents': ['read', 'write', 'delete'],
         'admin/stats': ['read'],
         'admin/child-requests': ['read', 'write', 'update'],
         'admin/cutpay': ['read', 'write', 'update', 'delete'],
@@ -20,13 +19,15 @@ RESOURCES_FOR_ROLES = {
         'users/me': ['read', 'write'],
         'users/documents': ['read', 'write', 'delete'],
         
-        'child/requests': ['read', 'write', 'update']
+        'child/requests': ['read', 'write', 'update'],
+        'policies': ['read', 'write', 'manage']
     },
     'agent': {
         'users/me': ['read', 'write'],
         'users/documents': ['read', 'write', 'delete'],
         
-        'child/requests': ['read', 'write']
+        'child/requests': ['read', 'write'],
+        'policies': ['read', 'write']
     }
 }
 

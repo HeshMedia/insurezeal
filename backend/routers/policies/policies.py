@@ -1,0 +1,477 @@
+from typing import Dict, Any, List
+from fastapi import Depends, HTTPException, APIRouter, status, Query, UploadFile, File, Form
+from pydantic import Field
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import get_db
+from routers.auth.auth import get_current_user
+from routers.policies.helpers import PolicyHelpers
+from routers.policies.schemas import (
+    PolicyResponse, PolicyCreate, PolicyUpdate, PolicySummary, PolicyListResponse,
+    PolicyUploadResponse, AIExtractionResponse, ChildIdOption, AgentOption
+)
+from dependencies.rbac import require_permission
+
+router = APIRouter(prefix="/policies", tags=["Policies"])
+security = HTTPBearer()
+policy_helpers = PolicyHelpers()
+logger = logging.getLogger(__name__)
+
+require_policy_read = require_permission("policies", "read")
+require_policy_write = require_permission("policies", "write")
+require_policy_manage = require_permission("policies", "manage")
+
+@router.post("/upload", response_model=PolicyUploadResponse)
+async def upload_policy_pdf(
+    file: UploadFile = File(..., description="Policy PDF file"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_write)
+):
+    """
+    Upload policy PDF and extract data using AI
+    
+    **Requires policy write permission**
+    
+    - **file**: Policy PDF file to upload
+      Returns extracted policy data for review before saving
+    """
+    try:
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only PDF files are allowed"
+            )
+        
+        user_id = current_user["supabase_user"].id
+        file_content = await file.read()
+
+        file_path, original_filename = await policy_helpers.save_uploaded_file_from_bytes(
+            file_content, file.filename, user_id
+        )
+        extracted_data = await policy_helpers.process_policy_pdf(file_content)
+        
+        user_role = current_user.get("user_role", "user")
+        if user_role == "agent":
+            agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
+            if agent_profile:
+                extracted_data["agent_id"] = str(agent_profile.user_id)
+                extracted_data["agent_code"] = agent_profile.agent_code
+        
+        confidence_score = extracted_data.pop("confidence_score", 0.5)
+        
+        return PolicyUploadResponse(
+            policy_id=None, 
+            extracted_data=extracted_data,
+            confidence_score=confidence_score,
+            pdf_file_path=file_path,
+            pdf_file_name=original_filename,
+            message="Policy PDF processed successfully. Please review the extracted data before submitting."
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading policy PDF: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
+            detail="Failed to upload and process policy PDF"
+        )
+
+@router.post("/submit", response_model=PolicyResponse)
+async def submit_policy(
+    policy_data: PolicyCreate,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_write)
+):
+    """
+    Submit final policy data after user review
+    
+    **Requires policy write permission**
+    
+    - **policy_data**: Complete policy information including:
+        - PDF-extracted data (policy_number, premiums, dates, etc.) - can be edited by user
+        - User-provided data (agent_id, child_id, broker_name, etc.)
+        - File information (pdf_file_path, pdf_file_name)
+        - AI metadata (ai_confidence_score, manual_override)
+    
+    Creates the policy record in the database
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+    
+        policy_dict = policy_data.model_dump()
+        
+        pdf_file_path = policy_dict.pop("pdf_file_path")
+        pdf_file_name = policy_dict.pop("pdf_file_name")
+        user_role = current_user.get("user_role", "user")
+        if user_role == "agent":
+            agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
+            if agent_profile:
+                policy_dict["agent_id"] = str(agent_profile.user_id)
+                policy_dict["agent_code"] = agent_profile.agent_code
+        
+        policy = await policy_helpers.create_policy(
+            db=db,
+            policy_data=policy_dict,
+            file_path=pdf_file_path,
+            file_name=pdf_file_name,
+            uploaded_by=user_id
+        )
+        
+        return PolicyResponse.model_validate(policy)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting policy: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to submit policy"
+        )
+
+@router.get("/", response_model=PolicyListResponse)
+async def list_policies(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    policy_type: str = Query(None, description="Filter by policy type"),
+    agent_id: str = Query(None, description="Filter by agent ID (admin only)"),
+    search: str = Query(None, description="Search by policy number, registration, or agent code"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_read)
+):
+    """
+    Get paginated list of policies
+    
+    **Requires policy read permission**
+    
+    - **page**: Page number
+    - **page_size**: Items per page
+    - **policy_type**: Filter by policy type
+    - **agent_id**: Filter by agent (admin only)
+    - **search**: Search term
+    
+    Agents can only see their own policies, admins can see all
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+
+        filter_user_id = user_id if user_role != "admin" else None
+        filter_agent_id = agent_id if user_role == "admin" else None
+        
+        result = await policy_helpers.get_policies(
+            db=db,
+            page=page,
+            page_size=page_size,
+            user_id=filter_user_id,
+            agent_id=filter_agent_id,
+            policy_type=policy_type,
+            search=search
+        )
+        
+        return PolicyListResponse(
+            policies=[PolicySummary.model_validate(policy) for policy in result["policies"]],
+            total_count=result["total_count"],
+            page=result["page"],
+            page_size=result["page_size"],
+            total_pages=result["total_pages"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing policies: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch policies"
+        )
+
+@router.get("/{policy_id}", response_model=PolicyResponse)
+async def get_policy_details(
+    policy_id: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_read)
+):
+    """
+    Get detailed policy information
+    
+    **Requires policy read permission**
+    
+    Agents can only access their own policies, admins can access any
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+        
+        filter_user_id = user_id if user_role != "admin" else None
+        
+        policy = await policy_helpers.get_policy_by_id(db, policy_id, filter_user_id)
+        if not policy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Policy not found"
+            )
+        
+        return PolicyResponse.model_validate(policy)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching policy details: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch policy details"
+        )
+
+@router.put("/{policy_id}", response_model=PolicyResponse)
+async def update_policy(
+    policy_id: str,
+    policy_data: PolicyUpdate,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_write)
+):
+    """
+    Update policy information
+    
+    **Requires policy write permission**
+    
+    Agents can only update their own policies, admins can update any
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+        
+        filter_user_id = user_id if user_role != "admin" else None
+
+        update_data = policy_data.model_dump(exclude_unset=True)
+        
+        if "child_id" in update_data and update_data["child_id"]:
+            child_details = await policy_helpers.get_child_id_details(db, update_data["child_id"])
+            if child_details:
+                update_data["broker_name"] = child_details.broker
+                update_data["insurance_company"] = child_details.insurance_company
+        
+        policy = await policy_helpers.update_policy(db, policy_id, update_data, filter_user_id)
+        if not policy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Policy not found"
+            )
+        
+        return PolicyResponse.model_validate(policy)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating policy: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update policy"
+        )
+
+@router.delete("/{policy_id}")
+async def delete_policy(
+    policy_id: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_manage)
+):
+    """
+    Delete policy
+    
+    **Requires policy manage permission**
+    
+    Agents can only delete their own policies, admins can delete any
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+        
+        filter_user_id = user_id if user_role != "admin" else None
+        
+        success = await policy_helpers.delete_policy(db, policy_id, filter_user_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Policy not found"
+            )
+        
+        return {"message": "Policy deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting policy: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete policy"
+        )
+
+
+@router.get("/helpers/child-ids", response_model=List[ChildIdOption])
+async def get_child_id_options(
+    agent_id: str = Query(None, description="Agent ID to filter child IDs (admin only)"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_read)
+):
+    """
+    Get available child IDs for dropdown
+    
+    **Requires policy read permission**
+    
+    - **agent_id**: Optional agent ID to filter child IDs (for admins)
+    - If agent_id is provided and user is admin: returns child IDs for that agent
+    - If agent_id is not provided or user is agent: returns child IDs for current user
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+        
+        if agent_id and user_role == "admin":
+            target_agent_id = agent_id
+        else:
+            target_agent_id = str(user_id)
+        
+        child_ids = await policy_helpers.get_available_child_ids(db, target_agent_id)
+        
+        return [ChildIdOption(**child_id) for child_id in child_ids]
+        
+    except Exception as e:
+        logger.error(f"Error fetching child ID options: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch child ID options"
+        )
+
+@router.get("/helpers/agents", response_model=List[AgentOption])
+async def get_agent_options(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_manage)
+):
+    """
+    Get available agents for dropdown (admin only)
+    
+    **Requires policy manage permission**
+    """
+    try:
+        agents = await policy_helpers.get_available_agents(db)
+        
+        return [AgentOption(**agent) for agent in agents]
+        
+    except Exception as e:
+        logger.error(f"Error fetching agent options: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch agent options"
+        )
+
+@router.post("/submit", response_model=PolicyResponse)
+async def submit_policy(
+    policy_data: PolicyCreate,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_write)
+):
+    """
+    Submit final policy data after user review
+    
+    **Requires policy write permission**
+    
+    - **policy_data**: Complete policy information including:
+        - PDF-extracted data (policy_number, premiums, dates, etc.) - can be edited by user
+        - User-provided data (agent_id, child_id, broker_name, etc.)
+        - File information (pdf_file_path, pdf_file_name)
+        - AI metadata (ai_confidence_score, manual_override)
+    
+    Creates the policy record in the database
+    """
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+    
+        policy_dict = policy_data.model_dump()
+        
+        pdf_file_path = policy_dict.pop("pdf_file_path")
+        pdf_file_name = policy_dict.pop("pdf_file_name")
+        
+        submitted_agent_id = policy_dict.get("agent_id")
+        if submitted_agent_id:
+            try:
+                agent_profile = await policy_helpers.get_agent_by_user_id(db, submitted_agent_id)
+                if not agent_profile:
+                    logger.warning(f"Invalid agent_id submitted: {submitted_agent_id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Agent with ID {submitted_agent_id} not found"
+                    )
+                policy_dict["agent_code"] = agent_profile.agent_code
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error validating agent_id {submitted_agent_id}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid agent_id provided"
+                )
+        else:
+            if user_role == "agent":
+                agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
+                if agent_profile:
+                    policy_dict["agent_id"] = str(agent_profile.user_id)
+                    policy_dict["agent_code"] = agent_profile.agent_code
+                    logger.info(f"Auto-assigned agent_id {user_id} for agent user")
+                else:
+                    logger.warning(f"Agent profile not found for user {user_id}")
+                    policy_dict["agent_id"] = str(user_id)
+                    policy_dict["agent_code"] = None
+        
+        # Validate child_id if provided
+        submitted_child_id = policy_dict.get("child_id")
+        if submitted_child_id:
+            try:
+                child_details = await policy_helpers.get_child_id_details(db, submitted_child_id)
+                if not child_details:
+                    logger.warning(f"Invalid child_id submitted: {submitted_child_id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Child ID {submitted_child_id} not found"
+                    )
+                # Auto-populate broker info from child_id
+                policy_dict["broker_name"] = child_details.broker
+                policy_dict["insurance_company"] = child_details.insurance_company
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error validating child_id {submitted_child_id}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid child_id provided"
+                )
+        
+        policy = await policy_helpers.create_policy(
+            db=db,
+            policy_data=policy_dict,
+            file_path=pdf_file_path,
+            file_name=pdf_file_name,
+            uploaded_by=user_id
+        )
+        
+        return PolicyResponse.model_validate(policy)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting policy: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to submit policy"
+        )

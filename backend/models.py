@@ -13,13 +13,15 @@ from sqlalchemy import (
     ForeignKey,
     Column,
     Numeric,
-    Date
+    Date,
+    func
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.ext.declarative import declarative_base
 from typing import Optional
 import uuid
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -361,4 +363,62 @@ class CutPay(Base):
         onupdate=text("CURRENT_TIMESTAMP"),
         nullable=False
     )
+
+
+class Policy(Base):
+    """
+    Policy table for storing insurance policy details
+    """
+    __tablename__ = "policies"
+    
+    id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # User & Agent Info
+    uploaded_by: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("user_profiles.user_id"), nullable=False)
+    agent_id: Mapped[Optional[UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("user_profiles.user_id"), nullable=True)
+    agent_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    child_id: Mapped[Optional[str]] = mapped_column(String(50), ForeignKey("child_id_requests.child_id"), nullable=True)
+    
+    # Auto-populated from Child ID
+    broker_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    insurance_company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+      # Policy Details
+    policy_number: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    policy_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Motor, Health, etc.
+    insurance_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comprehensive, Third Party
+    
+    # Vehicle Details
+    vehicle_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vehicle_class: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    vehicle_segment: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Premium Details
+    gross_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    gst: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    od_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Own Damage
+    tp_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Third Party
+    
+    # Dates
+    start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    
+    # File Storage
+    pdf_file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    pdf_file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    
+    # AI Extraction
+    ai_extracted_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Store raw AI response
+    ai_confidence_score: Mapped[Optional[float]] = mapped_column(Numeric(3, 2), nullable=True)
+    manual_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    uploader: Mapped["UserProfile"] = relationship("UserProfile", foreign_keys=[uploaded_by])
+    agent: Mapped[Optional["UserProfile"]] = relationship("UserProfile", foreign_keys=[agent_id])
+    child_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys=[child_id])
 

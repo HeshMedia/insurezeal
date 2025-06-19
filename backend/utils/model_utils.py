@@ -50,21 +50,17 @@ def model_data_from_orm(orm_obj, additional_data: Dict[str, Any] = None, uuid_fi
     if date_fields is None:
         date_fields = ['date_of_birth', 'nominee_date_of_birth']
     
-    # Extract column data from ORM object
     orm_data = {}
     for column in orm_obj.__table__.columns:
         value = getattr(orm_obj, column.name)
         
-        # Convert UUID objects to strings
         if column.name in uuid_fields and value is not None and isinstance(value, uuid.UUID):
             orm_data[column.name] = str(value)
-        # Convert datetime objects to dates for date fields
         elif column.name in date_fields and value is not None and isinstance(value, datetime):
             orm_data[column.name] = value.date()
         else:
             orm_data[column.name] = value
     
-    # Add any additional data
     if additional_data:
         orm_data.update(additional_data)
     
