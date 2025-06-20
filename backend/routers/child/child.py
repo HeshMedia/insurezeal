@@ -9,6 +9,7 @@ from routers.auth.auth import get_current_user
 from routers.child.helpers import ChildHelpers
 from routers.auth.helpers import AuthHelpers
 from routers.child.schemas import ChildIdResponse, ChildIdRequestCreate, ChildIdRequestList, ChildIdSummary
+from utils.google_sheets import google_sheets_sync
 
 router = APIRouter(tags=["User Child ID Routes"])
 security = HTTPBearer()
@@ -40,6 +41,28 @@ async def create_child_id_request(
             user_id=user_id,            
             request_data=request_data.dict()
         )
+        
+        child_request_dict = {
+            'id': child_request.id,
+            'user_id': child_request.user_id,
+            'insurance_company': child_request.insurance_company,
+            'broker': child_request.broker,
+            'location': child_request.location,
+            'phone_number': child_request.phone_number,
+            'email': child_request.email,
+            'preferred_rm_name': child_request.preferred_rm_name,
+            'status': child_request.status,
+            'child_id': child_request.child_id,
+            'broker_code': child_request.broker_code,
+            'branch_code': child_request.branch_code,
+            'region': child_request.region,
+            'created_at': child_request.created_at,
+            'updated_at': child_request.updated_at        }
+        try:
+            google_sheets_sync.sync_child_id_request(child_request_dict, "CREATE")
+            logger.info(f"Child ID request {child_request.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync child ID request {child_request.id} to Google Sheets: {str(sync_error)}")
         
         return ChildIdResponse.model_validate(child_request)
         

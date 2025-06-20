@@ -97,3 +97,10 @@ def get_sync_engine():
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 DEBUG = ENVIRONMENT == "dev"
+
+# Google Sheets Configuration
+GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+GOOGLE_SHEETS_DOCUMENT_ID = os.getenv("GOOGLE_SHEETS_DOCUMENT_ID")
+
+# Gemini AI Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

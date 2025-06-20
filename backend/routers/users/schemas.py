@@ -139,9 +139,6 @@ class UserProfileUpdate(BaseModel):
     preferred_language: Optional[str] = Field(None, max_length=20)
     territory_preference: Optional[str] = Field(None, max_length=100)
     
-    # User role
-    user_role: Optional[str] = Field(None, max_length=20)
-    
     username: Optional[str] = None
     display_name: Optional[str] = None
     bio: Optional[str] = None

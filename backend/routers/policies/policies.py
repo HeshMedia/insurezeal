@@ -13,6 +13,7 @@ from routers.policies.schemas import (
     PolicyUploadResponse, AIExtractionResponse, ChildIdOption, AgentOption
 )
 from dependencies.rbac import require_permission
+from utils.google_sheets import google_sheets_sync
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 security = HTTPBearer()
@@ -77,8 +78,7 @@ async def upload_policy_pdf(
         logger.error(f"Error uploading policy PDF: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
-            detail="Failed to upload and process policy PDF"
-        )
+            detail="Failed to upload and process policy PDF"        )
 
 @router.post("/submit", response_model=PolicyResponse)
 async def submit_policy(
@@ -102,17 +102,64 @@ async def submit_policy(
     """
     try:
         user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
     
         policy_dict = policy_data.model_dump()
-        
         pdf_file_path = policy_dict.pop("pdf_file_path")
         pdf_file_name = policy_dict.pop("pdf_file_name")
-        user_role = current_user.get("user_role", "user")
-        if user_role == "agent":
-            agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
-            if agent_profile:
-                policy_dict["agent_id"] = str(agent_profile.user_id)
+        
+        submitted_agent_id = policy_dict.get("agent_id")
+        if submitted_agent_id:
+            try:
+
+                agent_id_str = str(submitted_agent_id)
+                agent_profile = await policy_helpers.get_agent_by_user_id(db, agent_id_str)
+                if not agent_profile:
+                    logger.warning(f"Invalid agent_id submitted: {submitted_agent_id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Agent with ID {submitted_agent_id} not found"
+                    )
                 policy_dict["agent_code"] = agent_profile.agent_code
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error validating agent_id {submitted_agent_id}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid agent_id provided"
+                )
+        else:
+            if user_role == "agent":
+                agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
+                if agent_profile:
+                    policy_dict["agent_id"] = str(agent_profile.user_id)
+                    policy_dict["agent_code"] = agent_profile.agent_code
+                    logger.info(f"Auto-assigned agent_id {user_id} for agent user")
+                else:
+                    logger.warning(f"Agent profile not found for user {user_id}")
+                    policy_dict["agent_id"] = str(user_id)
+                    policy_dict["agent_code"] = None
+        
+        submitted_child_id = policy_dict.get("child_id")
+        if submitted_child_id:
+            try:
+                child_details = await policy_helpers.get_child_id_details(db, submitted_child_id)
+                if not child_details:
+                    logger.warning(f"Invalid child_id submitted: {submitted_child_id}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Child ID {submitted_child_id} not found"
+                    )
+                policy_dict["broker_name"] = child_details.broker
+                policy_dict["insurance_company"] = child_details.insurance_company
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error validating child_id {submitted_child_id}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid child_id provided"                )
         
         policy = await policy_helpers.create_policy(
             db=db,
@@ -121,6 +168,39 @@ async def submit_policy(
             file_name=pdf_file_name,
             uploaded_by=user_id
         )
+        
+        policy_dict_for_sheets = {
+            'id': policy.id,
+            'policy_number': policy.policy_number,
+            'policy_type': policy.policy_type,
+            'insurance_type': policy.insurance_type,
+            'agent_id': policy.agent_id,
+            'agent_code': policy.agent_code,
+            'child_id': policy.child_id,
+            'broker_name': policy.broker_name,
+            'insurance_company': policy.insurance_company,
+            'vehicle_type': policy.vehicle_type,
+            'registration_number': policy.registration_number,
+            'vehicle_class': policy.vehicle_class,
+            'vehicle_segment': policy.vehicle_segment,
+            'gross_premium': policy.gross_premium,
+            'gst': policy.gst,
+            'net_premium': policy.net_premium,
+            'od_premium': policy.od_premium,
+            'tp_premium': policy.tp_premium,
+            'start_date': policy.start_date,
+            'end_date': policy.end_date,
+            'uploaded_by': policy.uploaded_by,
+            'pdf_file_name': policy.pdf_file_name,
+            'ai_confidence_score': policy.ai_confidence_score,
+            'manual_override': policy.manual_override,
+            'created_at': policy.created_at,
+            'updated_at': policy.updated_at        }
+        try:
+            google_sheets_sync.sync_policy(policy_dict_for_sheets, "CREATE")
+            logger.info(f"Policy {policy.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync policy {policy.id} to Google Sheets: {str(sync_error)}")
         
         return PolicyResponse.model_validate(policy)
         
@@ -250,8 +330,7 @@ async def update_policy(
         
         filter_user_id = user_id if user_role != "admin" else None
 
-        update_data = policy_data.model_dump(exclude_unset=True)
-        
+        update_data = policy_data.model_dump(exclude_unset=True)        
         if "child_id" in update_data and update_data["child_id"]:
             child_details = await policy_helpers.get_child_id_details(db, update_data["child_id"])
             if child_details:
@@ -264,6 +343,14 @@ async def update_policy(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Policy not found"
             )
+          # Sync to Google Sheets
+        try:
+            policy_dict_for_sheets = await policy_helpers.convert_policy_to_dict(policy)
+            google_sheets_sync.sync_policy(policy_dict_for_sheets, "UPDATE")
+            logger.info(f"Updated policy {policy.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync updated policy {policy.id} to Google Sheets: {str(sync_error)}")
+            # Don't fail the main operation if Google Sheets sync fails
         
         return PolicyResponse.model_validate(policy)
         
@@ -374,104 +461,3 @@ async def get_agent_options(
             detail="Failed to fetch agent options"
         )
 
-@router.post("/submit", response_model=PolicyResponse)
-async def submit_policy(
-    policy_data: PolicyCreate,
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    _rbac_check = Depends(require_policy_write)
-):
-    """
-    Submit final policy data after user review
-    
-    **Requires policy write permission**
-    
-    - **policy_data**: Complete policy information including:
-        - PDF-extracted data (policy_number, premiums, dates, etc.) - can be edited by user
-        - User-provided data (agent_id, child_id, broker_name, etc.)
-        - File information (pdf_file_path, pdf_file_name)
-        - AI metadata (ai_confidence_score, manual_override)
-    
-    Creates the policy record in the database
-    """
-    try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
-    
-        policy_dict = policy_data.model_dump()
-        
-        pdf_file_path = policy_dict.pop("pdf_file_path")
-        pdf_file_name = policy_dict.pop("pdf_file_name")
-        
-        submitted_agent_id = policy_dict.get("agent_id")
-        if submitted_agent_id:
-            try:
-                agent_profile = await policy_helpers.get_agent_by_user_id(db, submitted_agent_id)
-                if not agent_profile:
-                    logger.warning(f"Invalid agent_id submitted: {submitted_agent_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Agent with ID {submitted_agent_id} not found"
-                    )
-                policy_dict["agent_code"] = agent_profile.agent_code
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Error validating agent_id {submitted_agent_id}: {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid agent_id provided"
-                )
-        else:
-            if user_role == "agent":
-                agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
-                if agent_profile:
-                    policy_dict["agent_id"] = str(agent_profile.user_id)
-                    policy_dict["agent_code"] = agent_profile.agent_code
-                    logger.info(f"Auto-assigned agent_id {user_id} for agent user")
-                else:
-                    logger.warning(f"Agent profile not found for user {user_id}")
-                    policy_dict["agent_id"] = str(user_id)
-                    policy_dict["agent_code"] = None
-        
-        # Validate child_id if provided
-        submitted_child_id = policy_dict.get("child_id")
-        if submitted_child_id:
-            try:
-                child_details = await policy_helpers.get_child_id_details(db, submitted_child_id)
-                if not child_details:
-                    logger.warning(f"Invalid child_id submitted: {submitted_child_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Child ID {submitted_child_id} not found"
-                    )
-                # Auto-populate broker info from child_id
-                policy_dict["broker_name"] = child_details.broker
-                policy_dict["insurance_company"] = child_details.insurance_company
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Error validating child_id {submitted_child_id}: {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid child_id provided"
-                )
-        
-        policy = await policy_helpers.create_policy(
-            db=db,
-            policy_data=policy_dict,
-            file_path=pdf_file_path,
-            file_name=pdf_file_name,
-            uploaded_by=user_id
-        )
-        
-        return PolicyResponse.model_validate(policy)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error submitting policy: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to submit policy"
-        )

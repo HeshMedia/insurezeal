@@ -27,6 +27,7 @@ from .schemas import (
 from .helpers import AdminHelpers
 from .cutpay import router as cutpay_router
 from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+from utils.google_sheets import google_sheets_sync
 from typing import Optional
 import logging
 
@@ -258,13 +259,33 @@ async def assign_child_id(
     
     try:
         admin_user_id = current_user["supabase_user"].id
-        
         child_request = await admin_helpers.approve_child_request(
             db=db,
             request_id=request_id,
             assignment_data=assignment_data.dict(),
             admin_user_id=admin_user_id
-        )        
+        )
+        
+        # Sync to Google Sheets
+        child_request_dict = {
+            'id': child_request.id,
+            'user_id': child_request.user_id,
+            'insurance_company': child_request.insurance_company,
+            'broker': child_request.broker,
+            'location': child_request.location,
+            'phone_number': child_request.phone_number,
+            'email': child_request.email,
+            'preferred_rm_name': child_request.preferred_rm_name,
+            'status': child_request.status,
+            'child_id': child_request.child_id,
+            'broker_code': child_request.broker_code,
+            'branch_code': child_request.branch_code,
+            'region': child_request.region,
+            'created_at': child_request.created_at,
+            'updated_at': child_request.updated_at
+        }
+        google_sheets_sync.sync_child_id_request(child_request_dict, "APPROVE")
+               
         return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
@@ -294,13 +315,33 @@ async def reject_child_request(
     
     try:
         admin_user_id = current_user["supabase_user"].id
-        
         child_request = await admin_helpers.reject_child_request(
             db=db,
             request_id=request_id,
             admin_notes=rejection_data.admin_notes,
             admin_user_id=admin_user_id
-        )        
+        )
+        
+        # Sync to Google Sheets
+        child_request_dict = {
+            'id': child_request.id,
+            'user_id': child_request.user_id,
+            'insurance_company': child_request.insurance_company,
+            'broker': child_request.broker,
+            'location': child_request.location,
+            'phone_number': child_request.phone_number,
+            'email': child_request.email,
+            'preferred_rm_name': child_request.preferred_rm_name,
+            'status': child_request.status,
+            'child_id': child_request.child_id,
+            'broker_code': child_request.broker_code,
+            'branch_code': child_request.branch_code,
+            'region': child_request.region,
+            'created_at': child_request.created_at,
+            'updated_at': child_request.updated_at
+        }
+        google_sheets_sync.sync_child_id_request(child_request_dict, "REJECT")
+               
         return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:
@@ -337,7 +378,28 @@ async def suspend_child_id(
             request_id=request_id,
             admin_notes=suspension_data.admin_notes,
             admin_user_id=admin_user_id
-        )        
+        )
+        
+        # Sync to Google Sheets
+        child_request_dict = {
+            'id': child_request.id,
+            'user_id': child_request.user_id,
+            'insurance_company': child_request.insurance_company,
+            'broker': child_request.broker,
+            'location': child_request.location,
+            'phone_number': child_request.phone_number,
+            'email': child_request.email,
+            'preferred_rm_name': child_request.preferred_rm_name,
+            'status': child_request.status,
+            'child_id': child_request.child_id,
+            'broker_code': child_request.broker_code,
+            'branch_code': child_request.branch_code,
+            'region': child_request.region,
+            'created_at': child_request.created_at,
+            'updated_at': child_request.updated_at
+        }
+        google_sheets_sync.sync_child_id_request(child_request_dict, "SUSPEND")
+               
         return ChildIdResponse.model_validate(child_request)
         
     except HTTPException:

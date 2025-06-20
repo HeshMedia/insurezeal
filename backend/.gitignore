@@ -187,3 +187,6 @@ lambda_function.py
 *.tfstate.*
 terraform.tfvars
 .terraform/
+
+google_sheets.json
+credentials/

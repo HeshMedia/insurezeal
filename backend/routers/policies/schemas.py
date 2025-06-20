@@ -42,34 +42,41 @@ class PolicyCreate(PolicyBase):
     manual_override: Optional[bool] = False
     
     class Config:
-        json_schema_extra = {              "example": {
-                "agent_id": None,  # Will be auto-filled for agents or validated for admins
-                "agent_code": None,  # Auto-filled based on agent_id
-                "child_id": None,  # Must be a valid child_id from /policies/helpers/child-ids
-                "broker_name": None,  # Auto-filled based on child_id
-                "insurance_company": None,  # Auto-filled based on child_id
+        json_schema_extra = {            "example": {
+                # Agent & Child Info (optional - auto-filled for agents, validated for admins)
+                "agent_id": "123e4567-e89b-12d3-a456-426614174000",  # Will be auto-filled for agents or validated for admins
+                "agent_code": "AGT001",  # Auto-filled based on agent_id
+                "child_id": "CHILD123",  # Must be a valid child_id from /policies/helpers/child-ids
+                "broker_name": "Sample Broker",  # Auto-filled based on child_id
+                "insurance_company": "Sample Insurance Co",  # Auto-filled based on child_id
                 
+                # Policy Details (required)
                 "policy_number": "POL123456789",
                 "policy_type": "Motor",
                 "insurance_type": "Comprehensive",
                 
+                # Vehicle Details (optional)
                 "vehicle_type": "Car",
                 "registration_number": "MH01AB1234",
                 "vehicle_class": "M1",
                 "vehicle_segment": "Hatchback",
 
+                # Premium Details (optional)
                 "gross_premium": 15000.00,
                 "gst": 2700.00,
                 "net_premium": 12300.00,
                 "od_premium": 8500.00,
                 "tp_premium": 3800.00,
                 
+                # Dates (optional)
                 "start_date": "2025-01-01",
                 "end_date": "2026-01-01",
 
+                # File Info (required)
                 "pdf_file_path": "https://supabase.url/path/to/file.pdf",
                 "pdf_file_name": "policy.pdf",
                 
+                # AI Metadata (optional)
                 "ai_confidence_score": 0.85,
                 "manual_override": False
             }
