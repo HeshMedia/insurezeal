@@ -81,7 +81,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(error.message || 'Login failed')
     }
   }
-
   const register = async (data: any) => {
     try {
       const response = await authApi.register(data)
@@ -95,7 +94,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.push('/agent')
         }
       } else {
-        router.push('/verify-email')
+        // Redirect to verify email with email parameter
+        router.push(`/verify-email?email=${encodeURIComponent(data.email)}`)
       }
     } catch (error: any) {
       throw new Error(error.message || 'Registration failed')

@@ -5,7 +5,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes
-  const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email']
+  const publicRoutes = ['/login', '/register', '/reset-password', '/verify-email']
   
   // Check for our access token cookie
   const token = request.cookies.get('access_token')?.value
@@ -25,6 +25,5 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',  ],
 }

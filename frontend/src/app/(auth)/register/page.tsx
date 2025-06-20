@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useState } from "react"
-import { UserPlus, Lock, Mail, User, Users } from "lucide-react"
+import { UserPlus, Lock, Mail, User, Users, Eye, EyeOff } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
 
@@ -10,29 +10,27 @@ const RegisterPage = () => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    confirmPassword: '',
     username: '',
     first_name: '',
     last_name: ''
   })
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const { register } = useAuth()
-
-  const validateEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  }
-
   const handleRegister = async () => {
     if (!formData.email || !formData.password || !formData.username) {
       setError("Please fill in all required fields.")
       return
     }
-    if (!validateEmail(formData.email)) {
-      setError("Please enter a valid email address.")
-      return
-    }
     if (formData.password.length < 6) {
       setError("Password must be at least 6 characters long.")
+      return
+    }
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.")
       return
     }
     
@@ -40,7 +38,9 @@ const RegisterPage = () => {
     setLoading(true)
 
     try {
-      await register(formData)
+      // Remove confirmPassword from the data sent to register
+      const { confirmPassword, ...registerData } = formData
+      await register(registerData)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -72,12 +72,12 @@ const RegisterPage = () => {
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <Mail className="w-4 h-4" />
-            </span>
-            <input
+            </span>            <input
               placeholder="Email *"
               type="email"
               name="email"
               value={formData.email}
+              required
               className="w-full pl-10 pr-3 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-gray-50 text-black text-sm"
               onChange={handleChange}
               disabled={loading}
@@ -126,21 +126,51 @@ const RegisterPage = () => {
               />
             </div>
           </div>
-          
-          <div className="relative">
+            <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <Lock className="w-4 h-4" />
             </span>
             <input
               placeholder="Password *"
-              type="password"
+              type={showPassword ? "text" : "password"}
               name="password"
               value={formData.password}
               className="w-full pl-10 pr-10 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-gray-50 text-black text-sm"
               onChange={handleChange}
               disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              disabled={loading}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <Lock className="w-4 h-4" />
+            </span>
+            <input
+              placeholder="Confirm Password *"
+              type={showConfirmPassword ? "text" : "password"}
+              name="confirmPassword"
+              value={formData.confirmPassword}
+              className="w-full pl-10 pr-10 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-gray-50 text-black text-sm"
+              onChange={handleChange}
+              disabled={loading}
               onKeyPress={(e) => e.key === 'Enter' && handleRegister()}
             />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              disabled={loading}
+            >
+              {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
 
           {error && (
