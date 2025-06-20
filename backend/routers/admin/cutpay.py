@@ -19,6 +19,7 @@ from .cutpay_schemas import (
 )
 from .cutpay_helpers import CutPayHelpers
 from .helpers import AdminHelpers
+from utils.google_sheets import google_sheets_sync
 from typing import Optional
 from datetime import date
 import logging
@@ -51,6 +52,36 @@ async def create_cutpay_transaction(
         cutpay = await cutpay_helpers.create_cutpay_transaction(
             db, cutpay_data, current_user["supabase_user"].id
         )
+          # Sync to Google Sheets
+        try:
+            # Convert SQLAlchemy model to dict for Google Sheets sync
+            cutpay_dict = {
+                'id': cutpay.id,
+                'policy_number': cutpay.policy_number,
+                'agent_code': cutpay.agent_code,
+                'insurance_company': cutpay.insurance_company,
+                'broker': cutpay.broker,
+                'gross_amount': cutpay.gross_amount,
+                'net_premium': cutpay.net_premium,
+                'commission_grid': cutpay.commission_grid,
+                'agent_commission_given_percent': cutpay.agent_commission_given_percent,
+                'cut_pay_amount': cutpay.cut_pay_amount,
+                'payment_by': cutpay.payment_by,
+                'amount_received': cutpay.amount_received,
+                'payment_method': cutpay.payment_method,
+                'payment_source': cutpay.payment_source,
+                'transaction_date': cutpay.transaction_date,
+                'payment_date': cutpay.payment_date,
+                'notes': cutpay.notes,
+                'created_at': cutpay.created_at,
+                'updated_at': cutpay.updated_at
+            }
+            google_sheets_sync.sync_cutpay_transaction(cutpay_dict)
+            logger.info(f"Cut pay transaction {cutpay.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync cut pay transaction {cutpay.id} to Google Sheets: {str(sync_error)}")
+            # Don't fail the main operation if Google Sheets sync fails
+        
         return CutPayResponse.model_validate(cutpay)
         
     except HTTPException:
@@ -229,19 +260,48 @@ async def update_cutpay_transaction(
 ):
     """
     Update a cut pay transaction
-      **Admin only endpoint**
+    
+    **Admin only endpoint**
     
     - **cutpay_id**: The ID of the cut pay transaction to update
-      Updates the specified cut pay transaction with the provided data.
-    """
     
+    Updates the specified cut pay transaction with the provided data.
+    """
     try:
         cutpay = await cutpay_helpers.update_cutpay_transaction(db, cutpay_id, update_data)
         if not cutpay:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Cut pay transaction not found"
-            )
+            )        # Sync to Google Sheets
+        try:
+            # Convert SQLAlchemy model to dict for Google Sheets sync
+            cutpay_dict = {
+                'id': cutpay.id,
+                'policy_number': cutpay.policy_number,
+                'agent_code': cutpay.agent_code,
+                'insurance_company': cutpay.insurance_company,
+                'broker': cutpay.broker,
+                'gross_amount': cutpay.gross_amount,
+                'net_premium': cutpay.net_premium,
+                'commission_grid': cutpay.commission_grid,
+                'agent_commission_given_percent': cutpay.agent_commission_given_percent,
+                'cut_pay_amount': cutpay.cut_pay_amount,
+                'payment_by': cutpay.payment_by,
+                'amount_received': cutpay.amount_received,
+                'payment_method': cutpay.payment_method,
+                'payment_source': cutpay.payment_source,
+                'transaction_date': cutpay.transaction_date,
+                'payment_date': cutpay.payment_date,
+                'notes': cutpay.notes,
+                'created_at': cutpay.created_at,
+                'updated_at': cutpay.updated_at
+            }
+            google_sheets_sync.sync_cutpay_transaction(cutpay_dict, action="UPDATE")
+            logger.info(f"Updated cut pay transaction {cutpay.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync updated cut pay transaction {cutpay.id} to Google Sheets: {str(sync_error)}")
+            # Don't fail the main operation if Google Sheets sync fails
         
         return CutPayResponse.model_validate(cutpay)
         

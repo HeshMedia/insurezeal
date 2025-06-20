@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
     preferences: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
+    user_role: str
 
     class Config:
         from_attributes = True
