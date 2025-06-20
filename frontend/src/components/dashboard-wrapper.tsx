@@ -4,25 +4,33 @@ import { useAuth } from '@/lib/auth-context'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
-export default function Home() {
+interface DashboardWrapperProps {
+  children: React.ReactNode
+  requiredRole: 'admin' | 'agent'
+}
+
+export function DashboardWrapper({ children, requiredRole }: DashboardWrapperProps) {
   const { user, loading } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (!loading) {
-      if (user) {
+      if (!user) {
+        router.push('/login')
+        return
+      }
+
+      if (user.user_role !== requiredRole) {
+        // Redirect to their correct dashboard
         if (user.user_role === 'admin') {
           router.push('/admin')
         } else if (user.user_role === 'agent') {
           router.push('/agent')
-        } else {
-          router.push('/login')
         }
-      } else {
-        router.push('/login')
+        return
       }
     }
-  }, [user, loading, router])
+  }, [user, loading, requiredRole, router])
 
   if (loading) {
     return (
@@ -32,5 +40,9 @@ export default function Home() {
     )
   }
 
-  return null
+  if (!user || user.user_role !== requiredRole) {
+    return null
+  }
+
+  return <>{children}</>
 }
