@@ -19,34 +19,74 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor for error handling
+// Response interceptor for error handling and token refresh
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const originalRequest = error.config
+
+    // If we get 401 and haven't already tried refreshing
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true
+
+      const refreshToken = Cookies.get('refresh_token')
+      if (refreshToken) {
+        try {
+          const response = await axios.post(
+            `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${refreshToken}`
+          )
+          
+          const newToken = response.data.access_token
+          const rememberMe = localStorage.getItem('remember_me') === 'true'
+          
+          // Set cookie with appropriate expiry
+          Cookies.set('access_token', newToken, { 
+            expires: rememberMe ? 30 : 7,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+          })
+          
+          // Retry original request with new token
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          return apiClient(originalRequest)
+        } catch (refreshError) {
+          // Refresh failed, clear tokens and redirect to login
+          Cookies.remove('access_token')
+          Cookies.remove('refresh_token')
+          localStorage.removeItem('remember_me')
+          
+          // Only redirect if we're not already on a public page
+          if (typeof window !== 'undefined' && 
+              !window.location.pathname.includes('/login') && 
+              !window.location.pathname.includes('/register')) {
+            window.location.href = '/login'
+          }
+          return Promise.reject(refreshError)
+        }
+      } else {
+        // No refresh token, redirect to login
+        Cookies.remove('access_token')
+        Cookies.remove('refresh_token')
+        localStorage.removeItem('remember_me')
+        
+        if (typeof window !== 'undefined' && 
+            !window.location.pathname.includes('/login') && 
+            !window.location.pathname.includes('/register')) {
+          window.location.href = '/login'
+        }
+      }
+    }
+
     const message = error.response?.data?.detail || error.message || 'An error occurred'
     throw new Error(message)
   }
 )
 
-export const authApi = {
-  // Get current user
-  getCurrentUser: async () => {
-    const response = await apiClient.get('/auth/me')
-    return response.data
-  },
-
-  // Login
+export const authApi = {  // Login
   login: async (data: LoginData): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', data)
-    const result = response.data
-    
-    // Store tokens in cookies
-    Cookies.set('access_token', result.access_token, { expires: 7 })
-    Cookies.set('refresh_token', result.refresh_token, { expires: 30 })
-
-    return result
+    return response.data
   },
-
   // Register
   register: async (data: RegisterData): Promise<AuthResponse> => {
     try {
@@ -55,37 +95,38 @@ export const authApi = {
           'Content-Type': 'application/json',
         },
       })
-      const result = response.data
-      
-      // Store tokens in cookies if registration is successful
-      if (result.access_token) {
-        Cookies.set('access_token', result.access_token, { expires: 7 })
-        Cookies.set('refresh_token', result.refresh_token, { expires: 30 })
-      }
-
-      return result
+      return response.data
     } catch (error: any) {
       const message = error.response?.data?.detail || error.message 
       throw new Error(message)
     }
   },
-
   // Refresh token
   refreshToken: async (refreshToken: string) => {
-    const response = await apiClient.post(`/auth/refresh?refresh_token=${refreshToken}`)
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${refreshToken}`
+    )
     const result = response.data
     
     // Update cookies with new tokens
     if (result.access_token) {
-      Cookies.set('access_token', result.access_token, { expires: 7 })
+      const rememberMe = localStorage.getItem('remember_me') === 'true'
+      Cookies.set('access_token', result.access_token, { 
+        expires: rememberMe ? 30 : 7,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      })
       if (result.refresh_token) {
-        Cookies.set('refresh_token', result.refresh_token, { expires: 30 })
+        Cookies.set('refresh_token', result.refresh_token, { 
+          expires: rememberMe ? 365 : 30,
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production'
+        })
       }
     }
 
     return result
   },
-
   // Logout
   logout: async () => {
     try {
@@ -96,6 +137,7 @@ export const authApi = {
       // Always clear cookies
       Cookies.remove('access_token')
       Cookies.remove('refresh_token')
+      localStorage.removeItem('remember_me')
     }
   },
 

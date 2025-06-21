@@ -5,24 +5,31 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 export default function Home() {
-  const { user, loading } = useAuth()
+  const { user, loading, checkAuth } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading) {
-      if (user) {
-        if (user.user_role === 'admin') {
-          router.push('/admin')
-        } else if (user.user_role === 'agent') {
-          router.push('/agent')
-        } else {
-          router.push('/login')
-        }
+    const handleRouting = async () => {
+      if (loading) return
+
+      // If no user, try to check auth again (in case of page refresh)
+      if (!user) {
+        await checkAuth()
+        return
+      }
+
+      // Route based on user role
+      if (user.user_role === 'admin') {
+        router.replace('/admin')
+      } else if (user.user_role === 'agent') {
+        router.replace('/agent')
       } else {
-        router.push('/login')
+        router.replace('/login')
       }
     }
-  }, [user, loading, router])
+
+    handleRouting()
+  }, [user, loading, router, checkAuth])
 
   if (loading) {
     return (
@@ -32,5 +39,12 @@ export default function Home() {
     )
   }
 
-  return null
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-4">InsureZeal</h1>
+        <p className="text-gray-600">Redirecting...</p>
+      </div>
+    </div>
+  )
 }
