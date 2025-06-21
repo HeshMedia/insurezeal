@@ -11,7 +11,9 @@ from routers.auth.auth import get_current_user
 logger = logging.getLogger(__name__)
 
 RESOURCES_FOR_ROLES = {
-    'admin': {        'admin/agents': ['read', 'write', 'delete'],
+    'admin': {
+        'admin': ['read', 'write'],  # Added base admin permissions
+        'admin/agents': ['read', 'write', 'delete'],
         'admin/stats': ['read'],
         'admin/child-requests': ['read', 'write', 'update'],
         'admin/cutpay': ['read', 'write', 'update', 'delete'],
@@ -32,7 +34,7 @@ RESOURCES_FOR_ROLES = {
 }
 
 def normalize_path(path: str) -> str:
-    """Normalize request path for RBAC checking"""
+    """Normalize request path for RBAC checking"""    
     if path.startswith('/'):
         path = path[1:]
 
@@ -51,6 +53,8 @@ def normalize_path(path: str) -> str:
                 return 'admin/stats'
             elif segments[1] == 'child-requests':
                 return 'admin/child-requests'
+            elif segments[1] == 'universal-records':
+                return 'admin'  # Universal records use base admin permissions
         return 'admin'
     
     elif segments[0] == 'users':

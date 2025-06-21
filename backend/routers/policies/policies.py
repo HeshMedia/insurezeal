@@ -1,9 +1,12 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import Depends, HTTPException, APIRouter, status, Query, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import Field
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import date
+import io
 
 from config import get_db
 from routers.auth.auth import get_current_user
@@ -459,5 +462,62 @@ async def get_agent_options(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch agent options"
+        )
+
+@router.get("/export/csv")
+async def export_policies_csv(
+    start_date: Optional[date] = Query(None, description="Start date for filtering (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date for filtering (YYYY-MM-DD)"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_read)
+):
+    """
+    Export policies to CSV
+    
+    **Requires policy read permission**
+    
+    - **start_date**: Optional start date for filtering (format: YYYY-MM-DD)
+    - **end_date**: Optional end date for filtering (format: YYYY-MM-DD)
+    
+    Returns a CSV file containing all policies.
+    If no date filters are provided, all policies are exported.
+    Agents can only export their own policies, admins can export all policies.
+    """
+    
+    try:
+        user_id = current_user["supabase_user"].id
+        user_role = current_user.get("user_role", "user")
+        
+        # For agents, filter by their user_id; for admins, no filter
+        filter_user_id = str(user_id) if user_role != "admin" else None
+        
+        csv_content = await policy_helpers.export_policies_to_csv(
+            db, filter_user_id, start_date, end_date
+        )
+        
+        # Generate filename
+        filename = "policies"
+        if start_date and end_date:
+            filename += f"_{start_date}_{end_date}"
+        elif start_date:
+            filename += f"_from_{start_date}"
+        elif end_date:
+            filename += f"_until_{end_date}"
+        filename += ".csv"
+        
+        return StreamingResponse(
+            io.BytesIO(csv_content.encode('utf-8')),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in export_policies_csv: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to export policies to CSV"
         )
 

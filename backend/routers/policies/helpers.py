@@ -436,3 +436,98 @@ class PolicyHelpers:
                 policy_data['insurance_type'] = 'Standard'
         
         return policy_data
+    
+    @staticmethod
+    async def export_policies_to_csv(
+        db: AsyncSession,
+        user_id: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> str:
+        """Export policies to CSV format"""
+        try:
+            import csv
+            import io
+            
+            query = select(Policy)
+            
+            # Apply user filter if provided (for agents)
+            if user_id:
+                query = query.where(Policy.uploaded_by == uuid.UUID(user_id))
+            
+            # Apply date filters
+            if start_date and end_date:
+                query = query.where(
+                    and_(
+                        Policy.created_at >= datetime.combine(start_date, datetime.min.time()),
+                        Policy.created_at <= datetime.combine(end_date, datetime.max.time())
+                    )
+                )
+            elif start_date:
+                query = query.where(Policy.created_at >= datetime.combine(start_date, datetime.min.time()))
+            elif end_date:
+                query = query.where(Policy.created_at <= datetime.combine(end_date, datetime.max.time()))
+            
+            query = query.order_by(desc(Policy.created_at))
+            
+            result = await db.execute(query)
+            policies = result.scalars().all()
+            
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # CSV Headers
+            headers = [
+                'ID', 'Policy Number', 'Policy Type', 'Insurance Type',
+                'Agent ID', 'Agent Code', 'Child ID', 'Broker Name', 'Insurance Company',
+                'Vehicle Type', 'Registration Number', 'Vehicle Class', 'Vehicle Segment',
+                'Gross Premium', 'GST', 'Net Premium', 'OD Premium', 'TP Premium',
+                'Start Date', 'End Date', 'Uploaded By', 'PDF File Name',
+                'AI Confidence Score', 'Manual Override', 'Created At', 'Updated At'
+            ]
+            writer.writerow(headers)
+            
+            # Write policy data
+            for policy in policies:
+                row = [
+                    str(policy.id),
+                    policy.policy_number or '',
+                    policy.policy_type or '',
+                    policy.insurance_type or '',
+                    str(policy.agent_id) if policy.agent_id else '',
+                    policy.agent_code or '',
+                    policy.child_id or '',
+                    policy.broker_name or '',
+                    policy.insurance_company or '',
+                    policy.vehicle_type or '',
+                    policy.registration_number or '',
+                    policy.vehicle_class or '',
+                    policy.vehicle_segment or '',
+                    policy.gross_premium or '',
+                    policy.gst or '',
+                    policy.net_premium or '',
+                    policy.od_premium or '',
+                    policy.tp_premium or '',
+                    policy.start_date.strftime('%Y-%m-%d') if policy.start_date else '',
+                    policy.end_date.strftime('%Y-%m-%d') if policy.end_date else '',
+                    str(policy.uploaded_by) if policy.uploaded_by else '',
+                    policy.pdf_file_name or '',
+                    policy.ai_confidence_score or '',
+                    'Yes' if policy.manual_override else 'No',
+                    policy.created_at.strftime('%Y-%m-%d %H:%M:%S') if policy.created_at else '',
+                    policy.updated_at.strftime('%Y-%m-%d %H:%M:%S') if policy.updated_at else ''
+                ]
+                writer.writerow(row)
+            
+            csv_content = output.getvalue()
+            output.close()
+            
+            logger.info(f"CSV export generated with {len(policies)} policies")
+            return csv_content
+            
+        except Exception as e:
+            logger.error(f"Error exporting policies to CSV: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to export policies to CSV"
+            )
