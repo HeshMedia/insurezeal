@@ -24,10 +24,17 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const message = error.response?.data?.detail || error.message || 'An error occurred'
-    throw new Error(message)  }
+    throw new Error(message)
+  }
 )
 
 export const authApi = {
+  // Get current user
+  getCurrentUser: async () => {
+    const response = await apiClient.get('/auth/me')
+    return response.data
+  },
+
   // Login
   login: async (data: LoginData): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', data)
@@ -38,7 +45,9 @@ export const authApi = {
     Cookies.set('refresh_token', result.refresh_token, { expires: 30 })
 
     return result
-  },  // Register
+  },
+
+  // Register
   register: async (data: RegisterData): Promise<AuthResponse> => {
     try {
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, data, {
@@ -102,9 +111,15 @@ export const authApi = {
     return response.data
   },
 
-  // Get current user
-  getCurrentUser: async () => {
-    const response = await apiClient.get('/users/me')
+  // Verify email
+  verifyEmail: async (token: string) => {
+    const response = await apiClient.post('/auth/verify-email', { token })
     return response.data
-  }
+  },
+
+  // Resend verification email
+  resendVerificationEmail: async (email: string) => {
+    const response = await apiClient.post('/auth/resend-verification', { email })
+    return response.data
+  },
 }

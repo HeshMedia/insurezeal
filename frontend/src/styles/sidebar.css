@@ -1,0 +1,71 @@
+/* Custom sidebar styling for better collapsed state */
+[data-sidebar="sidebar"][data-state="collapsed"] {
+  width: 4rem !important;
+}
+
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-menu-button {
+  justify-content: center;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-menu-button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  margin: 0 auto;
+}
+
+/* Hide text content when collapsed */
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-menu-button span:not(.sr-only) {
+  display: none;
+}
+
+/* Hide group labels when collapsed */
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-group-label {
+  display: none;
+}
+
+/* Better hover states */
+.sidebar-menu-button:hover {
+  background-color: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+/* Active state styling */
+.sidebar-menu-button[data-active="true"] {
+  background-color: rgb(219 234 254);
+  color: rgb(30 64 175);
+  font-weight: 500;
+}
+
+/* Profile section styling */
+.sidebar-footer .sidebar-menu-button {
+  border-radius: 0.75rem;
+}
+
+/* Collapsed state avatar */
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-footer .sidebar-menu-button {
+  padding: 0.75rem;
+  justify-content: center;
+}
+
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-footer .sidebar-menu-button .avatar {
+  margin: 0 auto;
+}
+
+/* Hide footer text content when collapsed */
+[data-sidebar="sidebar"][data-state="collapsed"] .sidebar-footer .sidebar-menu-button > div:not(:first-child) {
+  display: none;
+}
+
+/* Ensure proper spacing in expanded mode */
+[data-sidebar="sidebar"][data-state="expanded"] .sidebar-menu-button {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Prevent icon shrinking */
+.sidebar-menu-button svg {
+  flex-shrink: 0;
+}

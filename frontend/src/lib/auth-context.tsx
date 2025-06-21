@@ -34,7 +34,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     checkAuth()
   }, [])
-
   const checkAuth = async () => {
     try {
       const token = Cookies.get('access_token')
