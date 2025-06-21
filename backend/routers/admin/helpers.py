@@ -6,6 +6,7 @@ from models import UserProfile, UserDocument, ChildIdRequest
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Any, List
 import logging
+from datetime import datetime
 from supabase import Client
 from config import get_supabase_admin_client
 
@@ -650,3 +651,406 @@ class AdminHelpers:
         except Exception as e:
             logger.error(f"Error checking child ID existence: {str(e)}")
             return False
+
+    async def process_universal_record_csv(
+        self,
+        db: AsyncSession,
+        csv_content: str,
+        admin_user_id: str
+    ) -> Dict[str, Any]:
+        """
+        Process universal record CSV and reconcile with existing data
+        
+        Args:
+            db: Database session
+            csv_content: Raw CSV content
+            admin_user_id: ID of admin user performing the operation
+            
+        Returns:
+            Dictionary containing reconciliation report
+        """
+        import csv
+        import io
+        from datetime import datetime
+        from models import Policy, CutPay
+        from routers.policies.helpers import PolicyHelpers
+        from routers.admin.cutpay_helpers import CutPayHelpers
+        
+        start_time = datetime.now()
+        
+        try:
+            # Parse CSV content
+            universal_records = await self._parse_universal_csv(csv_content)
+            
+            # Initialize counters and tracking
+            report = {
+                'total_records_processed': len(universal_records),
+                'policies_updated': 0,
+                'policies_added': 0,
+                'cutpay_updated': 0,
+                'cutpay_added': 0,
+                'no_changes': 0,
+                'errors': [],
+                'processing_summary': []
+            }
+            
+            policy_helpers = PolicyHelpers()
+            cutpay_helpers = CutPayHelpers()
+            
+            # Process each record
+            for record in universal_records:
+                try:
+                    summary = await self._reconcile_single_record(
+                        db, record, policy_helpers, cutpay_helpers, admin_user_id
+                    )
+                    
+                    # Update counters based on what was processed
+                    if summary['action'] == 'updated':
+                        if 'policy' in summary['record_type']:
+                            report['policies_updated'] += 1
+                        if 'cutpay' in summary['record_type']:
+                            report['cutpay_updated'] += 1
+                    elif summary['action'] == 'added':
+                        if 'policy' in summary['record_type']:
+                            report['policies_added'] += 1
+                        if 'cutpay' in summary['record_type']:
+                            report['cutpay_added'] += 1
+                    else:
+                        report['no_changes'] += 1
+                    
+                    report['processing_summary'].append(summary)
+                    
+                except Exception as e:
+                    error_msg = f"Error processing record {record.get('policy_number', 'unknown')}: {str(e)}"
+                    logger.error(error_msg)
+                    report['errors'].append(error_msg)
+            
+            # Commit all changes
+            await db.commit()
+            
+            processing_time = (datetime.now() - start_time).total_seconds()
+            
+            logger.info(f"Universal record processing completed in {processing_time:.2f}s")
+            logger.info(f"Processed {report['total_records_processed']} records")
+            logger.info(f"Policies: {report['policies_updated']} updated, {report['policies_added']} added")
+            logger.info(f"Cut Pay: {report['cutpay_updated']} updated, {report['cutpay_added']} added")
+            
+            return {
+                **report,
+                'processing_time_seconds': processing_time
+            }
+            
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Error processing universal record: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to process universal record: {str(e)}"
+            )
+    
+    async def _parse_universal_csv(self, csv_content: str) -> List[Dict[str, Any]]:
+        """Parse CSV content into list of dictionaries"""
+        import csv
+        import io
+        from datetime import datetime
+        
+        try:
+            csv_file = io.StringIO(csv_content)
+            reader = csv.DictReader(csv_file)
+            
+            records = []
+            for row in reader:
+                # Clean and convert data types
+                clean_row = {}
+                for key, value in row.items():
+                    if value is None or value.strip() == '':
+                        clean_row[key.lower().replace(' ', '_')] = None
+                    else:
+                        # Convert dates
+                        if 'date' in key.lower():
+                            try:
+                                clean_row[key.lower().replace(' ', '_')] = datetime.strptime(value.strip(), '%Y-%m-%d').date()
+                            except:
+                                clean_row[key.lower().replace(' ', '_')] = None
+                        # Convert numbers
+                        elif any(field in key.lower() for field in ['premium', 'amount', 'gst', 'percent']):
+                            try:
+                                clean_row[key.lower().replace(' ', '_')] = float(value.strip())
+                            except:
+                                clean_row[key.lower().replace(' ', '_')] = None
+                        else:
+                            clean_row[key.lower().replace(' ', '_')] = value.strip()
+                
+                if clean_row.get('policy_number'):
+                    records.append(clean_row)
+            
+            return records
+            
+        except Exception as e:
+            logger.error(f"Error parsing CSV: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid CSV format: {str(e)}"
+            )
+    
+    async def _reconcile_single_record(
+        self,
+        db: AsyncSession,
+        universal_record: Dict[str, Any],
+        policy_helpers,
+        cutpay_helpers,
+        admin_user_id: str
+    ) -> Dict[str, Any]:
+        """Reconcile a single universal record with existing data"""
+        from models import Policy, CutPay
+        from sqlalchemy import select
+        
+        policy_number = universal_record['policy_number']
+        summary = {
+            'policy_number': policy_number,
+            'record_type': '',
+            'action': 'no_change',
+            'updated_fields': [],
+            'old_values': {},
+            'new_values': {}
+        }
+        
+        try:
+            # Check for existing policy
+            policy_query = select(Policy).where(Policy.policy_number == policy_number)
+            policy_result = await db.execute(policy_query)
+            existing_policy = policy_result.scalar_one_or_none()
+            
+            # Check for existing cut pay
+            cutpay_query = select(CutPay).where(CutPay.policy_number == policy_number)
+            cutpay_result = await db.execute(cutpay_query)
+            existing_cutpay = cutpay_result.scalar_one_or_none()
+            
+            # Process policy data
+            policy_updated = False
+            if self._has_policy_data(universal_record):
+                if existing_policy:
+                    policy_updated = await self._update_policy_from_universal(
+                        db, existing_policy, universal_record, summary
+                    )
+                else:
+                    await self._create_policy_from_universal(
+                        db, universal_record, admin_user_id, summary
+                    )
+                    policy_updated = True
+            
+            # Process cut pay data
+            cutpay_updated = False
+            if self._has_cutpay_data(universal_record):
+                if existing_cutpay:
+                    cutpay_updated = await self._update_cutpay_from_universal(
+                        db, existing_cutpay, universal_record, summary
+                    )
+                else:
+                    await self._create_cutpay_from_universal(
+                        db, universal_record, admin_user_id, summary
+                    )
+                    cutpay_updated = True
+            
+            # Set summary record type and action
+            record_types = []
+            if self._has_policy_data(universal_record):
+                record_types.append('policy')
+            if self._has_cutpay_data(universal_record):
+                record_types.append('cutpay')
+            
+            summary['record_type'] = '+'.join(record_types)
+            
+            if policy_updated or cutpay_updated:
+                if existing_policy or existing_cutpay:
+                    summary['action'] = 'updated'
+                else:
+                    summary['action'] = 'added'
+            
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Error reconciling record {policy_number}: {str(e)}")
+            raise
+    
+    def _has_policy_data(self, record: Dict[str, Any]) -> bool:
+        """Check if record contains policy-specific data"""
+        policy_fields = ['policy_type', 'insurance_type', 'vehicle_type', 'registration_number', 'start_date', 'end_date']
+        return any(record.get(field) is not None for field in policy_fields)
+    
+    def _has_cutpay_data(self, record: Dict[str, Any]) -> bool:
+        """Check if record contains cut pay-specific data"""
+        cutpay_fields = ['cut_pay_amount', 'commission_grid', 'payment_by', 'amount_received', 'payment_method']
+        return any(record.get(field) is not None for field in cutpay_fields)
+    
+    async def _update_policy_from_universal(
+        self,
+        db: AsyncSession,
+        existing_policy,
+        universal_record: Dict[str, Any],
+        summary: Dict[str, Any]
+    ) -> bool:
+        """Update existing policy with universal record data"""
+        updated = False
+        
+        # Map universal record fields to policy model fields
+        field_mappings = {
+            'policy_type': 'policy_type',
+            'insurance_type': 'insurance_type',
+            'agent_code': 'agent_code',
+            'broker_name': 'broker_name',
+            'insurance_company': 'insurance_company',
+            'vehicle_type': 'vehicle_type',
+            'registration_number': 'registration_number',
+            'vehicle_class': 'vehicle_class',
+            'vehicle_segment': 'vehicle_segment',
+            'gross_premium': 'gross_premium',
+            'gst': 'gst',
+            'net_premium': 'net_premium',
+            'od_premium': 'od_premium',
+            'tp_premium': 'tp_premium',
+            'start_date': 'start_date',
+            'end_date': 'end_date'
+        }
+        
+        for universal_field, policy_field in field_mappings.items():
+            if universal_record.get(universal_field) is not None:
+                current_value = getattr(existing_policy, policy_field)
+                new_value = universal_record[universal_field]
+                
+                if current_value != new_value:
+                    summary['old_values'][policy_field] = current_value
+                    summary['new_values'][policy_field] = new_value
+                    summary['updated_fields'].append(policy_field)
+                    setattr(existing_policy, policy_field, new_value)
+                    updated = True
+        
+        if updated:
+            existing_policy.updated_at = datetime.now()
+        
+        return updated
+    
+    async def _create_policy_from_universal(
+        self,
+        db: AsyncSession,
+        universal_record: Dict[str, Any],
+        admin_user_id: str,        summary: Dict[str, Any]
+    ):
+        """Create new policy from universal record"""
+        from models import Policy
+        policy_data = {
+            'policy_number': universal_record['policy_number'],
+            'policy_type': universal_record.get('policy_type', 'Universal Import'),  # Required field
+            'insurance_type': universal_record.get('insurance_type'),
+            'agent_code': universal_record.get('agent_code'),
+            'broker_name': universal_record.get('broker_name'),
+            'insurance_company': universal_record.get('insurance_company'),
+            'vehicle_type': universal_record.get('vehicle_type'),
+            'registration_number': universal_record.get('registration_number'),
+            'vehicle_class': universal_record.get('vehicle_class'),
+            'vehicle_segment': universal_record.get('vehicle_segment'),
+            'gross_premium': universal_record.get('gross_premium'),
+            'gst': universal_record.get('gst'),
+            'net_premium': universal_record.get('net_premium'),
+            'od_premium': universal_record.get('od_premium'),
+            'tp_premium': universal_record.get('tp_premium'),
+            'start_date': universal_record.get('start_date'),
+            'end_date': universal_record.get('end_date'),
+            'uploaded_by': admin_user_id,
+            'pdf_file_path': 'universal_record_import',  # Required field - provide default
+            'pdf_file_name': 'universal_record_import.csv'  # Required field
+        }
+        
+        # Remove None values
+        policy_data = {k: v for k, v in policy_data.items() if v is not None}
+        
+        new_policy = Policy(**policy_data)
+        db.add(new_policy)
+        await db.flush()  # Get the ID
+        
+        summary['new_values'].update(policy_data)
+    
+    async def _update_cutpay_from_universal(
+        self,
+        db: AsyncSession,
+        existing_cutpay,
+        universal_record: Dict[str, Any],
+        summary: Dict[str, Any]
+    ) -> bool:
+        """Update existing cut pay with universal record data"""
+        updated = False
+        
+        # Map universal record fields to cutpay model fields
+        field_mappings = {
+            'agent_code': 'agent_code',
+            'insurance_company': 'insurance_company',
+            'broker_name': 'broker',
+            'gross_premium': 'gross_amount',
+            'net_premium': 'net_premium',
+            'commission_grid': 'commission_grid',
+            'agent_commission_given_percent': 'agent_commission_given_percent',
+            'cut_pay_amount': 'cut_pay_amount',
+            'payment_by': 'payment_by',
+            'amount_received': 'amount_received',
+            'payment_method': 'payment_method',
+            'payment_source': 'payment_source',
+            'transaction_date': 'transaction_date',
+            'payment_date': 'payment_date',
+            'notes': 'notes'
+        }
+        
+        for universal_field, cutpay_field in field_mappings.items():
+            if universal_record.get(universal_field) is not None:
+                current_value = getattr(existing_cutpay, cutpay_field)
+                new_value = universal_record[universal_field]
+                
+                if current_value != new_value:
+                    summary['old_values'][cutpay_field] = current_value
+                    summary['new_values'][cutpay_field] = new_value
+                    summary['updated_fields'].append(cutpay_field)
+                    setattr(existing_cutpay, cutpay_field, new_value)
+                    updated = True
+        
+        if updated:
+            existing_cutpay.updated_at = datetime.now()
+        
+        return updated
+    
+    async def _create_cutpay_from_universal(
+        self,
+        db: AsyncSession,
+        universal_record: Dict[str, Any],
+        admin_user_id: str,
+        summary: Dict[str, Any]
+    ):
+        """Create new cut pay from universal record"""
+        from models import CutPay
+        
+        cutpay_data = {
+            'policy_number': universal_record['policy_number'],
+            'agent_code': universal_record.get('agent_code', ''),
+            'insurance_company': universal_record.get('insurance_company', ''),
+            'broker': universal_record.get('broker_name', ''),
+            'gross_amount': universal_record.get('gross_premium', 0.0),
+            'net_premium': universal_record.get('net_premium', 0.0),
+            'commission_grid': universal_record.get('commission_grid', ''),
+            'agent_commission_given_percent': universal_record.get('agent_commission_given_percent', 0.0),
+            'cut_pay_amount': universal_record.get('cut_pay_amount', 0.0),
+            'payment_by': universal_record.get('payment_by', ''),
+            'amount_received': universal_record.get('amount_received', 0.0),
+            'payment_method': universal_record.get('payment_method', ''),
+            'payment_source': universal_record.get('payment_source', ''),
+            'transaction_date': universal_record.get('transaction_date'),
+            'payment_date': universal_record.get('payment_date'),
+            'notes': universal_record.get('notes'),
+            'created_by': admin_user_id
+        }
+        
+        # Remove None values and ensure required fields have defaults
+        cutpay_data = {k: v for k, v in cutpay_data.items() if v is not None}
+        
+        new_cutpay = CutPay(**cutpay_data)
+        db.add(new_cutpay)
+        await db.flush()  # Get the ID
+        
+        summary['new_values'].update(cutpay_data)

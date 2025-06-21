@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_db
@@ -8,6 +8,7 @@ from dependencies.rbac import (
     require_admin_agents_write, 
     require_admin_agents_delete,
     require_admin_read,
+    require_admin_write,
     require_admin_stats,
     require_admin_child_requests,
     require_admin_child_requests_write,
@@ -22,7 +23,8 @@ from .schemas import (
     ChildIdRequestList,
     ChildIdResponse,
     ChildIdAssignment,
-    ChildIdStatusUpdate
+    ChildIdStatusUpdate,
+    UniversalRecordUploadResponse
 )
 from .helpers import AdminHelpers
 from .cutpay import router as cutpay_router
@@ -434,4 +436,204 @@ async def get_child_id_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch child ID statistics"
+        )
+
+
+#<------------------Universal Record Management------------------>
+
+@router.post("/universal-records/upload", response_model=UniversalRecordUploadResponse)
+async def upload_universal_record(
+    file: UploadFile = File(..., description="Universal record CSV file"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_write)
+):
+    """
+    Upload and process universal record CSV for data reconciliation
+    
+    **Admin only endpoint**
+    
+    This endpoint processes a universal record CSV file from external companies
+    that contains both policy and cut pay transaction data. The universal record
+    is considered the source of truth and will be used to:
+    
+    1. **Update existing records** where data mismatches are found
+    2. **Add missing records** that exist in universal record but not in our system
+    3. **Generate detailed report** of all changes made
+    
+    **CSV Requirements:**
+    - Must contain 'policy_number' column as unique identifier
+    - Can contain any combination of policy and cut pay fields
+    - Date fields should be in YYYY-MM-DD format
+    - Numeric fields should be valid numbers
+    
+    **Process Flow:**
+    1. Parse and validate CSV content
+    2. For each record, find matching policy/cut pay by policy number
+    3. Compare universal record data with existing data
+    4. Update fields where universal record differs from our data
+    5. Create new records if they don't exist in our system
+    6. Generate comprehensive reconciliation report
+    
+    **Returns:**
+    - Detailed report showing what was updated/added
+    - Processing statistics and timing
+    - List of any errors encountered
+    """
+    
+    try:
+        # Validate file type
+        if not file.filename.lower().endswith('.csv'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only CSV files are allowed"
+            )
+        
+        # Read file content
+        file_content = await file.read()
+        csv_content = file_content.decode('utf-8')
+        
+        # Validate file is not empty
+        if not csv_content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="CSV file is empty"
+            )
+        
+        admin_user_id = current_user["supabase_user"].id
+        
+        # Process the universal record
+        result = await admin_helpers.process_universal_record_csv(
+            db=db,
+            csv_content=csv_content,
+            admin_user_id=admin_user_id
+        )
+        
+        logger.info(f"Universal record processed by admin {admin_user_id}")
+        logger.info(f"File: {file.filename}, Size: {len(file_content)} bytes")
+        
+        return UniversalRecordUploadResponse(
+            message=f"Universal record processed successfully. "
+                   f"Processed {result['total_records_processed']} records in "
+                   f"{result['processing_time_seconds']:.2f} seconds.",
+            report=result,
+            processing_time_seconds=result['processing_time_seconds']
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing universal record: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process universal record: {str(e)}"
+        )
+
+@router.get("/universal-records/template")
+async def download_universal_record_template(
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_read)
+):
+    """
+    Download CSV template for universal record upload
+    
+    **Admin only endpoint**
+    
+    Returns a CSV template file showing the expected format and all possible
+    fields that can be included in a universal record upload.
+    """
+    
+    try:
+        from fastapi.responses import StreamingResponse
+        import io
+        import csv
+        
+        # Define template headers with all possible fields
+        headers = [
+            # Required field
+            'policy_number',
+            
+            # Policy fields
+            'policy_type',
+            'insurance_type', 
+            'agent_code',
+            'broker_name',
+            'insurance_company',
+            'vehicle_type',
+            'registration_number',
+            'vehicle_class',
+            'vehicle_segment',
+            'gross_premium',
+            'gst',
+            'net_premium',
+            'od_premium',
+            'tp_premium',
+            'start_date',
+            'end_date',
+            
+            # Cut pay fields
+            'cut_pay_amount',
+            'commission_grid',
+            'agent_commission_given_percent',
+            'payment_by',
+            'amount_received',
+            'payment_method',
+            'payment_source',
+            'transaction_date',
+            'payment_date',
+            'notes'
+        ]
+        
+        # Create sample data
+        sample_data = [
+            'POL-2024-001',  # policy_number
+            'Motor Insurance',  # policy_type
+            'Comprehensive',  # insurance_type
+            'AGT001',  # agent_code
+            'ABC Insurance Brokers',  # broker_name
+            'ICICI Lombard',  # insurance_company
+            'Car',  # vehicle_type
+            'MH12AB1234',  # registration_number
+            'Private Car',  # vehicle_class
+            'Sedan',  # vehicle_segment
+            25000.00,  # gross_premium
+            4500.00,  # gst
+            20500.00,  # net_premium
+            15000.00,  # od_premium
+            5500.00,  # tp_premium
+            '2024-01-01',  # start_date
+            '2024-12-31',  # end_date
+            2500.00,  # cut_pay_amount
+            '10%',  # commission_grid
+            12.5,  # agent_commission_given_percent
+            'John Smith',  # payment_by
+            2500.00,  # amount_received
+            'Bank Transfer',  # payment_method
+            'Company Account',  # payment_source
+            '2024-01-15',  # transaction_date
+            '2024-01-20',  # payment_date
+            'Sample transaction'  # notes
+        ]
+        
+        # Create CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerow(sample_data)
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Return as downloadable file
+        return StreamingResponse(
+            io.BytesIO(csv_content.encode('utf-8')),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=universal_record_template.csv"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating template: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate template"
         )

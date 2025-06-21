@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from routers.users.schemas import GenderEnum, EducationLevelEnum
 from enum import Enum
@@ -191,3 +191,64 @@ class AdminStatsResponse(BaseModel):
     total_agents: int
     new_agents_this_month: int
     total_documents: int
+
+# Universal Record Schemas for Data Reconciliation
+class UniversalRecordItem(BaseModel):
+    """Schema for a single universal record item from CSV"""
+    policy_number: str = Field(..., description="Policy number - unique identifier")
+    
+    # Policy fields
+    policy_type: Optional[str] = None
+    insurance_type: Optional[str] = None
+    agent_code: Optional[str] = None
+    broker_name: Optional[str] = None
+    insurance_company: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    registration_number: Optional[str] = None
+    vehicle_class: Optional[str] = None
+    vehicle_segment: Optional[str] = None
+    gross_premium: Optional[float] = None
+    gst: Optional[float] = None
+    net_premium: Optional[float] = None
+    od_premium: Optional[float] = None
+    tp_premium: Optional[float] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    
+    # Cut pay fields
+    cut_pay_amount: Optional[float] = None
+    commission_grid: Optional[str] = None
+    agent_commission_given_percent: Optional[float] = None
+    payment_by: Optional[str] = None
+    amount_received: Optional[float] = None
+    payment_method: Optional[str] = None
+    payment_source: Optional[str] = None
+    transaction_date: Optional[date] = None
+    payment_date: Optional[date] = None
+    notes: Optional[str] = None
+
+class RecordUpdateSummary(BaseModel):
+    """Summary of what was updated for a single record"""
+    policy_number: str
+    record_type: str  # "policy", "cutpay", or "both"
+    action: str  # "updated", "added", "no_change"
+    updated_fields: List[str] = []
+    old_values: Dict[str, Any] = {}
+    new_values: Dict[str, Any] = {}
+
+class ReconciliationReport(BaseModel):
+    """Report of what was updated/added during reconciliation"""
+    total_records_processed: int
+    policies_updated: int
+    policies_added: int
+    cutpay_updated: int
+    cutpay_added: int
+    no_changes: int
+    errors: List[str] = []
+    processing_summary: List[RecordUpdateSummary] = []
+
+class UniversalRecordUploadResponse(BaseModel):
+    """Response after uploading universal record"""
+    message: str
+    report: ReconciliationReport
+    processing_time_seconds: float
