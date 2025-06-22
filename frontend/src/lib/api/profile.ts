@@ -17,12 +17,22 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
+console.log('Profile API Base URL:', process.env.NEXT_PUBLIC_API_URL)
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use((config) => {
   const token = Cookies.get('access_token')
+  console.log('API Request token:', token ? 'Token present' : 'No token found')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  console.log('API Request:', {
+    method: config.method,
+    url: config.url,
+    baseURL: config.baseURL,
+    headers: config.headers,
+    data: config.data
+  })
   return config
 })
 
@@ -30,7 +40,32 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.detail || error.message || 'An error occurred'
+    console.error('API Error Details:', {
+      response: error.response?.data,
+      status: error.response?.status,
+      message: error.message,
+      config: error.config
+    })
+    
+    // Extract meaningful error message
+    let message = 'An unexpected error occurred'
+    
+    if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        message = error.response.data
+      } else if (error.response.data.detail) {
+        message = error.response.data.detail
+      } else if (error.response.data.message) {
+        message = error.response.data.message
+      } else if (error.response.data.error) {
+        message = error.response.data.error
+      } else {
+        message = `Server error (${error.response.status})`
+      }
+    } else if (error.message) {
+      message = error.message
+    }
+    
     throw new Error(message)
   }
 )
@@ -41,11 +76,17 @@ export const profileApi = {
     const response = await apiClient.get('/users/me')
     return response.data
   },
-
   // Update current user profile
   updateProfile: async (data: UpdateProfileRequest): Promise<UserProfile> => {
-    const response = await apiClient.put('/users/me', data)
-    return response.data
+    console.log('Updating profile with data:', data)
+    try {
+      const response = await apiClient.put('/users/me', data)
+      console.log('Profile update response:', response.data)
+      return response.data
+    } catch (error) {
+      console.error('Profile update failed:', error)
+      throw error
+    }
   },
 
   // Upload profile image
@@ -93,105 +134,4 @@ export const profileApi = {
   },
 }
 
-// TanStack Query Keys
-export const profileQueryKeys = {
-  all: ['profile'] as const,
-  profile: () => [...profileQueryKeys.all, 'current'] as const,
-  documents: () => [...profileQueryKeys.all, 'documents'] as const,
-}
 
-// TanStack Query Hooks
-export const useProfile = () => {
-  return {
-    // Query hooks
-    useGetProfile: () => {
-      const { useQuery } = require('@tanstack/react-query')
-      return useQuery({
-        queryKey: profileQueryKeys.profile(),
-        queryFn: profileApi.getCurrentProfile,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        gcTime: 10 * 60 * 1000, // 10 minutes
-      })
-    },
-
-    useGetDocuments: () => {
-      const { useQuery } = require('@tanstack/react-query')
-      return useQuery({
-        queryKey: profileQueryKeys.documents(),
-        queryFn: profileApi.getUserDocuments,
-        staleTime: 2 * 60 * 1000, // 2 minutes
-      })
-    },
-
-    // Mutation hooks
-    useUpdateProfile: () => {
-      const { useMutation, useQueryClient } = require('@tanstack/react-query')
-      const queryClient = useQueryClient()
-
-      return useMutation({
-        mutationFn: profileApi.updateProfile,
-        onSuccess: (data: UserProfile) => {
-          // Update the profile cache
-          queryClient.setQueryData(profileQueryKeys.profile(), data)
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.profile() })
-        },
-      })
-    },
-
-    useUploadProfileImage: () => {
-      const { useMutation, useQueryClient } = require('@tanstack/react-query')
-      const queryClient = useQueryClient()
-
-      return useMutation({
-        mutationFn: profileApi.uploadProfileImage,
-        onSuccess: () => {
-          // Invalidate profile cache to refetch with new image
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.profile() })
-        },
-      })
-    },
-
-    useDeleteProfileImage: () => {
-      const { useMutation, useQueryClient } = require('@tanstack/react-query')
-      const queryClient = useQueryClient()
-
-      return useMutation({
-        mutationFn: profileApi.deleteProfileImage,
-        onSuccess: () => {
-          // Invalidate profile cache to refetch without image
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.profile() })
-        },
-      })
-    },
-
-    useUploadDocument: () => {
-      const { useMutation, useQueryClient } = require('@tanstack/react-query')
-      const queryClient = useQueryClient()
-
-      return useMutation({
-        mutationFn: profileApi.uploadDocument,
-        onSuccess: () => {
-          // Invalidate documents cache to show new document
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.documents() })
-          // Also invalidate profile to update document_urls if needed
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.profile() })
-        },
-      })
-    },
-
-    useDeleteDocument: () => {
-      const { useMutation, useQueryClient } = require('@tanstack/react-query')
-      const queryClient = useQueryClient()
-
-      return useMutation({
-        mutationFn: profileApi.deleteDocument,
-        onSuccess: () => {
-          // Invalidate documents cache to remove deleted document
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.documents() })
-          // Also invalidate profile to update document_urls if needed
-          queryClient.invalidateQueries({ queryKey: profileQueryKeys.profile() })
-        },
-      })
-    },
-  }
-}

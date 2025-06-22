@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { Home, LogOut, User, Settings, BarChart3, Users, FileText, Shield } from "lucide-react"
+import { Home, User, Settings, BarChart3, Users, FileText, Shield } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { useProfile } from "@/hooks/profileQuery"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Sidebar,
@@ -52,13 +53,10 @@ const navigationItems = [
 ]
 
 export function AdminSidebar({ ...props }) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
+  const { data: profile } = useProfile()
   const router = useRouter()
   const pathname = usePathname()
-
-  const handleLogout = async () => {
-    await logout()
-  }
 
   const handleProfileClick = () => {
     router.push('/admin/profile')
@@ -127,35 +125,20 @@ export function AdminSidebar({ ...props }) {
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
-        </SidebarGroup>        <SidebarGroup className="mt-6">
-          <SidebarGroupLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-            Account
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  onClick={handleLogout}
-                  className="h-10 px-3 text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors flex items-center gap-3"
-                  tooltip="Logout"
-                >
-                  <LogOut className="size-4 shrink-0" />
-                  <span className="font-medium truncate">Logout</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>      <SidebarFooter className="border-t border-gray-100 p-4">
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton 
+          <SidebarMenuItem>            <SidebarMenuButton 
               onClick={handleProfileClick}
               size="lg"
               className="h-14 px-3 data-[state=open]:bg-blue-50 data-[state=open]:text-blue-700 hover:bg-gray-50 transition-colors flex items-center gap-3"
               tooltip={`Profile - ${getDisplayName()}`}
-            >
-              <Avatar className="h-8 w-8 rounded-lg ring-2 ring-blue-100 shrink-0">
+            >              <Avatar className="h-8 w-8 rounded-lg ring-2 ring-blue-100 shrink-0">
+                <AvatarImage 
+                  src={profile?.avatar_url} 
+                  alt={getDisplayName()}
+                  className="object-cover"
+                />
                 <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-700 text-white text-xs font-bold rounded-lg">
                   {getInitials(user?.first_name, user?.last_name, user?.username)}
                 </AvatarFallback>

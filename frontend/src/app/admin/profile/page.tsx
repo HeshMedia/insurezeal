@@ -1,9 +1,12 @@
-import React from 'react'
+'use client'
 
-function Profile() {
+import React from 'react'
+import { AdminProfileView } from '@/components/profile/admin-profile-view'
+
+export default function AdminProfilePage() {
   return (
-    <div>Profile</div>
+    <div className="w-full">
+      <AdminProfileView />
+    </div>
   )
 }
-
-export default Profile
