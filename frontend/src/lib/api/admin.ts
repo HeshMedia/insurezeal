@@ -82,7 +82,8 @@ interface UniversalRecordUploadResponse {
       policy_number: string
       record_type: string
       action: string
-      updated_fields: string[]      old_values: Record<string, unknown>
+      updated_fields: string[]    
+      old_values: Record<string, unknown>
       new_values: Record<string, unknown>
     }>
   }
