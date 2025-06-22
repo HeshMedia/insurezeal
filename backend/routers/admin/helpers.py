@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 from supabase import Client
 from config import get_supabase_admin_client
+from utils.google_sheets import google_sheets_sync
 
 logger = logging.getLogger(__name__)
 
@@ -917,7 +918,6 @@ class AdminHelpers:
             if universal_record.get(universal_field) is not None:
                 current_value = getattr(existing_policy, policy_field)
                 new_value = universal_record[universal_field]
-                
                 if current_value != new_value:
                     summary['old_values'][policy_field] = current_value
                     summary['new_values'][policy_field] = new_value
@@ -927,14 +927,50 @@ class AdminHelpers:
         
         if updated:
             existing_policy.updated_at = datetime.now()
-        
+            
+            # Sync to Google Sheets
+            try:
+                policy_dict_for_sheets = {
+                    'id': existing_policy.id,
+                    'policy_number': existing_policy.policy_number,
+                    'policy_type': existing_policy.policy_type,
+                    'insurance_type': existing_policy.insurance_type,
+                    'agent_id': existing_policy.agent_id,
+                    'agent_code': existing_policy.agent_code,
+                    'child_id': existing_policy.child_id,
+                    'broker_name': existing_policy.broker_name,
+                    'insurance_company': existing_policy.insurance_company,
+                    'vehicle_type': existing_policy.vehicle_type,
+                    'registration_number': existing_policy.registration_number,
+                    'vehicle_class': existing_policy.vehicle_class,
+                    'vehicle_segment': existing_policy.vehicle_segment,
+                    'gross_premium': existing_policy.gross_premium,
+                    'gst': existing_policy.gst,
+                    'net_premium': existing_policy.net_premium,
+                    'od_premium': existing_policy.od_premium,
+                    'tp_premium': existing_policy.tp_premium,
+                    'start_date': existing_policy.start_date,
+                    'end_date': existing_policy.end_date,
+                    'uploaded_by': existing_policy.uploaded_by,
+                    'pdf_file_name': existing_policy.pdf_file_name,
+                    'ai_confidence_score': existing_policy.ai_confidence_score,
+                    'manual_override': existing_policy.manual_override,
+                    'created_at': existing_policy.created_at,
+                    'updated_at': existing_policy.updated_at
+                }
+                google_sheets_sync.sync_policy(policy_dict_for_sheets, "UPDATE")
+                logger.info(f"Universal record updated policy {existing_policy.id} synced to Google Sheets")
+            except Exception as sync_error:
+                logger.error(f"Failed to sync universal record updated policy {existing_policy.id} to Google Sheets: {str(sync_error)}")
+                # Don't fail the main operation if Google Sheets sync fails        
         return updated
     
     async def _create_policy_from_universal(
         self,
         db: AsyncSession,
         universal_record: Dict[str, Any],
-        admin_user_id: str,        summary: Dict[str, Any]
+        admin_user_id: str,
+        summary: Dict[str, Any]
     ):
         """Create new policy from universal record"""
         from models import Policy
@@ -962,13 +998,48 @@ class AdminHelpers:
         }
         
         # Remove None values
-        policy_data = {k: v for k, v in policy_data.items() if v is not None}
-        
+        policy_data = {k: v for k, v in policy_data.items() if v is not None}        
         new_policy = Policy(**policy_data)
         db.add(new_policy)
         await db.flush()  # Get the ID
         
         summary['new_values'].update(policy_data)
+        
+        # Sync to Google Sheets
+        try:
+            policy_dict_for_sheets = {
+                'id': new_policy.id,
+                'policy_number': new_policy.policy_number,
+                'policy_type': new_policy.policy_type,
+                'insurance_type': new_policy.insurance_type,
+                'agent_id': new_policy.agent_id,
+                'agent_code': new_policy.agent_code,
+                'child_id': new_policy.child_id,
+                'broker_name': new_policy.broker_name,
+                'insurance_company': new_policy.insurance_company,
+                'vehicle_type': new_policy.vehicle_type,
+                'registration_number': new_policy.registration_number,
+                'vehicle_class': new_policy.vehicle_class,
+                'vehicle_segment': new_policy.vehicle_segment,
+                'gross_premium': new_policy.gross_premium,
+                'gst': new_policy.gst,
+                'net_premium': new_policy.net_premium,
+                'od_premium': new_policy.od_premium,
+                'tp_premium': new_policy.tp_premium,
+                'start_date': new_policy.start_date,
+                'end_date': new_policy.end_date,
+                'uploaded_by': new_policy.uploaded_by,
+                'pdf_file_name': new_policy.pdf_file_name,
+                'ai_confidence_score': new_policy.ai_confidence_score,
+                'manual_override': new_policy.manual_override,
+                'created_at': new_policy.created_at,
+                'updated_at': new_policy.updated_at
+            }
+            google_sheets_sync.sync_policy(policy_dict_for_sheets, "CREATE")
+            logger.info(f"Universal record policy {new_policy.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync universal record policy {new_policy.id} to Google Sheets: {str(sync_error)}")
+            # Don't fail the main operation if Google Sheets sync fails
     
     async def _update_cutpay_from_universal(
         self,
@@ -980,7 +1051,6 @@ class AdminHelpers:
         """Update existing cut pay with universal record data"""
         updated = False
         
-        # Map universal record fields to cutpay model fields
         field_mappings = {
             'agent_code': 'agent_code',
             'insurance_company': 'insurance_company',
@@ -1010,9 +1080,37 @@ class AdminHelpers:
                     summary['updated_fields'].append(cutpay_field)
                     setattr(existing_cutpay, cutpay_field, new_value)
                     updated = True
-        
         if updated:
             existing_cutpay.updated_at = datetime.now()
+            
+            # Sync to Google Sheets
+            try:
+                cutpay_dict_for_sheets = {
+                    'id': existing_cutpay.id,
+                    'policy_number': existing_cutpay.policy_number,
+                    'agent_code': existing_cutpay.agent_code,
+                    'insurance_company': existing_cutpay.insurance_company,
+                    'broker': existing_cutpay.broker,
+                    'gross_amount': existing_cutpay.gross_amount,
+                    'net_premium': existing_cutpay.net_premium,
+                    'commission_grid': existing_cutpay.commission_grid,
+                    'agent_commission_given_percent': existing_cutpay.agent_commission_given_percent,
+                    'cut_pay_amount': existing_cutpay.cut_pay_amount,
+                    'payment_by': existing_cutpay.payment_by,
+                    'amount_received': existing_cutpay.amount_received,
+                    'payment_method': existing_cutpay.payment_method,
+                    'payment_source': existing_cutpay.payment_source,
+                    'transaction_date': existing_cutpay.transaction_date,
+                    'payment_date': existing_cutpay.payment_date,
+                    'notes': existing_cutpay.notes,
+                    'created_at': existing_cutpay.created_at,
+                    'updated_at': existing_cutpay.updated_at
+                }
+                google_sheets_sync.sync_cutpay_transaction(cutpay_dict_for_sheets, "UPDATE")
+                logger.info(f"Universal record updated cut pay {existing_cutpay.id} synced to Google Sheets")
+            except Exception as sync_error:
+                logger.error(f"Failed to sync universal record updated cut pay {existing_cutpay.id} to Google Sheets: {str(sync_error)}")
+                # Don't fail the main operation if Google Sheets sync fails
         
         return updated
     
@@ -1045,8 +1143,7 @@ class AdminHelpers:
             'notes': universal_record.get('notes'),
             'created_by': admin_user_id
         }
-        
-        # Remove None values and ensure required fields have defaults
+          # Remove None values and ensure required fields have defaults
         cutpay_data = {k: v for k, v in cutpay_data.items() if v is not None}
         
         new_cutpay = CutPay(**cutpay_data)
@@ -1054,3 +1151,32 @@ class AdminHelpers:
         await db.flush()  # Get the ID
         
         summary['new_values'].update(cutpay_data)
+        
+        # Sync to Google Sheets
+        try:
+            cutpay_dict_for_sheets = {
+                'id': new_cutpay.id,
+                'policy_number': new_cutpay.policy_number,
+                'agent_code': new_cutpay.agent_code,
+                'insurance_company': new_cutpay.insurance_company,
+                'broker': new_cutpay.broker,
+                'gross_amount': new_cutpay.gross_amount,
+                'net_premium': new_cutpay.net_premium,
+                'commission_grid': new_cutpay.commission_grid,
+                'agent_commission_given_percent': new_cutpay.agent_commission_given_percent,
+                'cut_pay_amount': new_cutpay.cut_pay_amount,
+                'payment_by': new_cutpay.payment_by,
+                'amount_received': new_cutpay.amount_received,
+                'payment_method': new_cutpay.payment_method,
+                'payment_source': new_cutpay.payment_source,
+                'transaction_date': new_cutpay.transaction_date,
+                'payment_date': new_cutpay.payment_date,
+                'notes': new_cutpay.notes,
+                'created_at': new_cutpay.created_at,
+                'updated_at': new_cutpay.updated_at
+            }
+            google_sheets_sync.sync_cutpay_transaction(cutpay_dict_for_sheets, "CREATE")
+            logger.info(f"Universal record cut pay {new_cutpay.id} synced to Google Sheets")
+        except Exception as sync_error:
+            logger.error(f"Failed to sync universal record cut pay {new_cutpay.id} to Google Sheets: {str(sync_error)}")
+            # Don't fail the main operation if Google Sheets sync fails
