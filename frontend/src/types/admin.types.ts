@@ -1,0 +1,251 @@
+// Cutpay Transaction Types
+export interface CutPayTransaction {
+  id: number
+  policy_number: string
+  agent_code: string
+  insurance_company: string
+  broker: string
+  gross_amount: number
+  net_premium: number
+  commission_grid: string
+  agent_commission_given_percent: number
+  cut_pay_amount: number
+  payment_by: string
+  amount_received: number
+  payment_method: string
+  payment_source: string
+  transaction_date: string
+  payment_date: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateCutPayRequest {
+  policy_number: string
+  agent_code: string
+  insurance_company: string
+  broker: string
+  gross_amount: number
+  net_premium: number
+  commission_grid: string
+  agent_commission_given_percent: number
+  cut_pay_amount: number
+  payment_by: string
+  amount_received: number
+  payment_method: string
+  payment_source: string
+  transaction_date: string
+  payment_date?: string
+  notes?: string
+}
+
+export interface UpdateCutPayRequest {
+  policy_number?: string
+  agent_code?: string
+  insurance_company?: string
+  broker?: string
+  gross_amount?: number
+  net_premium?: number
+  commission_grid?: string
+  agent_commission_given_percent?: number
+  cut_pay_amount?: number
+  payment_by?: string
+  amount_received?: number
+  payment_method?: string
+  payment_source?: string
+  transaction_date?: string
+  payment_date?: string
+  notes?: string
+}
+
+export interface CutPaySummary {
+  id: number
+  policy_number: string
+  agent_code: string
+  insurance_company: string
+  broker: string
+  cut_pay_amount: number
+  amount_received: number
+  transaction_date: string
+  created_at: string
+}
+
+export interface CutPayListResponse {
+  transactions: CutPaySummary[]
+  total_count: number
+  page: number
+  page_size: number
+}
+
+export interface CutPayListParams {
+  agent_code?: string
+  page?: number
+  page_size?: number
+  search?: string
+}
+
+export interface CutPayStats {
+  total_transactions: number
+  total_cut_pay_amount: number
+  total_amount_received: number
+  average_cut_pay_amount: number
+  monthly_breakdown: Array<{
+    month?: string
+    year?: number
+    total_amount?: number
+    transaction_count?: number
+  }>
+  top_agents: Array<{
+    agent_code?: string
+    agent_name?: string
+    total_cut_pay_amount?: number
+    transaction_count?: number
+  }>
+}
+
+export interface CutPayStatsResponse {
+  stats: CutPayStats
+}
+
+// Agent Types
+export type GenderEnum = 'male' | 'female' | 'other' | null
+export type EducationLevelEnum = 
+  | 'high_school' 
+  | 'diploma' 
+  | 'bachelors' 
+  | 'masters' 
+  | 'doctorate' 
+  | 'professional' 
+  | null
+
+export interface AgentSummary {
+  id: string
+  user_id: string
+  first_name: string | null
+  last_name: string | null
+  email: string
+  mobile_number: string | null
+  agent_code: string | null
+  user_role: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AgentListResponse {
+  agents: AgentSummary[]
+  total_count: number
+  page: number
+  page_size: number
+}
+
+export interface AgentListParams {
+  page?: number
+  page_size?: number
+  search?: string
+}
+
+export interface AgentDetails {
+  id: string
+  user_id: string
+  email: string
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  middle_name: string | null
+  father_name: string | null
+  mother_name: string | null
+  date_of_birth: string | null
+  gender: GenderEnum
+  mobile_number: string | null
+  alternate_mobile: string | null
+  alternate_email: string | null
+  permanent_address_line1: string | null
+  permanent_address_line2: string | null
+  permanent_city: string | null
+  permanent_state: string | null
+  permanent_pincode: string | null
+  communication_same_as_permanent: boolean | null
+  communication_address_line1: string | null
+  communication_address_line2: string | null
+  communication_city: string | null
+  communication_state: string | null
+  communication_pincode: string | null
+  aadhaar_number: string | null
+  pan_number: string | null
+  education_level: EducationLevelEnum
+  specialization: string | null
+  previous_insurance_experience: boolean | null
+  years_of_experience: number | null
+  previous_company_name: string | null
+  bank_name: string | null
+  account_number: string | null
+  ifsc_code: string | null
+  branch_name: string | null
+  nominee_name: string | null
+  nominee_relationship: string | null
+  nominee_date_of_birth: string | null
+  preferred_language: string | null
+  territory_preference: string | null
+  agent_code: string | null
+  user_role: string
+  avatar_url: string | null
+  preferences: Record<string, any> | null
+  created_at: string
+  updated_at: string
+  document_urls: Record<string, string>
+  display_name: string | null
+  bio: string | null
+  timezone: string | null
+  language: string | null
+}
+
+export interface AdminStats {
+  total_agents: number
+  new_agents_this_month: number
+  total_documents: number
+}
+
+// Child Request Types
+export type ChildRequestStatus = 'pending' | 'accepted' | 'rejected' | 'suspended'
+
+export interface ChildRequest {
+  id: string
+  user_id: string
+  insurance_company: string
+  broker: string
+  location: string
+  phone_number: string
+  email: string
+  preferred_rm_name: string | null
+  status: ChildRequestStatus
+  child_id: string | null
+  broker_code: string | null
+  branch_code: string | null
+  region: string | null
+  manager_name: string | null
+  manager_email: string | null
+  commission_percentage: number | null
+  policy_limit: number | null
+  admin_notes: string | null
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AssignChildIdRequest {
+  child_id: string
+  broker_code: string
+  branch_code?: string
+  region?: string
+  manager_name?: string
+  manager_email?: string
+  commission_percentage?: number
+  policy_limit?: number
+  admin_notes?: string
+}
+
+export interface UpdateChildRequestStatusRequest {
+  admin_notes: string
+}
