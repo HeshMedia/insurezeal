@@ -19,11 +19,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // If authenticated and trying to access auth pages (but not home), redirect to home
-  if (token && ['/login', '/register'].includes(pathname)) {
-    console.log('Redirecting to home - has token')
-    return NextResponse.redirect(new URL('/', request.url))
-  }
+  // // If authenticated and trying to access auth pages (but not home), redirect to home
+  // if (token && ['/login', '/register'].includes(pathname)) {
+  //   console.log('Redirecting to home - has token')
+  //   return NextResponse.redirect(new URL('/', request.url))
+  // }
 
   return NextResponse.next()
 }

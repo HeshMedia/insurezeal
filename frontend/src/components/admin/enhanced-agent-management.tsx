@@ -1,0 +1,469 @@
+"use client"
+
+import { useState } from "react"
+import { useAtom } from "jotai"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAgentList, useDeleteAgent } from "@/hooks/adminQuery"
+import { agentListParamsAtom, selectedAgentIdAtom, isAgentDialogOpenAtom } from "@/lib/atoms/admin"
+import { AgentSummary } from "@/types/admin.types"
+import { cn } from "@/lib/utils"
+import { 
+  Search, 
+  Filter, 
+  Download, 
+  MoreHorizontal, 
+  Eye, 
+  Edit,
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+  ArrowLeft,
+  ArrowRight,
+  UserPlus,
+  Trash2
+} from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
+
+function AgentCard({ agent, onViewDetails, onDelete }: { 
+  agent: AgentSummary; 
+  onViewDetails: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const getInitials = (firstName?: string | null, lastName?: string | null) => {
+    if (firstName && lastName) {
+      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+    }
+    if (firstName) {
+      return firstName.charAt(0).toUpperCase()
+    }
+    return 'A'
+  }
+
+  const getDisplayName = () => {
+    if (agent.first_name && agent.last_name) {
+      return `${agent.first_name} ${agent.last_name}`
+    }
+    if (agent.first_name) {
+      return agent.first_name
+    }
+    return 'Unknown Agent'
+  }
+
+  return (
+    <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-12 w-12">
+              <AvatarImage src="" alt={getDisplayName()} />
+              <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-700 text-white font-semibold">
+                {getInitials(agent.first_name, agent.last_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <CardTitle className="text-lg font-semibold text-gray-900">
+                {getDisplayName()}
+              </CardTitle>
+              <div className="flex items-center gap-2 mt-1">
+                {agent.agent_code && (
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {agent.agent_code}
+                  </Badge>
+                )}
+                <Badge 
+                  variant="secondary" 
+                  className={cn(
+                    "text-xs",
+                    agent.user_role === 'admin' ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
+                  )}
+                >
+                  {agent.user_role}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => onViewDetails(agent.id)}
+                className="cursor-pointer"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer">
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Profile
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => onDelete(agent.id)}
+                className="cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Agent
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2 text-gray-600">
+            <Mail className="h-4 w-4 text-gray-400" />
+            <span className="truncate">{agent.email}</span>
+          </div>
+          {agent.mobile_number && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <Phone className="h-4 w-4 text-gray-400" />
+              <span>{agent.mobile_number}</span>
+            </div>
+          )}          <div className="flex items-center gap-2 text-gray-600">
+            <Calendar className="h-4 w-4 text-gray-400" />
+            <span>
+              Joined {agent.created_at ? new Date(agent.created_at).toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+              }) : 'Unknown'}
+            </span>
+          </div>
+        </div>
+        <div className="mt-4">
+          <Button
+            onClick={() => onViewDetails(agent.id)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            size="sm"
+          >
+            View Profile
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function EnhancedAgentManagement() {
+  const [params, setParams] = useAtom(agentListParamsAtom)
+  const [, setSelectedId] = useAtom(selectedAgentIdAtom)
+  const [, setDialogOpen] = useAtom(isAgentDialogOpenAtom)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [agentToDelete, setAgentToDelete] = useState<string | null>(null)
+
+  const { data: agentData, isLoading, error } = useAgentList(params)
+  const deleteAgentMutation = useDeleteAgent()
+
+  const handleSearch = () => {
+    setParams(prev => ({ ...prev, search: searchQuery, page: 1 }))
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setParams(prev => ({ ...prev, page: newPage }))
+  }
+
+  const handleViewDetails = (agentId: string) => {
+    setSelectedId(agentId)
+    setDialogOpen(true)
+  }
+
+  const handleDeleteClick = (agentId: string) => {
+    setAgentToDelete(agentId)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!agentToDelete) return
+
+    try {
+      await deleteAgentMutation.mutateAsync(agentToDelete)
+      toast.success('Agent deleted successfully')
+      setDeleteDialogOpen(false)
+      setAgentToDelete(null)
+    } catch (error: any) {
+      toast.error(`Failed to delete agent: ${error.message}`)
+    }
+  }
+
+  const handlePageSizeChange = (newPageSize: string) => {
+    setParams(prev => ({ ...prev, page_size: parseInt(newPageSize), page: 1 }))
+  }
+
+  if (error) {
+    return (
+      <Card className="border-red-200 bg-red-50">
+        <CardContent className="p-6">
+          <p className="text-red-600">Failed to load agent data: {error instanceof Error ? error.message : 'Unknown error'}</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Agent Management</h2>
+          <p className="text-gray-600">Manage agent profiles and monitor their activities</p>
+        </div>        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
+            {viewMode === 'grid' ? 'List View' : 'Grid View'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-gray-700">Total Agents</CardTitle>
+            <div className="p-2 bg-blue-50 rounded-lg">
+              <Users className="h-4 w-4 text-blue-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {agentData?.total_count || 0}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Registered agents</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-green-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-gray-700">Active Agents</CardTitle>
+            <div className="p-2 bg-green-50 rounded-lg">
+              <Users className="h-4 w-4 text-green-600" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-gray-900">
+              {agentData?.agents?.filter(a => a.agent_code).length || 0}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">With agent codes</p>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="text-sm font-medium text-gray-700">Recent Joins</CardTitle>
+            <div className="p-2 bg-purple-50 rounded-lg">
+              <Calendar className="h-4 w-4 text-purple-600" />
+            </div>
+          </CardHeader>
+          <CardContent>            <div className="text-2xl font-bold text-gray-900">
+              {agentData?.agents?.filter(a => {
+                if (!a.created_at) return false
+                const joinDate = new Date(a.created_at)
+                const thirtyDaysAgo = new Date()
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+                return joinDate > thirtyDaysAgo
+              }).length || 0}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Last 30 days</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters and Search */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search by name, email, agent code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSearch} variant="outline" className="shrink-0">
+                <Search className="h-4 w-4 mr-2" />
+                Search
+              </Button>
+              <Button variant="outline" className="shrink-0">
+                <Filter className="h-4 w-4 mr-2" />
+                Filter
+              </Button>
+              <Button variant="outline" className="shrink-0">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Agents Grid/List */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg font-semibold">Agents</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Show</span>
+              <Select
+                value={params.page_size?.toString() || "20"}
+                onValueChange={handlePageSizeChange}
+              >
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-gray-500">entries</span>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className={cn(
+              "grid gap-4",
+              viewMode === 'grid' ? "md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
+            )}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-3/4" />
+                      <Skeleton className="h-8 w-full mt-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : agentData?.agents?.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-2">
+                <Users className="h-12 w-12 mx-auto" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">No agents found</h3>
+              <p className="text-gray-500">No agents match your current search criteria.</p>
+            </div>
+          ) : (
+            <div className={cn(
+              "grid gap-4",
+              viewMode === 'grid' ? "md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
+            )}>
+              {agentData?.agents?.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  onViewDetails={handleViewDetails}
+                  onDelete={handleDeleteClick}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {agentData && agentData.agents.length > 0 && (
+            <div className="flex items-center justify-between mt-6">
+              <div className="text-sm text-gray-500">
+                Showing {((agentData.page - 1) * agentData.page_size) + 1} to{' '}
+                {Math.min(agentData.page * agentData.page_size, agentData.total_count)} of{' '}
+                {agentData.total_count} agents
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(agentData.page - 1)}
+                  disabled={agentData.page <= 1}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Page {agentData.page} of {Math.ceil(agentData.total_count / agentData.page_size)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(agentData.page + 1)}
+                  disabled={agentData.page >= Math.ceil(agentData.total_count / agentData.page_size)}
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Agent</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this agent? This action cannot be undone and will permanently 
+              remove the agent's profile, documents, and all associated data from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAgentToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteAgentMutation.isPending}
+            >
+              {deleteAgentMutation.isPending ? 'Deleting...' : 'Delete Agent'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

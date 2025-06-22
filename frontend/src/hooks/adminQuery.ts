@@ -5,8 +5,9 @@ import {
   UpdateCutPayRequest, 
   CutPayListParams,
   AgentListParams,
+  ChildRequestListParams,
   AssignChildIdRequest,
-  UpdateChildRequestStatusRequest
+  ChildRequestStatusUpdate
 } from '@/types/admin.types'
 
 // Query keys
@@ -26,9 +27,13 @@ const ADMIN_QUERY_KEYS = {
     details: () => [...ADMIN_QUERY_KEYS.agents.all, 'detail'] as const,
     detail: (id: string) => [...ADMIN_QUERY_KEYS.agents.details(), id] as const,
   },
-  stats: ['admin', 'stats'] as const,
-  childRequests: {
+  stats: ['admin', 'stats'] as const,  childRequests: {
     all: ['admin', 'childRequests'] as const,
+    lists: () => [...ADMIN_QUERY_KEYS.childRequests.all, 'list'] as const,
+    list: (params?: ChildRequestListParams) => [...ADMIN_QUERY_KEYS.childRequests.lists(), params] as const,
+    details: () => [...ADMIN_QUERY_KEYS.childRequests.all, 'detail'] as const,
+    detail: (id: string) => [...ADMIN_QUERY_KEYS.childRequests.details(), id] as const,
+    stats: () => [...ADMIN_QUERY_KEYS.childRequests.all, 'stats'] as const,
   }
 }
 
@@ -106,6 +111,22 @@ export const useAdminStats = () => {
   })
 }
 
+// Child Request Queries
+export const useChildRequestList = (params?: ChildRequestListParams) => {
+  return useQuery({
+    queryKey: ADMIN_QUERY_KEYS.childRequests.list(params),
+    queryFn: () => adminApi.childRequests.list(params),
+  })
+}
+
+export const useChildRequestById = (requestId: string) => {
+  return useQuery({
+    queryKey: ADMIN_QUERY_KEYS.childRequests.detail(requestId),
+    queryFn: () => adminApi.childRequests.getById(requestId),
+    enabled: !!requestId,
+  })
+}
+
 // Child Request Mutations
 export const useAssignChildId = () => {
   const queryClient = useQueryClient()
@@ -124,7 +145,7 @@ export const useRejectChildRequest = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: ({ requestId, data }: { requestId: string; data: UpdateChildRequestStatusRequest }) => 
+    mutationFn: ({ requestId, data }: { requestId: string; data: ChildRequestStatusUpdate }) => 
       adminApi.childRequests.reject(requestId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.childRequests.all })
@@ -136,10 +157,58 @@ export const useSuspendChildId = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: ({ requestId, data }: { requestId: string; data: UpdateChildRequestStatusRequest }) => 
+    mutationFn: ({ requestId, data }: { requestId: string; data: ChildRequestStatusUpdate }) => 
       adminApi.childRequests.suspend(requestId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.childRequests.all })
     },
+  })
+}
+
+export const useChildRequestStats = () => {
+  return useQuery({
+    queryKey: ADMIN_QUERY_KEYS.childRequests.stats(),
+    queryFn: adminApi.childRequests.getStats,
+  })
+}
+
+// Agent Deletion
+export const useDeleteAgent = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: adminApi.agents.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.lists() })
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.stats })
+    },
+  })
+}
+
+// CutPay Export
+export const useExportCutPayCsv = () => {
+  return useMutation({
+    mutationFn: ({ startDate, endDate }: { startDate?: string; endDate?: string }) => 
+      adminApi.cutpay.exportCsv(startDate, endDate),
+  })
+}
+
+// Universal Record Management
+export const useUploadUniversalRecord = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: adminApi.universalRecords.upload,
+    onSuccess: () => {
+      // Invalidate all data that might have been updated
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.all })
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.stats })
+    },
+  })
+}
+
+export const useDownloadUniversalRecordTemplate = () => {
+  return useMutation({
+    mutationFn: adminApi.universalRecords.downloadTemplate,
   })
 }

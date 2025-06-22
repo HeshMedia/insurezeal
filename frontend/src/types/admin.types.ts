@@ -246,6 +246,82 @@ export interface AssignChildIdRequest {
   admin_notes?: string
 }
 
-export interface UpdateChildRequestStatusRequest {
-  admin_notes: string
+export interface ChildRequestListResponse {
+  requests: ChildRequest[]
+  total_count: number
+  page: number
+  page_size: number
+}
+
+export interface ChildRequestListParams {
+  page?: number
+  page_size?: number
+  status?: ChildRequestStatus
+  search?: string
+}
+
+export interface ChildRequestStatusUpdate {
+  status: 'rejected' | 'suspended'
+  reason?: string
+  admin_notes?: string
+}
+
+export interface UpdateChildRequestStatusRequest extends ChildRequestStatusUpdate {}
+
+// Universal Record Management Types
+export interface UniversalRecordUploadResponse {
+  message: string
+  report: ReconciliationReport
+  processing_time_seconds: number
+}
+
+export interface ReconciliationReport {
+  total_records_processed: number
+  policies_updated: number
+  policies_added: number
+  cutpay_updated: number
+  cutpay_added: number
+  no_changes: number
+  errors: string[]
+  processing_summary: RecordUpdateSummary[]
+}
+
+export interface RecordUpdateSummary {
+  policy_number: string
+  record_type: string // "policy", "cutpay", or "policy+cutpay"
+  action: string // "updated", "added", "no_change"
+  updated_fields: string[]
+  old_values: Record<string, any>
+  new_values: Record<string, any>
+}
+
+// Child Request Statistics
+export interface ChildRequestStats {
+  total_requests: number
+  pending_requests: number
+  approved_requests: number
+  rejected_requests: number
+  suspended_requests: number
+  monthly_breakdown?: Array<{
+    month: string
+    year: number
+    total_requests: number
+    approved: number
+    rejected: number
+    suspended: number
+  }>
+}
+
+// Agent Document Types (for enhanced agent details)
+export interface AgentDocument {
+  id: string
+  document_type: string
+  document_name: string
+  document_url: string
+  upload_date: string
+}
+
+export interface EnhancedAgentDetails extends AgentDetails {
+  documents: AgentDocument[]
+  document_urls: Record<string, string> // document_type -> url mapping
 }

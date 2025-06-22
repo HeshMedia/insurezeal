@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, User, Settings, BarChart3, Users, FileText, Shield } from "lucide-react"
+import { Home, User, Settings, BarChart3, Users, FileText, Shield, DollarSign, MessageSquare, Database } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
@@ -31,14 +31,24 @@ const navigationItems = [
     icon: BarChart3,
   },
   {
-    title: "Home",
-    url: "/admin/home",
-    icon: Home,
+    title: "Agents",
+    url: "/admin/agents",
+    icon: Users,
   },
   {
-    title: "Users",
-    url: "/admin/users",
-    icon: Users,
+    title: "Child Requests",
+    url: "/admin/child-requests",
+    icon: MessageSquare,
+  },
+  {
+    title: "CutPay",
+    url: "/admin/cutpay",
+    icon: DollarSign,
+  },
+  {
+    title: "Universal Records",
+    url: "/admin/universal-records",
+    icon: Database,
   },
   {
     title: "Reports",
@@ -146,9 +156,8 @@ export function AdminSidebar({ ...props }) {
               <div className="grid flex-1 text-left text-sm leading-tight min-w-0">
                 <span className="truncate font-semibold text-gray-900">
                   {getDisplayName()}
-                </span>
-                <span className="truncate text-xs text-gray-500">
-                  {user?.email || 'admin@example.com'}
+                </span>                <span className="truncate text-xs text-gray-500">
+                  {user?.email || 'admin@company.com'}
                 </span>
               </div>
               <User className="ml-auto size-4 text-gray-400 shrink-0" />

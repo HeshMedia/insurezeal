@@ -12,8 +12,10 @@ import {
   AgentDetails,
   AdminStats,
   ChildRequest,
+  ChildRequestListResponse,
+  ChildRequestListParams,
   AssignChildIdRequest,
-  UpdateChildRequestStatusRequest
+  ChildRequestStatusUpdate
 } from '@/types/admin.types'
 
 // Create axios instance
@@ -65,6 +67,29 @@ apiClient.interceptors.response.use(
   }
 )
 
+// Universal Record Management Types
+interface UniversalRecordUploadResponse {
+  message: string
+  report: {
+    total_records_processed: number
+    policies_updated: number
+    policies_added: number
+    cutpay_updated: number
+    cutpay_added: number
+    no_changes: number
+    errors: string[]
+    processing_summary: Array<{
+      policy_number: string
+      record_type: string
+      action: string
+      updated_fields: string[]
+      old_values: Record<string, any>
+      new_values: Record<string, any>
+    }>
+  }
+  processing_time_seconds: number
+}
+
 export const adminApi = {
   // Cutpay APIs
   cutpay: {
@@ -103,6 +128,18 @@ export const adminApi = {
     update: async (cutpayId: number, data: UpdateCutPayRequest): Promise<CutPayTransaction> => {
       const response = await apiClient.put(`/admin/cutpay/${cutpayId}`, data)
       return response.data
+    },
+
+    // Export cutpay transactions to CSV
+    exportCsv: async (startDate?: string, endDate?: string): Promise<Blob> => {
+      const params = new URLSearchParams()
+      if (startDate) params.append('start_date', startDate)
+      if (endDate) params.append('end_date', endDate)
+      
+      const response = await apiClient.get(`/admin/cutpay/export/csv?${params.toString()}`, {
+        responseType: 'blob'
+      })
+      return response.data
     }
   },
 
@@ -124,6 +161,12 @@ export const adminApi = {
     getById: async (agentId: string): Promise<AgentDetails> => {
       const response = await apiClient.get(`/admin/agents/${agentId}`)
       return response.data
+    },
+
+    // Delete agent
+    delete: async (agentId: string): Promise<{ message: string }> => {
+      const response = await apiClient.delete(`/admin/agents/${agentId}`)
+      return response.data
     }
   },
 
@@ -135,21 +178,74 @@ export const adminApi = {
 
   // Child Request APIs
   childRequests: {
+    // List child requests
+    list: async (params?: ChildRequestListParams): Promise<ChildRequestListResponse> => {
+      const response = await apiClient.get('/admin/child-requests', {
+        params: {
+          page: params?.page || 1,
+          page_size: params?.page_size || 20,
+          status_filter: params?.status,
+          search: params?.search
+        }
+      })
+      return response.data
+    },
+
+    // Get child request by ID
+    getById: async (requestId: string): Promise<ChildRequest> => {
+      const response = await apiClient.get(`/admin/child-requests/${requestId}`)
+      return response.data
+    },
+
     // Assign child ID
     assign: async (requestId: string, data: AssignChildIdRequest): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/assign`, data)
       return response.data
-    },
-
-    // Reject child request
-    reject: async (requestId: string, data: UpdateChildRequestStatusRequest): Promise<ChildRequest> => {
+    },    // Reject child request
+    reject: async (requestId: string, data: ChildRequestStatusUpdate): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/reject`, data)
       return response.data
     },
 
     // Suspend child ID
-    suspend: async (requestId: string, data: UpdateChildRequestStatusRequest): Promise<ChildRequest> => {
+    suspend: async (requestId: string, data: ChildRequestStatusUpdate): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/suspend`, data)
+      return response.data
+    },
+
+    // Get child request statistics
+    getStats: async (): Promise<{
+      total_requests: number
+      pending_requests: number
+      approved_requests: number
+      rejected_requests: number
+      suspended_requests: number
+    }> => {
+      const response = await apiClient.get('/admin/child-statistics')
+      return response.data
+    }
+  },
+
+  // Universal Record Management APIs
+  universalRecords: {
+    // Upload universal record CSV
+    upload: async (file: File): Promise<UniversalRecordUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await apiClient.post('/admin/universal-records/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      return response.data
+    },
+
+    // Download CSV template
+    downloadTemplate: async (): Promise<Blob> => {
+      const response = await apiClient.get('/admin/universal-records/template', {
+        responseType: 'blob'
+      })
       return response.data
     }
   }
