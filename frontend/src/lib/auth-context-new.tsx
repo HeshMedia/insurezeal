@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Cookies from 'js-cookie'
 import { authApi } from '@/lib/api/auth'
+import { RegisterData } from '@/types/auth.types'
 import useUser from '@/hooks/use-user'
 
 interface User {
@@ -20,7 +21,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
-  register: (data: any) => Promise<void>
+  register: (data: RegisterData) => Promise<void>
   logout: () => Promise<void>
   isAuthenticated: boolean
   checkAuth: () => Promise<void>
@@ -78,10 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (!token && refreshToken) {
         console.log('No access token, trying refresh')
-        try {
-          await authApi.refreshToken(refreshToken)
+        try {          await authApi.refreshToken(refreshToken)
           // After refresh, useUser hook will automatically refetch
-        } catch (refreshError) {
+        } catch {
           console.log('Token refresh failed, clearing auth')
           clearAuth()
         }
@@ -154,13 +154,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push('/agent')
       } else {
         throw new Error('Invalid user role')
-      }
-    } catch (error: any) {
-      throw new Error(error.message || 'Login failed')
+      }    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Login failed'
+      throw new Error(message)
     }
   }
 
-  const register = async (data: any) => {
+  const register = async (data: RegisterData) => {
     try {
       const response = await authApi.register(data)
       

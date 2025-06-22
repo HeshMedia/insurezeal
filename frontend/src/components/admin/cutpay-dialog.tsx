@@ -7,17 +7,12 @@ import * as z from "zod"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useCreateCutPay, useUpdateCutPay, useCutPayById } from "@/hooks/adminQuery"
 import  Loader  from "@/components/ui/loader"
 import { toast } from "sonner"
-import { CalendarIcon } from "lucide-react"
-import { format } from "date-fns"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 const cutpayFormSchema = z.object({
   policy_number: z.string().min(1, "Policy number is required"),
@@ -46,10 +41,7 @@ interface CutPayDialogProps {
   cutpayId?: number | null
 }
 
-export function CutPayDialog({ open, onOpenChange, cutpayId }: CutPayDialogProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>()
-  const [selectedPaymentDate, setSelectedPaymentDate] = useState<Date>()
-  
+export function CutPayDialog({ open, onOpenChange, cutpayId }: CutPayDialogProps) {  
   const { data: cutpayData, isLoading: isLoadingCutpay } = useCutPayById(cutpayId || 0)
   const createMutation = useCreateCutPay()
   const updateMutation = useUpdateCutPay()
@@ -116,9 +108,8 @@ export function CutPayDialog({ open, onOpenChange, cutpayId }: CutPayDialogProps
         toast.success("Transaction created successfully")
       }
       onOpenChange(false)
-      form.reset()
-    } catch (error: any) {
-      toast.error(error.message || "Failed to save transaction")
+      form.reset()    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to save transaction")
     }
   }
 

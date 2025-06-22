@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -57,9 +56,8 @@ export function CutPayExport({ className }: CutPayExportProps) {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
       
-      toast.success('CutPay transactions exported successfully!')
-    } catch (error: any) {
-      toast.error(`Export failed: ${error.message}`)
+      toast.success('CutPay transactions exported successfully!')    } catch (error: unknown) {
+      toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

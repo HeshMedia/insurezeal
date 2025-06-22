@@ -95,9 +95,8 @@ export const authApi = {  // Login
           'Content-Type': 'application/json',
         },
       })
-      return response.data
-    } catch (error: any) {
-      const message = error.response?.data?.detail || error.message 
+      return response.data    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'An error occurred'
       throw new Error(message)
     }
   },
@@ -130,8 +129,7 @@ export const authApi = {  // Login
   // Logout
   logout: async () => {
     try {
-      await apiClient.post('/auth/logout')
-    } catch (error) {
+      await apiClient.post('/auth/logout')    } catch {
       // Continue even if logout fails on server
     } finally {
       // Always clear cookies

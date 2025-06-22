@@ -77,7 +77,10 @@ export function ProfileDetails({ profile, onEditClick }: ProfileDetailsProps) {
     { label: 'Bio', value: profile.bio, icon: User },
   ]
 
-  const DetailSection = ({ title, details }: { title: string, details: any[] }) => (
+  const DetailSection = ({ title, details }: { 
+    title: string, 
+    details: Array<{ label: string; value: string | number | boolean | null | undefined; icon: React.ComponentType<{ className?: string }> }> 
+  }) => (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
         {title}

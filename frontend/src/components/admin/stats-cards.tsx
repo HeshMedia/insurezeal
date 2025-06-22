@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, Users, FileText, DollarSign, Calendar, MessageSquare } from "lucide-react"
+import { TrendingUp, TrendingDown, Users, FileText, DollarSign, MessageSquare } from "lucide-react"
 import { useAdminStats, useCutPayStats, useChildRequestStats } from "@/hooks/adminQuery"
 import { cn } from "@/lib/utils"
 
@@ -108,9 +108,7 @@ export function StatsCards() {
     if (previous === 0) return 0
     return ((current - previous) / previous) * 100
   }
-
   const monthlyGrowth = getMonthlyGrowth(cutpayStats?.stats?.monthly_breakdown)
-  const avgTransaction = cutpayStats?.stats?.average_cut_pay_amount || 0
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

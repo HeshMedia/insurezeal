@@ -37,9 +37,6 @@ import {
   Trash2, 
   Eye, 
   Plus,
-  CheckCircle,
-  AlertCircle,
-  Clock,
   CreditCard,
   GraduationCap,
   BriefcaseIcon,
@@ -190,7 +187,7 @@ const categoryLabels = {
   address: 'Address Documents'
 }
 
-export function DocumentManagement({ profile }: DocumentManagementProps) {
+export function DocumentManagement({}: DocumentManagementProps) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ isUploading: false, progress: 0, fileName: '' })
   const [showUploadDialog, setShowUploadDialog] = useState(false)
@@ -243,11 +240,9 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
     if (!allowedTypes.includes(file.type)) {
       toast.error('Only JPG, PNG, and PDF files are allowed')
       return
-    }
-
-    try {
+    }    try {
       await simulateUpload(file, selectedDocType)
-    } catch (error) {
+    } catch {
       toast.error('Failed to upload document')
       setUploadProgress({ isUploading: false, progress: 0, fileName: '' })
     } finally {
@@ -256,13 +251,12 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
       }
     }
   }
-
   const handleDeleteDocument = async (docId: string) => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000))
       setDocuments(prev => prev.filter(doc => doc.id !== docId))
       toast.success('Document deleted successfully!')
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete document')
     }
   }
@@ -285,30 +279,7 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
       document.body.removeChild(link)
     } else {
       toast.error('Document download not available')
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle className="w-4 h-4 text-green-500" />
-      case 'rejected':
-        return <AlertCircle className="w-4 h-4 text-red-500" />
-      default:
-        return <Clock className="w-4 h-4 text-yellow-500" />
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'rejected':
-        return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-      default:
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-    }
-  }
+    }  }
 
   const getDocumentsByCategory = () => {
     const categories: Record<string, Document[]> = {}
@@ -439,7 +410,7 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Document</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete "{doc.name}"? This action cannot be undone.
+                                  Are you sure you want to delete &quot;{doc.name}&quot;? This action cannot be undone.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>

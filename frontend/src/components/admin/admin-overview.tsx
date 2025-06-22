@@ -4,14 +4,14 @@ import { StatsCards } from "./stats-cards"
 import { AnalyticsCharts } from "./analytics-charts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Activity, Clock, Users, FileText, TrendingUp } from "lucide-react"
 import { useAdminStats, useCutPayStats, useChildRequestStats } from "@/hooks/adminQuery"
 
 export function AdminOverview() {
-  const { data: adminStats, isLoading: adminStatsLoading } = useAdminStats()
-  const { data: cutpayStats, isLoading: cutpayStatsLoading } = useCutPayStats()
-  const { data: childStats, isLoading: childStatsLoading } = useChildRequestStats()
+  const { data: adminStats } = useAdminStats()
+  const { data: cutpayStats } = useCutPayStats()
+  const { data: childStats } = useChildRequestStats()
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {

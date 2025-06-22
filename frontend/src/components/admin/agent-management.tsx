@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { AgentSummary } from "@/types/admin.types"
 import { 
   Table, 
   TableBody, 
@@ -21,11 +22,9 @@ import { agentListParamsAtom, selectedAgentIdAtom, isAgentDialogOpenAtom } from 
 import { formatDate } from "@/lib/utils"
 import { 
   Search, 
-  MoreHorizontal, 
-  Eye,
+  MoreHorizontal,   Eye,
   Mail,
-  Phone,  Users,
-  Shield
+  Phone,  Users
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -158,10 +157,9 @@ function AgentTable({
   data, 
   onViewDetails 
 }: {
-  data: any[]
+  data: AgentSummary[]
   onViewDetails: (id: string) => void
-}) {
-  const getInitials = (firstName?: string, lastName?: string) => {
+}) {  const getInitials = (firstName?: string | null, lastName?: string | null) => {
     if (firstName && lastName) {
       return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
     }
@@ -170,8 +168,7 @@ function AgentTable({
     }
     return 'A'
   }
-
-  const getDisplayName = (agent: any) => {
+  const getDisplayName = (agent: AgentSummary) => {
     if (agent.first_name && agent.last_name) {
       return `${agent.first_name} ${agent.last_name}`
     }

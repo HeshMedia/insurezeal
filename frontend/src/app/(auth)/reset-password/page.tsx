@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Lock, Mail, CheckCircle, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -38,17 +38,15 @@ const ForgotPasswordForm = () => {
     if (!email) {
       setError("Please enter your email address.")
       return
-    }
-
-    setError("")
+    }    setError("")
     setMessage("")
     setLoading(true)
 
     try {
       await authApi.forgotPassword(email)
       setMessage("If an account with that email exists, a password reset link has been sent.")
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }
@@ -64,9 +62,8 @@ const ForgotPasswordForm = () => {
         <h2 className="text-2xl font-semibold mb-2 text-center">
           Forgot Password?
         </h2>
-        
-        <p className="text-gray-500 text-sm mb-6 text-center">
-          Enter your email address and we'll send you a link to reset your password.
+          <p className="text-gray-500 text-sm mb-6 text-center">
+          Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
 
         <div className="w-full flex flex-col gap-4 mb-6">
@@ -147,12 +144,10 @@ const ResetPasswordForm = ({
     if (password.length < 6) {
       setError("Password must be at least 6 characters long.")
       return
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.")
+    }    if (password !== confirmPassword) {
+      setError("Passwords don&apos;t match.")
       return
-    }    setError("")
+    }setError("")
     setMessage("")
     setLoading(true)
 
@@ -175,13 +170,12 @@ const ResetPasswordForm = ({
       }
 
       setMessage("Password reset successfully! Redirecting to login...")
-      
-      // Redirect to login after 2 seconds
+        // Redirect to login after 2 seconds
       setTimeout(() => {
         router.push('/login')
       }, 2000)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }

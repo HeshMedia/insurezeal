@@ -48,14 +48,12 @@ const LoginPage = () => {
     if (!email || !password) {
       setError("Please enter both email and password.")
       return
-    }
-    setError("")
+    }    setError("")
     setLoading(true)
 
     try {
-      await login(email, password, rememberMe)
-    } catch (err: any) {
-      setError(err.message)
+      await login(email, password, rememberMe)    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }
@@ -147,9 +145,8 @@ const LoginPage = () => {
             <Link href="/reset-password" className="font-medium text-blue-600 hover:text-blue-500">
               Forgot your password?
             </Link>
-          </p>
-          <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
+          </p>          <p className="text-sm text-gray-600">
+            Don&apos;t have an account?{' '}
             <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
               Sign up
             </Link>

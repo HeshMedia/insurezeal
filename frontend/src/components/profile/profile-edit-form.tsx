@@ -108,7 +108,7 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
     },
   })
 
-  const { register, handleSubmit, watch, setValue, formState: { errors } } = form
+  const { register, handleSubmit, watch, setValue } = form
   const watchSameAddress = watch('communication_same_as_permanent')
 
   // Auto-fill communication address when checkbox is checked
@@ -183,13 +183,12 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
               placeholder="Enter last name" 
             />
           </FormField>
-          
-          <FormField label="Father's Name">
-            <Input {...register('father_name')} placeholder="Enter father's name" />
+            <FormField label="Father's Name">
+            <Input {...register('father_name')} placeholder="Enter father&apos;s name" />
           </FormField>
           
           <FormField label="Mother's Name">
-            <Input {...register('mother_name')} placeholder="Enter mother's name" />
+            <Input {...register('mother_name')} placeholder="Enter mother&apos;s name" />
           </FormField>
           
           <FormField label="Date of Birth">
@@ -322,9 +321,8 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="high_school">High School</SelectItem>
-                <SelectItem value="diploma">Diploma</SelectItem>
-                <SelectItem value="bachelors">Bachelor's Degree</SelectItem>
-                <SelectItem value="masters">Master's Degree</SelectItem>
+                <SelectItem value="diploma">Diploma</SelectItem>                <SelectItem value="bachelors">Bachelor&apos;s Degree</SelectItem>
+                <SelectItem value="masters">Master&apos;s Degree</SelectItem>
                 <SelectItem value="doctorate">Doctorate</SelectItem>
                 <SelectItem value="professional">Professional</SelectItem>
               </SelectContent>

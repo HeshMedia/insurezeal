@@ -9,6 +9,7 @@ import { ProfileEditForm } from '@/components/profile/profile-edit-form'
 import { ProfileTabs } from '@/components/profile/profile-tabs'
 import { DocumentManagement } from '@/components/profile/document-management'
 import { LoadingSpinner } from '@/components/ui/loader'
+import { UpdateProfileRequest } from '@/types/profile.types'
 import { 
   useProfile, 
   useUpdateProfile, 
@@ -22,22 +23,21 @@ export function AdminProfileView() {
   const updateProfileMutation = useUpdateProfile()
   const uploadImageMutation = useUploadProfileImage()
   const deleteImageMutation = useDeleteProfileImage()
-  
-  const [isEditing, setIsEditing] = useAtom(isEditingProfileAtom)
+    const [isEditing, setIsEditing] = useAtom(isEditingProfileAtom)
   const [activeTab] = useAtom(activeProfileTabAtom)
-  const handleUpdateProfile = async (data: any) => {
+  
+  const handleUpdateProfile = async (data: UpdateProfileRequest) => {
     console.log('Submitting profile data:', data)
     try {
       await updateProfileMutation.mutateAsync(data)
       toast.success('Profile updated successfully!')
       setIsEditing(false)
-    } catch (error: any) {
-      const errorMessage = error?.message || 'Failed to update profile'
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update profile'
       toast.error(errorMessage)
       console.error('Update profile error:', {
         error,
-        message: error?.message,
-        response: error?.response,
+        message: error instanceof Error ? error.message : 'Unknown error',
         data: data
       })
     }

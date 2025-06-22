@@ -31,18 +31,17 @@ const RegisterPage = () => {
     }
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match.")
-      return
-    }
-    
-    setError("")
+      return    }
+      setError("")
     setLoading(true)
 
     try {
       // Remove confirmPassword from the data sent to register
       const { confirmPassword, ...registerData } = formData
+      console.log('Removed confirmPassword:', confirmPassword) // Use the variable
       await register(registerData)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
     }

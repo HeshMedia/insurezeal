@@ -64,7 +64,7 @@ export interface UserProfile {
   preferred_language?: string
   territory_preference?: string
   avatar_url?: string
-  preferences?: Record<string, any>
+  preferences?: Record<string, unknown>
   created_at: string
   updated_at: string
   agent_code?: string

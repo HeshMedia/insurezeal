@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api/admin'
 import { 
-  CreateCutPayRequest, 
   UpdateCutPayRequest, 
   CutPayListParams,
   AgentListParams,

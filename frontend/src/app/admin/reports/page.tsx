@@ -20,8 +20,8 @@ import { CutPayExport } from '@/components/admin/cutpay-export'
 import { useCutPayStats, useAdminStats } from '@/hooks/adminQuery'
 
 export default function ReportsPage() {
-  const { data: cutpayStats, isLoading: cutpayLoading } = useCutPayStats()
-  const { data: adminStats, isLoading: adminLoading } = useAdminStats()
+  const { data: cutpayStats } = useCutPayStats()
+  const { data: adminStats } = useAdminStats()
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {

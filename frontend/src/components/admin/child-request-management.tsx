@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useAtom } from "jotai"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,18 +9,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Plus, Edit, Trash2, Eye, Building, Phone, Mail, MapPin, User } from "lucide-react"
+import { Search, Edit, Eye, Building, Phone, Mail, MapPin, User } from "lucide-react"
 import { useAssignChildId, useRejectChildRequest, useSuspendChildId } from "@/hooks/adminQuery"
-import { ChildRequest, ChildRequestStatus, AssignChildIdRequest, UpdateChildRequestStatusRequest } from "@/types/admin.types"
+import { ChildRequest, AssignChildIdRequest } from "@/types/admin.types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { 
-  selectedChildRequestIdAtom, 
-  isChildRequestDialogOpenAtom, 
-  childRequestActionAtom 
-} from "@/lib/atoms/admin"
 
 interface ChildRequestManagementProps {
   requests?: ChildRequest[]
@@ -42,7 +35,7 @@ const statusLabels = {
   suspended: "Suspended",
 }
 
-function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (action: string, request: ChildRequest) => void }) {
+function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (action: 'assign' | 'reject' | 'suspend' | 'view', request: ChildRequest) => void }) {
   return (
     <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
       <CardHeader className="pb-3">
@@ -283,7 +276,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                     <Input
                       id="child_id"
                       value={formData.child_id || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, child_id: e.target.value }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, child_id: e.target.value }))}
                       placeholder="Enter child ID"
                       required
                     />
@@ -293,7 +286,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                     <Input
                       id="broker_code"
                       value={formData.broker_code || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, broker_code: e.target.value }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, broker_code: e.target.value }))}
                       placeholder="Enter broker code"
                       required
                     />
@@ -303,7 +296,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                     <Input
                       id="branch_code"
                       value={formData.branch_code || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, branch_code: e.target.value }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, branch_code: e.target.value }))}
                       placeholder="Enter branch code"
                     />
                   </div>
@@ -312,7 +305,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                     <Input
                       id="region"
                       value={formData.region || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, region: e.target.value }))}
                       placeholder="Enter region"
                     />
                   </div>
@@ -321,7 +314,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                     <Input
                       id="manager_name"
                       value={formData.manager_name || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, manager_name: e.target.value }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, manager_name: e.target.value }))}
                       placeholder="Enter manager name"
                     />
                   </div>
@@ -331,7 +324,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                       id="manager_email"
                       type="email"
                       value={formData.manager_email || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, manager_email: e.target.value }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, manager_email: e.target.value }))}
                       placeholder="Enter manager email"
                     />
                   </div>
@@ -344,7 +337,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                       min="0"
                       max="100"
                       value={formData.commission_percentage || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, commission_percentage: parseFloat(e.target.value) || undefined }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, commission_percentage: parseFloat(e.target.value) || undefined }))}
                       placeholder="Enter commission percentage"
                     />
                   </div>
@@ -355,7 +348,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                       type="number"
                       min="0"
                       value={formData.policy_limit || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, policy_limit: parseFloat(e.target.value) || undefined }))}
+                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, policy_limit: parseFloat(e.target.value) || undefined }))}
                       placeholder="Enter policy limit"
                     />
                   </div>
@@ -425,13 +418,12 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
       request.phone_number.includes(searchQuery)
     
     const matchesStatus = statusFilter === 'all' || request.status === statusFilter
-    
-    return matchesSearch && matchesStatus
+      return matchesSearch && matchesStatus
   })
 
-  const handleAction = (action: string, request: ChildRequest) => {
+  const handleAction = (action: 'assign' | 'reject' | 'suspend' | 'view', request: ChildRequest) => {
     setSelectedRequest(request)
-    setDialogAction(action as any)
+    setDialogAction(action)
     setDialogOpen(true)
   }
 

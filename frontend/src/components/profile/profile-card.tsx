@@ -8,15 +8,20 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Edit, Camera, Mail, Phone, MapPin, Calendar, User, Briefcase } from 'lucide-react'
-import { UserProfile } from '@/types/profile.types'
+import { UserProfile, UpdateProfileRequest } from '@/types/profile.types'
 import { ProfileEditForm } from '@/components/profile/profile-edit-form'
 import { cn } from '@/lib/utils'
 
+interface DetailItem {
+  label: string
+  value: string | number | null | undefined
+  icon: React.ComponentType<{ className?: string }>
+}
+
 interface ProfileCardProps {
   profile: UserProfile
-  onUpdateProfile: (data: any) => void
+  onUpdateProfile: (data: UpdateProfileRequest) => void
   onUploadImage: (file: File) => void
-  onDeleteImage: () => void
   isLoading?: boolean
   className?: string
 }
@@ -25,9 +30,8 @@ export function ProfileCard({
   profile, 
   onUpdateProfile, 
   onUploadImage, 
-  onDeleteImage, 
   isLoading = false,
-  className 
+  className
 }: ProfileCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState('details')
@@ -46,8 +50,7 @@ export function ProfileCard({
   const handleEditToggle = () => {
     setIsEditing(!isEditing)
   }
-
-  const handleFormSubmit = async (data: any) => {
+  const handleFormSubmit = async (data: UpdateProfileRequest) => {
     await onUpdateProfile(data)
     setIsEditing(false)
   }
@@ -216,7 +219,7 @@ function ProfileDetails({ profile }: { profile: UserProfile }) {
     { label: 'Previous Company', value: profile.previous_company_name, icon: Briefcase },
   ]
 
-  const DetailSection = ({ title, details }: { title: string, details: any[] }) => (
+  const DetailSection = ({ title, details }: { title: string, details: DetailItem[] }) => (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">
         {title}

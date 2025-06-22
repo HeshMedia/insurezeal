@@ -29,9 +29,8 @@ const VerifyEmailPage = () => {
         <h2 className="text-2xl font-semibold mb-2 text-center">
           Check Your Email
         </h2>
-        
-        <p className="text-gray-500 text-sm mb-6 text-center leading-relaxed">
-          We've sent a verification link to {email ? <span className="font-medium text-gray-700">{email}</span> : 'your email address'}. 
+          <p className="text-gray-500 text-sm mb-6 text-center leading-relaxed">
+          We&apos;ve sent a verification link to {email ? <span className="font-medium text-gray-700">{email}</span> : 'your email address'}. 
           Please check your inbox and click the link to verify your account.
         </p>
 
@@ -39,7 +38,7 @@ const VerifyEmailPage = () => {
           <div className="text-sm text-blue-600 text-center bg-blue-50 p-4 rounded-lg border border-blue-200 flex items-start gap-3">
             <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
             <div className="text-left">
-              <p className="font-medium mb-1">What's next?</p>
+              <p className="font-medium mb-1">What&apos;s next?</p>
               <ul className="text-xs space-y-1 text-blue-700">
                 <li>• Check your email inbox</li>
                 <li>• Look for an email from InsureZeal</li>
@@ -60,9 +59,8 @@ const VerifyEmailPage = () => {
           </p>
         </div>
 
-        <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-          <p className="text-xs text-yellow-700 text-center">
-            <strong>Don't see the email?</strong> Check your spam folder or wait a few minutes for delivery.
+        <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">          <p className="text-xs text-yellow-700 text-center">
+            <strong>Don&apos;t see the email?</strong> Check your spam folder or wait a few minutes for delivery.
           </p>
         </div>
       </div>

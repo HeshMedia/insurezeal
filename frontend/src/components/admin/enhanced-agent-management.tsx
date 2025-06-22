@@ -21,12 +21,10 @@ import {
   Eye, 
   Edit,
   Users,
-  Mail,
-  Phone,
+  Mail,  Phone,
   Calendar,
   ArrowLeft,
   ArrowRight,
-  UserPlus,
   Trash2
 } from "lucide-react"
 import {
@@ -209,9 +207,8 @@ export function EnhancedAgentManagement() {
       await deleteAgentMutation.mutateAsync(agentToDelete)
       toast.success('Agent deleted successfully')
       setDeleteDialogOpen(false)
-      setAgentToDelete(null)
-    } catch (error: any) {
-      toast.error(`Failed to delete agent: ${error.message}`)
+      setAgentToDelete(null)    } catch (error: unknown) {
+      toast.error(`Failed to delete agent: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -447,7 +444,7 @@ export function EnhancedAgentManagement() {
             <AlertDialogTitle>Delete Agent</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete this agent? This action cannot be undone and will permanently 
-              remove the agent's profile, documents, and all associated data from the system.
+              remove the agent&apos;s profile, documents, and all associated data from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

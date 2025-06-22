@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Home, User, Settings, BarChart3, Users, FileText, Shield, DollarSign, MessageSquare, Database } from "lucide-react"
+import { User, Settings, BarChart3, Users, FileText, Shield, DollarSign, MessageSquare, Database } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
@@ -19,10 +19,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 
 const navigationItems = [
   {

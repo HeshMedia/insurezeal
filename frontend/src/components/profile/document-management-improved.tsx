@@ -191,7 +191,7 @@ const categoryLabels = {
   address: 'Address Documents'
 }
 
-export function DocumentManagement({ profile }: DocumentManagementProps) {
+export function DocumentManagement({}: DocumentManagementProps) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ isUploading: false, progress: 0, fileName: '' })
   const [showUploadDialog, setShowUploadDialog] = useState(false)
@@ -245,11 +245,9 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
     if (!allowedTypes.includes(file.type)) {
       toast.error('Only JPG, PNG, and PDF files are allowed')
       return
-    }
-
-    try {
+    }    try {
       await simulateUpload(file, selectedDocType)
-    } catch (error) {
+    } catch {
       toast.error('Failed to upload document')
       setUploadProgress({ isUploading: false, progress: 0, fileName: '' })
     } finally {
@@ -258,13 +256,12 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
       }
     }
   }
-
   const handleDeleteDocument = async (docId: string) => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000))
       setDocuments(prev => prev.filter(doc => doc.id !== docId))
       toast.success('Document deleted successfully!')
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete document')
     }
   }
@@ -450,7 +447,7 @@ export function DocumentManagement({ profile }: DocumentManagementProps) {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Document</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete "{doc.name}"? This action cannot be undone.
+                                  Are you sure you want to delete &quot;{doc.name}&quot;? This action cannot be undone.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>

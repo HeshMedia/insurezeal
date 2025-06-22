@@ -14,7 +14,6 @@ import {
   CheckCircle, 
   AlertCircle,
   Clock,
-  TrendingUp,
   Database
 } from 'lucide-react'
 import { useUploadUniversalRecord, useDownloadUniversalRecordTemplate } from '@/hooks/adminQuery'
@@ -55,9 +54,8 @@ export function UniversalRecordManagement({ className }: UniversalRecordManageme
     try {
       const result = await uploadMutation.mutateAsync(selectedFile)
       setUploadResult(result)
-      toast.success('Universal record processed successfully!')
-    } catch (error: any) {
-      toast.error(`Upload failed: ${error.message}`)
+      toast.success('Universal record processed successfully!')    } catch (error: unknown) {
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setIsUploading(false)
     }
@@ -74,9 +72,8 @@ export function UniversalRecordManagement({ className }: UniversalRecordManageme
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      toast.success('Template downloaded successfully!')
-    } catch (error: any) {
-      toast.error(`Download failed: ${error.message}`)
+      toast.success('Template downloaded successfully!')    } catch (error: unknown) {
+      toast.error(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
