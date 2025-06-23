@@ -1083,7 +1083,6 @@ class AdminHelpers:
         if updated:
             existing_cutpay.updated_at = datetime.now()
             
-            # Sync to Google Sheets
             try:
                 cutpay_dict_for_sheets = {
                     'id': existing_cutpay.id,
@@ -1110,8 +1109,7 @@ class AdminHelpers:
                 logger.info(f"Universal record updated cut pay {existing_cutpay.id} synced to Google Sheets")
             except Exception as sync_error:
                 logger.error(f"Failed to sync universal record updated cut pay {existing_cutpay.id} to Google Sheets: {str(sync_error)}")
-                # Don't fail the main operation if Google Sheets sync fails
-        
+
         return updated
     
     async def _create_cutpay_from_universal(
