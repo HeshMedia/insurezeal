@@ -329,9 +329,13 @@ class AdminHelpers:
             search: Search term
             
         Returns:
-            Dictionary with requests and pagination info        """
+            Dictionary with requests and pagination info
+        """
         try:
-            query = select(ChildIdRequest)
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            )
             
             conditions = []
             if status_filter:
@@ -340,9 +344,10 @@ class AdminHelpers:
                 search_term = f"%{search.lower()}%"
                 conditions.append(
                     or_(
-                        func.lower(ChildIdRequest.insurance_company).like(search_term),
-                        func.lower(ChildIdRequest.broker).like(search_term),
-                        func.lower(ChildIdRequest.email).like(search_term)
+                        func.lower(ChildIdRequest.email).like(search_term),
+                        func.lower(ChildIdRequest.location).like(search_term),
+                        func.lower(ChildIdRequest.child_id).like(search_term),
+                        func.lower(ChildIdRequest.phone_number).like(search_term)
                     )
                 )
             
@@ -377,7 +382,8 @@ class AdminHelpers:
         self,
         db: AsyncSession,
         request_id: str,
-        assignment_data: Dict[str, Any],        admin_user_id: str
+        assignment_data: Dict[str, Any],
+        admin_user_id: str
     ) -> ChildIdRequest:
         """
         Approve a child ID request and assign details
@@ -396,7 +402,10 @@ class AdminHelpers:
             from datetime import datetime
             import uuid
             
-            query = select(ChildIdRequest).where(ChildIdRequest.id == uuid.UUID(request_id))
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(ChildIdRequest.id == uuid.UUID(request_id))
             result = await db.execute(query)
             child_request = result.scalar_one_or_none()
             
@@ -418,10 +427,11 @@ class AdminHelpers:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Child ID already exists. Please choose a different child ID."
                     )
-            
+                
             for field, value in assignment_data.items():
-                setattr(child_request, field, value)
-            
+                if hasattr(child_request, field):
+                    setattr(child_request, field, value)
+
             child_request.status = "accepted"
             child_request.approved_by = uuid.UUID(admin_user_id)
             child_request.approved_at = datetime.utcnow()
@@ -462,7 +472,7 @@ class AdminHelpers:
         self,
         db: AsyncSession,
         request_id: str,
-        admin_notes: str,        
+        admin_notes: str,
         admin_user_id: str
     ) -> ChildIdRequest:
         """
@@ -482,7 +492,10 @@ class AdminHelpers:
             from datetime import datetime
             import uuid
             
-            query = select(ChildIdRequest).where(ChildIdRequest.id == uuid.UUID(request_id))
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(ChildIdRequest.id == uuid.UUID(request_id))
             result = await db.execute(query)
             child_request = result.scalar_one_or_none()
             
@@ -524,7 +537,7 @@ class AdminHelpers:
         self,
         db: AsyncSession,
         request_id: str,
-        admin_notes: str,       
+        admin_notes: str,
         admin_user_id: str
     ) -> ChildIdRequest:
         """
@@ -543,8 +556,11 @@ class AdminHelpers:
             from models import ChildIdRequest
             from datetime import datetime
             import uuid
-            
-            query = select(ChildIdRequest).where(ChildIdRequest.id == uuid.UUID(request_id))
+
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(ChildIdRequest.id == uuid.UUID(request_id))
             result = await db.execute(query)
             child_request = result.scalar_one_or_none()
             
@@ -680,10 +696,8 @@ class AdminHelpers:
         start_time = datetime.now()
         
         try:
-            # Parse CSV content
             universal_records = await self._parse_universal_csv(csv_content)
             
-            # Initialize counters and tracking
             report = {
                 'total_records_processed': len(universal_records),
                 'policies_updated': 0,

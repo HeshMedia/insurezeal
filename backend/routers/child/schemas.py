@@ -48,7 +48,7 @@ class BrokerInsurerDropdownResponse(BaseModel):
     insurers: List[InsurerDropdownResponse]
 
 class ChildIdResponse(BaseModel):
-    """Response schema for child ID requests - Updated"""
+    """Response schema for child ID requests - Clean new structure"""
     id: UUID
     user_id: UUID
     phone_number: str
@@ -82,7 +82,7 @@ class ChildIdResponse(BaseModel):
         from_attributes = True
 
 class ChildIdSummary(BaseModel):
-    """Summary schema for child ID requests (list/card view) - Updated"""
+    """Summary schema for child ID requests (list/card view) - Clean new structure"""
     id: UUID
     phone_number: str
     location: str

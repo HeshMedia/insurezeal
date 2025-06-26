@@ -14,40 +14,36 @@ class ChildIdStatusEnum(str, Enum):
 
 class ChildIdAssignment(BaseModel):
     """Schema for admin to assign child ID details"""
-    child_id: str = Field(..., min_length=1, max_length=50)
-    broker_code: str = Field(..., min_length=1, max_length=20)
-    branch_code: Optional[str] = Field(None, max_length=20)
-    region: Optional[str] = Field(None, max_length=50)
-    manager_name: Optional[str] = Field(None, max_length=100)
-    manager_email: Optional[EmailStr] = None
-    commission_percentage: Optional[float] = Field(None, ge=0, le=100)
-    policy_limit: Optional[int] = Field(None, ge=0)
-    admin_notes: Optional[str] = Field(None, max_length=1000)
+    child_id: str = Field(..., min_length=1, max_length=50, description="Unique child ID to assign")
+    branch_code: Optional[str] = Field(None, max_length=20, description="Branch code")
+    region: Optional[str] = Field(None, max_length=50, description="Region")
+    manager_name: Optional[str] = Field(None, max_length=100, description="Manager name")
+    manager_email: Optional[EmailStr] = Field(None, description="Manager email")
+    admin_notes: Optional[str] = Field(None, max_length=1000, description="Admin notes")
 
 class ChildIdResponse(BaseModel):
-    """Response schema for child ID requests"""
+    """Response schema for child ID requests - Clean new structure"""
     id: UUID
     user_id: UUID
     
     # Request details
-    insurance_company: str
-    broker: str
-    location: str
     phone_number: str
     email: str
+    location: str
+    code_type: str
+    insurer_id: int
+    broker_id: Optional[int] = None
     preferred_rm_name: Optional[str] = None
     
     # Status and assignment
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
-    broker_code: Optional[str] = None
     branch_code: Optional[str] = None
     region: Optional[str] = None
     manager_name: Optional[str] = None
     manager_email: Optional[str] = None
-    commission_percentage: Optional[float] = None
-    policy_limit: Optional[int] = None
-      # Admin details
+    
+    # Admin details
     admin_notes: Optional[str] = None
     approved_by: Optional[UUID] = None
     approved_at: Optional[datetime] = None
@@ -55,6 +51,10 @@ class ChildIdResponse(BaseModel):
     # Timestamps
     created_at: datetime
     updated_at: datetime
+    
+    # Nested relationships
+    insurer: Optional[dict] = None
+    broker_relation: Optional[dict] = None
     
     class Config:
         from_attributes = True

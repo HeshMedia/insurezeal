@@ -113,29 +113,48 @@ async def create_child_id_request(
             request_data=request_data.dict()
         )
         
-        child_request_dict = {
-            'id': child_request.id,
-            'user_id': child_request.user_id,
-            'insurance_company': child_request.insurance_company,
-            'broker': child_request.broker,
+        from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+        req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        
+        if child_request.insurer:
+            req_dict["insurer"] = {
+                "id": child_request.insurer.id,
+                "insurer_code": child_request.insurer.insurer_code,
+                "name": child_request.insurer.name
+            }
+        if child_request.broker:
+            req_dict["broker_relation"] = {
+                "id": child_request.broker.id,
+                "broker_code": child_request.broker.broker_code,
+                "name": child_request.broker.name
+            }
+        
+        google_sheets_dict = {
+            'id': str(child_request.id),
+            'user_id': str(child_request.user_id),
+            'insurance_company': child_request.insurer.name if child_request.insurer else "",
+            'broker': child_request.broker.name if child_request.broker else "",
             'location': child_request.location,
             'phone_number': child_request.phone_number,
             'email': child_request.email,
             'preferred_rm_name': child_request.preferred_rm_name,
             'status': child_request.status,
             'child_id': child_request.child_id,
-            'broker_code': child_request.broker_code,
             'branch_code': child_request.branch_code,
             'region': child_request.region,
+            'manager_name': child_request.manager_name,
+            'manager_email': child_request.manager_email,
+            'admin_notes': child_request.admin_notes,
             'created_at': child_request.created_at,
-            'updated_at': child_request.updated_at        }
+            'updated_at': child_request.updated_at
+        }
         try:
-            google_sheets_sync.sync_child_id_request(child_request_dict, "CREATE")
+            google_sheets_sync.sync_child_id_request(google_sheets_dict, "CREATE")
             logger.info(f"Child ID request {child_request.id} synced to Google Sheets")
         except Exception as sync_error:
             logger.error(f"Failed to sync child ID request {child_request.id} to Google Sheets: {str(sync_error)}")
         
-        return ChildIdResponse.model_validate(child_request)
+        return ChildIdResponse.model_validate(req_dict)
         
     except HTTPException:
         raise
@@ -171,8 +190,28 @@ async def get_my_child_requests(
             page_size=page_size
         )
         
+        formatted_requests = []
+        for req in result["child_requests"]:
+            from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+            req_dict = convert_uuids_to_strings(model_data_from_orm(req))
+
+            if req.insurer:
+                req_dict["insurer"] = {
+                    "id": req.insurer.id,
+                    "insurer_code": req.insurer.insurer_code,
+                    "name": req.insurer.name
+                }
+            if req.broker:
+                req_dict["broker_relation"] = {
+                    "id": req.broker.id,
+                    "broker_code": req.broker.broker_code,
+                    "name": req.broker.name
+                }
+            
+            formatted_requests.append(ChildIdSummary.model_validate(req_dict))
+        
         return ChildIdRequestList(
-            requests=[ChildIdSummary.model_validate(req) for req in result["child_requests"]],
+            requests=formatted_requests,
             total_count=result["total_count"],
             page=page,
             page_size=page_size,
@@ -210,9 +249,26 @@ async def get_child_request_details(
         if not child_request:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Child ID request not found"            )
+                detail="Child ID request not found"
+            )
         
-        return ChildIdResponse.model_validate(child_request)
+        from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+        req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        
+        if child_request.insurer:
+            req_dict["insurer"] = {
+                "id": child_request.insurer.id,
+                "insurer_code": child_request.insurer.insurer_code,
+                "name": child_request.insurer.name
+            }
+        if child_request.broker:
+            req_dict["broker_relation"] = {
+                "id": child_request.broker.id,
+                "broker_code": child_request.broker.broker_code,
+                "name": child_request.broker.name
+            }
+        
+        return ChildIdResponse.model_validate(req_dict)
         
     except HTTPException:
         raise
@@ -242,7 +298,27 @@ async def get_active_child_ids(
             user_id=user_id
         )
         
-        return [ChildIdResponse.model_validate(req) for req in active_requests]
+        formatted_responses = []
+        for req in active_requests:
+            from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+            req_dict = convert_uuids_to_strings(model_data_from_orm(req))
+
+            if req.insurer:
+                req_dict["insurer"] = {
+                    "id": req.insurer.id,
+                    "insurer_code": req.insurer.insurer_code,
+                    "name": req.insurer.name
+                }
+            if req.broker:
+                req_dict["broker_relation"] = {
+                    "id": req.broker.id,
+                    "broker_code": req.broker.broker_code,
+                    "name": req.broker.name
+                }
+            
+            formatted_responses.append(ChildIdResponse.model_validate(req_dict))
+        
+        return formatted_responses
         
     except Exception as e:
         logger.error(f"Error fetching active child IDs: {str(e)}")

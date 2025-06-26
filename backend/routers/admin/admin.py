@@ -196,7 +196,7 @@ async def get_all_child_requests(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     status_filter: Optional[str] = Query(None, description="Filter by status"),
-    search: Optional[str] = Query(None, description="Search by company, broker, or email"),
+    search: Optional[str] = Query(None, description="Search by location, email, or child ID"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_child_requests)
@@ -207,7 +207,7 @@ async def get_all_child_requests(
     **Admin only endpoint**
     
     - **status_filter**: Filter by request status (pending, accepted, rejected, suspended)
-    - **search**: Search in company name, broker, or email
+    - **search**: Search in location, email, or child ID
     - Returns paginated list with user details
     """
     
@@ -220,8 +220,27 @@ async def get_all_child_requests(
             search=search
         )
         
+        formatted_requests = []
+        for req in result["requests"]:
+            req_dict = convert_uuids_to_strings(model_data_from_orm(req))
+            
+            if req.insurer:
+                req_dict["insurer"] = {
+                    "id": req.insurer.id,
+                    "insurer_code": req.insurer.insurer_code,
+                    "name": req.insurer.name
+                }
+            if req.broker:
+                req_dict["broker_relation"] = {
+                    "id": req.broker.id,
+                    "broker_code": req.broker.broker_code,
+                    "name": req.broker.name
+                }
+            
+            formatted_requests.append(ChildIdResponse.model_validate(req_dict))
+        
         return ChildIdRequestList(
-            requests=[ChildIdResponse.model_validate(req) for req in result["requests"]],
+            requests=formatted_requests,
             total_count=result["total_count"],
             page=page,
             page_size=page_size,
@@ -249,13 +268,10 @@ async def assign_child_id(
     **Admin only endpoint**
     
     - **child_id**: Unique child ID to assign
-    - **broker_code**: Broker code
     - **branch_code**: Optional branch code
     - **region**: Optional region
     - **manager_name**: Optional manager name
     - **manager_email**: Optional manager email
-    - **commission_percentage**: Optional commission percentage
-    - **policy_limit**: Optional policy limit
     - **admin_notes**: Optional admin notes
     """
     
@@ -268,27 +284,43 @@ async def assign_child_id(
             admin_user_id=admin_user_id
         )
         
-        # Sync to Google Sheets
-        child_request_dict = {
-            'id': child_request.id,
-            'user_id': child_request.user_id,
-            'insurance_company': child_request.insurance_company,
-            'broker': child_request.broker,
+        req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+
+        if child_request.insurer:
+            req_dict["insurer"] = {
+                "id": child_request.insurer.id,
+                "insurer_code": child_request.insurer.insurer_code,
+                "name": child_request.insurer.name
+            }
+        if child_request.broker:
+            req_dict["broker_relation"] = {
+                "id": child_request.broker.id,
+                "broker_code": child_request.broker.broker_code,
+                "name": child_request.broker.name
+            }
+
+        google_sheets_dict = {
+            'id': str(child_request.id),
+            'user_id': str(child_request.user_id),
+            'insurance_company': child_request.insurer.name if child_request.insurer else "",
+            'broker': child_request.broker.name if child_request.broker else "",
             'location': child_request.location,
             'phone_number': child_request.phone_number,
             'email': child_request.email,
             'preferred_rm_name': child_request.preferred_rm_name,
             'status': child_request.status,
             'child_id': child_request.child_id,
-            'broker_code': child_request.broker_code,
             'branch_code': child_request.branch_code,
             'region': child_request.region,
+            'manager_name': child_request.manager_name,
+            'manager_email': child_request.manager_email,
+            'admin_notes': child_request.admin_notes,
             'created_at': child_request.created_at,
             'updated_at': child_request.updated_at
         }
-        google_sheets_sync.sync_child_id_request(child_request_dict, "APPROVE")
+        google_sheets_sync.sync_child_id_request(google_sheets_dict, "APPROVE")
                
-        return ChildIdResponse.model_validate(child_request)
+        return ChildIdResponse.model_validate(req_dict)
         
     except HTTPException:
         raise
@@ -324,27 +356,43 @@ async def reject_child_request(
             admin_user_id=admin_user_id
         )
         
-        # Sync to Google Sheets
-        child_request_dict = {
-            'id': child_request.id,
-            'user_id': child_request.user_id,
-            'insurance_company': child_request.insurance_company,
-            'broker': child_request.broker,
+        req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+
+        if child_request.insurer:
+            req_dict["insurer"] = {
+                "id": child_request.insurer.id,
+                "insurer_code": child_request.insurer.insurer_code,
+                "name": child_request.insurer.name
+            }
+        if child_request.broker:
+            req_dict["broker_relation"] = {
+                "id": child_request.broker.id,
+                "broker_code": child_request.broker.broker_code,
+                "name": child_request.broker.name
+            }
+
+        google_sheets_dict = {
+            'id': str(child_request.id),
+            'user_id': str(child_request.user_id),
+            'insurance_company': child_request.insurer.name if child_request.insurer else "",
+            'broker': child_request.broker.name if child_request.broker else "",
             'location': child_request.location,
             'phone_number': child_request.phone_number,
             'email': child_request.email,
             'preferred_rm_name': child_request.preferred_rm_name,
             'status': child_request.status,
             'child_id': child_request.child_id,
-            'broker_code': child_request.broker_code,
             'branch_code': child_request.branch_code,
             'region': child_request.region,
+            'manager_name': child_request.manager_name,
+            'manager_email': child_request.manager_email,
+            'admin_notes': child_request.admin_notes,
             'created_at': child_request.created_at,
             'updated_at': child_request.updated_at
         }
-        google_sheets_sync.sync_child_id_request(child_request_dict, "REJECT")
+        google_sheets_sync.sync_child_id_request(google_sheets_dict, "REJECT")
                
-        return ChildIdResponse.model_validate(child_request)
+        return ChildIdResponse.model_validate(req_dict)
         
     except HTTPException:
         raise
@@ -382,27 +430,43 @@ async def suspend_child_id(
             admin_user_id=admin_user_id
         )
         
-        # Sync to Google Sheets
-        child_request_dict = {
-            'id': child_request.id,
-            'user_id': child_request.user_id,
-            'insurance_company': child_request.insurance_company,
-            'broker': child_request.broker,
+        req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        
+        if child_request.insurer:
+            req_dict["insurer"] = {
+                "id": child_request.insurer.id,
+                "insurer_code": child_request.insurer.insurer_code,
+                "name": child_request.insurer.name
+            }
+        if child_request.broker:
+            req_dict["broker_relation"] = {
+                "id": child_request.broker.id,
+                "broker_code": child_request.broker.broker_code,
+                "name": child_request.broker.name
+            }
+
+        google_sheets_dict = {
+            'id': str(child_request.id),
+            'user_id': str(child_request.user_id),
+            'insurance_company': child_request.insurer.name if child_request.insurer else "",
+            'broker': child_request.broker.name if child_request.broker else "",
             'location': child_request.location,
             'phone_number': child_request.phone_number,
             'email': child_request.email,
             'preferred_rm_name': child_request.preferred_rm_name,
             'status': child_request.status,
             'child_id': child_request.child_id,
-            'broker_code': child_request.broker_code,
             'branch_code': child_request.branch_code,
             'region': child_request.region,
+            'manager_name': child_request.manager_name,
+            'manager_email': child_request.manager_email,
+            'admin_notes': child_request.admin_notes,
             'created_at': child_request.created_at,
             'updated_at': child_request.updated_at
         }
-        google_sheets_sync.sync_child_id_request(child_request_dict, "SUSPEND")
+        google_sheets_sync.sync_child_id_request(google_sheets_dict, "SUSPEND")
                
-        return ChildIdResponse.model_validate(child_request)
+        return ChildIdResponse.model_validate(req_dict)
         
     except HTTPException:
         raise
@@ -482,18 +546,15 @@ async def upload_universal_record(
     """
     
     try:
-        # Validate file type
         if not file.filename.lower().endswith('.csv'):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only CSV files are allowed"
             )
-        
-        # Read file content
+
         file_content = await file.read()
         csv_content = file_content.decode('utf-8')
         
-        # Validate file is not empty
         if not csv_content.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -501,8 +562,7 @@ async def upload_universal_record(
             )
         
         admin_user_id = current_user["supabase_user"].id
-        
-        # Process the universal record
+
         result = await admin_helpers.process_universal_record_csv(
             db=db,
             csv_content=csv_content,
@@ -547,13 +607,9 @@ async def download_universal_record_template(
         from fastapi.responses import StreamingResponse
         import io
         import csv
-        
-        # Define template headers with all possible fields
+
         headers = [
-            # Required field
             'policy_number',
-            
-            # Policy fields
             'policy_type',
             'insurance_type', 
             'agent_code',

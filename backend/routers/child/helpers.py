@@ -47,6 +47,8 @@ class ChildHelpers:
             Created ChildIdRequest object
         """
         try:
+            from sqlalchemy.orm import selectinload
+            
             child_request = ChildIdRequest(
                 user_id=uuid.UUID(user_id),
                 **request_data
@@ -55,6 +57,13 @@ class ChildHelpers:
             db.add(child_request)
             await db.commit()
             await db.refresh(child_request)
+            
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(ChildIdRequest.id == child_request.id)
+            result = await db.execute(query)
+            child_request = result.scalar_one()
             
             logger.info(f"Created child ID request {child_request.id} for user {user_id}")
             return child_request
@@ -87,7 +96,12 @@ class ChildHelpers:
             Dictionary with child requests and pagination info
         """
         try:
-            query = select(ChildIdRequest).where(ChildIdRequest.user_id == uuid.UUID(user_id))
+            from sqlalchemy.orm import selectinload
+            
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(ChildIdRequest.user_id == uuid.UUID(user_id))
             
             count_query = select(func.count()).select_from(query.subquery())
             total_count = await db.scalar(count_query)
@@ -131,7 +145,12 @@ class ChildHelpers:
             ChildIdRequest object
         """
         try:
-            query = select(ChildIdRequest).where(ChildIdRequest.id == uuid.UUID(request_id))
+            from sqlalchemy.orm import selectinload
+            
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(ChildIdRequest.id == uuid.UUID(request_id))
             
             if user_id:
                 query = query.where(ChildIdRequest.user_id == uuid.UUID(user_id))
@@ -350,7 +369,12 @@ class ChildHelpers:
             List of accepted ChildIdRequest objects
         """
         try:
-            query = select(ChildIdRequest).where(
+            from sqlalchemy.orm import selectinload
+            
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).where(
                 and_(
                     ChildIdRequest.user_id == uuid.UUID(user_id),
                     ChildIdRequest.status == "accepted"
