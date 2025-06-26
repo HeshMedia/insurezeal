@@ -314,36 +314,74 @@ class ChildIdRequest(Base):
     # Relationships
     insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id])
     broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id])
+    cutpay_transactions: Mapped[list["CutPay"]] = relationship("CutPay", back_populates="child_id_request")
 
 
 class CutPay(Base):
     """
     Cut Pay Transactions - Admin only feature for managing cut pay transactions
+    Includes document upload, PDF extraction, manual data entry, and dual Google Sheets sync
     """
     __tablename__ = "cut_pay"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    policy_number: Mapped[str] = mapped_column(String(100), nullable=False)
-    agent_code: Mapped[str] = mapped_column(String(50), nullable=False)
-    insurance_company: Mapped[str] = mapped_column(String(200), nullable=False)
-    broker: Mapped[str] = mapped_column(String(200), nullable=False)
     
-    # Financial details
-    gross_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    net_premium: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    commission_grid: Mapped[str] = mapped_column(String(100), nullable=False)
-    agent_commission_given_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
-    cut_pay_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-      
-    # Payment details
-    payment_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    amount_received: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    payment_method: Mapped[str] = mapped_column(String(100), nullable=False)
-    payment_source: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Document upload fields
+    policy_pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    additional_documents: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)  # Array of document URLs
+    
+    # Extracted fields from PDF (auto-populated from AI extraction)
+    policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    policy_holder_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    policy_start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    policy_end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    premium_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    sum_insured: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    insurance_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    # Manual/Admin data entry fields with foreign key relationships
+    code_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # "agent", "broker", "child_id"
+    agent_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Foreign key relationships for dropdowns
+    insurer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("insurers.id"), nullable=True)
+    broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
+    child_id_request_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("child_id_requests.id"), nullable=True)
+    
+    # Financial details (manual entry)
+    gross_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    commission_grid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    agent_commission_given_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    
+    # Payment mode logic
+    payment_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # "agent", "insurezeal"
+    
+    # Payout configuration (when payment_mode = "agent")
+    payout_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    
+    # Calculated fields
+    cut_pay_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Auto-calculated
+    
+    # Payment tracking
+    payment_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    amount_received: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    payment_source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    payment_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     
     # Dates
-    transaction_date: Mapped[Date] = mapped_column(Date, nullable=False)
-    payment_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    transaction_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    
+    # Status tracking
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")  # draft, completed, cancelled
+    
+    # Google Sheets sync tracking
+    synced_to_cutpay_sheet: Mapped[bool] = mapped_column(Boolean, default=False)
+    synced_to_master_sheet: Mapped[bool] = mapped_column(Boolean, default=False)
+    cutpay_sheet_row_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    master_sheet_row_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
     # Additional info
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -365,6 +403,11 @@ class CutPay(Base):
         onupdate=text("CURRENT_TIMESTAMP"),
         nullable=False
     )
+    
+    # Relationships
+    insurer: Mapped[Optional["Insurer"]] = relationship("Insurer", back_populates="cutpay_transactions")
+    broker: Mapped[Optional["Broker"]] = relationship("Broker", back_populates="cutpay_transactions")
+    child_id_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", back_populates="cutpay_transactions")
 
 
 class Policy(Base):
@@ -451,6 +494,11 @@ class Broker(Base):
         onupdate=text("CURRENT_TIMESTAMP"),
         nullable=False
     )
+    
+    # Relationships
+    cutpay_transactions: Mapped[list["CutPay"]] = relationship("CutPay", back_populates="broker")
+    child_id_requests: Mapped[list["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys="ChildIdRequest.broker_id")
+    admin_child_ids: Mapped[list["AdminChildID"]] = relationship("AdminChildID", foreign_keys="AdminChildID.broker_id")
 
 
 class Insurer(Base):
@@ -476,6 +524,11 @@ class Insurer(Base):
         onupdate=text("CURRENT_TIMESTAMP"),
         nullable=False
     )
+    
+    # Relationships
+    cutpay_transactions: Mapped[list["CutPay"]] = relationship("CutPay", back_populates="insurer")
+    child_id_requests: Mapped[list["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys="ChildIdRequest.insurer_id")
+    admin_child_ids: Mapped[list["AdminChildID"]] = relationship("AdminChildID", foreign_keys="AdminChildID.insurer_id")
 
 
 class AdminChildID(Base):

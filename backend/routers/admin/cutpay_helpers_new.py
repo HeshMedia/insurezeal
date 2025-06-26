@@ -28,7 +28,6 @@ class CutPayHelpers:
     ) -> CutPay:
         """Create a new cut pay transaction with new flow support"""
         try:
-            # Calculate cut_pay_amount if sufficient data is provided
             cut_pay_amount = None
             payout_amount = None
             
@@ -104,12 +103,10 @@ class CutPayHelpers:
                     detail="Cut pay transaction not found"
                 )
             
-            # Update fields
             update_data = cutpay_data.model_dump(exclude_unset=True)
             for field, value in update_data.items():
                 setattr(cutpay, field, value)
-            
-            # Recalculate amounts if financial data changed
+
             if any(field in update_data for field in [
                 'gross_amount', 'net_premium', 'agent_commission_given_percent', 
                 'payment_mode', 'payout_percent'
@@ -148,17 +145,14 @@ class CutPayHelpers:
     ) -> CutPayPDFExtraction:
         """Process PDF extraction for CutPay transaction"""
         try:
-            # Validate PDF file
             if not validate_pdf_file(pdf_url):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid PDF file"
                 )
-            
-            # Extract data using AI
+
             extracted_data = await extract_policy_data_from_pdf(pdf_url)
             
-            # Update CutPay transaction with extracted data
             cutpay = await self.get_cutpay_by_id(db, cutpay_id)
             if not cutpay:
                 raise HTTPException(
@@ -166,7 +160,6 @@ class CutPayHelpers:
                     detail="Cut pay transaction not found"
                 )
             
-            # Map extracted data to CutPay fields
             cutpay.policy_number = extracted_data.get('policy_number')
             cutpay.policy_holder_name = extracted_data.get('policy_holder_name')
             cutpay.policy_start_date = extracted_data.get('policy_start_date')
@@ -207,14 +200,11 @@ class CutPayHelpers:
             calculation_details = {}
             
             if gross_amount and net_premium and agent_commission_given_percent:
-                # Basic CutPay calculation logic
                 commission_amount = (gross_amount * agent_commission_given_percent) / 100
-                cut_pay_amount = commission_amount - (net_premium * 0.1)  # Example calculation
-                
+                cut_pay_amount = commission_amount - (net_premium * 0.1) 
                 calculation_details["commission_amount"] = commission_amount
                 calculation_details["cutpay_calculation"] = f"Commission({commission_amount}) - Net Premium Adjustment"
                 
-                # Payout calculation (when payment_mode is "agent")
                 if payment_mode == "agent" and payout_percent and cut_pay_amount:
                     payout_amount = (cut_pay_amount * payout_percent) / 100
                     calculation_details["payout_calculation"] = f"CutPay({cut_pay_amount}) × Payout%({payout_percent})"
@@ -246,14 +236,12 @@ class CutPayHelpers:
         try:
             offset = (page - 1) * page_size
             
-            # Build query with filters
             query = select(CutPay).options(
                 joinedload(CutPay.insurer),
                 joinedload(CutPay.broker),
                 joinedload(CutPay.child_id_request)
             )
             
-            # Apply filters
             conditions = []
             if search:
                 conditions.append(
@@ -271,16 +259,14 @@ class CutPayHelpers:
             
             if conditions:
                 query = query.where(and_(*conditions))
-            
-            # Count total
+
             count_query = select(func.count(CutPay.id))
             if conditions:
                 count_query = count_query.where(and_(*conditions))
             
             total_count_result = await db.execute(count_query)
             total_count = total_count_result.scalar()
-            
-            # Get paginated results
+
             query = query.order_by(desc(CutPay.created_at)).offset(offset).limit(page_size)
             result = await db.execute(query)
             transactions = result.scalars().all()
@@ -302,7 +288,6 @@ class CutPayHelpers:
     async def get_cutpay_dropdowns(self, db: AsyncSession) -> Dict[str, List]:
         """Get dropdown options for CutPay form"""
         try:
-            # Get active insurers
             insurer_result = await db.execute(
                 select(Insurer).where(Insurer.is_active == True).order_by(Insurer.name)
             )
@@ -315,8 +300,7 @@ class CutPayHelpers:
                 )
                 for insurer in insurer_result.scalars().all()
             ]
-            
-            # Get active brokers
+
             broker_result = await db.execute(
                 select(Broker).where(Broker.is_active == True).order_by(Broker.name)
             )
@@ -329,8 +313,7 @@ class CutPayHelpers:
                 )
                 for broker in broker_result.scalars().all()
             ]
-            
-            # Get approved child IDs
+
             child_id_result = await db.execute(
                 select(ChildIdRequest)
                 .options(
@@ -368,7 +351,6 @@ class CutPayHelpers:
     async def get_cutpay_statistics(self, db: AsyncSession) -> Dict[str, Any]:
         """Get comprehensive cut pay statistics"""
         try:
-            # Basic stats
             stats_result = await db.execute(
                 select(
                     func.count(CutPay.id).label("total_transactions"),
@@ -379,7 +361,6 @@ class CutPayHelpers:
             )
             stats = stats_result.first()
             
-            # Monthly breakdown
             monthly_result = await db.execute(
                 select(
                     extract('year', CutPay.created_at).label('year'),
@@ -407,7 +388,6 @@ class CutPayHelpers:
                 for row in monthly_result.fetchall()
             ]
             
-            # Top agents
             top_agents_result = await db.execute(
                 select(
                     CutPay.agent_code,
@@ -486,7 +466,6 @@ class CutPayHelpers:
                 joinedload(CutPay.child_id_request)
             )
             
-            # Apply date filters
             conditions = []
             if start_date:
                 conditions.append(CutPay.created_at >= start_date)
@@ -499,12 +478,10 @@ class CutPayHelpers:
             query = query.order_by(CutPay.created_at)
             result = await db.execute(query)
             transactions = result.scalars().all()
-            
-            # Create CSV
+
             output = io.StringIO()
             writer = csv.writer(output)
-            
-            # Write headers
+
             headers = [
                 'ID', 'Policy Number', 'Agent Code', 'Code Type', 'Insurer', 'Broker',
                 'Gross Amount', 'Net Premium', 'Commission %', 'Cut Pay Amount',
@@ -512,8 +489,7 @@ class CutPayHelpers:
                 'Transaction Date', 'Created At'
             ]
             writer.writerow(headers)
-            
-            # Write data
+
             for transaction in transactions:
                 writer.writerow([
                     transaction.id,

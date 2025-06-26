@@ -711,15 +711,13 @@ class AdminHelpers:
             
             policy_helpers = PolicyHelpers()
             cutpay_helpers = CutPayHelpers()
-            
-            # Process each record
+
             for record in universal_records:
                 try:
                     summary = await self._reconcile_single_record(
                         db, record, policy_helpers, cutpay_helpers, admin_user_id
                     )
-                    
-                    # Update counters based on what was processed
+
                     if summary['action'] == 'updated':
                         if 'policy' in summary['record_type']:
                             report['policies_updated'] += 1
@@ -740,7 +738,6 @@ class AdminHelpers:
                     logger.error(error_msg)
                     report['errors'].append(error_msg)
             
-            # Commit all changes
             await db.commit()
             
             processing_time = (datetime.now() - start_time).total_seconds()
@@ -775,19 +772,16 @@ class AdminHelpers:
             
             records = []
             for row in reader:
-                # Clean and convert data types
                 clean_row = {}
                 for key, value in row.items():
                     if value is None or value.strip() == '':
                         clean_row[key.lower().replace(' ', '_')] = None
                     else:
-                        # Convert dates
                         if 'date' in key.lower():
                             try:
                                 clean_row[key.lower().replace(' ', '_')] = datetime.strptime(value.strip(), '%Y-%m-%d').date()
                             except:
                                 clean_row[key.lower().replace(' ', '_')] = None
-                        # Convert numbers
                         elif any(field in key.lower() for field in ['premium', 'amount', 'gst', 'percent']):
                             try:
                                 clean_row[key.lower().replace(' ', '_')] = float(value.strip())
@@ -831,17 +825,14 @@ class AdminHelpers:
         }
         
         try:
-            # Check for existing policy
             policy_query = select(Policy).where(Policy.policy_number == policy_number)
             policy_result = await db.execute(policy_query)
             existing_policy = policy_result.scalar_one_or_none()
             
-            # Check for existing cut pay
             cutpay_query = select(CutPay).where(CutPay.policy_number == policy_number)
             cutpay_result = await db.execute(cutpay_query)
             existing_cutpay = cutpay_result.scalar_one_or_none()
             
-            # Process policy data
             policy_updated = False
             if self._has_policy_data(universal_record):
                 if existing_policy:
@@ -854,7 +845,6 @@ class AdminHelpers:
                     )
                     policy_updated = True
             
-            # Process cut pay data
             cutpay_updated = False
             if self._has_cutpay_data(universal_record):
                 if existing_cutpay:
@@ -866,8 +856,7 @@ class AdminHelpers:
                         db, universal_record, admin_user_id, summary
                     )
                     cutpay_updated = True
-            
-            # Set summary record type and action
+
             record_types = []
             if self._has_policy_data(universal_record):
                 record_types.append('policy')
@@ -908,7 +897,6 @@ class AdminHelpers:
         """Update existing policy with universal record data"""
         updated = False
         
-        # Map universal record fields to policy model fields
         field_mappings = {
             'policy_type': 'policy_type',
             'insurance_type': 'insurance_type',
@@ -941,8 +929,7 @@ class AdminHelpers:
         
         if updated:
             existing_policy.updated_at = datetime.now()
-            
-            # Sync to Google Sheets
+
             try:
                 policy_dict_for_sheets = {
                     'id': existing_policy.id,
@@ -975,8 +962,7 @@ class AdminHelpers:
                 google_sheets_sync.sync_policy(policy_dict_for_sheets, "UPDATE")
                 logger.info(f"Universal record updated policy {existing_policy.id} synced to Google Sheets")
             except Exception as sync_error:
-                logger.error(f"Failed to sync universal record updated policy {existing_policy.id} to Google Sheets: {str(sync_error)}")
-                # Don't fail the main operation if Google Sheets sync fails        
+                logger.error(f"Failed to sync universal record updated policy {existing_policy.id} to Google Sheets: {str(sync_error)}")      
         return updated
     
     async def _create_policy_from_universal(
@@ -1007,19 +993,17 @@ class AdminHelpers:
             'start_date': universal_record.get('start_date'),
             'end_date': universal_record.get('end_date'),
             'uploaded_by': admin_user_id,
-            'pdf_file_path': 'universal_record_import',  # Required field - provide default
-            'pdf_file_name': 'universal_record_import.csv'  # Required field
+            'pdf_file_path': 'universal_record_import',  
+            'pdf_file_name': 'universal_record_import.csv'  
         }
         
-        # Remove None values
         policy_data = {k: v for k, v in policy_data.items() if v is not None}        
         new_policy = Policy(**policy_data)
         db.add(new_policy)
-        await db.flush()  # Get the ID
+        await db.flush() 
         
         summary['new_values'].update(policy_data)
-        
-        # Sync to Google Sheets
+
         try:
             policy_dict_for_sheets = {
                 'id': new_policy.id,
@@ -1053,7 +1037,6 @@ class AdminHelpers:
             logger.info(f"Universal record policy {new_policy.id} synced to Google Sheets")
         except Exception as sync_error:
             logger.error(f"Failed to sync universal record policy {new_policy.id} to Google Sheets: {str(sync_error)}")
-            # Don't fail the main operation if Google Sheets sync fails
     
     async def _update_cutpay_from_universal(
         self,
@@ -1082,7 +1065,7 @@ class AdminHelpers:
             'payment_date': 'payment_date',
             'notes': 'notes'
         }
-        
+
         for universal_field, cutpay_field in field_mappings.items():
             if universal_record.get(universal_field) is not None:
                 current_value = getattr(existing_cutpay, cutpay_field)
@@ -1155,16 +1138,14 @@ class AdminHelpers:
             'notes': universal_record.get('notes'),
             'created_by': admin_user_id
         }
-          # Remove None values and ensure required fields have defaults
         cutpay_data = {k: v for k, v in cutpay_data.items() if v is not None}
         
         new_cutpay = CutPay(**cutpay_data)
         db.add(new_cutpay)
-        await db.flush()  # Get the ID
+        await db.flush()  
         
         summary['new_values'].update(cutpay_data)
         
-        # Sync to Google Sheets
         try:
             cutpay_dict_for_sheets = {
                 'id': new_cutpay.id,
@@ -1191,4 +1172,3 @@ class AdminHelpers:
             logger.info(f"Universal record cut pay {new_cutpay.id} synced to Google Sheets")
         except Exception as sync_error:
             logger.error(f"Failed to sync universal record cut pay {new_cutpay.id} to Google Sheets: {str(sync_error)}")
-            # Don't fail the main operation if Google Sheets sync fails

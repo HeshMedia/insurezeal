@@ -132,14 +132,16 @@ class GoogleSheetsSync:
         
         self._safe_sync(_sync)   
     def sync_cutpay_transaction(self, cutpay_data: Dict[str, Any], action: str = "CREATE"):
-        """Sync cut pay transaction to Google Sheets"""
+        """Sync cut pay transaction to CutPay Google Sheets"""
         def _sync():
             headers = [
-                'id', 'policy_number', 'agent_code', 'insurance_company', 'broker',
+                'id', 'policy_number', 'agent_code', 'code_type', 
+                'insurer_name', 'broker_name', 'child_id',
                 'gross_amount', 'net_premium', 'commission_grid', 'agent_commission_given_percent',
-                'cut_pay_amount', 'payment_by', 'amount_received', 'payment_method', 'payment_source',
-                'transaction_date', 'payment_date', 'notes', 'created_at', 'updated_at', 
-                'action', 'synced_at'
+                'cut_pay_amount', 'payment_mode', 'payout_amount',
+                'payment_by', 'amount_received', 'payment_method', 'payment_source',
+                'transaction_date', 'payment_date', 'status', 'notes', 
+                'created_at', 'updated_at', 'action', 'synced_at'
             ]
             
             worksheet = self._get_or_create_worksheet("Cut Pay Transactions", headers)
@@ -150,19 +152,24 @@ class GoogleSheetsSync:
                 str(cutpay_data.get('id', '')),
                 str(cutpay_data.get('policy_number', '')),
                 str(cutpay_data.get('agent_code', '')),
-                str(cutpay_data.get('insurance_company', '')),
-                str(cutpay_data.get('broker', '')),
+                str(cutpay_data.get('code_type', '')),
+                str(cutpay_data.get('insurer_name', '')),
+                str(cutpay_data.get('broker_name', '')),
+                str(cutpay_data.get('child_id', '')),
                 str(cutpay_data.get('gross_amount', '')),
                 str(cutpay_data.get('net_premium', '')),
                 str(cutpay_data.get('commission_grid', '')),
                 str(cutpay_data.get('agent_commission_given_percent', '')),
                 str(cutpay_data.get('cut_pay_amount', '')),
+                str(cutpay_data.get('payment_mode', '')),
+                str(cutpay_data.get('payout_amount', '')),
                 str(cutpay_data.get('payment_by', '')),
                 str(cutpay_data.get('amount_received', '')),
                 str(cutpay_data.get('payment_method', '')),
                 str(cutpay_data.get('payment_source', '')),
                 str(cutpay_data.get('transaction_date', '')),
                 str(cutpay_data.get('payment_date', '')),
+                str(cutpay_data.get('status', '')),
                 str(cutpay_data.get('notes', '')),
                 str(cutpay_data.get('created_at', '')),
                 str(cutpay_data.get('updated_at', '')),
@@ -173,7 +180,57 @@ class GoogleSheetsSync:
             row_values = [str(val) if val is not None else '' for val in row_values]
             
             worksheet.append_row(row_values, value_input_option='RAW')
-            logger.info(f"Synced cut pay transaction {cutpay_data.get('id')} to Google Sheets")
+            logger.info(f"Synced cut pay transaction {cutpay_data.get('id')} to CutPay sheet")
+        
+        self._safe_sync(_sync)
+    
+    def sync_to_master_sheet(self, cutpay_data: Dict[str, Any], action: str = "CREATE"):
+        """Sync completed CutPay transaction to Master Google Sheet"""
+        def _sync():
+            headers = [
+                'id', 'type', 'policy_number', 'agent_code', 'code_type',
+                'insurer_name', 'broker_name', 'child_id',
+                'gross_amount', 'net_premium', 'commission_amount', 'cut_pay_amount',
+                'payment_mode', 'payout_amount', 'amount_received',
+                'transaction_date', 'status', 'created_at', 'action', 'synced_at'
+            ]
+            
+            worksheet = self._get_or_create_worksheet("Master Transactions", headers)
+            if not worksheet:
+                return
+            
+            commission_amount = 0
+            if cutpay_data.get('gross_amount') and cutpay_data.get('agent_commission_given_percent'):
+                commission_amount = (cutpay_data.get('gross_amount', 0) * 
+                                   cutpay_data.get('agent_commission_given_percent', 0)) / 100
+            
+            row_values = [
+                str(cutpay_data.get('id', '')),
+                'CutPay',  
+                str(cutpay_data.get('policy_number', '')),
+                str(cutpay_data.get('agent_code', '')),
+                str(cutpay_data.get('code_type', '')),
+                str(cutpay_data.get('insurer_name', '')),
+                str(cutpay_data.get('broker_name', '')),
+                str(cutpay_data.get('child_id', '')),
+                str(cutpay_data.get('gross_amount', '')),
+                str(cutpay_data.get('net_premium', '')),
+                str(commission_amount),
+                str(cutpay_data.get('cut_pay_amount', '')),
+                str(cutpay_data.get('payment_mode', '')),
+                str(cutpay_data.get('payout_amount', '')),
+                str(cutpay_data.get('amount_received', '')),
+                str(cutpay_data.get('transaction_date', '')),
+                str(cutpay_data.get('status', '')),
+                str(cutpay_data.get('created_at', '')),
+                str(action),
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ]
+
+            row_values = [str(val) if val is not None else '' for val in row_values]
+            
+            worksheet.append_row(row_values, value_input_option='RAW')
+            logger.info(f"Synced cut pay transaction {cutpay_data.get('id')} to Master sheet")
         
         self._safe_sync(_sync)
 
