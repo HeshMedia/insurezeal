@@ -19,7 +19,6 @@ JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
 JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-
 _supabase_client = None
 _supabase_admin_client = None
 
@@ -98,9 +97,7 @@ def get_sync_engine():
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 DEBUG = ENVIRONMENT == "dev"
 
-# Google Sheets Configuration
 GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
 GOOGLE_SHEETS_DOCUMENT_ID = os.getenv("GOOGLE_SHEETS_DOCUMENT_ID")
 
-# Gemini AI Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

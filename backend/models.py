@@ -422,3 +422,101 @@ class Policy(Base):
     agent: Mapped[Optional["UserProfile"]] = relationship("UserProfile", foreign_keys=[agent_id])
     child_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys=[child_id])
 
+
+class Broker(Base):
+    """
+    Brokers table for storing insurance broker information
+    """
+    __tablename__ = "brokers"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    broker_code: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    address: Mapped[str] = mapped_column(Text, nullable=False)
+    rm: Mapped[str] = mapped_column(String(100), nullable=False)
+    gst: Mapped[str] = mapped_column(String(15), nullable=False)
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+
+
+class Insurer(Base):
+    """
+    Insurers table for storing insurance company information
+    """
+    __tablename__ = "insurers"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    insurer_code: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+
+
+class AdminChildID(Base):
+    """
+    Admin Child IDs table for storing child IDs created directly by admins
+    These are not linked to any specific user and can be used by all admins
+    """
+    __tablename__ = "admin_child_ids"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    child_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    branch_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    region: Mapped[str] = mapped_column(String(50), nullable=False)
+    manager_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    manager_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text)
+    
+    # Code type: "Direct Code" or "Broker Code"
+    code_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    insurer_id: Mapped[int] = mapped_column(ForeignKey("insurers.id"), nullable=False)
+    broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    created_by: Mapped[Optional[UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        nullable=True
+    )
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    
+    # Relationships
+    insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id])
+    broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id])
+

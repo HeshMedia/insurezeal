@@ -11,12 +11,36 @@ from routers.auth.auth import get_current_user
 logger = logging.getLogger(__name__)
 
 RESOURCES_FOR_ROLES = {
-    'admin': {
-        'admin': ['read', 'write'],  # Added base admin permissions
+    'superadmin': {
+        'superadmin': ['read', 'write', 'update', 'delete', 'manage'],
+        'superadmin/brokers': ['read', 'write', 'update', 'delete'],
+        'superadmin/insurers': ['read', 'write', 'update', 'delete'],
+        'superadmin/admin-child-ids': ['read', 'write', 'update', 'delete'],
+        'superadmin/brokers-insurers-list': ['read'],
+        
+        'admin': ['read', 'write', 'update', 'delete', 'manage'],
         'admin/agents': ['read', 'write', 'delete'],
         'admin/stats': ['read'],
         'admin/child-requests': ['read', 'write', 'update'],
         'admin/cutpay': ['read', 'write', 'update', 'delete'],
+        
+        'users/me': ['read', 'write'],
+        'users/documents': ['read', 'write', 'delete'],
+        
+        'child/requests': ['read', 'write', 'update'],
+        'policies': ['read', 'write', 'manage']
+    },
+    'admin': {
+        'admin': ['read', 'write'],  
+        'admin/agents': ['read', 'write', 'delete'],
+        'admin/stats': ['read'],
+        'admin/child-requests': ['read', 'write', 'update'],
+        'admin/cutpay': ['read', 'write', 'update', 'delete'],
+        
+        'superadmin/brokers': ['read'],
+        'superadmin/insurers': ['read'],
+        'superadmin/admin-child-ids': ['read'],
+        'superadmin/brokers-insurers-list': ['read'],
         
         'users/me': ['read', 'write'],
         'users/documents': ['read', 'write', 'delete'],
@@ -54,8 +78,20 @@ def normalize_path(path: str) -> str:
             elif segments[1] == 'child-requests':
                 return 'admin/child-requests'
             elif segments[1] == 'universal-records':
-                return 'admin'  # Universal records use base admin permissions
+                return 'admin' 
         return 'admin'
+    
+    elif segments[0] == 'superadmin':
+        if len(segments) >= 2:
+            if segments[1] == 'brokers':
+                return 'superadmin/brokers'
+            elif segments[1] == 'insurers':
+                return 'superadmin/insurers'
+            elif segments[1] == 'admin-child-ids':
+                return 'superadmin/admin-child-ids'
+            elif segments[1] == 'brokers-insurers-list':
+                return 'superadmin/brokers-insurers-list'
+        return 'superadmin'
     
     elif segments[0] == 'users':
         if len(segments) >= 2:
@@ -164,3 +200,25 @@ require_admin_stats = require_permission("admin/stats", "read")
 require_admin_child_requests = require_permission("admin/child-requests", "read")
 require_admin_child_requests_write = require_permission("admin/child-requests", "write")
 require_admin_child_requests_update = require_permission("admin/child-requests", "update")
+
+# SuperAdmin permissions
+require_superadmin_read = require_permission("superadmin", "read")
+require_superadmin_write = require_permission("superadmin", "write")
+require_superadmin_manage = require_permission("superadmin", "manage")
+
+require_superadmin_brokers = require_permission("superadmin/brokers", "read")
+require_superadmin_brokers_write = require_permission("superadmin/brokers", "write")
+require_superadmin_brokers_update = require_permission("superadmin/brokers", "update")
+require_superadmin_brokers_delete = require_permission("superadmin/brokers", "delete")
+
+require_superadmin_insurers = require_permission("superadmin/insurers", "read")
+require_superadmin_insurers_write = require_permission("superadmin/insurers", "write")
+require_superadmin_insurers_update = require_permission("superadmin/insurers", "update")
+require_superadmin_insurers_delete = require_permission("superadmin/insurers", "delete")
+
+require_superadmin_admin_child_ids = require_permission("superadmin/admin-child-ids", "read")
+require_superadmin_admin_child_ids_write = require_permission("superadmin/admin-child-ids", "write")
+require_superadmin_admin_child_ids_update = require_permission("superadmin/admin-child-ids", "update")
+require_superadmin_admin_child_ids_delete = require_permission("superadmin/admin-child-ids", "delete")
+
+require_superadmin_brokers_insurers_list = require_permission("superadmin/brokers-insurers-list", "read")

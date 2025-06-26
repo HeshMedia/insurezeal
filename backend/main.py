@@ -10,6 +10,7 @@ from routers.users.users import router as users_router
 from routers.admin.admin import router as admin_router
 from routers.child.child import router as child_router
 from routers.policies.policies import router as policies_router
+from routers.superadmin.superadmin import router as superadmin_router
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 IS_PRODUCTION = ENVIRONMENT == "prod"
@@ -40,6 +41,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(admin_router)
+app.include_router(superadmin_router)
 app.include_router(child_router)
 app.include_router(policies_router)
 
