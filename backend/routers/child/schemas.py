@@ -10,40 +10,63 @@ class ChildIdStatusEnum(str, Enum):
     REJECTED = "rejected"
     SUSPENDED = "suspended"
 
+class CodeTypeEnum(str, Enum):
+    DIRECT_CODE = "Direct Code"
+    BROKER_CODE = "Broker Code"
+
 class ChildIdRequestCreate(BaseModel):
-    """Schema for creating a child ID request"""
-    insurance_company: str = Field(..., min_length=2, max_length=100)
-    broker: str = Field(..., min_length=2, max_length=100)
-    location: str = Field(..., min_length=2, max_length=200)
+    """Schema for creating a child ID request - Updated flow"""
     phone_number: str = Field(..., pattern=r"^[6-9]\d{9}$")
     email: EmailStr = Field(...)
+    location: str = Field(..., min_length=2, max_length=200)
+    code_type: CodeTypeEnum = Field(...)
+    insurer_id: int = Field(..., description="Selected insurer ID")
+    broker_id: Optional[int] = Field(None, description="Selected broker ID (required for Broker Code type)")
     preferred_rm_name: Optional[str] = Field(None, max_length=100)
 
+class BrokerDropdownResponse(BaseModel):
+    """Response schema for broker dropdown"""
+    id: int
+    broker_code: str
+    name: str
+    
+    class Config:
+        from_attributes = True
+
+class InsurerDropdownResponse(BaseModel):
+    """Response schema for insurer dropdown"""
+    id: int
+    insurer_code: str
+    name: str
+    
+    class Config:
+        from_attributes = True
+
+class BrokerInsurerDropdownResponse(BaseModel):
+    """Response for dropdown lists"""
+    brokers: List[BrokerDropdownResponse]
+    insurers: List[InsurerDropdownResponse]
+
 class ChildIdResponse(BaseModel):
-    """Response schema for child ID requests"""
+    """Response schema for child ID requests - Updated"""
     id: UUID
     user_id: UUID
-    
-    # Request details
-    insurance_company: str
-    broker: str
-    location: str
     phone_number: str
     email: str
+    location: str
+    code_type: str
+    insurer_id: int
+    broker_id: Optional[int] = None
     preferred_rm_name: Optional[str] = None
-    
-    # Status and assignment
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
-    broker_code: Optional[str] = None
     branch_code: Optional[str] = None
     region: Optional[str] = None
     manager_name: Optional[str] = None
     manager_email: Optional[str] = None
-    commission_percentage: Optional[float] = None
-    policy_limit: Optional[int] = None
-      # Admin details
     admin_notes: Optional[str] = None
+
+    # Admin approval details
     approved_by: Optional[UUID] = None
     approved_at: Optional[datetime] = None
     
@@ -51,18 +74,26 @@ class ChildIdResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
+    # Nested relationships
+    insurer: Optional[InsurerDropdownResponse] = None
+    broker_relation: Optional[BrokerDropdownResponse] = None
+    
     class Config:
         from_attributes = True
 
 class ChildIdSummary(BaseModel):
-    """Summary schema for child ID requests (list/card view)"""
+    """Summary schema for child ID requests (list/card view) - Updated"""
     id: UUID
-    insurance_company: str
-    broker: str
+    phone_number: str
     location: str
+    code_type: str
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
     created_at: datetime
+    
+    # Include nested insurer/broker info
+    insurer: Optional[InsurerDropdownResponse] = None
+    broker_relation: Optional[BrokerDropdownResponse] = None
     
     class Config:
         from_attributes = True

@@ -8,7 +8,10 @@ from config import get_db
 from routers.auth.auth import get_current_user
 from routers.child.helpers import ChildHelpers
 from routers.auth.helpers import AuthHelpers
-from routers.child.schemas import ChildIdResponse, ChildIdRequestCreate, ChildIdRequestList, ChildIdSummary
+from routers.child.schemas import (
+    ChildIdResponse, ChildIdRequestCreate, ChildIdRequestList, ChildIdSummary,
+    InsurerDropdownResponse, BrokerDropdownResponse, BrokerInsurerDropdownResponse
+)
 from utils.google_sheets import google_sheets_sync
 
 router = APIRouter(tags=["User Child ID Routes"])
@@ -17,6 +20,61 @@ child_helpers = ChildHelpers()
 auth_helpers = AuthHelpers()
 logger = logging.getLogger(__name__)
 
+# ============ DROPDOWN ROUTES FOR CHILD ID REQUESTS ============
+
+@router.get("/get-insurers", response_model=List[InsurerDropdownResponse])
+async def get_insurers_for_child_request(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all active insurers for Direct Code selection
+    
+    - Used when agent selects "Direct Code" type
+    - Returns list of available insurers for dropdown
+    - Accessible by authenticated agents
+    """
+    try:
+        insurers = await child_helpers.get_active_insurers(db)
+        return [InsurerDropdownResponse.model_validate(insurer) for insurer in insurers]
+        
+    except Exception as e:
+        logger.error(f"Error fetching insurers: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch insurers"
+        )
+
+@router.get("/get-brokers-and-insurers", response_model=BrokerInsurerDropdownResponse)
+async def get_brokers_and_insurers_for_child_request(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all active brokers and insurers for Broker Code selection
+    
+    - Used when agent selects "Broker Code" type
+    - Returns both brokers and insurers for dropdown selection
+    - Accessible by authenticated agents
+    """
+    try:
+        brokers = await child_helpers.get_active_brokers(db)
+        insurers = await child_helpers.get_active_insurers(db)
+        
+        return BrokerInsurerDropdownResponse(
+            brokers=[BrokerDropdownResponse.model_validate(broker) for broker in brokers],
+            insurers=[InsurerDropdownResponse.model_validate(insurer) for insurer in insurers]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching brokers and insurers: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch brokers and insurers"
+        )
+
+# ============ CHILD ID REQUEST ROUTES ============
+
 @router.post("/request", response_model=ChildIdResponse)
 async def create_child_id_request(
     request_data: ChildIdRequestCreate,
@@ -24,17 +82,30 @@ async def create_child_id_request(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create a new child ID request
+    Create a new child ID request - Updated flow
     
-    - **insurance_company**: Name of the insurance company
-    - **broker**: Broker name
-    - **location**: Location/address
     - **phone_number**: Valid Indian phone number
     - **email**: Email address
+    - **location**: Location/address
+    - **code_type**: Either "Direct Code" or "Broker Code"
+    - **insurer_id**: Selected insurer ID
+    - **broker_id**: Selected broker ID (required for Broker Code type)
     - **preferred_rm_name**: Optional preferred relationship manager name
     """
     try:
         user_id = current_user["supabase_user"].id
+        
+        if request_data.code_type == "Broker Code" and not request_data.broker_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Broker ID is required for Broker Code type"
+            )
+
+        if request_data.code_type == "Direct Code" and request_data.broker_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Broker ID should not be provided for Direct Code type"
+            )
         
         child_request = await child_helpers.create_child_id_request(
             db=db,

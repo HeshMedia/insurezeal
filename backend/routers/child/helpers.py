@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc, or_
-from models import ChildIdRequest, UserProfile
+from models import ChildIdRequest, UserProfile, Broker, Insurer
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Any, List
 import logging
@@ -22,6 +22,8 @@ class ChildHelpers:
     - reject_child_request() - Reject child ID request
     - suspend_child_id() - Suspend active child ID
     - generate_child_id() - Generate unique child ID
+    - get_active_brokers() - Get active brokers for dropdown
+    - get_active_insurers() - Get active insurers for dropdown
     """
     
     def __init__(self):
@@ -468,4 +470,50 @@ class ChildHelpers:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch child ID statistics"
+            )
+
+    async def get_active_brokers(self, db: AsyncSession) -> List[Broker]:
+        """
+        Get all active brokers for dropdown selection
+        
+        Args:
+            db: Database session
+            
+        Returns:
+            List of active Broker objects
+        """
+        try:
+            result = await db.execute(
+                select(Broker).where(Broker.is_active == True).order_by(Broker.name)
+            )
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error fetching active brokers: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch brokers"
+            )
+
+    async def get_active_insurers(self, db: AsyncSession) -> List[Insurer]:
+        """
+        Get all active insurers for dropdown selection
+        
+        Args:
+            db: Database session
+            
+        Returns:
+            List of active Insurer objects
+        """
+        try:
+            result = await db.execute(
+                select(Insurer).where(Insurer.is_active == True).order_by(Insurer.name)
+            )
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error fetching active insurers: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch insurers"
             )

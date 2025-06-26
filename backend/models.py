@@ -272,29 +272,26 @@ class ChildIdRequest(Base):
         index=True
     )
     
-    # Request Details
-    insurance_company: Mapped[str] = mapped_column(String(100), nullable=False)
-    broker: Mapped[str] = mapped_column(String(100), nullable=False)
-    location: Mapped[str] = mapped_column(String(200), nullable=False)
     phone_number: Mapped[str] = mapped_column(String(15), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
+    location: Mapped[str] = mapped_column(String(200), nullable=False)
+    
+    code_type: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    insurer_id: Mapped[int] = mapped_column(ForeignKey("insurers.id"), nullable=False)
+    broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
+
     preferred_rm_name: Mapped[Optional[str]] = mapped_column(String(100))
     
-    # Status: pending, accepted, rejected, suspended
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
-    
-    # Assigned Details (filled by admin during approval)
+
     child_id: Mapped[Optional[str]] = mapped_column(String(50), unique=True, index=True)
-    broker_code: Mapped[Optional[str]] = mapped_column(String(20))
     branch_code: Mapped[Optional[str]] = mapped_column(String(20))
     region: Mapped[Optional[str]] = mapped_column(String(50))
     manager_name: Mapped[Optional[str]] = mapped_column(String(100))
     manager_email: Mapped[Optional[str]] = mapped_column(String(255))
-    commission_percentage: Mapped[Optional[float]] = mapped_column()
-    policy_limit: Mapped[Optional[int]] = mapped_column()
-    
-    # Admin notes
     admin_notes: Mapped[Optional[str]] = mapped_column(Text)
+    
     approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("auth.users.id", ondelete="SET NULL"),
@@ -313,6 +310,10 @@ class ChildIdRequest(Base):
         onupdate=text("CURRENT_TIMESTAMP"),
         nullable=False
     )
+    
+    # Relationships
+    insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id])
+    broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id])
 
 
 class CutPay(Base):
@@ -333,7 +334,8 @@ class CutPay(Base):
     commission_grid: Mapped[str] = mapped_column(String(100), nullable=False)
     agent_commission_given_percent: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
     cut_pay_amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-      # Payment details
+      
+    # Payment details
     payment_by: Mapped[str] = mapped_column(String(200), nullable=False)
     amount_received: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
     payment_method: Mapped[str] = mapped_column(String(100), nullable=False)
