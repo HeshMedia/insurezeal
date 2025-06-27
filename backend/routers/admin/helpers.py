@@ -691,7 +691,6 @@ class AdminHelpers:
         from datetime import datetime
         from models import Policy, CutPay
         from routers.policies.helpers import PolicyHelpers
-        from routers.admin.cutpay_helpers import CutPayHelpers
         
         start_time = datetime.now()
         
@@ -710,12 +709,11 @@ class AdminHelpers:
             }
             
             policy_helpers = PolicyHelpers()
-            cutpay_helpers = CutPayHelpers()
 
             for record in universal_records:
                 try:
                     summary = await self._reconcile_single_record(
-                        db, record, policy_helpers, cutpay_helpers, admin_user_id
+                        db, record, policy_helpers, admin_user_id
                     )
 
                     if summary['action'] == 'updated':
@@ -807,7 +805,6 @@ class AdminHelpers:
         db: AsyncSession,
         universal_record: Dict[str, Any],
         policy_helpers,
-        cutpay_helpers,
         admin_user_id: str
     ) -> Dict[str, Any]:
         """Reconcile a single universal record with existing data"""

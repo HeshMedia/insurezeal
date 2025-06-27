@@ -302,4 +302,393 @@ class GoogleSheetsSync:
             logger.error(f"Google Sheets connection test failed: {str(e)}")
             return False
 
+    # =============================================================================
+    # COMPREHENSIVE CUTPAY SYNC METHODS
+    # =============================================================================
+    
+    async def sync_cutpay_to_sheets(self, cutpay) -> Dict[str, Any]:
+        """
+        Sync CutPay transaction to CutPay sheet with all comprehensive fields
+        
+        Maps all fields from the CutPay model to Google Sheets columns
+        """
+        try:
+            if not self.client:
+                return {"success": False, "error": "Google Sheets client not initialized"}
+            
+            # Get or create CutPay worksheet
+            cutpay_sheet = self._get_or_create_worksheet("CutPay")
+            
+            # Prepare comprehensive row data for CutPay sheet
+            row_data = self._prepare_cutpay_row_data(cutpay)
+            
+            # Check if record already exists
+            if cutpay.cutpay_sheet_row_id:
+                # Update existing row
+                row_number = int(cutpay.cutpay_sheet_row_id)
+                cutpay_sheet.update(f"A{row_number}:AZ{row_number}", [row_data])
+                logger.info(f"Updated CutPay sheet row {row_number} for transaction {cutpay.id}")
+            else:
+                # Add new row
+                cutpay_sheet.append_row(row_data)
+                row_number = len(cutpay_sheet.get_all_values())
+                logger.info(f"Added new CutPay sheet row {row_number} for transaction {cutpay.id}")
+            
+            return {
+                "success": True,
+                "row_id": str(row_number),
+                "sheet_name": "CutPay"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to sync CutPay transaction {cutpay.id} to sheets: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    async def sync_to_master_sheet(self, cutpay) -> Dict[str, Any]:
+        """
+        Sync completed CutPay transaction to Master Sheet
+        
+        Only syncs completed transactions with all required Master Sheet fields
+        """
+        try:
+            if not self.client:
+                return {"success": False, "error": "Google Sheets client not initialized"}
+            
+            if cutpay.status != "completed":
+                return {"success": False, "error": "Only completed transactions sync to Master Sheet"}
+            
+            # Get or create Master worksheet
+            master_sheet = self._get_or_create_worksheet("Master")
+            
+            # Prepare comprehensive row data for Master sheet
+            row_data = self._prepare_master_sheet_row_data(cutpay)
+            
+            # Check if record already exists
+            if cutpay.master_sheet_row_id:
+                # Update existing row
+                row_number = int(cutpay.master_sheet_row_id)
+                master_sheet.update(f"A{row_number}:AZ{row_number}", [row_data])
+                logger.info(f"Updated Master sheet row {row_number} for transaction {cutpay.id}")
+            else:
+                # Add new row
+                master_sheet.append_row(row_data)
+                row_number = len(master_sheet.get_all_values())
+                logger.info(f"Added new Master sheet row {row_number} for transaction {cutpay.id}")
+            
+            return {
+                "success": True,
+                "row_id": str(row_number),
+                "sheet_name": "Master"
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to sync CutPay transaction {cutpay.id} to Master sheet: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    def _prepare_cutpay_row_data(self, cutpay) -> List[Any]:
+        """
+        Prepare comprehensive row data for CutPay sheet
+        
+        Maps all CutPay model fields to sheet columns
+        """
+        return [
+            # Basic Information
+            cutpay.id,
+            cutpay.status,
+            cutpay.reporting_month,
+            cutpay.booking_date.isoformat() if cutpay.booking_date else "",
+            cutpay.agent_code,
+            cutpay.code_type,
+            
+            # Policy Information (Extracted)
+            cutpay.policy_number,
+            cutpay.formatted_policy_number,
+            cutpay.customer_name,
+            cutpay.major_categorisation,
+            cutpay.product_insurer_report,
+            cutpay.product_type,
+            cutpay.plan_type,
+            
+            # Financial Details (Extracted)
+            cutpay.gross_premium,
+            cutpay.net_premium,
+            cutpay.od_premium,
+            cutpay.tp_premium,
+            cutpay.gst_amount,
+            
+            # Vehicle Details (Extracted)
+            cutpay.registration_no,
+            cutpay.make_model,
+            cutpay.model,
+            cutpay.vehicle_variant,
+            cutpay.gvw,
+            cutpay.rto,
+            cutpay.state,
+            cutpay.cluster,
+            cutpay.fuel_type,
+            cutpay.cc,
+            cutpay.age_year,
+            cutpay.ncb,
+            cutpay.discount_percent,
+            cutpay.business_type,
+            cutpay.seating_capacity,
+            cutpay.veh_wheels,
+            
+            # Relationship Data (Auto-populated)
+            cutpay.insurer_name,
+            cutpay.broker_name,
+            cutpay.insurer_broker_code,
+            
+            # Commission Configuration (Admin Input)
+            cutpay.incoming_grid_percent,
+            cutpay.agent_commission_given_percent,
+            cutpay.extra_grid,
+            cutpay.commissionable_premium,
+            cutpay.agent_extra_percent,
+            
+            # Payment Configuration (Admin Input)
+            cutpay.payment_by,
+            cutpay.payment_method,
+            cutpay.payout_on,
+            cutpay.payment_by_office,
+            
+            # Calculated Amounts
+            cutpay.receivable_from_broker,
+            cutpay.extra_amount_receivable_from_broker,
+            cutpay.total_receivable_from_broker,
+            cutpay.total_receivable_from_broker_with_gst,
+            cutpay.cut_pay_amount,
+            cutpay.agent_po_amt,
+            cutpay.agent_extra_amount,
+            cutpay.total_agent_po_amt,
+            
+            # Tracking Fields
+            cutpay.claimed_by,
+            cutpay.already_given_to_agent,
+            cutpay.po_paid_to_agent,
+            cutpay.running_bal,
+            cutpay.match_status,
+            cutpay.invoice_number,
+            
+            # System Fields
+            cutpay.synced_to_cutpay_sheet,
+            cutpay.synced_to_master_sheet,
+            cutpay.notes,
+            cutpay.created_at.isoformat() if cutpay.created_at else "",
+            cutpay.updated_at.isoformat() if cutpay.updated_at else ""
+        ]
+    
+    def _prepare_master_sheet_row_data(self, cutpay) -> List[Any]:
+        """
+        Prepare comprehensive row data for Master sheet
+        
+        Includes all Master Sheet columns as per business requirements
+        """
+        return [
+            # Core Transaction Data
+            cutpay.id,
+            cutpay.reporting_month,
+            cutpay.booking_date.isoformat() if cutpay.booking_date else "",
+            cutpay.agent_code,
+            cutpay.code_type,
+            cutpay.insurer_name,
+            cutpay.broker_name,
+            cutpay.insurer_broker_code,
+            
+            # Policy Information
+            cutpay.policy_number,
+            cutpay.formatted_policy_number,
+            cutpay.customer_name,
+            cutpay.major_categorisation,
+            cutpay.product_insurer_report,
+            cutpay.product_type,
+            cutpay.plan_type,
+            
+            # Premium Details
+            cutpay.gross_premium,
+            cutpay.net_premium,
+            cutpay.od_premium,
+            cutpay.tp_premium,
+            cutpay.gst_amount,
+            cutpay.commissionable_premium,
+            
+            # Vehicle Details (if applicable)
+            cutpay.registration_no,
+            cutpay.make_model,
+            cutpay.model,
+            cutpay.vehicle_variant,
+            cutpay.gvw,
+            cutpay.rto,
+            cutpay.state,
+            cutpay.cluster,
+            cutpay.fuel_type,
+            cutpay.cc,
+            cutpay.age_year,
+            cutpay.ncb,
+            cutpay.discount_percent,
+            cutpay.business_type,
+            cutpay.seating_capacity,
+            cutpay.veh_wheels,
+            
+            # Commission Structure
+            cutpay.incoming_grid_percent,
+            cutpay.agent_commission_given_percent,
+            cutpay.extra_grid,
+            cutpay.agent_extra_percent,
+            
+            # Payment Configuration
+            cutpay.payment_by,
+            cutpay.payment_method,
+            cutpay.payout_on,
+            cutpay.payment_by_office,
+            
+            # Calculated Commission Amounts
+            cutpay.receivable_from_broker,
+            cutpay.extra_amount_receivable_from_broker,
+            cutpay.total_receivable_from_broker,
+            cutpay.total_receivable_from_broker_with_gst,
+            
+            # CutPay & Payout Amounts
+            cutpay.cut_pay_amount,
+            cutpay.agent_po_amt,
+            cutpay.agent_extra_amount,
+            cutpay.total_agent_po_amt,
+            
+            # Transaction Tracking
+            cutpay.claimed_by,
+            cutpay.already_given_to_agent,
+            cutpay.po_paid_to_agent,
+            cutpay.running_bal,
+            cutpay.match_status,
+            cutpay.invoice_number,
+            
+            # Status and Notes
+            cutpay.status,
+            cutpay.notes,
+            
+            # Timestamps
+            cutpay.created_at.isoformat() if cutpay.created_at else "",
+            cutpay.updated_at.isoformat() if cutpay.updated_at else ""
+        ]
+    
+    def _get_or_create_worksheet(self, sheet_name: str):
+        """Get existing worksheet or create new one with headers"""
+        try:
+            # Try to get existing worksheet
+            worksheet = self.spreadsheet.worksheet(sheet_name)
+            return worksheet
+        except gspread.exceptions.WorksheetNotFound:
+            # Create new worksheet with appropriate headers
+            worksheet = self.spreadsheet.add_worksheet(
+                title=sheet_name,
+                rows=1000,
+                cols=100
+            )
+            
+            # Add headers based on sheet type
+            if sheet_name == "CutPay":
+                headers = self._get_cutpay_sheet_headers()
+            elif sheet_name == "Master":
+                headers = self._get_master_sheet_headers()
+            else:
+                headers = ["ID", "Created At", "Updated At"]
+            
+            worksheet.append_row(headers)
+            logger.info(f"Created new worksheet '{sheet_name}' with headers")
+            return worksheet
+    
+    def _get_cutpay_sheet_headers(self) -> List[str]:
+        """Get comprehensive headers for CutPay sheet"""
+        return [
+            # Basic Information
+            "ID", "Status", "Reporting Month", "Booking Date", "Agent Code", "Code Type",
+            
+            # Policy Information (Extracted)
+            "Policy Number", "Formatted Policy Number", "Customer Name", "Major Categorisation",
+            "Product Insurer Report", "Product Type", "Plan Type",
+            
+            # Financial Details (Extracted)
+            "Gross Premium", "Net Premium", "OD Premium", "TP Premium", "GST Amount",
+            
+            # Vehicle Details (Extracted)
+            "Registration No", "Make Model", "Model", "Vehicle Variant", "GVW", "RTO",
+            "State", "Cluster", "Fuel Type", "CC", "Age Year", "NCB", "Discount Percent",
+            "Business Type", "Seating Capacity", "Vehicle Wheels",
+            
+            # Relationship Data
+            "Insurer Name", "Broker Name", "Insurer Broker Code",
+            
+            # Commission Configuration
+            "Incoming Grid %", "Agent Commission %", "Extra Grid %", "Commissionable Premium", "Agent Extra %",
+            
+            # Payment Configuration
+            "Payment By", "Payment Method", "Payout On", "Payment By Office",
+            
+            # Calculated Amounts
+            "Receivable from Broker", "Extra Amount Receivable", "Total Receivable",
+            "Total Receivable with GST", "CutPay Amount", "Agent PO Amount", "Agent Extra Amount", "Total Agent PO",
+            
+            # Tracking Fields
+            "Claimed By", "Already Given to Agent", "PO Paid to Agent", "Running Balance",
+            "Match Status", "Invoice Number",
+            
+            # System Fields
+            "Synced to CutPay Sheet", "Synced to Master Sheet", "Notes", "Created At", "Updated At"
+        ]
+    
+    def _get_master_sheet_headers(self) -> List[str]:
+        """Get comprehensive headers for Master sheet"""
+        return [
+            # Core Transaction Data
+            "ID", "Reporting Month", "Booking Date", "Agent Code", "Code Type",
+            "Insurer Name", "Broker Name", "Insurer Broker Code",
+            
+            # Policy Information
+            "Policy Number", "Formatted Policy Number", "Customer Name", "Major Categorisation",
+            "Product Insurer Report", "Product Type", "Plan Type",
+            
+            # Premium Details
+            "Gross Premium", "Net Premium", "OD Premium", "TP Premium", "GST Amount", "Commissionable Premium",
+            
+            # Vehicle Details
+            "Registration No", "Make Model", "Model", "Vehicle Variant", "GVW", "RTO",
+            "State", "Cluster", "Fuel Type", "CC", "Age Year", "NCB", "Discount Percent",
+            "Business Type", "Seating Capacity", "Vehicle Wheels",
+            
+            # Commission Structure
+            "Incoming Grid %", "Agent Commission %", "Extra Grid %", "Agent Extra %",
+            
+            # Payment Configuration
+            "Payment By", "Payment Method", "Payout On", "Payment By Office",
+            
+            # Calculated Commission Amounts
+            "Receivable from Broker", "Extra Amount Receivable", "Total Receivable", "Total Receivable with GST",
+            
+            # CutPay & Payout Amounts
+            "CutPay Amount", "Agent PO Amount", "Agent Extra Amount", "Total Agent PO",
+            
+            # Transaction Tracking
+            "Claimed By", "Already Given to Agent", "PO Paid to Agent", "Running Balance",
+            "Match Status", "Invoice Number",
+            
+            # Status and Notes
+            "Status", "Notes",
+            
+            # Timestamps
+            "Created At", "Updated At"
+        ]
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
+
+# Create global instance
 google_sheets_sync = GoogleSheetsSync()
+
+async def sync_cutpay_to_sheets(cutpay) -> Dict[str, Any]:
+    """Convenience function to sync CutPay transaction to sheets"""
+    return await google_sheets_sync.sync_cutpay_to_sheets(cutpay)
+
+async def sync_to_master_sheet(cutpay) -> Dict[str, Any]:
+    """Convenience function to sync completed transaction to Master sheet"""
+    return await google_sheets_sync.sync_to_master_sheet(cutpay)
