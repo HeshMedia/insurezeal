@@ -3,17 +3,16 @@ from sqlalchemy import select, func, and_, extract, or_, desc
 from sqlalchemy.orm import selectinload, joinedload
 from models import CutPay, Insurer, Broker, ChildIdRequest
 from .cutpay_schemas import (
-    CutPayCreate, CutPayUpdate, CutPayStats, CutPayPDFExtraction,
-    CutPayCalculationRequest, InsurerDropdown, BrokerDropdown, ChildIdDropdown
+    CutPayCreate, CutPayUpdate, CutPayPDFExtraction, InsurerDropdown, BrokerDropdown, ChildIdDropdown, CutPayStats
 )
+from utils.ai_utils import extract_policy_data_from_pdf
+from utils.google_sheets import sync_cutpay_to_sheets
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 import logging
 import csv
 import io
-from utils.ai_utils import extract_policy_data_from_pdf
-from utils.pdf_utils import validate_pdf_file
 
 logger = logging.getLogger(__name__)
 
@@ -148,13 +147,6 @@ class CutPayHelpers:
     ) -> CutPayPDFExtraction:
         """Process PDF extraction for CutPay transaction"""
         try:
-            # Validate PDF file
-            if not validate_pdf_file(pdf_url):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid PDF file"
-                )
-            
             # Extract data using AI
             extracted_data = await extract_policy_data_from_pdf(pdf_url)
             
@@ -543,3 +535,239 @@ class CutPayHelpers:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to export cut pay transactions"
             )
+
+# =============================================================================
+# STANDALONE HELPER FUNCTIONS (for cutpay.py router)
+# =============================================================================
+
+async def extract_pdf_data(cutpay_id: int, pdf_url: str, db: AsyncSession):
+    """Extract data from policy PDF using AI/OCR (standalone function)"""
+    helper = CutPayHelpers()
+    return await helper.process_pdf_extraction(db, cutpay_id, pdf_url)
+
+async def calculate_commission_amounts(calculation_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate commission amounts using real business logic from README"""
+    try:
+        # Extract input values
+        gross_premium = calculation_data.get('gross_premium', 0) or 0
+        net_premium = calculation_data.get('net_premium', 0) or 0
+        od_premium = calculation_data.get('od_premium', 0) or 0
+        tp_premium = calculation_data.get('tp_premium', 0) or 0
+        incoming_grid_percent = calculation_data.get('incoming_grid_percent', 0) or 0
+        extra_grid = calculation_data.get('extra_grid', 0) or 0
+        commissionable_premium = calculation_data.get('commissionable_premium') or gross_premium
+        agent_commission_percent = calculation_data.get('agent_commission_given_percent', 0) or 0
+        payment_by = calculation_data.get('payment_by', 'Agent')
+        payout_on = calculation_data.get('payout_on', 'NP')
+        
+        # Initialize results
+        result = {
+            'receivable_from_broker': 0,
+            'extra_amount_receivable_from_broker': 0,
+            'total_receivable_from_broker': 0,
+            'total_receivable_from_broker_with_gst': 0,
+            'cut_pay_amount': 0,
+            'agent_po_amt': 0,
+            'total_agent_po_amt': 0,
+            'calculation_details': {}
+        }
+        
+        # 1. Commission Calculations
+        if gross_premium and incoming_grid_percent:
+            # Receivable from Broker = Gross Premium × Incoming Grid %
+            result['receivable_from_broker'] = gross_premium * (incoming_grid_percent / 100)
+            
+            # Extra Receivable = Commissionable Premium × Extra Grid %
+            if extra_grid and commissionable_premium:
+                result['extra_amount_receivable_from_broker'] = commissionable_premium * (extra_grid / 100)
+            
+            # Total Receivable = Receivable + Extra
+            result['total_receivable_from_broker'] = (
+                result['receivable_from_broker'] + result['extra_amount_receivable_from_broker']
+            )
+            
+            # With GST = Total × 1.18
+            result['total_receivable_from_broker_with_gst'] = result['total_receivable_from_broker'] * 1.18
+        
+        # 2. CutPay Amount Logic
+        if payment_by == "Agent":
+            result['cut_pay_amount'] = 0  # Agent handles customer payment
+        elif payment_by == "InsureZeal" and gross_premium and net_premium and agent_commission_percent:
+            agent_commission = net_premium * (agent_commission_percent / 100)
+            result['cut_pay_amount'] = gross_premium - agent_commission
+        
+        # 3. Agent Payout Logic
+        if agent_commission_percent:
+            base_premium = 0
+            if payout_on == "OD" and od_premium:
+                base_premium = od_premium
+            elif payout_on == "NP" and net_premium:
+                base_premium = net_premium
+            elif payout_on == "OD+TP" and od_premium and tp_premium:
+                base_premium = od_premium + tp_premium
+            
+            if base_premium:
+                result['agent_po_amt'] = base_premium * (agent_commission_percent / 100)
+                result['total_agent_po_amt'] = result['agent_po_amt']  # Can add extra amounts later
+        
+        # 4. Calculation Details for transparency
+        result['calculation_details'] = {
+            'commission_formula': f"{gross_premium} × {incoming_grid_percent}% = {result['receivable_from_broker']}",
+            'extra_formula': f"{commissionable_premium} × {extra_grid}% = {result['extra_amount_receivable_from_broker']}",
+            'gst_formula': f"{result['total_receivable_from_broker']} × 1.18 = {result['total_receivable_from_broker_with_gst']}",
+            'cutpay_logic': f"Payment by {payment_by}: {result['cut_pay_amount']}",
+            'payout_logic': f"Payout on {payout_on}: {result['agent_po_amt']}"
+        }
+        
+        logger.info(f"Calculated commission amounts: CutPay={result['cut_pay_amount']}, Agent Payout={result['agent_po_amt']}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error calculating commission amounts: {str(e)}")
+        return {
+            'receivable_from_broker': 0,
+            'total_receivable_from_broker_with_gst': 0,
+            'cut_pay_amount': 0,
+            'agent_po_amt': 0,
+            'calculation_details': {'error': str(e)}
+        }
+
+async def get_dropdown_options(db: AsyncSession) -> Dict[str, List]:
+    """Get dropdown options for CutPay form (standalone function)"""
+    helper = CutPayHelpers()
+    return await helper.get_cutpay_dropdowns(db)
+
+async def get_filtered_dropdowns(db: AsyncSession, insurer_id: Optional[int] = None, broker_id: Optional[int] = None) -> Dict[str, List]:
+    """Get filtered dropdown options based on insurer/broker selection"""
+    try:
+        result = {"insurers": [], "brokers": [], "child_ids": []}
+        
+        # Get insurers (always return all active insurers)
+        insurer_result = await db.execute(
+            select(Insurer).where(Insurer.is_active == True).order_by(Insurer.name)
+        )
+        result["insurers"] = [
+            {"id": insurer.id, "name": insurer.name, "insurer_code": insurer.insurer_code}
+            for insurer in insurer_result.scalars().all()
+        ]
+        
+        # Get brokers (filter by insurer if provided)
+        broker_query = select(Broker).where(Broker.is_active == True)
+        if insurer_id:
+            # If you have a relationship between Broker and Insurer, filter here
+            # For now, return all brokers
+            pass
+        broker_query = broker_query.order_by(Broker.name)
+        
+        broker_result = await db.execute(broker_query)
+        result["brokers"] = [
+            {"id": broker.id, "name": broker.name, "broker_code": broker.broker_code}
+            for broker in broker_result.scalars().all()
+        ]
+        
+        # Get child IDs (filter by insurer/broker if provided)
+        child_id_query = select(ChildIdRequest).options(
+            joinedload(ChildIdRequest.insurer),
+            joinedload(ChildIdRequest.broker)
+        ).where(ChildIdRequest.status == "approved")
+        
+        conditions = []
+        if insurer_id:
+            conditions.append(ChildIdRequest.insurer_id == insurer_id)
+        if broker_id:
+            conditions.append(ChildIdRequest.broker_id == broker_id)
+        
+        if conditions:
+            child_id_query = child_id_query.where(and_(*conditions))
+        
+        child_id_query = child_id_query.order_by(ChildIdRequest.child_id)
+        child_id_result = await db.execute(child_id_query)
+        
+        result["child_ids"] = [
+            {
+                "id": child_id.id,
+                "child_id": child_id.child_id,
+                "insurer_name": child_id.insurer.name if child_id.insurer else None,
+                "broker_name": child_id.broker.name if child_id.broker else None,
+                "code_type": child_id.code_type
+            }
+            for child_id in child_id_result.scalars().all()
+        ]
+        
+        logger.info(f"Retrieved filtered dropdowns: {len(result['insurers'])} insurers, {len(result['brokers'])} brokers, {len(result['child_ids'])} child IDs")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting filtered dropdowns: {str(e)}")
+        # Fallback to unfiltered dropdowns
+        helper = CutPayHelpers()
+        return await helper.get_cutpay_dropdowns(db)
+
+def auto_populate_relationship_data(cutpay: CutPay, db: AsyncSession):
+    """Auto-populate relationship data from IDs"""
+    try:
+        # Auto-populate insurer name from insurer_id
+        if cutpay.insurer_id and not cutpay.insurer_name:
+            if hasattr(cutpay, 'insurer') and cutpay.insurer:
+                cutpay.insurer_name = cutpay.insurer.name
+        
+        # Auto-populate broker name from broker_id  
+        if cutpay.broker_id and not cutpay.broker_name:
+            if hasattr(cutpay, 'broker') and cutpay.broker:
+                cutpay.broker_name = cutpay.broker.name
+        
+        # Auto-populate cluster from state (basic mapping)
+        if cutpay.state and not cutpay.cluster:
+            state_cluster_map = {
+                'MH': 'West', 'GJ': 'West', 'RJ': 'West',
+                'DL': 'North', 'PB': 'North', 'HR': 'North',
+                'KA': 'South', 'TN': 'South', 'AP': 'South', 'TS': 'South',
+                'WB': 'East', 'OR': 'East', 'JH': 'East'
+            }
+            cutpay.cluster = state_cluster_map.get(cutpay.state, 'Other')
+            
+        logger.info(f"Auto-populated relationship data for CutPay {cutpay.id}")
+        
+    except Exception as e:
+        logger.error(f"Error auto-populating relationship data: {str(e)}")
+
+async def sync_cutpay_transaction(cutpay_id: int, db: AsyncSession) -> Dict[str, Any]:
+    """Sync CutPay transaction to Google Sheets using real sync function"""
+    try:
+        # Get the CutPay transaction
+        helper = CutPayHelpers()
+        cutpay = await helper.get_cutpay_by_id(db, cutpay_id)
+        
+        if not cutpay:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="CutPay transaction not found"
+            )
+        
+        # Use the real Google Sheets sync function
+        result = await sync_cutpay_to_sheets(cutpay)
+        
+        logger.info(f"Successfully synced CutPay transaction {cutpay_id} to Google Sheets")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error syncing CutPay transaction {cutpay_id}: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+def validate_cutpay_data(cutpay_data: Dict[str, Any]) -> List[str]:
+    """Validate CutPay data (standalone function)"""
+    errors = []
+    
+    # Basic validation
+    if not cutpay_data.get('policy_number') and not cutpay_data.get('agent_code'):
+        errors.append("Either policy_number or agent_code is required")
+    
+    if cutpay_data.get('gross_amount') and cutpay_data.get('gross_amount') < 0:
+        errors.append("Gross amount cannot be negative")
+    
+    if cutpay_data.get('agent_commission_given_percent'):
+        commission = cutpay_data['agent_commission_given_percent']
+        if commission < 0 or commission > 100:
+            errors.append("Agent commission percent must be between 0 and 100")
+    
+    return errors

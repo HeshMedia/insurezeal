@@ -648,4 +648,40 @@ class CutPayListResponse(BaseModel):
     page: int
     page_size: int
 
+class CutPayPDFExtraction(BaseModel):
+    """Schema for PDF extraction results"""
+    policy_number: Optional[str] = Field(None, description="Policy number")
+    policy_holder_name: Optional[str] = Field(None, description="Policy holder name")
+    policy_start_date: Optional[date] = Field(None, description="Policy start date")
+    policy_end_date: Optional[date] = Field(None, description="Policy end date")
+    premium_amount: Optional[float] = Field(None, description="Premium amount")
+    sum_insured: Optional[float] = Field(None, description="Sum insured")
+    insurance_type: Optional[str] = Field(None, description="Type of insurance")
+    policy_pdf_url: Optional[str] = Field(None, description="URL of the policy PDF")
+    confidence_score: Optional[float] = Field(None, description="Confidence score of extraction")
+
+class BrokerDropdown(BaseModel):
+    id: int
+    broker_code: str
+    name: str
+
+class InsurerDropdown(BaseModel):
+    id: int
+    insurer_code: str
+    name: str
+
+class ChildIdDropdown(BaseModel):
+    id: int
+    child_id: str
+    insurer_name: Optional[str]
+    broker_name: Optional[str]
+    code_type: Optional[str]
+    status: Optional[str]
+
+class CutPayStats(BaseModel):
+    total_transactions: int
+    total_cut_pay_amount: float
+    total_amount_received: float
+    average_cut_pay_amount: float
+
 

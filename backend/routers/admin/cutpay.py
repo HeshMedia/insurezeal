@@ -13,10 +13,10 @@ import logging
 import io
 import csv
 
-from ...config import get_db
-from ..auth.auth import get_current_user
-from ...dependencies.rbac import require_admin_cutpay
-from ...models import CutPay, Insurer, Broker, ChildIdRequest
+from config import get_db
+from routers.auth.auth import get_current_user
+from dependencies.rbac import require_admin_cutpay
+from models import CutPay, Insurer, Broker, ChildIdRequest
 from .cutpay_schemas import (
     CutPayCreate,
     CutPayUpdate,
