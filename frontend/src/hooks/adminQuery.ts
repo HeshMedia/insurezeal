@@ -41,6 +41,10 @@ export const useCutPayList = (params?: CutPayListParams) => {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.cutpay.list(params),
     queryFn: () => adminApi.cutpay.list(params),
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
   })
 }
 
@@ -56,6 +60,10 @@ export const useCutPayStats = () => {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.cutpay.stats(),
     queryFn: adminApi.cutpay.getStats,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
 

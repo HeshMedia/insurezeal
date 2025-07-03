@@ -28,25 +28,25 @@ export function AnalyticsCharts() {
     transactions: agent.transaction_count || 0,
   })) || []
 
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+  const COLORS = ['#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0', '#f1f5f9']
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card className="border border-gray-200">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-5 w-40" />
           </CardHeader>
           <CardContent>
-            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-48 w-full" />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48" />
+        <Card className="border border-gray-200">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-5 w-40" />
           </CardHeader>
           <CardContent>
-            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-48 w-full" />
           </CardContent>
         </Card>
       </div>
@@ -54,26 +54,26 @@ export function AnalyticsCharts() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-3 md:grid-cols-2">
       {/* Monthly Revenue Chart */}
-      <Card className="col-span-1">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">
+      <Card className="col-span-1 border border-gray-200 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold text-gray-900">
             Monthly CutPay Trends
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-64">
+        <CardContent className="p-3">
+          <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis 
                   dataKey="month" 
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11 }}
                   stroke="#6b7280"
                 />
                 <YAxis 
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11 }}
                   stroke="#6b7280"
                   tickFormatter={(value) => `₹${(value / 1000)}K`}
                 />
@@ -89,15 +89,15 @@ export function AnalyticsCharts() {
                 />
                 <Bar 
                   dataKey="amount" 
-                  fill="#3B82F6" 
-                  radius={[4, 4, 0, 0]}
-                  stroke="#2563EB"
+                  fill="#64748b" 
+                  radius={[3, 3, 0, 0]}
+                  stroke="#475569"
                   strokeWidth={1}
                 />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+          <div className="mt-3 flex items-center justify-between text-xs text-gray-600">
             <span>Last 6 months performance</span>
             <span className="font-medium">
               Total: {formatCurrency(monthlyData.reduce((sum, item) => sum + item.amount, 0))}
@@ -107,22 +107,22 @@ export function AnalyticsCharts() {
       </Card>
 
       {/* Top Agents Chart */}
-      <Card className="col-span-1">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-gray-900">
+      <Card className="col-span-1 border border-gray-200 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold text-gray-900">
             Top Performing Agents
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-64">
+        <CardContent className="p-3">
+          <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={topAgentsData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
+                  innerRadius={45}
+                  outerRadius={75}
                   paddingAngle={2}
                   dataKey="amount"
                 >
@@ -142,18 +142,18 @@ export function AnalyticsCharts() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-4 space-y-2">
+          <div className="mt-3 space-y-2">
             {topAgentsData.map((agent, index) => (
               <div key={agent.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div 
-                    className="w-3 h-3 rounded-full" 
+                    className="w-2.5 h-2.5 rounded-full" 
                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
                   />
-                  <span className="text-sm font-medium text-gray-700">{agent.name}</span>
+                  <span className="text-xs font-medium text-gray-700">{agent.name}</span>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className="text-xs font-semibold text-gray-900">
                     {formatCurrency(agent.amount)}
                   </div>
                   <div className="text-xs text-gray-500">

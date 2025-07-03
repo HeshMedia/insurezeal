@@ -71,79 +71,79 @@ export function AdminOverview() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-6 text-white">
+    <div className="space-y-4">
+      {/* Welcome Header - Professional and Compact */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-2">Welcome to Admin Dashboard</h1>
-            <p className="text-blue-100">
-              Manage your insurance platform with comprehensive tools and insights
+            <h1 className="text-lg font-semibold text-gray-900 mb-1">Welcome to Admin Dashboard</h1>
+            <p className="text-sm text-gray-600">
+              Manage your insurance platform with professional tools and insights
             </p>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold">
+            <div className="text-xl font-bold text-gray-900">
               {cutpayStats?.stats ? formatCurrency(cutpayStats.stats.total_cut_pay_amount) : '₹0'}
             </div>
-            <div className="text-blue-100 text-sm">Total CutPay Volume</div>
+            <div className="text-xs text-gray-500">Total CutPay Volume</div>
           </div>
         </div>
       </div>
 
-      {/* Quick Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-blue-500">
-          <CardContent className="p-4">
+      {/* Quick Stats Row - Compact */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Agents</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-xs font-medium text-gray-600">Total Agents</p>
+                <p className="text-lg font-bold text-gray-900">
                   {adminStats?.total_agents || 0}
                 </p>
               </div>
-              <Users className="h-8 w-8 text-blue-500" />
+              <Users className="h-6 w-6 text-slate-600" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500">
-          <CardContent className="p-4">
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">CutPay Transactions</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-xs font-medium text-gray-600">CutPay Transactions</p>
+                <p className="text-lg font-bold text-gray-900">
                   {cutpayStats?.stats?.total_transactions || 0}
                 </p>
               </div>
-              <TrendingUp className="h-8 w-8 text-green-500" />
+              <TrendingUp className="h-6 w-6 text-slate-600" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-orange-500">
-          <CardContent className="p-4">
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Child Requests</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-xs font-medium text-gray-600">Child Requests</p>
+                <p className="text-lg font-bold text-gray-900">
                   {childStats?.total_requests || 0}
                 </p>
               </div>
-              <FileText className="h-8 w-8 text-orange-500" />
+              <FileText className="h-6 w-6 text-slate-600" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-purple-500">
-          <CardContent className="p-4">
+        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Pending Approvals</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-xs font-medium text-gray-600">Pending Approvals</p>
+                <p className="text-lg font-bold text-gray-900">
                   {childStats?.pending_requests || 0}
                 </p>
               </div>
-              <Clock className="h-8 w-8 text-purple-500" />
+              <Clock className="h-6 w-6 text-slate-600" />
             </div>
           </CardContent>
         </Card>
@@ -156,28 +156,28 @@ export function AdminOverview() {
       <AnalyticsCharts />
 
       {/* Recent Activity */}
-      <div className="grid gap-6 md:grid-cols-1">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-              <Activity className="h-5 w-5 text-blue-600" />
+      <div className="grid gap-4 md:grid-cols-1">
+        <Card className="border border-gray-200 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Activity className="h-4 w-4 text-slate-600" />
               Recent Activity
             </CardTitle>
             <Badge variant="secondary" className="text-xs">
               Real-time data
             </Badge>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="p-3">
+            <div className="space-y-3">
               {getRecentActivity().length === 0 ? (
-                <div className="text-center py-6 text-gray-500">
-                  <Activity className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-                  <p>No recent activity</p>
+                <div className="text-center py-4 text-gray-500">
+                  <Activity className="h-6 w-6 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No recent activity</p>
                 </div>
               ) : (
                 getRecentActivity().map((activity) => (
-                  <div key={activity.id} className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                    <Avatar className="h-10 w-10">
+                  <div key={activity.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-md transition-colors">
+                    <Avatar className="h-8 w-8">
                       <AvatarFallback className={activity.color}>
                         {activity.avatar}
                       </AvatarFallback>
@@ -186,7 +186,7 @@ export function AdminOverview() {
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {activity.title}
                       </p>
-                      <p className="text-sm text-gray-500 truncate">
+                      <p className="text-xs text-gray-500 truncate">
                         {activity.description}
                       </p>
                     </div>

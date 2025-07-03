@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAtom } from "jotai"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAgentList, useDeleteAgent } from "@/hooks/adminQuery"
-import { agentListParamsAtom, selectedAgentIdAtom, isAgentDialogOpenAtom } from "@/lib/atoms/admin"
+import { agentListParamsAtom } from "@/lib/atoms/admin"
 import { AgentSummary } from "@/types/admin.types"
 import { cn } from "@/lib/utils"
 import { 
@@ -72,31 +73,32 @@ function AgentCard({ agent, onViewDetails, onDelete }: {
   }
 
   return (
-    <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-      <CardHeader className="pb-3">
+    <Card className="bg-white hover:shadow-lg transition-all duration-200 border border-gray-200 shadow-sm rounded-xl">
+      <CardHeader className="pb-4">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14 border-2 border-white shadow-md">
               <AvatarImage src="" alt={getDisplayName()} />
-              <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-700 text-white font-semibold">
+              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold text-lg">
                 {getInitials(agent.first_name, agent.last_name)}
               </AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">
+              <CardTitle className="text-lg font-semibold text-gray-900 mb-1">
                 {getDisplayName()}
               </CardTitle>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2">
                 {agent.agent_code && (
-                  <Badge variant="outline" className="font-mono text-xs">
+                  <Badge variant="outline" className="font-mono text-xs bg-gray-50 text-gray-700 border-gray-200">
                     {agent.agent_code}
                   </Badge>
                 )}
                 <Badge 
-                  variant="secondary" 
                   className={cn(
-                    "text-xs",
-                    agent.user_role === 'admin' ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800"
+                    "text-xs font-medium",
+                    agent.user_role === 'admin' 
+                      ? "bg-purple-100 text-purple-700 border-purple-200" 
+                      : "bg-blue-100 text-blue-700 border-blue-200"
                   )}
                 >
                   {agent.user_role}
@@ -106,11 +108,11 @@ function AgentCard({ agent, onViewDetails, onDelete }: {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-gray-100">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
                 onClick={() => onViewDetails(agent.id)}
                 className="cursor-pointer"
@@ -135,18 +137,25 @@ function AgentCard({ agent, onViewDetails, onDelete }: {
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="space-y-2 text-sm">
-          <div className="flex items-center gap-2 text-gray-600">
-            <Mail className="h-4 w-4 text-gray-400" />
+        <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-3 text-gray-600">
+            <div className="p-1.5 bg-gray-100 rounded-md">
+              <Mail className="h-3.5 w-3.5 text-gray-500" />
+            </div>
             <span className="truncate">{agent.email}</span>
           </div>
           {agent.mobile_number && (
-            <div className="flex items-center gap-2 text-gray-600">
-              <Phone className="h-4 w-4 text-gray-400" />
+            <div className="flex items-center gap-3 text-gray-600">
+              <div className="p-1.5 bg-gray-100 rounded-md">
+                <Phone className="h-3.5 w-3.5 text-gray-500" />
+              </div>
               <span>{agent.mobile_number}</span>
             </div>
-          )}          <div className="flex items-center gap-2 text-gray-600">
-            <Calendar className="h-4 w-4 text-gray-400" />
+          )}
+          <div className="flex items-center gap-3 text-gray-600">
+            <div className="p-1.5 bg-gray-100 rounded-md">
+              <Calendar className="h-3.5 w-3.5 text-gray-500" />
+            </div>
             <span>
               Joined {agent.created_at ? new Date(agent.created_at).toLocaleDateString('en-IN', {
                 year: 'numeric',
@@ -156,12 +165,13 @@ function AgentCard({ agent, onViewDetails, onDelete }: {
             </span>
           </div>
         </div>
-        <div className="mt-4">
+        <div className="mt-5 pt-4 border-t border-gray-100">
           <Button
             onClick={() => onViewDetails(agent.id)}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm"
             size="sm"
           >
+            <Eye className="h-4 w-4 mr-2" />
             View Profile
           </Button>
         </div>
@@ -171,9 +181,8 @@ function AgentCard({ agent, onViewDetails, onDelete }: {
 }
 
 export function EnhancedAgentManagement() {
+  const router = useRouter()
   const [params, setParams] = useAtom(agentListParamsAtom)
-  const [, setSelectedId] = useAtom(selectedAgentIdAtom)
-  const [, setDialogOpen] = useAtom(isAgentDialogOpenAtom)
   const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -191,8 +200,7 @@ export function EnhancedAgentManagement() {
   }
 
   const handleViewDetails = (agentId: string) => {
-    setSelectedId(agentId)
-    setDialogOpen(true)
+    router.push(`/admin/agents/${agentId}`)
   }
 
   const handleDeleteClick = (agentId: string) => {
@@ -227,29 +235,36 @@ export function EnhancedAgentManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Agent Management</h2>
-          <p className="text-gray-600">Manage agent profiles and monitor their activities</p>
-        </div>        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
-            {viewMode === 'grid' ? 'List View' : 'Grid View'}
-          </Button>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Agent Management</h1>
+            <p className="text-gray-600 mt-1">Manage insurance agents and their profiles</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
+              {viewMode === 'grid' ? 'List View' : 'Grid View'}
+            </Button>
+            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
+              <Users className="h-4 w-4 mr-2" />
+              Add Agent
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-700">Total Agents</CardTitle>
-            <div className="p-2 bg-blue-50 rounded-lg">
+            <CardTitle className="text-sm font-medium text-gray-600">Total Agents</CardTitle>
+            <div className="p-2 bg-blue-100 rounded-lg">
               <Users className="h-4 w-4 text-blue-600" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
               {agentData?.total_count || 0}
             </div>
@@ -257,14 +272,14 @@ export function EnhancedAgentManagement() {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-green-500">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-700">Active Agents</CardTitle>
-            <div className="p-2 bg-green-50 rounded-lg">
+            <CardTitle className="text-sm font-medium text-gray-600">Active Agents</CardTitle>
+            <div className="p-2 bg-green-100 rounded-lg">
               <Users className="h-4 w-4 text-green-600" />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
               {agentData?.agents?.filter(a => a.agent_code).length || 0}
             </div>
@@ -272,14 +287,15 @@ export function EnhancedAgentManagement() {
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
+        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-700">Recent Joins</CardTitle>
-            <div className="p-2 bg-purple-50 rounded-lg">
+            <CardTitle className="text-sm font-medium text-gray-600">Recent Joins</CardTitle>
+            <div className="p-2 bg-purple-100 rounded-lg">
               <Calendar className="h-4 w-4 text-purple-600" />
             </div>
           </CardHeader>
-          <CardContent>            <div className="text-2xl font-bold text-gray-900">
+          <CardContent className="pt-0">
+            <div className="text-2xl font-bold text-gray-900">
               {agentData?.agents?.filter(a => {
                 if (!a.created_at) return false
                 const joinDate = new Date(a.created_at)
@@ -326,10 +342,10 @@ export function EnhancedAgentManagement() {
       </Card>
 
       {/* Agents Grid/List */}
-      <Card>
-        <CardHeader>
+      <Card className="border border-gray-200 shadow-sm">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold">Agents</CardTitle>
+            <CardTitle className="text-base font-semibold text-gray-900">Agents</CardTitle>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">Show</span>
               <Select

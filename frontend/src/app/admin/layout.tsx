@@ -10,15 +10,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <SidebarProvider 
       style={{
-        "--sidebar-width": "16rem",
-        "--sidebar-width-icon": "4rem",
+        "--sidebar-width": "15rem",
+        "--sidebar-width-icon": "3.5rem",
       } as React.CSSProperties}
     >
-      <AdminSidebar />      <SidebarInset>
+      <AdminSidebar />
+      <SidebarInset>
         <AdminHeader />
         
         {/* Main Content */}
-        <div className="flex flex-1 flex-col gap-4 p-6 bg-gray-50">
+        <div className="flex flex-1 flex-col gap-3 p-3 bg-gray-50/30">
           {children}
         </div>
       </SidebarInset>

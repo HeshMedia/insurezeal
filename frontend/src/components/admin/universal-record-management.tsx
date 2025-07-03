@@ -13,8 +13,7 @@ import {
   FileText, 
   CheckCircle, 
   AlertCircle,
-  Clock,
-  Database
+  Clock
 } from 'lucide-react'
 import { useUploadUniversalRecord, useDownloadUniversalRecordTemplate } from '@/hooks/adminQuery'
 import { UniversalRecordUploadResponse } from '@/types/admin.types'
@@ -178,32 +177,32 @@ export function UniversalRecordManagement({ className }: UniversalRecordManageme
 
   return (
     <div className={className}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5 text-blue-600" />
-            Universal Record Management
-          </CardTitle>
-          <p className="text-sm text-gray-600">
-            Upload CSV files to reconcile policy and cut pay data from external systems
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">Universal Record Management</h1>
+          <p className="text-sm text-gray-600">Upload CSV files to reconcile policy and cut pay data from external systems</p>
+        </div>
+      </div>
+
+      <Card className="border border-gray-200 shadow-sm">
+        <CardContent className="p-4 space-y-4">
           {/* Template Download */}
-          <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
             <div className="flex items-center gap-3">
-              <FileText className="h-8 w-8 text-blue-600" />
+              <FileText className="h-6 w-6 text-blue-600" />
               <div>
-                <h3 className="font-semibold text-blue-900">CSV Template</h3>
-                <p className="text-sm text-blue-700">Download the template to see required format</p>
+                <h3 className="text-sm font-semibold text-blue-900">CSV Template</h3>
+                <p className="text-xs text-blue-700">Download the template to see required format</p>
               </div>
             </div>
             <Button 
               variant="outline" 
+              size="sm"
               onClick={handleDownloadTemplate}
               disabled={downloadTemplateMutation.isPending}
             >
-              <Download className="h-4 w-4 mr-2" />
+              <Download className="h-3 w-3 mr-1.5" />
               {downloadTemplateMutation.isPending ? 'Downloading...' : 'Download Template'}
             </Button>
           </div>

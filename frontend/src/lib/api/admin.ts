@@ -91,6 +91,7 @@ interface UniversalRecordUploadResponse {
 }
 
 export const adminApi = {
+  
   // Cutpay APIs
   cutpay: {
     // Create cutpay transaction
