@@ -291,8 +291,8 @@ export interface RecordUpdateSummary {
   record_type: string // "policy", "cutpay", or "policy+cutpay"
   action: string // "updated", "added", "no_change"
   updated_fields: string[]
-  old_values: Record<string, any>
-  new_values: Record<string, any>
+  old_values: Record<string, string | number | boolean | null>
+  new_values: Record<string, string | number | boolean | null>
 }
 
 // Child Request Statistics

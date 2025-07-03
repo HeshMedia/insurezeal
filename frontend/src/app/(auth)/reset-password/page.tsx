@@ -1,13 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { Lock, Mail, CheckCircle, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { authApi } from "@/lib/api/auth"
 
-const ResetPasswordPage = () => {
+const ResetPasswordContent = () => {
   // Check if we have tokens from email link
   const searchParams = useSearchParams()
   const accessToken = searchParams?.get('access_token')
@@ -25,6 +25,14 @@ const ResetPasswordPage = () => {
   } else {
     return <ForgotPasswordForm />
   }
+}
+
+const ResetPasswordPage = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ResetPasswordContent />
+    </Suspense>
+  )
 }
 
 // Component for forgot password (email input)
