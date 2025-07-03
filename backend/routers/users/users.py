@@ -32,8 +32,16 @@ async def get_current_user_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """Get current user's profile information with document URLs"""
-    profile = current_user["profile"]
-    supabase_user = current_user["supabase_user"]
+    result = await db.execute(
+        select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+    )
+    profile = result.scalar_one_or_none()
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found"
+        )
     
     try:
         documents = await user_helpers.get_user_documents(str(profile.user_id), db)
@@ -43,7 +51,7 @@ async def get_current_user_profile(
         document_urls = {}
     
     profile_data = model_data_from_orm(profile, {
-        "email": supabase_user.email,
+        "email": current_user["email"],  
         "document_urls": document_urls
     })
     
@@ -57,8 +65,16 @@ async def update_current_user_profile(
 ):
     """Dual route for both creating and updating user profile"""
     try:
-        profile = current_user["profile"]
-        supabase_user = current_user["supabase_user"]
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
         
         if profile_update.username and profile_update.username != profile.username:
             result = await db.execute(
@@ -103,7 +119,7 @@ async def update_current_user_profile(
             document_urls = {}
         
         profile_data = model_data_from_orm(profile, {
-            "email": supabase_user.email,
+            "email": current_user["email"],  
             "document_urls": document_urls
         })
         
@@ -137,7 +153,16 @@ async def upload_profile_image(
     Maximum file size: 5MB
     """
     try:
-        profile = current_user["profile"]
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
         
         if not file.filename:
             raise HTTPException(
@@ -148,7 +173,6 @@ async def upload_profile_image(
         if profile.avatar_url:
             await user_helpers.delete_profile_image(profile.avatar_url)
         
-
         image_url = await user_helpers.upload_profile_image(str(profile.id), file)
         
         profile.avatar_url = image_url
@@ -177,7 +201,16 @@ async def delete_profile_image(
 ):
     """Delete current user's profile image"""
     try:
-        profile = current_user["profile"]
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
         
         if not profile.avatar_url:
             raise HTTPException(
@@ -226,13 +259,23 @@ async def upload_document(
     Maximum file size: 5MB
     """
     try:
-        profile = current_user["profile"]
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
         
         if not file.filename:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No file uploaded"
             )
+        
         document_record = await user_helpers.upload_and_save_document(
             str(profile.user_id), 
             file, 
@@ -262,7 +305,17 @@ async def get_user_documents(
 ):
     """Get all documents uploaded by the current user"""
     try:
-        profile = current_user["profile"]
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
+        
         documents = await user_helpers.get_user_documents(str(profile.user_id), db)        
         document_responses = [
             DocumentUploadResponse.model_validate({
@@ -293,7 +346,16 @@ async def delete_document(
 ):
     """Delete a document automatically from both storage and database"""
     try:
-        profile = current_user["profile"]
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
         
         result = await user_helpers.delete_document_completely(
             document_id, 

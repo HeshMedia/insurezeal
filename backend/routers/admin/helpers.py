@@ -47,7 +47,7 @@ class AdminHelpers:
         Raises:
             HTTPException: If user is not an admin
         """
-        user_role = getattr(current_user["profile"], "user_role", "agent")
+        user_role = current_user.get("role", "agent")
         if user_role != "admin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

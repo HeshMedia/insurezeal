@@ -32,26 +32,43 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get current user from JWT token"""
+    """
+    Get current user from JWT token (optimized)
+    - Uses role from JWT if available (new users)
+    - Falls back to DB for users without role in JWT (existing users)
+    """
     token = credentials.credentials
-    
     supabase_user = auth_helpers.verify_token(token)  
-    result = await db.execute(
-        select(UserProfile).where(UserProfile.user_id == supabase_user.id)
-    )
-    user_profile = result.scalar_one_or_none()
     
-    if not user_profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User profile not found"
-        )
+    if supabase_user.role:
+        current_user = {
+            "user_id": supabase_user.id,
+            "email": supabase_user.email,
+            "role": supabase_user.role 
+        }
+        logger.info(f"User {supabase_user.id} authenticated via JWT role: {supabase_user.role}")
+        
+    # else:
+    #     result = await db.execute(
+    #         select(UserProfile).where(UserProfile.user_id == supabase_user.id)
+    #     )
+    #     user_profile = result.scalar_one_or_none()
+        
+    #     if not user_profile:
+    #         raise HTTPException(
+    #             status_code=status.HTTP_404_NOT_FOUND,
+    #             detail="User profile not found"
+    #         )
+        
+    #     current_user = {
+    #         "user_id": supabase_user.id,
+    #         "email": supabase_user.email,
+    #         "role": user_profile.user_role,  
+    #         "profile": user_profile 
+    #     }
+    #     logger.info(f"User {supabase_user.id} authenticated via DB role: {user_profile.user_role}")
     
-    current_user = {
-        "supabase_user": supabase_user,
-        "profile": user_profile
-    }
-    
+
     request.state.current_user = current_user
     
     return current_user
@@ -77,7 +94,8 @@ async def register(
                 "data": {
                     "username": user_data.username,
                     "first_name": user_data.first_name,
-                    "last_name": user_data.last_name
+                    "last_name": user_data.last_name,
+                    "role": "agent" 
                 }
             }
         })
@@ -92,7 +110,8 @@ async def register(
             user_id=supabase_user_id,  
             username=user_data.username,
             first_name=user_data.first_name,
-            last_name=user_data.last_name
+            last_name=user_data.last_name,
+            user_role="agent" 
         )
         
         db.add(new_user_profile)

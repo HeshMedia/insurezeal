@@ -276,7 +276,7 @@ async def assign_child_id(
     """
     
     try:
-        admin_user_id = current_user["supabase_user"].id
+        admin_user_id = current_user["user_id"]
         child_request = await admin_helpers.approve_child_request(
             db=db,
             request_id=request_id,
@@ -348,7 +348,7 @@ async def reject_child_request(
     """
     
     try:
-        admin_user_id = current_user["supabase_user"].id
+        admin_user_id = current_user["user_id"]
         child_request = await admin_helpers.reject_child_request(
             db=db,
             request_id=request_id,
@@ -421,7 +421,7 @@ async def suspend_child_id(
     """
     
     try:
-        admin_user_id = current_user["supabase_user"].id
+        admin_user_id = current_user["user_id"]
         
         child_request = await admin_helpers.suspend_child_id(
             db=db,
@@ -561,7 +561,7 @@ async def upload_universal_record(
                 detail="CSV file is empty"
             )
         
-        admin_user_id = current_user["supabase_user"].id
+        admin_user_id = current_user["user_id"]
 
         result = await admin_helpers.process_universal_record_csv(
             db=db,

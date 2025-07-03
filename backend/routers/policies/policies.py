@@ -49,7 +49,7 @@ async def upload_policy_pdf(
                 detail="Only PDF files are allowed"
             )
         
-        user_id = current_user["supabase_user"].id
+        user_id = current_user["user_id"]
         file_content = await file.read()
 
         file_path, original_filename = await policy_helpers.save_uploaded_file_from_bytes(
@@ -57,7 +57,7 @@ async def upload_policy_pdf(
         )
         extracted_data = await policy_helpers.process_policy_pdf(file_content)
         
-        user_role = current_user.get("user_role", "user")
+        user_role = current_user.get("role", "agent")
         if user_role == "agent":
             agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
             if agent_profile:
@@ -104,8 +104,8 @@ async def submit_policy(
     Creates the policy record in the database
     """
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
     
         policy_dict = policy_data.model_dump()
         pdf_file_path = policy_dict.pop("pdf_file_path")
@@ -241,8 +241,8 @@ async def list_policies(
     Agents can only see their own policies, admins can see all
     """
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
 
         filter_user_id = user_id if user_role != "admin" else None
         filter_agent_id = agent_id if user_role == "admin" else None
@@ -289,8 +289,8 @@ async def get_policy_details(
     Agents can only access their own policies, admins can access any
     """
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
         
         filter_user_id = user_id if user_role != "admin" else None
         
@@ -328,8 +328,8 @@ async def update_policy(
     Agents can only update their own policies, admins can update any
     """
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
         
         filter_user_id = user_id if user_role != "admin" else None
 
@@ -381,8 +381,8 @@ async def delete_policy(
     Agents can only delete their own policies, admins can delete any
     """
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
         
         filter_user_id = user_id if user_role != "admin" else None
         
@@ -422,8 +422,8 @@ async def get_child_id_options(
     - If agent_id is not provided or user is agent: returns child IDs for current user
     """
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
         
         if agent_id and user_role == "admin":
             target_agent_id = agent_id
@@ -486,8 +486,8 @@ async def export_policies_csv(
     """
     
     try:
-        user_id = current_user["supabase_user"].id
-        user_role = current_user.get("user_role", "user")
+        user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
         
         # For agents, filter by their user_id; for admins, no filter
         filter_user_id = str(user_id) if user_role != "admin" else None

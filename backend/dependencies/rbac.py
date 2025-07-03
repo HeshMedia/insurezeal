@@ -152,15 +152,14 @@ def require_permission(resource: str = None, permission: str = None):
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Authentication required"
                 )
-            
+
             user_role = 'agent' 
             if isinstance(current_user, dict):
-                profile = current_user.get('profile')
-                if profile:
-                    user_role = getattr(profile, 'user_role', 'agent')
+                if 'role' in current_user:
+                    user_role = current_user['role']
             else:
-                user_role = getattr(current_user, 'user_role', 'agent')
-            
+                user_role = getattr(current_user, 'role', 'agent')
+
             resource_name = resource or normalize_path(str(request.url.path))
             required_permission = permission or translate_method_to_action(request.method)
             

@@ -93,7 +93,7 @@ async def create_child_id_request(
     - **preferred_rm_name**: Optional preferred relationship manager name
     """
     try:
-        user_id = current_user["supabase_user"].id
+        user_id = current_user["user_id"]
         
         if request_data.code_type == "Broker Code" and not request_data.broker_id:
             raise HTTPException(
@@ -181,7 +181,7 @@ async def get_my_child_requests(
     - Use GET /request/{request_id} to get full details of a specific request
     """
     try:
-        user_id = current_user["supabase_user"].id
+        user_id = current_user["user_id"]
         
         result = await child_helpers.get_user_child_requests(
             db=db,
@@ -238,7 +238,7 @@ async def get_child_request_details(
     - Returns complete request details including status and assignment info
     """
     try:
-        user_id = current_user["supabase_user"].id
+        user_id = current_user["user_id"]
         
         child_request = await child_helpers.get_child_request_by_id(
             db=db,
@@ -291,7 +291,7 @@ async def get_active_child_ids(
     - Includes all assignment details like child_id, broker_code, etc.
     """
     try:
-        user_id = current_user["supabase_user"].id
+        user_id = current_user["user_id"]
         
         active_requests = await child_helpers.get_user_active_child_ids(
             db=db,
