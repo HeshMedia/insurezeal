@@ -24,35 +24,36 @@ import { Textarea } from '@/components/ui/textarea'
 export default function SettingsPage() {
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-3">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-            <p className="text-gray-600">Manage system settings and configurations</p>
+            <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+            <p className="text-sm text-gray-600">Manage system settings and configurations</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" className="h-8 px-3 text-xs">
+              <RefreshCw className="h-3 w-3 mr-1.5" />
               Reset
             </Button>
-            <Button size="sm">
-              <Save className="h-4 w-4 mr-2" />
+            <Button size="sm" className="h-8 px-3 text-xs">
+              <Save className="h-3 w-3 mr-1.5" />
               Save Changes
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* General Settings */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <SettingsIcon className="h-5 w-5" />
+          <div className="lg:col-span-2 space-y-4">
+            <Card className="border border-gray-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <SettingsIcon className="h-4 w-4" />
                   General Settings
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 p-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="company-name">Company Name</Label>

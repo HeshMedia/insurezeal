@@ -15,7 +15,8 @@ import {
   ChildRequestListResponse,
   ChildRequestListParams,
   AssignChildIdRequest,
-  ChildRequestStatusUpdate
+  ChildRequestStatusUpdate,
+  UniversalRecordUploadResponse
 } from '@/types/admin.types'
 
 // Create axios instance
@@ -67,30 +68,8 @@ apiClient.interceptors.response.use(
   }
 )
 
-// Universal Record Management Types
-interface UniversalRecordUploadResponse {
-  message: string
-  report: {
-    total_records_processed: number
-    policies_updated: number
-    policies_added: number
-    cutpay_updated: number
-    cutpay_added: number
-    no_changes: number
-    errors: string[]
-    processing_summary: Array<{
-      policy_number: string
-      record_type: string
-      action: string
-      updated_fields: string[]    
-      old_values: Record<string, unknown>
-      new_values: Record<string, unknown>
-    }>
-  }
-  processing_time_seconds: number
-}
-
 export const adminApi = {
+  
   // Cutpay APIs
   cutpay: {
     // Create cutpay transaction

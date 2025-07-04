@@ -13,19 +13,20 @@ export function AdminHeader() {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-2 px-4 bg-white border-b shadow-sm">
-      <div className="flex items-center gap-2">
-        <SidebarTrigger className="-ml-1 hover:bg-gray-100" />
-        <h1 className="text-lg font-semibold text-gray-900">Admin Dashboard</h1>
+    <header className="flex h-12 shrink-0 items-center justify-between gap-2 px-4 bg-white border-b border-gray-100">
+      <div className="flex items-center gap-3">
+        <SidebarTrigger className="-ml-1 hover:bg-gray-50 rounded-md p-1.5" />
+        <div className="h-3 w-px bg-gray-200" />
+        <h1 className="text-sm font-medium text-gray-700">Admin Dashboard</h1>
       </div>
       
       <Button 
         onClick={handleLogout}
-        variant="outline"
+        variant="ghost"
         size="sm"
-        className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 hover:border-red-300 transition-colors"
+        className="h-7 px-2.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
       >
-        <LogOut className="h-4 w-4" />
+        <LogOut className="h-3 w-3 mr-1" />
         Logout
       </Button>
     </header>

@@ -190,7 +190,7 @@ export interface AgentDetails {
   agent_code: string | null
   user_role: string
   avatar_url: string | null
-  preferences: Record<string, any> | null
+  preferences: Record<string, unknown> | null
   created_at: string
   updated_at: string
   document_urls: Record<string, string>
@@ -266,7 +266,7 @@ export interface ChildRequestStatusUpdate {
   admin_notes?: string
 }
 
-export interface UpdateChildRequestStatusRequest extends ChildRequestStatusUpdate {}
+export type UpdateChildRequestStatusRequest = ChildRequestStatusUpdate
 
 // Universal Record Management Types
 export interface UniversalRecordUploadResponse {
@@ -291,8 +291,8 @@ export interface RecordUpdateSummary {
   record_type: string // "policy", "cutpay", or "policy+cutpay"
   action: string // "updated", "added", "no_change"
   updated_fields: string[]
-  old_values: Record<string, any>
-  new_values: Record<string, any>
+  old_values: Record<string, string | number | boolean | null>
+  new_values: Record<string, string | number | boolean | null>
 }
 
 // Child Request Statistics

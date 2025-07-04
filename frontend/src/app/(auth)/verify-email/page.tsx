@@ -1,12 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { Mail, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 
-const VerifyEmailPage = () => {
+const VerifyEmailContent = () => {
   const [email, setEmail] = useState("")
   
   const searchParams = useSearchParams()
@@ -65,6 +65,14 @@ const VerifyEmailPage = () => {
         </div>
       </div>
     </div>
+  )
+}
+
+const VerifyEmailPage = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }
 

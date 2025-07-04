@@ -30,14 +30,14 @@ function StatCard({
 }: StatCardProps) {
   if (isLoading) {
     return (
-      <Card className={cn("hover:shadow-md transition-shadow", className)}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-5 w-5" />
+      <Card className={cn("hover:shadow-md transition-shadow border border-gray-200", className)}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-4 w-4" />
         </CardHeader>
-        <CardContent>
-          <Skeleton className="h-8 w-20 mb-2" />
-          <Skeleton className="h-3 w-32" />
+        <CardContent className="p-3 pt-1">
+          <Skeleton className="h-6 w-16 mb-1" />
+          <Skeleton className="h-2 w-24" />
         </CardContent>
       </Card>
     )
@@ -50,24 +50,24 @@ function StatCard({
   }
 
   const getTrendColor = () => {
-    if (trend === 'up') return 'text-green-600 bg-green-50'
-    if (trend === 'down') return 'text-red-600 bg-red-50'
-    return 'text-gray-600 bg-gray-50'
+    if (trend === 'up') return 'text-green-700 bg-green-50 border-green-200'
+    if (trend === 'down') return 'text-red-700 bg-red-50 border-red-200'
+    return 'text-gray-700 bg-gray-50 border-gray-200'
   }
 
   return (
-    <Card className={cn("hover:shadow-md transition-shadow", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
-        <Icon className="h-5 w-5 text-gray-500" />
+    <Card className={cn("hover:shadow-md transition-shadow border border-gray-200", className)}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+        <CardTitle className="text-xs font-medium text-gray-600">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-slate-600" />
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold text-gray-900 mb-1">
+      <CardContent className="p-3 pt-1">
+        <div className="text-lg font-bold text-gray-900 mb-1">
           {typeof value === 'number' ? value.toLocaleString() : value}
         </div>
         {change !== undefined && changeLabel && (
           <div className="flex items-center gap-1">
-            <Badge variant="secondary" className={cn("text-xs font-medium", getTrendColor())}>
+            <Badge variant="outline" className={cn("text-xs font-medium border", getTrendColor())}>
               {getTrendIcon()}
               <span className="ml-1">
                 {change > 0 ? '+' : ''}{change}% {changeLabel}
@@ -111,7 +111,7 @@ export function StatsCards() {
   const monthlyGrowth = getMonthlyGrowth(cutpayStats?.stats?.monthly_breakdown)
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
       <StatCard
         title="Total Agents"
         value={adminStats?.total_agents || 0}
@@ -120,7 +120,7 @@ export function StatsCards() {
         icon={Users}
         isLoading={adminStatsLoading}
         trend={adminStats?.new_agents_this_month && adminStats.new_agents_this_month > 0 ? 'up' : 'neutral'}
-        className="border-l-4 border-l-blue-500"
+        className="shadow-sm"
       />
       
       <StatCard
@@ -128,7 +128,7 @@ export function StatsCards() {
         value={adminStats?.total_documents || 0}
         icon={FileText}
         isLoading={adminStatsLoading}
-        className="border-l-4 border-l-green-500"
+        className="shadow-sm"
       />
       
       <StatCard
@@ -138,7 +138,7 @@ export function StatsCards() {
         icon={DollarSign}
         isLoading={cutpayStatsLoading}
         trend={monthlyGrowth > 0 ? 'up' : monthlyGrowth < 0 ? 'down' : 'neutral'}
-        className="border-l-4 border-l-purple-500"
+        className="shadow-sm"
       />
       
       <StatCard
@@ -149,7 +149,7 @@ export function StatsCards() {
         icon={MessageSquare}
         isLoading={childStatsLoading}
         trend={childStats?.pending_requests && childStats.pending_requests > 0 ? 'down' : 'neutral'}
-        className="border-l-4 border-l-orange-500"
+        className="shadow-sm"
       />
     </div>
   )

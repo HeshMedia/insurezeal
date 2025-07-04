@@ -37,8 +37,8 @@ const statusLabels = {
 
 function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (action: 'assign' | 'reject' | 'suspend' | 'view', request: ChildRequest) => void }) {
   return (
-    <Card className="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-      <CardHeader className="pb-3">
+    <Card className="hover:shadow-sm transition-shadow border border-gray-200">
+      <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-gray-900">
@@ -461,28 +461,28 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Child Request Management</h2>
-          <p className="text-gray-600 mt-1">Manage and process child ID requests from agents</p>
+          <h1 className="text-xl font-semibold text-gray-900">Child Request Management</h1>
+          <p className="text-sm text-gray-600">Manage and process child ID requests from agents</p>
         </div>
       </div>
 
       {/* Status Overview */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-5 gap-3">
         {Object.entries(statusCounts).map(([status, count]) => (
           <Card 
             key={status}
             className={cn(
-              "cursor-pointer transition-all hover:shadow-md",
+              "cursor-pointer transition-all hover:shadow-sm border border-gray-200",
               statusFilter === status && "ring-2 ring-blue-500 bg-blue-50"
             )}
             onClick={() => setStatusFilter(status)}
           >
-            <CardContent className="p-4 text-center">
-              <div className="text-2xl font-bold text-gray-900">{count}</div>
+            <CardContent className="p-3 text-center">
+              <div className="text-lg font-bold text-gray-900">{count}</div>
               <div className="text-sm text-gray-600 capitalize">
                 {status === 'all' ? 'Total' : status}
               </div>

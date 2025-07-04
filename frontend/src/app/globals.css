@@ -4,6 +4,21 @@
 /* Custom sidebar styling */
 @import "../styles/sidebar.css";
 
+/* Grid background for hero section */
+.bg-grid-slate-100 {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 32 32'%3e%3cpath stroke='%23e2e8f0' stroke-linecap='round' stroke-linejoin='round' stroke-width='1' d='m1 1 30 30m0-30L1 31'/%3e%3c/svg%3e");
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Ensure button hover animations are smooth */
+button {
+  transition: all 0.2s ease-in-out;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

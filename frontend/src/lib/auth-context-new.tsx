@@ -49,7 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   } : null
 
   const loading = authLoading || userLoading
-
   // Check auth on mount and set up token refresh
   useEffect(() => {
     checkAuth()
@@ -60,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 4 * 60 * 1000) // Check every 4 minutes
 
     return () => clearInterval(refreshInterval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Handle user errors (like token expiry)
@@ -176,12 +176,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.push('/admin')
         } else if (response.user.user_role === 'agent') {
           router.push('/agent')
-        }
-      } else {
+        }      } else {
         router.push(`/verify-email?email=${encodeURIComponent(data.email)}`)
       }
-    } catch (error: any) {
-      throw new Error(error.message || 'Registration failed')
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Registration failed'
+      throw new Error(message)
     }
   }
 

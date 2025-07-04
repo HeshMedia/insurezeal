@@ -33,43 +33,44 @@ export default function ReportsPage() {
 
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-3">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
-            <p className="text-gray-600">Comprehensive business insights and analytics</p>
+            <h1 className="text-xl font-semibold text-gray-900">Reports & Analytics</h1>
+            <p className="text-sm text-gray-600">Comprehensive business insights and analytics</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" className="h-8 px-3 text-xs">
+              <Filter className="h-3 w-3 mr-1.5" />
               Filter
             </Button>
-            <Button variant="outline" size="sm">
-              <Calendar className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" className="h-8 px-3 text-xs">
+              <Calendar className="h-3 w-3 mr-1.5" />
               Date Range
             </Button>
-            <Button size="sm">
-              <Download className="h-4 w-4 mr-2" />
+            <Button size="sm" className="h-8 px-3 text-xs">
+              <Download className="h-3 w-3 mr-1.5" />
               Export
             </Button>
           </div>
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-blue-600" />
+                <div className="p-1.5 bg-slate-100 rounded-md">
+                  <DollarSign className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Total Revenue</div>
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-xs text-gray-600">Total Revenue</div>
+                  <div className="text-lg font-bold text-gray-900">
                     {cutpayStats?.stats ? formatCurrency(cutpayStats.stats.total_cut_pay_amount) : '₹0'}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-green-600">
-                    <TrendingUp className="h-3 w-3" />
+                    <TrendingUp className="h-2.5 w-2.5" />
                     +12.5%
                   </div>
                 </div>
@@ -77,19 +78,19 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Users className="h-5 w-5 text-green-600" />
+                <div className="p-1.5 bg-slate-100 rounded-md">
+                  <Users className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Total Agents</div>
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-xs text-gray-600">Total Agents</div>
+                  <div className="text-lg font-bold text-gray-900">
                     {adminStats?.total_agents || 0}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-green-600">
-                    <TrendingUp className="h-3 w-3" />
+                    <TrendingUp className="h-2.5 w-2.5" />
                     +{adminStats?.new_agents_this_month || 0} this month
                   </div>
                 </div>
@@ -97,19 +98,19 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
+                <div className="p-1.5 bg-slate-100 rounded-md">
+                  <BarChart3 className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Transactions</div>
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-xs text-gray-600">Transactions</div>
+                  <div className="text-lg font-bold text-gray-900">
                     {cutpayStats?.stats.total_transactions || 0}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-green-600">
-                    <TrendingUp className="h-3 w-3" />
+                    <TrendingUp className="h-2.5 w-2.5" />
                     +8.2%
                   </div>
                 </div>
@@ -117,19 +118,19 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-6">
+          <Card className="border border-gray-200 shadow-sm">
+            <CardContent className="p-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-orange-600" />
+                <div className="p-1.5 bg-slate-100 rounded-md">
+                  <FileText className="h-4 w-4 text-slate-600" />
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Documents</div>
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className="text-xs text-gray-600">Documents</div>
+                  <div className="text-lg font-bold text-gray-900">
                     {adminStats?.total_documents || 0}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-green-600">
-                    <TrendingUp className="h-3 w-3" />
+                    <TrendingUp className="h-2.5 w-2.5" />
                     +15.3%
                   </div>
                 </div>
@@ -139,32 +140,32 @@ export default function ReportsPage() {
         </div>
 
         {/* Reports Tabs */}
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="financial">Financial</TabsTrigger>
-            <TabsTrigger value="exports">Data Export</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-5 h-8">
+            <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+            <TabsTrigger value="analytics" className="text-xs">Analytics</TabsTrigger>
+            <TabsTrigger value="financial" className="text-xs">Financial</TabsTrigger>
+            <TabsTrigger value="exports" className="text-xs">Data Export</TabsTrigger>
+            <TabsTrigger value="performance" className="text-xs">Performance</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-6">
+          <TabsContent value="overview" className="space-y-4">
             <AnalyticsCharts />
           </TabsContent>
 
-          <TabsContent value="analytics" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <TabsContent value="analytics" className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <AnalyticsCharts />
             </div>
           </TabsContent>
 
-          <TabsContent value="financial" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Monthly Revenue Breakdown</CardTitle>
+          <TabsContent value="financial" className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="border border-gray-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Monthly Revenue Breakdown</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-3">
                   <div className="space-y-4">
                     {cutpayStats?.stats.monthly_breakdown?.map((month, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">

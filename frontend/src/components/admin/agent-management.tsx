@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAtom } from "jotai"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,7 +19,7 @@ import {
   TableRow 
 } from "@/components/ui/table"
 import { useAgentList } from "@/hooks/adminQuery"
-import { agentListParamsAtom, selectedAgentIdAtom, isAgentDialogOpenAtom } from "@/lib/atoms/admin"
+import { agentListParamsAtom } from "@/lib/atoms/admin"
 import { formatDate } from "@/lib/utils"
 import { 
   Search, 
@@ -34,9 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function AgentManagement() {
+  const router = useRouter()
   const [params, setParams] = useAtom(agentListParamsAtom)
-  const [, setSelectedId] = useAtom(selectedAgentIdAtom)
-  const [, setDialogOpen] = useAtom(isAgentDialogOpenAtom)
   const [searchQuery, setSearchQuery] = useState("")
 
   const { data: agentData, isLoading, error } = useAgentList(params)
@@ -50,8 +50,7 @@ export function AgentManagement() {
   }
 
   const handleViewDetails = (agentId: string) => {
-    setSelectedId(agentId)
-    setDialogOpen(true)
+    router.push(`/admin/agents/${agentId}`)
   }
 
   if (error) {

@@ -3,9 +3,6 @@ import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-
-  // Public routes that don't require auth
-  const publicRoutes = ['/login', '/register', '/reset-password', '/verify-email', '/']
   
   // Get tokens from cookies
   const token = request.cookies.get('access_token')?.value

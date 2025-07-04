@@ -12,14 +12,7 @@ export default function ChildRequestsPage() {
 
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Child Request Management</h1>
-            <p className="text-gray-600">Manage child ID requests and approvals</p>
-          </div>
-        </div>
-        
+      <div className="space-y-3">
         <ChildRequestManagement 
           requests={childRequestData?.requests || []} 
           isLoading={isLoading}
