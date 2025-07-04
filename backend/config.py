@@ -72,10 +72,28 @@ if DATABASE_URL:
         class_=AsyncSession,
         expire_on_commit=False
     )
+    
+    # Sync session for legacy routes
+    from sqlalchemy.orm import sessionmaker as sync_sessionmaker
+    SyncSessionLocal = sync_sessionmaker(
+        bind=sync_engine,
+        expire_on_commit=False
+    )
 else:
     sync_engine = None
     async_engine = None
     AsyncSessionLocal = None
+    SyncSessionLocal = None
+
+def get_sync_db():
+    """Synchronous database session for legacy routes"""
+    if SyncSessionLocal is None:
+        raise Exception("Sync database not configured")
+    db = SyncSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 async def get_db():
     if AsyncSessionLocal is None:

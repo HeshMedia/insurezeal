@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.security import HTTPBearer
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from config import get_db
 from routers.auth.auth import get_current_user
 from dependencies.rbac import (
@@ -24,14 +26,21 @@ from .schemas import (
     ChildIdResponse,
     ChildIdAssignment,
     ChildIdStatusUpdate,
-    UniversalRecordUploadResponse
+    UniversalRecordUploadResponse,
+    UserRoleUpdateRequest,
+    UserRoleUpdateResponse,
+    SuperadminPromotionRequest
 )
+from . import schemas
 from .helpers import AdminHelpers
 from .cutpay import router as cutpay_router
+from .public import router as public_router
 from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
 from utils.google_sheets import google_sheets_sync
 from typing import Optional
 import logging
+import io
+import csv
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +50,7 @@ security = HTTPBearer()
 admin_helpers = AdminHelpers()
 
 router.include_router(cutpay_router)
+router.include_router(public_router)
 
 @router.get("/agents", response_model=AgentListResponse)
 async def list_all_agents(
@@ -604,10 +614,6 @@ async def download_universal_record_template(
     """
     
     try:
-        from fastapi.responses import StreamingResponse
-        import io
-        import csv
-
         headers = [
             'policy_number',
             'policy_type',
@@ -692,4 +698,126 @@ async def download_universal_record_template(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate template"
+        )
+
+@router.put("/agents/{user_id}/promote-to-admin", response_model=schemas.UserRoleUpdateResponse)
+async def promote_agent_to_admin(
+    user_id: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin_write)  # Only admins can promote agents
+):
+    """
+    Promote an agent to admin role. Only accessible by existing admins.
+    This endpoint updates both database and Supabase metadata.
+    
+    Note: Existing JWT tokens will still contain the old role until they expire or the user logs in again.
+    """
+    from config import get_supabase_admin_client
+    from models import UserProfile
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Convert user_id to UUID and validate
+        from uuid import UUID
+        try:
+            user_uuid = UUID(user_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid user ID format. Must be a valid UUID."
+            )
+        
+        # Initialize response tracking
+        updated_in_database = False
+        updated_in_supabase = False
+        
+        # Update role in the database
+        try:
+            # Check if user exists in database and is currently an agent
+            result = await db.execute(
+                select(UserProfile).where(UserProfile.user_id == user_uuid)
+            )
+            user_profile = result.scalar_one_or_none()
+            
+            if not user_profile:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"User with ID {user_id} not found in database"
+                )
+            
+            # Check if user is currently an agent
+            if user_profile.user_role != "agent":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
+                )
+            
+            # Update the role in database
+            user_profile.user_role = "admin"
+            await db.commit()
+            updated_in_database = True
+            logger.info(f"Updated role in database for user {user_id} to admin")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to update role in database: {str(e)}")
+            await db.rollback()
+            
+        # Update role in Supabase user metadata
+        try:
+            supabase_admin = get_supabase_admin_client()
+            
+            # Update user metadata in Supabase
+            response = supabase_admin.auth.admin.update_user_by_id(
+                uid=user_id,
+                attributes={
+                    "user_metadata": {
+                        "role": "admin"
+                    }
+                }
+            )
+            
+            if response.user:
+                updated_in_supabase = True
+                logger.info(f"Updated role in Supabase for user {user_id} to admin")
+            else:
+                logger.error(f"Failed to update role in Supabase for user {user_id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to update role in Supabase: {str(e)}")
+        
+        # Determine success and message
+        if updated_in_database and updated_in_supabase:
+            success = True
+            message = f"Successfully promoted agent to admin in both database and Supabase"
+        elif updated_in_database:
+            success = True
+            message = f"Promoted to admin in database, but failed to update Supabase metadata. User may need to log in again."
+        elif updated_in_supabase:
+            success = False
+            message = f"Updated role in Supabase to admin, but failed to update database. This is an inconsistent state."
+        else:
+            success = False
+            message = "Failed to promote user to admin in both database and Supabase"
+        
+        return schemas.UserRoleUpdateResponse(
+            success=success,
+            message=message,
+            user_id=user_uuid,
+            new_role="admin",
+            updated_in_supabase=updated_in_supabase,
+            updated_in_database=updated_in_database
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error promoting user to admin: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while promoting the user to admin"
         )

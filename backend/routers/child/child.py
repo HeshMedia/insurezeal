@@ -3,8 +3,10 @@ from fastapi import Depends, HTTPException, APIRouter, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from config import get_db
+from models import Insurer, Broker
 from routers.auth.auth import get_current_user
 from routers.child.helpers import ChildHelpers
 from routers.auth.helpers import AuthHelpers
@@ -88,29 +90,55 @@ async def create_child_id_request(
     - **email**: Email address
     - **location**: Location/address
     - **code_type**: Either "Direct Code" or "Broker Code"
-    - **insurer_id**: Selected insurer ID
-    - **broker_id**: Selected broker ID (required for Broker Code type)
+    - **insurer_code**: Selected insurer code
+    - **broker_code**: Selected broker code (required for Broker Code type)
     - **preferred_rm_name**: Optional preferred relationship manager name
     """
     try:
         user_id = current_user["user_id"]
         
-        if request_data.code_type == "Broker Code" and not request_data.broker_id:
+        if request_data.code_type == "Broker Code" and not request_data.broker_code:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Broker ID is required for Broker Code type"
+                detail="Broker code is required for Broker Code type"
             )
 
-        if request_data.code_type == "Direct Code" and request_data.broker_id:
+        if request_data.code_type == "Direct Code" and request_data.broker_code:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Broker ID should not be provided for Direct Code type"
+                detail="Broker code should not be provided for Direct Code type"
             )
+
+        insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == request_data.insurer_code))
+        insurer = insurer_result.scalar_one_or_none()
+        if not insurer:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid insurer code: {request_data.insurer_code}"
+            )
+
+        broker_id = None
+        if request_data.broker_code:
+            broker_result = await db.execute(select(Broker).where(Broker.broker_code == request_data.broker_code))
+            broker = broker_result.scalar_one_or_none()
+            if not broker:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid broker code: {request_data.broker_code}"
+                )
+            broker_id = broker.id
+        
+
+        request_dict = request_data.dict()
+        request_dict["insurer_id"] = insurer.id
+        request_dict["broker_id"] = broker_id
+        request_dict.pop("insurer_code", None)
+        request_dict.pop("broker_code", None)
         
         child_request = await child_helpers.create_child_id_request(
             db=db,
             user_id=user_id,            
-            request_data=request_data.dict()
+            request_data=request_dict
         )
         
         from utils.model_utils import model_data_from_orm, convert_uuids_to_strings

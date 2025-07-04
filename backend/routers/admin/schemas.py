@@ -12,6 +12,30 @@ class ChildIdStatusEnum(str, Enum):
     REJECTED = "rejected"
     SUSPENDED = "suspended"
 
+class UserRoleEnum(str, Enum):
+    """Valid user roles"""
+    SUPERADMIN = "superadmin"
+    ADMIN = "admin"
+    AGENT = "agent"
+
+class UserRoleUpdateRequest(BaseModel):
+    """Schema for updating a user's role"""
+    new_role: UserRoleEnum = Field(..., description="New role to assign to the user")
+
+class SuperadminPromotionRequest(BaseModel):
+    """Schema for promoting a user to superadmin (open route)"""
+    user_id: UUID = Field(..., description="UUID of the user to promote to superadmin")
+    email: EmailStr = Field(..., description="Email of the user for verification")
+
+class UserRoleUpdateResponse(BaseModel):
+    """Response schema for role update"""
+    success: bool
+    message: str
+    user_id: UUID
+    new_role: str
+    updated_in_supabase: bool
+    updated_in_database: bool
+
 class ChildIdAssignment(BaseModel):
     """Schema for admin to assign child ID details"""
     child_id: str = Field(..., min_length=1, max_length=50, description="Unique child ID to assign")
