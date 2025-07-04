@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 
 interface DashboardWrapperProps {
   children: React.ReactNode
-  requiredRole: 'admin' | 'agent'
+  requiredRole: 'admin' | 'agent' | 'superadmin'
 }
 
 export function DashboardWrapper({ children, requiredRole }: DashboardWrapperProps) {
