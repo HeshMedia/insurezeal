@@ -1,9 +1,33 @@
 """
 Schemas for SuperAdmin routes
 """
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
+from uuid import UUID
+from enum import Enum
+
+
+class UserRoleEnum(str, Enum):
+    """Valid user roles"""
+    SUPERADMIN = "superadmin"
+    ADMIN = "admin"
+    AGENT = "agent"
+
+
+class AgentToAdminPromotionRequest(BaseModel):
+    """Schema for promoting an agent to admin (superadmin only)"""
+    user_id: UUID = Field(..., description="UUID of the agent to promote to admin")
+
+
+class UserRoleUpdateResponse(BaseModel):
+    """Response schema for role update"""
+    success: bool
+    message: str
+    user_id: UUID
+    new_role: str
+    updated_in_supabase: bool
+    updated_in_database: bool
 
 
 class BrokerCreate(BaseModel):
@@ -65,8 +89,8 @@ class AdminChildIDCreate(BaseModel):
     manager_email: EmailStr
     admin_notes: Optional[str] = None
     code_type: str  # "Direct Code" or "Broker Code"
-    insurer_id: int
-    broker_id: Optional[int] = None
+    insurer_code: str
+    broker_code: Optional[str] = None
 
 
 class AdminChildIDResponse(BaseModel):
@@ -85,7 +109,7 @@ class AdminChildIDResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    # Nested relationships
+    # Nested relationships with broker and insurer details
     insurer: InsurerResponse
     broker: Optional[BrokerResponse] = None
     
@@ -101,8 +125,8 @@ class AdminChildIDUpdate(BaseModel):
     manager_email: Optional[EmailStr] = None
     admin_notes: Optional[str] = None
     code_type: Optional[str] = None
-    insurer_id: Optional[int] = None
-    broker_id: Optional[int] = None
+    insurer_code: Optional[str] = None
+    broker_code: Optional[str] = None
     is_active: Optional[bool] = None
     is_suspended: Optional[bool] = None
 

@@ -20,8 +20,8 @@ class ChildIdRequestCreate(BaseModel):
     email: EmailStr = Field(...)
     location: str = Field(..., min_length=2, max_length=200)
     code_type: CodeTypeEnum = Field(...)
-    insurer_id: int = Field(..., description="Selected insurer ID")
-    broker_id: Optional[int] = Field(None, description="Selected broker ID (required for Broker Code type)")
+    insurer_code: str = Field(..., description="Selected insurer code")
+    broker_code: Optional[str] = Field(None, description="Selected broker code (required for Broker Code type)")
     preferred_rm_name: Optional[str] = Field(None, max_length=100)
 
 class BrokerDropdownResponse(BaseModel):
@@ -55,8 +55,8 @@ class ChildIdResponse(BaseModel):
     email: str
     location: str
     code_type: str
-    insurer_id: int
-    broker_id: Optional[int] = None
+    insurer_id: int  # Keep for internal use
+    broker_id: Optional[int] = None  # Keep for internal use
     preferred_rm_name: Optional[str] = None
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
@@ -74,7 +74,7 @@ class ChildIdResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    # Nested relationships
+    # Nested relationships with codes
     insurer: Optional[InsurerDropdownResponse] = None
     broker_relation: Optional[BrokerDropdownResponse] = None
     
