@@ -55,7 +55,7 @@ class AdminInputData(BaseModel):
     reporting_month: Optional[str] = Field(None, description="Month in MMM'YY format")
     booking_date: Optional[date] = Field(None, description="Transaction date")
     agent_code: Optional[str] = Field(None, description="Agent identifier code")
-    code_type: Optional[str] = Field(None, description="Selection (Direct, Broker, Child ID)")
+    code_type: Optional[str] = Field(None, description="Selection (Direct, Broker)")
     
     # Commission Configuration
     incoming_grid_percent: Optional[float] = Field(None, ge=0, le=100, description="Commission rate from insurer")
@@ -71,14 +71,14 @@ class AdminInputData(BaseModel):
     payment_by_office: Optional[str] = Field(None, description="Who pays agent payout")
     
     # Relationship Selection
-    insurer_id: Optional[int] = Field(None, description="Selected insurer")
-    broker_id: Optional[int] = Field(None, description="Selected broker")
-    child_id_request_id: Optional[UUID] = Field(None, description="Selected child ID")
+    insurer_code: Optional[str] = Field(None, description="Selected insurer code")
+    broker_code: Optional[str] = Field(None, description="Selected broker code")
+    admin_child_id: Optional[int] = Field(None, description="Selected admin child ID")
     
     @validator('code_type')
     def validate_code_type(cls, v):
-        if v and v not in ['Direct', 'Broker', 'Child ID']:
-            raise ValueError('code_type must be one of: Direct, Broker, Child ID')
+        if v and v not in ['Direct', 'Broker']:
+            raise ValueError('code_type must be one of: Direct, Broker')
         return v
     
     @validator('payment_by')
@@ -166,15 +166,11 @@ class CutPayCreate(BaseModel):
     match_status: Optional[str] = Field(None, description="Reconciliation status")
     invoice_number: Optional[str] = Field(None, description="Invoice reference")
     
-    # Status and notes
-    status: Optional[str] = Field("draft", description="Transaction status")
+    # Status and notes (CutPay transactions are always completed)
+    status: Optional[str] = Field("completed", description="Transaction status - always completed for CutPay")
     notes: Optional[str] = Field(None, description="Additional notes")
     
-    @validator('status')
-    def validate_status(cls, v):
-        if v and v not in ['draft', 'completed', 'cancelled']:
-            raise ValueError('status must be one of: draft, completed, cancelled')
-        return v
+    # Remove status validator since CutPay is always completed
 
 class CutPayUpdate(BaseModel):
     """Schema for updating cut pay transactions"""
@@ -229,10 +225,10 @@ class CutPayUpdate(BaseModel):
     agent_extra_percent: Optional[float] = Field(None, ge=0, le=100)
     payment_by_office: Optional[str] = Field(None)
     
-    # Foreign keys
-    insurer_id: Optional[int] = Field(None)
-    broker_id: Optional[int] = Field(None)
-    child_id_request_id: Optional[UUID] = Field(None)
+    # Foreign keys - now using codes instead of IDs
+    insurer_code: Optional[str] = Field(None)
+    broker_code: Optional[str] = Field(None)
+    admin_child_id: Optional[int] = Field(None)
     
     # Tracking fields
     claimed_by: Optional[str] = Field(None)
@@ -394,33 +390,31 @@ class CutPayResponse(BaseModel):
 
 class InsurerOption(BaseModel):
     """Schema for insurer dropdown options"""
-    id: int
+    code: str
     name: str
-    code: Optional[str]
     is_active: bool = True
 
 class BrokerOption(BaseModel):
     """Schema for broker dropdown options"""
-    id: int
+    code: str
     name: str
-    code: Optional[str]
-    insurer_id: Optional[int]
     is_active: bool = True
 
-class ChildIdOption(BaseModel):
-    """Schema for child ID dropdown options"""
-    id: UUID
+class AdminChildIdOption(BaseModel):
+    """Schema for admin child ID dropdown options"""
+    id: int
     child_id: str
-    insurer_id: Optional[int]
-    broker_id: Optional[int]
-    status: str
+    insurer_name: str
+    broker_name: Optional[str]
+    code_type: str
+    is_active: bool
 
 class DropdownOptions(BaseModel):
     """Schema for all dropdown options"""
     insurers: List[InsurerOption]
     brokers: List[BrokerOption]
-    child_ids: List[ChildIdOption]
-    code_types: List[str] = ["Direct", "Broker", "Child ID"]
+    admin_child_ids: List[AdminChildIdOption]
+    code_types: List[str] = ["Direct", "Broker"]
     payment_by_options: List[str] = ["Agent", "InsureZeal"]
     payout_on_options: List[str] = ["OD", "NP", "OD+TP"]
     payment_by_office_options: List[str] = ["InsureZeal", "Agent"]
@@ -432,7 +426,7 @@ class DropdownOptions(BaseModel):
 class FilteredDropdowns(BaseModel):
     """Schema for filtered dropdown options based on selections"""
     brokers: List[BrokerOption]
-    child_ids: List[ChildIdOption]
+    admin_child_ids: List[AdminChildIdOption]
 
 # =============================================================================
 # DOCUMENT UPLOAD SCHEMAS
@@ -447,17 +441,16 @@ class DocumentUploadResponse(BaseModel):
 
 class ExtractionRequest(BaseModel):
     """Schema for PDF extraction request"""
-    cutpay_id: int
-    force_reextract: bool = False
-    extraction_confidence_threshold: float = 0.7
+    # No additional fields needed - cutpay_id comes from URL path
+    pass
 
 class ExtractionResponse(BaseModel):
     """Schema for PDF extraction response"""
     cutpay_id: int
     extraction_status: str
     extracted_data: Optional[ExtractedPolicyData]
-    confidence_scores: Optional[Dict[str, float]]
-    errors: Optional[List[str]]
+    confidence_scores: Optional[Dict[str, float]] = None
+    errors: Optional[List[str]] = None
     extraction_time: Optional[datetime]
 
 # =============================================================================
@@ -486,8 +479,8 @@ class ExportRequest(BaseModel):
     format: str = Field("csv", description="Export format: csv, excel")
     date_from: Optional[date] = Field(None, description="Start date filter")
     date_to: Optional[date] = Field(None, description="End date filter")
-    status_filter: Optional[List[str]] = Field(None, description="Status filters")
-    insurer_ids: Optional[List[int]] = Field(None, description="Insurer filters")
+    # Removed status_filter since all CutPay transactions are completed
+    insurer_codes: Optional[List[str]] = Field(None, description="Insurer codes filter")
     
     @validator('format')
     def validate_format(cls, v):
@@ -511,43 +504,6 @@ class DashboardStats(BaseModel):
     # Top performers
     top_agents: List[Dict[str, Any]]
     top_insurers: List[Dict[str, Any]]
-    
-    # Calculated fields
-    cut_pay_amount: Optional[float]
-    
-    # Payment tracking
-    payment_by: Optional[str]
-    amount_received: Optional[float]
-    payment_method: Optional[str]
-    payment_source: Optional[str]
-    payment_date: Optional[date]
-    
-    # Dates
-    transaction_date: Optional[date]
-    
-    # Status tracking
-    status: str
-    
-    # Google Sheets sync tracking
-    synced_to_cutpay_sheet: bool
-    synced_to_master_sheet: bool
-    cutpay_sheet_row_id: Optional[str]
-    master_sheet_row_id: Optional[str]
-    
-    # Additional info
-    notes: Optional[str]
-    
-    # Audit fields
-    created_at: datetime
-    updated_at: datetime
-    
-    # Relationship data (loaded when needed)
-    insurer: Optional[Dict[str, Any]] = None
-    broker: Optional[Dict[str, Any]] = None
-    child_id_request: Optional[Dict[str, Any]] = None
-
-    class Config:
-        from_attributes = True
 
 class CutPaySummary(BaseModel):
     """Schema for cut pay transaction summary (for card view in lists)"""
@@ -570,95 +526,12 @@ class CutPaySummary(BaseModel):
     class Config:
         from_attributes = True
 
-class CutPayUpdate(BaseModel):
-    """Schema for updating a cut pay transaction"""
-    
-    # Document upload fields
-    policy_pdf_url: Optional[str] = Field(None, max_length=500)
-    additional_documents: Optional[List[str]] = Field(None)
-    
-    # Extracted fields can be manually corrected
-    policy_number: Optional[str] = Field(None, max_length=100)
-    policy_holder_name: Optional[str] = Field(None, max_length=200)
-    policy_start_date: Optional[date] = Field(None)
-    policy_end_date: Optional[date] = Field(None)
-    premium_amount: Optional[float] = Field(None, gt=0)
-    sum_insured: Optional[float] = Field(None, gt=0)
-    insurance_type: Optional[str] = Field(None, max_length=100)
-    
-    # Manual/Admin data entry fields
-    code_type: Optional[str] = Field(None)
-    agent_code: Optional[str] = Field(None, max_length=50)
-    
-    # Foreign key relationships
-    insurer_id: Optional[int] = Field(None)
-    broker_id: Optional[int] = Field(None)
-    child_id_request_id: Optional[int] = Field(None)
-    
-    # Financial details
-    gross_amount: Optional[float] = Field(None, gt=0)
-    net_premium: Optional[float] = Field(None, gt=0)
-    commission_grid: Optional[str] = Field(None, max_length=100)
-    agent_commission_given_percent: Optional[float] = Field(None, ge=0, le=100)
-    
-    # Payment mode logic
-    payment_mode: Optional[str] = Field(None)
-    
-    # Payout configuration
-    payout_percent: Optional[float] = Field(None, ge=0, le=100)
-    payout_amount: Optional[float] = Field(None, ge=0)
-    
-    # Payment tracking
-    payment_by: Optional[str] = Field(None, max_length=200)
-    amount_received: Optional[float] = Field(None, ge=0)
-    payment_method: Optional[str] = Field(None, max_length=100)
-    payment_source: Optional[str] = Field(None, max_length=200)
-    payment_date: Optional[date] = Field(None)
-    
-    # Dates
-    transaction_date: Optional[date] = Field(None)
-    
-    # Status
-    status: Optional[str] = Field(None)
-    
-    # Additional info
-    notes: Optional[str] = Field(None, max_length=1000)
-    
-    @validator('payment_mode')
-    def validate_payment_mode(cls, v):
-        if v and v not in ['agent', 'insurezeal']:
-            raise ValueError('payment_mode must be either "agent" or "insurezeal"')
-        return v
-    
-    @validator('status')
-    def validate_status(cls, v):
-        if v and v not in ['draft', 'completed', 'cancelled']:
-            raise ValueError('status must be one of: draft, completed, cancelled')
-        return v
-    transaction_date: Optional[date] = Field(None)
-    payment_date: Optional[date] = Field(None)
-    
-    # Additional info
-    notes: Optional[str] = Field(None, max_length=1000)
-
 class CutPayListResponse(BaseModel):
     """Schema for paginated cut pay transactions list"""
     transactions: list[CutPaySummary]
     total_count: int
     page: int
     page_size: int
-
-class CutPayPDFExtraction(BaseModel):
-    """Schema for PDF extraction results"""
-    policy_number: Optional[str] = Field(None, description="Policy number")
-    policy_holder_name: Optional[str] = Field(None, description="Policy holder name")
-    policy_start_date: Optional[date] = Field(None, description="Policy start date")
-    policy_end_date: Optional[date] = Field(None, description="Policy end date")
-    premium_amount: Optional[float] = Field(None, description="Premium amount")
-    sum_insured: Optional[float] = Field(None, description="Sum insured")
-    insurance_type: Optional[str] = Field(None, description="Type of insurance")
-    policy_pdf_url: Optional[str] = Field(None, description="URL of the policy PDF")
-    confidence_score: Optional[float] = Field(None, description="Confidence score of extraction")
 
 class BrokerDropdown(BaseModel):
     id: int

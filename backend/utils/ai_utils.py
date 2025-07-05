@@ -3,6 +3,8 @@ import json
 from typing import Dict, Any, Optional
 import logging
 import os
+import requests
+from utils.pdf_utils import extract_text_from_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -222,16 +224,29 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
             logger.error("Gemini extractor not available")
             return {}
         
-        # TODO: Implement actual PDF text extraction from URL
-        # For now, this would need to be implemented to:
-        # 1. Download PDF from URL
-        # 2. Extract text using PyPDF2 or similar
-        # 3. Pass extracted text to Gemini
-        
-        # Placeholder for PDF text extraction
-        pdf_text = f"PDF content from {pdf_url} would be extracted here"
+        # Download PDF from URL and extract text
+        logger.info(f"Downloading PDF from URL: {pdf_url}")
+        try:
+            response = requests.get(pdf_url, timeout=30)
+            response.raise_for_status()
+            pdf_bytes = response.content
+            
+            # Extract text from PDF bytes
+            pdf_text = extract_text_from_bytes(pdf_bytes)
+            if not pdf_text or len(pdf_text.strip()) < 50:
+                logger.warning("No meaningful text extracted from PDF")
+                return {}
+                
+        except requests.RequestException as e:
+            logger.error(f"Failed to download PDF from {pdf_url}: {str(e)}")
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to extract text from PDF: {str(e)}")
+            return {}
         
         logger.info(f"Extracting comprehensive policy data from PDF: {pdf_url}")
+        logger.info(f"Extracted text length: {len(pdf_text)} characters")
+        
         extracted_data = gemini_extractor.extract_policy_data(pdf_text)
         
         if extracted_data:
@@ -277,6 +292,69 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
             
     except Exception as e:
         logger.error(f"Error extracting policy data: {str(e)}")
+        return {}
+
+async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]:
+    """Extract comprehensive policy data from PDF bytes using the Gemini extractor (stateless)"""
+    try:
+        if not gemini_extractor:
+            logger.error("Gemini extractor not available")
+            return {}
+        
+        # Extract text directly from PDF bytes
+        pdf_text = extract_text_from_bytes(pdf_bytes)
+        if not pdf_text or len(pdf_text.strip()) < 50:
+            logger.warning("No meaningful text extracted from PDF bytes")
+            return {}
+        
+        logger.info(f"Extracting comprehensive policy data from PDF bytes ({len(pdf_bytes)} bytes)")
+        logger.info(f"Extracted text length: {len(pdf_text)} characters")
+        
+        extracted_data = gemini_extractor.extract_policy_data(pdf_text)
+        
+        if extracted_data:
+            # Return data matching our ExtractedPolicyData schema
+            return {
+                # Basic Policy Information
+                "policy_number": extracted_data.get("policy_number"),
+                "formatted_policy_number": extracted_data.get("formatted_policy_number"),
+                "major_categorisation": extracted_data.get("major_categorisation"),
+                "product_insurer_report": extracted_data.get("product_insurer_report"),
+                "product_type": extracted_data.get("product_type"),
+                "plan_type": extracted_data.get("plan_type"),
+                "customer_name": extracted_data.get("customer_name"),
+                
+                # Premium & Financial Details
+                "gross_premium": extracted_data.get("gross_premium"),
+                "net_premium": extracted_data.get("net_premium"),
+                "od_premium": extracted_data.get("od_premium"),
+                "tp_premium": extracted_data.get("tp_premium"),
+                "gst_amount": extracted_data.get("gst_amount"),
+                
+                # Vehicle Details
+                "registration_no": extracted_data.get("registration_no"),
+                "make_model": extracted_data.get("make_model"),
+                "model": extracted_data.get("model"),
+                "vehicle_variant": extracted_data.get("vehicle_variant"),
+                "gvw": extracted_data.get("gvw"),
+                "rto": extracted_data.get("rto"),
+                "state": extracted_data.get("state"),
+                "fuel_type": extracted_data.get("fuel_type"),
+                "cc": extracted_data.get("cc"),
+                "age_year": extracted_data.get("age_year"),
+                "ncb": extracted_data.get("ncb"),
+                "discount_percent": extracted_data.get("discount_percent"),
+                "business_type": extracted_data.get("business_type"),
+                "seating_capacity": extracted_data.get("seating_capacity"),
+                "veh_wheels": extracted_data.get("veh_wheels"),
+                "confidence_score": extracted_data.get("confidence_score", 0.0)
+            }
+        else:
+            logger.warning("No data extracted from Gemini")
+            return {}
+            
+    except Exception as e:
+        logger.error(f"Error extracting policy data from bytes: {str(e)}")
         return {}
 
 try:

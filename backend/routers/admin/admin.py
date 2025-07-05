@@ -33,7 +33,6 @@ from .schemas import (
 )
 from . import schemas
 from .helpers import AdminHelpers
-from .cutpay import router as cutpay_router
 from .public import router as public_router
 from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
 from utils.google_sheets import google_sheets_sync
@@ -49,7 +48,6 @@ security = HTTPBearer()
 
 admin_helpers = AdminHelpers()
 
-router.include_router(cutpay_router)
 router.include_router(public_router)
 
 @router.get("/agents", response_model=AgentListResponse)
@@ -235,17 +233,27 @@ async def get_all_child_requests(
             req_dict = convert_uuids_to_strings(model_data_from_orm(req))
             
             if req.insurer:
+                req_dict["insurer_id"] = req.insurer.id
                 req_dict["insurer"] = {
                     "id": req.insurer.id,
                     "insurer_code": req.insurer.insurer_code,
                     "name": req.insurer.name
                 }
+            else:
+              
+                logger.warning(f"ChildIdRequest {req.id} has no insurer relationship")
+                continue 
+            
             if req.broker:
+                req_dict["broker_id"] = req.broker.id
                 req_dict["broker_relation"] = {
                     "id": req.broker.id,
                     "broker_code": req.broker.broker_code,
                     "name": req.broker.name
                 }
+            else:
+                req_dict["broker_id"] = None
+                req_dict["broker_relation"] = None
             
             formatted_requests.append(ChildIdResponse.model_validate(req_dict))
         
@@ -297,17 +305,29 @@ async def assign_child_id(
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
 
         if child_request.insurer:
+            req_dict["insurer_id"] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
+        else:
+            logger.warning(f"ChildIdRequest {child_request.id} has no insurer relationship")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Child ID request has invalid insurer relationship"
+            )
+        
         if child_request.broker:
+            req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
+        else:
+            req_dict["broker_id"] = None
+            req_dict["broker_relation"] = None
 
         google_sheets_dict = {
             'id': str(child_request.id),
@@ -369,17 +389,29 @@ async def reject_child_request(
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
 
         if child_request.insurer:
+            req_dict["insurer_id"] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
+        else:
+            logger.warning(f"ChildIdRequest {child_request.id} has no insurer relationship")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Child ID request has invalid insurer relationship"
+            )
+        
         if child_request.broker:
+            req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
+        else:
+            req_dict["broker_id"] = None
+            req_dict["broker_relation"] = None
 
         google_sheets_dict = {
             'id': str(child_request.id),
@@ -443,17 +475,29 @@ async def suspend_child_id(
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
         
         if child_request.insurer:
+            req_dict["insurer_id"] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
+        else:
+            logger.warning(f"ChildIdRequest {child_request.id} has no insurer relationship")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Child ID request has invalid insurer relationship"
+            )
+        
         if child_request.broker:
+            req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
+        else:
+            req_dict["broker_id"] = None
+            req_dict["broker_relation"] = None
 
         google_sheets_dict = {
             'id': str(child_request.id),
@@ -705,23 +749,17 @@ async def promote_agent_to_admin(
     user_id: str,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_admin_write)  # Only admins can promote agents
+    _: dict = Depends(require_admin_write)
 ):
     """
     Promote an agent to admin role. Only accessible by existing admins.
-    This endpoint updates both database and Supabase metadata.
-    
-    Note: Existing JWT tokens will still contain the old role until they expire or the user logs in again.
+    Updates both database and Supabase metadata.
     """
     from config import get_supabase_admin_client
     from models import UserProfile
-    import logging
-    
-    logger = logging.getLogger(__name__)
+    from uuid import UUID
     
     try:
-        # Convert user_id to UUID and validate
-        from uuid import UUID
         try:
             user_uuid = UUID(user_id)
         except ValueError:
@@ -729,94 +767,46 @@ async def promote_agent_to_admin(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid user ID format. Must be a valid UUID."
             )
+
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == user_uuid)
+        )
+        user_profile = result.scalar_one_or_none()
         
-        # Initialize response tracking
-        updated_in_database = False
-        updated_in_supabase = False
-        
-        # Update role in the database
-        try:
-            # Check if user exists in database and is currently an agent
-            result = await db.execute(
-                select(UserProfile).where(UserProfile.user_id == user_uuid)
+        if not user_profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found in database"
             )
-            user_profile = result.scalar_one_or_none()
-            
-            if not user_profile:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"User with ID {user_id} not found in database"
-                )
-            
-            # Check if user is currently an agent
-            if user_profile.user_role != "agent":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
-                )
-            
-            # Update the role in database
-            user_profile.user_role = "admin"
-            await db.commit()
-            updated_in_database = True
-            logger.info(f"Updated role in database for user {user_id} to admin")
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Failed to update role in database: {str(e)}")
-            await db.rollback()
-            
-        # Update role in Supabase user metadata
-        try:
-            supabase_admin = get_supabase_admin_client()
-            
-            # Update user metadata in Supabase
-            response = supabase_admin.auth.admin.update_user_by_id(
-                uid=user_id,
-                attributes={
-                    "user_metadata": {
-                        "role": "admin"
-                    }
-                }
-            )
-            
-            if response.user:
-                updated_in_supabase = True
-                logger.info(f"Updated role in Supabase for user {user_id} to admin")
-            else:
-                logger.error(f"Failed to update role in Supabase for user {user_id}")
-                
-        except Exception as e:
-            logger.error(f"Failed to update role in Supabase: {str(e)}")
         
-        # Determine success and message
-        if updated_in_database and updated_in_supabase:
-            success = True
-            message = f"Successfully promoted agent to admin in both database and Supabase"
-        elif updated_in_database:
-            success = True
-            message = f"Promoted to admin in database, but failed to update Supabase metadata. User may need to log in again."
-        elif updated_in_supabase:
-            success = False
-            message = f"Updated role in Supabase to admin, but failed to update database. This is an inconsistent state."
-        else:
-            success = False
-            message = "Failed to promote user to admin in both database and Supabase"
+        if user_profile.user_role != "agent":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
+            )
+
+        user_profile.user_role = "admin"
+        await db.commit()
+        
+        supabase_admin = get_supabase_admin_client()
+        supabase_response = supabase_admin.auth.admin.update_user_by_id(
+            uid=user_id,
+            attributes={"user_metadata": {"role": "admin"}}
+        )
         
         return schemas.UserRoleUpdateResponse(
-            success=success,
-            message=message,
+            success=True,
+            message="Successfully promoted agent to admin",
             user_id=user_uuid,
             new_role="admin",
-            updated_in_supabase=updated_in_supabase,
-            updated_in_database=updated_in_database
+            updated_in_supabase=bool(supabase_response.user),
+            updated_in_database=True
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error promoting user to admin: {str(e)}")
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while promoting the user to admin"

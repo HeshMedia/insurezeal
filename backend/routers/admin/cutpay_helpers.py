@@ -1,11 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, extract, or_, desc
 from sqlalchemy.orm import selectinload, joinedload
-from models import CutPay, Insurer, Broker, ChildIdRequest
+from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID
 from .cutpay_schemas import (
-    CutPayCreate, CutPayUpdate, CutPayPDFExtraction, InsurerDropdown, BrokerDropdown, ChildIdDropdown, CutPayStats
+    CutPayCreate, CutPayUpdate, ExtractedPolicyData, InsurerDropdown, BrokerDropdown, ChildIdDropdown, CutPayStats
 )
-from utils.ai_utils import extract_policy_data_from_pdf
 from utils.google_sheets import sync_cutpay_to_sheets
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Any, List
@@ -15,6 +14,77 @@ import csv
 import io
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# CODE LOOKUP HELPER FUNCTIONS
+# =============================================================================
+
+async def resolve_broker_code_to_id(db: AsyncSession, broker_code: str) -> Optional[int]:
+    """Resolve broker code to broker ID"""
+    if not broker_code:
+        return None
+    
+    result = await db.execute(
+        select(Broker.id).where(
+            and_(
+                Broker.broker_code == broker_code,
+                Broker.is_active == True
+            )
+        )
+    )
+    broker = result.scalar_one_or_none()
+    
+    if not broker:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Broker with code '{broker_code}' not found or inactive"
+        )
+    
+    return broker
+
+async def resolve_insurer_code_to_id(db: AsyncSession, insurer_code: str) -> Optional[int]:
+    """Resolve insurer code to insurer ID"""
+    if not insurer_code:
+        return None
+    
+    result = await db.execute(
+        select(Insurer.id).where(
+            and_(
+                Insurer.insurer_code == insurer_code,
+                Insurer.is_active == True
+            )
+        )
+    )
+    insurer = result.scalar_one_or_none()
+    
+    if not insurer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Insurer with code '{insurer_code}' not found or inactive"
+        )
+    
+    return insurer
+
+async def validate_and_resolve_codes(
+    db: AsyncSession,
+    broker_code: Optional[str],
+    insurer_code: Optional[str]
+) -> tuple[Optional[int], Optional[int]]:
+    """Validate and resolve both broker and insurer codes to IDs"""
+    broker_id = None
+    insurer_id = None
+    
+    if broker_code:
+        broker_id = await resolve_broker_code_to_id(db, broker_code)
+        
+    if insurer_code:
+        insurer_id = await resolve_insurer_code_to_id(db, insurer_code)
+    
+    return broker_id, insurer_id
+
+# =============================================================================
+# EXISTING CUTPAY HELPERS CLASS
+# =============================================================================
 
 class CutPayHelpers:
     """Helper class for cut pay operations with new flow support"""
@@ -139,51 +209,6 @@ class CutPayHelpers:
                 detail="Failed to update cut pay transaction"
             )
     
-    async def process_pdf_extraction(
-        self, 
-        db: AsyncSession, 
-        cutpay_id: int, 
-        pdf_url: str
-    ) -> CutPayPDFExtraction:
-        """Process PDF extraction for CutPay transaction"""
-        try:
-            # Extract data using AI
-            extracted_data = await extract_policy_data_from_pdf(pdf_url)
-            
-            # Update CutPay transaction with extracted data
-            cutpay = await self.get_cutpay_by_id(db, cutpay_id)
-            if not cutpay:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Cut pay transaction not found"
-                )
-            
-            # Map extracted data to CutPay fields
-            cutpay.policy_number = extracted_data.get('policy_number')
-            cutpay.policy_holder_name = extracted_data.get('policy_holder_name')
-            cutpay.policy_start_date = extracted_data.get('policy_start_date')
-            cutpay.policy_end_date = extracted_data.get('policy_end_date')
-            cutpay.premium_amount = extracted_data.get('premium_amount')
-            cutpay.sum_insured = extracted_data.get('sum_insured')
-            cutpay.insurance_type = extracted_data.get('insurance_type')
-            cutpay.policy_pdf_url = pdf_url
-            
-            await db.commit()
-            
-            return CutPayPDFExtraction(
-                **extracted_data,
-                confidence_score=extracted_data.get('confidence_score', 0.0)
-            )
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Error processing PDF extraction for cutpay {cutpay_id}: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to process PDF extraction"
-            )
-    
     async def calculate_cutpay_amounts(
         self,
         gross_amount: Optional[float] = None,
@@ -299,12 +324,11 @@ class CutPayHelpers:
                 select(Insurer).where(Insurer.is_active == True).order_by(Insurer.name)
             )
             insurers = [
-                InsurerDropdown(
-                    id=insurer.id,
-                    name=insurer.name,
-                    insurer_code=insurer.insurer_code,
-                    is_active=insurer.is_active
-                )
+                {
+                    "code": insurer.insurer_code,
+                    "name": insurer.name,
+                    "is_active": insurer.is_active
+                }
                 for insurer in insurer_result.scalars().all()
             ]
             
@@ -313,41 +337,40 @@ class CutPayHelpers:
                 select(Broker).where(Broker.is_active == True).order_by(Broker.name)
             )
             brokers = [
-                BrokerDropdown(
-                    id=broker.id,
-                    name=broker.name,
-                    broker_code=broker.broker_code,
-                    is_active=broker.is_active
-                )
+                {
+                    "code": broker.broker_code,
+                    "name": broker.name,
+                    "is_active": broker.is_active
+                }
                 for broker in broker_result.scalars().all()
             ]
             
-            # Get approved child IDs
-            child_id_result = await db.execute(
-                select(ChildIdRequest)
+            # Get active admin child IDs
+            admin_child_result = await db.execute(
+                select(AdminChildID)
                 .options(
-                    joinedload(ChildIdRequest.insurer),
-                    joinedload(ChildIdRequest.broker)
+                    joinedload(AdminChildID.insurer),
+                    joinedload(AdminChildID.broker)
                 )
-                .where(ChildIdRequest.status == "approved")
-                .order_by(ChildIdRequest.child_id)
+                .where(AdminChildID.is_active == True)
+                .order_by(AdminChildID.child_id)
             )
-            child_ids = [
-                ChildIdDropdown(
-                    id=child_id.id,
-                    child_id=child_id.child_id,
-                    insurer_name=child_id.insurer.name,
-                    broker_name=child_id.broker.name if child_id.broker else None,
-                    code_type=child_id.code_type,
-                    status=child_id.status
-                )
-                for child_id in child_id_result.scalars().all()
+            admin_child_ids = [
+                {
+                    "id": admin_child.id,
+                    "child_id": admin_child.child_id,
+                    "insurer_name": admin_child.insurer.name,
+                    "broker_name": admin_child.broker.name if admin_child.broker else None,
+                    "code_type": admin_child.code_type,
+                    "is_active": admin_child.is_active
+                }
+                for admin_child in admin_child_result.scalars().all()
             ]
             
             return {
                 "insurers": insurers,
                 "brokers": brokers,
-                "child_ids": child_ids
+                "admin_child_ids": admin_child_ids
             }
             
         except Exception as e:
@@ -537,18 +560,12 @@ class CutPayHelpers:
             )
 
 # =============================================================================
-# STANDALONE HELPER FUNCTIONS (for cutpay.py router)
+# STANDALONE HELPER FUNCTIONS (for cutpay.py router)  
 # =============================================================================
-
-async def extract_pdf_data(cutpay_id: int, pdf_url: str, db: AsyncSession):
-    """Extract data from policy PDF using AI/OCR (standalone function)"""
-    helper = CutPayHelpers()
-    return await helper.process_pdf_extraction(db, cutpay_id, pdf_url)
 
 async def calculate_commission_amounts(calculation_data: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate commission amounts using real business logic from README"""
     try:
-        # Extract input values
         gross_premium = calculation_data.get('gross_premium', 0) or 0
         net_premium = calculation_data.get('net_premium', 0) or 0
         od_premium = calculation_data.get('od_premium', 0) or 0
@@ -559,8 +576,7 @@ async def calculate_commission_amounts(calculation_data: Dict[str, Any]) -> Dict
         agent_commission_percent = calculation_data.get('agent_commission_given_percent', 0) or 0
         payment_by = calculation_data.get('payment_by', 'Agent')
         payout_on = calculation_data.get('payout_on', 'NP')
-        
-        # Initialize results
+
         result = {
             'receivable_from_broker': 0,
             'extra_amount_receivable_from_broker': 0,
@@ -647,7 +663,7 @@ async def get_filtered_dropdowns(db: AsyncSession, insurer_id: Optional[int] = N
             select(Insurer).where(Insurer.is_active == True).order_by(Insurer.name)
         )
         result["insurers"] = [
-            {"id": insurer.id, "name": insurer.name, "insurer_code": insurer.insurer_code}
+            {"code": insurer.insurer_code, "name": insurer.name}
             for insurer in insurer_result.scalars().all()
         ]
         
@@ -661,40 +677,41 @@ async def get_filtered_dropdowns(db: AsyncSession, insurer_id: Optional[int] = N
         
         broker_result = await db.execute(broker_query)
         result["brokers"] = [
-            {"id": broker.id, "name": broker.name, "broker_code": broker.broker_code}
+            {"code": broker.broker_code, "name": broker.name}
             for broker in broker_result.scalars().all()
         ]
         
-        # Get child IDs (filter by insurer/broker if provided)
-        child_id_query = select(ChildIdRequest).options(
-            joinedload(ChildIdRequest.insurer),
-            joinedload(ChildIdRequest.broker)
-        ).where(ChildIdRequest.status == "approved")
+        # Get admin child IDs (filter by insurer/broker if provided)
+        admin_child_query = select(AdminChildID).options(
+            joinedload(AdminChildID.insurer),
+            joinedload(AdminChildID.broker)
+        ).where(AdminChildID.is_active == True)
         
         conditions = []
         if insurer_id:
-            conditions.append(ChildIdRequest.insurer_id == insurer_id)
+            conditions.append(AdminChildID.insurer_id == insurer_id)
         if broker_id:
-            conditions.append(ChildIdRequest.broker_id == broker_id)
+            conditions.append(AdminChildID.broker_id == broker_id)
         
         if conditions:
-            child_id_query = child_id_query.where(and_(*conditions))
+            admin_child_query = admin_child_query.where(and_(*conditions))
         
-        child_id_query = child_id_query.order_by(ChildIdRequest.child_id)
-        child_id_result = await db.execute(child_id_query)
+        admin_child_query = admin_child_query.order_by(AdminChildID.child_id)
+        admin_child_result = await db.execute(admin_child_query)
         
-        result["child_ids"] = [
+        result["admin_child_ids"] = [
             {
-                "id": child_id.id,
-                "child_id": child_id.child_id,
-                "insurer_name": child_id.insurer.name if child_id.insurer else None,
-                "broker_name": child_id.broker.name if child_id.broker else None,
-                "code_type": child_id.code_type
+                "id": admin_child.id,
+                "child_id": admin_child.child_id,
+                "insurer_name": admin_child.insurer.name if admin_child.insurer else None,
+                "broker_name": admin_child.broker.name if admin_child.broker else None,
+                "code_type": admin_child.code_type,
+                "is_active": admin_child.is_active
             }
-            for child_id in child_id_result.scalars().all()
+            for admin_child in admin_child_result.scalars().all()
         ]
         
-        logger.info(f"Retrieved filtered dropdowns: {len(result['insurers'])} insurers, {len(result['brokers'])} brokers, {len(result['child_ids'])} child IDs")
+        logger.info(f"Retrieved filtered dropdowns: {len(result['insurers'])} insurers, {len(result['brokers'])} brokers, {len(result['admin_child_ids'])} admin child IDs")
         return result
         
     except Exception as e:
@@ -757,17 +774,29 @@ async def sync_cutpay_transaction(cutpay_id: int, db: AsyncSession) -> Dict[str,
 def validate_cutpay_data(cutpay_data: Dict[str, Any]) -> List[str]:
     """Validate CutPay data (standalone function)"""
     errors = []
-    
-    # Basic validation
-    if not cutpay_data.get('policy_number') and not cutpay_data.get('agent_code'):
+
+    # Check for policy_number and agent_code at all possible locations
+    policy_number = (
+        cutpay_data.get('policy_number')
+        or (cutpay_data.get('extracted_data') or {}).get('policy_number')
+    )
+    agent_code = (
+        cutpay_data.get('agent_code')
+        or (cutpay_data.get('admin_input') or {}).get('agent_code')
+    )
+
+    if not policy_number and not agent_code:
         errors.append("Either policy_number or agent_code is required")
-    
-    if cutpay_data.get('gross_amount') and cutpay_data.get('gross_amount') < 0:
+
+    # Gross amount validation (top-level or in admin_input)
+    gross_amount = cutpay_data.get('gross_amount') or (cutpay_data.get('admin_input') or {}).get('gross_amount')
+    if gross_amount and gross_amount < 0:
         errors.append("Gross amount cannot be negative")
     
-    if cutpay_data.get('agent_commission_given_percent'):
-        commission = cutpay_data['agent_commission_given_percent']
-        if commission < 0 or commission > 100:
+    # Agent commission percent validation (top-level or in admin_input)
+    agent_commission = cutpay_data.get('agent_commission_given_percent') or (cutpay_data.get('admin_input') or {}).get('agent_commission_given_percent')
+    if agent_commission is not None:
+        if agent_commission < 0 or agent_commission > 100:
             errors.append("Agent commission percent must be between 0 and 100")
     
     return errors

@@ -16,7 +16,7 @@ class CodeTypeEnum(str, Enum):
 
 class ChildIdRequestCreate(BaseModel):
     """Schema for creating a child ID request - Updated flow"""
-    phone_number: str = Field(..., pattern=r"^[6-9]\d{9}$")
+    phone_number: str = Field(...)
     email: EmailStr = Field(...)
     location: str = Field(..., min_length=2, max_length=200)
     code_type: CodeTypeEnum = Field(...)
@@ -26,7 +26,6 @@ class ChildIdRequestCreate(BaseModel):
 
 class BrokerDropdownResponse(BaseModel):
     """Response schema for broker dropdown"""
-    id: int
     broker_code: str
     name: str
     
@@ -35,7 +34,6 @@ class BrokerDropdownResponse(BaseModel):
 
 class InsurerDropdownResponse(BaseModel):
     """Response schema for insurer dropdown"""
-    id: int
     insurer_code: str
     name: str
     
@@ -55,8 +53,8 @@ class ChildIdResponse(BaseModel):
     email: str
     location: str
     code_type: str
-    insurer_id: int  # Keep for internal use
-    broker_id: Optional[int] = None  # Keep for internal use
+    insurer_code: str
+    broker_code: Optional[str] = None
     preferred_rm_name: Optional[str] = None
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
@@ -74,7 +72,7 @@ class ChildIdResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    # Nested relationships with codes
+    # Nested relationships
     insurer: Optional[InsurerDropdownResponse] = None
     broker_relation: Optional[BrokerDropdownResponse] = None
     

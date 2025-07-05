@@ -278,8 +278,8 @@ class ChildIdRequest(Base):
     
     code_type: Mapped[str] = mapped_column(String(20), nullable=False)
 
-    insurer_id: Mapped[int] = mapped_column(ForeignKey("insurers.id"), nullable=False)
-    broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
+    insurer_code: Mapped[str] = mapped_column(ForeignKey("insurers.insurer_code"), nullable=False)
+    broker_code: Mapped[Optional[str]] = mapped_column(ForeignKey("brokers.broker_code"), nullable=True)
 
     preferred_rm_name: Mapped[Optional[str]] = mapped_column(String(100))
     
@@ -312,8 +312,8 @@ class ChildIdRequest(Base):
     )
     
     # Relationships
-    insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id])
-    broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id])
+    insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_code], overlaps="child_id_requests")
+    broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_code], overlaps="child_id_requests")
     cutpay_transactions: Mapped[list["CutPay"]] = relationship("CutPay", back_populates="child_id_request")
 
 
@@ -400,6 +400,7 @@ class CutPay(Base):
     insurer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("insurers.id"), nullable=True)
     broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
     child_id_request_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("child_id_requests.id"), nullable=True)
+    admin_child_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admin_child_ids.id"), nullable=True)
     
     # =============================================================================
     # AUTO-CALCULATED FIELDS
@@ -490,6 +491,7 @@ class CutPay(Base):
     insurer: Mapped[Optional["Insurer"]] = relationship("Insurer", back_populates="cutpay_transactions")
     broker: Mapped[Optional["Broker"]] = relationship("Broker", back_populates="cutpay_transactions")
     child_id_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", back_populates="cutpay_transactions")
+    admin_child: Mapped[Optional["AdminChildID"]] = relationship("AdminChildID", foreign_keys=[admin_child_id])
 
 
 class Policy(Base):
@@ -579,8 +581,8 @@ class Broker(Base):
     
     # Relationships
     cutpay_transactions: Mapped[list["CutPay"]] = relationship("CutPay", back_populates="broker")
-    child_id_requests: Mapped[list["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys="ChildIdRequest.broker_id")
-    admin_child_ids: Mapped[list["AdminChildID"]] = relationship("AdminChildID", foreign_keys="AdminChildID.broker_id")
+    child_id_requests: Mapped[list["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys="ChildIdRequest.broker_code", overlaps="broker")
+    admin_child_ids: Mapped[list["AdminChildID"]] = relationship("AdminChildID", foreign_keys="AdminChildID.broker_id", overlaps="broker")
 
 
 class Insurer(Base):
@@ -609,8 +611,8 @@ class Insurer(Base):
     
     # Relationships
     cutpay_transactions: Mapped[list["CutPay"]] = relationship("CutPay", back_populates="insurer")
-    child_id_requests: Mapped[list["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys="ChildIdRequest.insurer_id")
-    admin_child_ids: Mapped[list["AdminChildID"]] = relationship("AdminChildID", foreign_keys="AdminChildID.insurer_id")
+    child_id_requests: Mapped[list["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys="ChildIdRequest.insurer_code", overlaps="insurer")
+    admin_child_ids: Mapped[list["AdminChildID"]] = relationship("AdminChildID", foreign_keys="AdminChildID.insurer_id", overlaps="insurer")
 
 
 class AdminChildID(Base):
@@ -654,6 +656,6 @@ class AdminChildID(Base):
     )
     
     # Relationships
-    insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id])
-    broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id])
+    insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id], overlaps="admin_child_ids")
+    broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id], overlaps="admin_child_ids")
 

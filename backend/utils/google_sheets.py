@@ -317,7 +317,7 @@ class GoogleSheetsSync:
                 return {"success": False, "error": "Google Sheets client not initialized"}
             
             # Get or create CutPay worksheet
-            cutpay_sheet = self._get_or_create_worksheet("CutPay")
+            cutpay_sheet = self._get_or_create_cutpay_worksheet("CutPay")
             
             # Prepare comprehensive row data for CutPay sheet
             row_data = self._prepare_cutpay_row_data(cutpay)
@@ -358,7 +358,7 @@ class GoogleSheetsSync:
                 return {"success": False, "error": "Only completed transactions sync to Master Sheet"}
             
             # Get or create Master worksheet
-            master_sheet = self._get_or_create_worksheet("Master")
+            master_sheet = self._get_or_create_master_worksheet("Master")
             
             # Prepare comprehensive row data for Master sheet
             row_data = self._prepare_master_sheet_row_data(cutpay)
@@ -571,33 +571,45 @@ class GoogleSheetsSync:
             cutpay.updated_at.isoformat() if cutpay.updated_at else ""
         ]
     
-    def _get_or_create_worksheet(self, sheet_name: str):
-        """Get existing worksheet or create new one with headers"""
+    def _get_or_create_cutpay_worksheet(self, sheet_name: str):
+        """Get existing CutPay worksheet or create new one with headers"""
         try:
             # Try to get existing worksheet
             worksheet = self.spreadsheet.worksheet(sheet_name)
             return worksheet
         except gspread.exceptions.WorksheetNotFound:
-            # Create new worksheet with appropriate headers
+            # Create new worksheet with CutPay headers
             worksheet = self.spreadsheet.add_worksheet(
                 title=sheet_name,
                 rows=1000,
                 cols=100
             )
             
-            # Add headers based on sheet type
-            if sheet_name == "CutPay":
-                headers = self._get_cutpay_sheet_headers()
-            elif sheet_name == "Master":
-                headers = self._get_master_sheet_headers()
-            else:
-                headers = ["ID", "Created At", "Updated At"]
-            
+            headers = self._get_cutpay_sheet_headers()
             worksheet.append_row(headers)
-            logger.info(f"Created new worksheet '{sheet_name}' with headers")
+            logger.info(f"Created new CutPay worksheet '{sheet_name}' with headers")
             return worksheet
     
-    def _get_cutpay_sheet_headers(self) -> List[str]:
+    def _get_or_create_master_worksheet(self, sheet_name: str):
+        """Get existing Master worksheet or create new one with headers"""
+        try:
+            # Try to get existing worksheet
+            worksheet = self.spreadsheet.worksheet(sheet_name)
+            return worksheet
+        except gspread.exceptions.WorksheetNotFound:
+            # Create new worksheet with Master headers
+            worksheet = self.spreadsheet.add_worksheet(
+                title=sheet_name,
+                rows=1000,
+                cols=100
+            )
+            
+            headers = self._get_master_sheet_headers()
+            worksheet.append_row(headers)
+            logger.info(f"Created new Master worksheet '{sheet_name}' with headers")
+            return worksheet
+
+    def _get_or_create_worksheet(self, worksheet_name: str, headers: List[str]) -> Optional[gspread.Worksheet]:
         """Get comprehensive headers for CutPay sheet"""
         return [
             # Basic Information

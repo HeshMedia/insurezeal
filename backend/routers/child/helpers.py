@@ -36,12 +36,12 @@ class ChildHelpers:
         request_data: Dict[str, Any]
     ) -> ChildIdRequest:
         """
-        Create a new child ID request
+        Create a new child ID request with code validation
         
         Args:
             db: Database session
             user_id: User ID making the request
-            request_data: Request details
+            request_data: Request details with broker_code and insurer_code
             
         Returns:
             Created ChildIdRequest object
@@ -49,6 +49,23 @@ class ChildHelpers:
         try:
             from sqlalchemy.orm import selectinload
             
+            # Validate insurer_code
+            insurer_code = request_data.get("insurer_code")
+            if not insurer_code:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Insurer code is required"
+                )
+            
+            # Validate the insurer code exists and is active
+            await self.validate_insurer_code(db, insurer_code)
+            
+            # Validate broker_code if provided (for Broker Code type)
+            broker_code = request_data.get("broker_code")
+            if broker_code:
+                await self.validate_broker_code(db, broker_code)
+            
+            # Create the child ID request
             child_request = ChildIdRequest(
                 user_id=uuid.UUID(user_id),
                 **request_data
@@ -58,6 +75,7 @@ class ChildHelpers:
             await db.commit()
             await db.refresh(child_request)
             
+            # Fetch with relationships
             query = select(ChildIdRequest).options(
                 selectinload(ChildIdRequest.insurer),
                 selectinload(ChildIdRequest.broker)
@@ -68,6 +86,9 @@ class ChildHelpers:
             logger.info(f"Created child ID request {child_request.id} for user {user_id}")
             return child_request
             
+        except HTTPException:
+            await db.rollback()
+            raise
         except Exception as e:
             await db.rollback()
             logger.error(f"Error creating child ID request: {str(e)}")
@@ -495,6 +516,94 @@ class ChildHelpers:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch child ID statistics"
             )
+
+    # ============ VALIDATION HELPERS FOR CODE-BASED LOOKUPS ============
+    
+    async def validate_broker_code(self, db: AsyncSession, broker_code: str) -> Broker:
+        """
+        Validate and fetch broker by broker_code
+        
+        Args:
+            db: Database session
+            broker_code: Broker code to validate
+            
+        Returns:
+            Broker object if valid
+            
+        Raises:
+            HTTPException: If broker not found or inactive
+        """
+        try:
+            result = await db.execute(
+                select(Broker).where(
+                    and_(
+                        Broker.broker_code == broker_code,
+                        Broker.is_active == True
+                    )
+                )
+            )
+            broker = result.scalar_one_or_none()
+            
+            if not broker:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid or inactive broker code: {broker_code}"
+                )
+            
+            return broker
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error validating broker code {broker_code}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to validate broker code"
+            )
+
+    async def validate_insurer_code(self, db: AsyncSession, insurer_code: str) -> Insurer:
+        """
+        Validate and fetch insurer by insurer_code
+        
+        Args:
+            db: Database session
+            insurer_code: Insurer code to validate
+            
+        Returns:
+            Insurer object if valid
+            
+        Raises:
+            HTTPException: If insurer not found or inactive
+        """
+        try:
+            result = await db.execute(
+                select(Insurer).where(
+                    and_(
+                        Insurer.insurer_code == insurer_code,
+                        Insurer.is_active == True
+                    )
+                )
+            )
+            insurer = result.scalar_one_or_none()
+            
+            if not insurer:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid or inactive insurer code: {insurer_code}"
+                )
+            
+            return insurer
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error validating insurer code {insurer_code}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to validate insurer code"
+            )
+
+    # ============ DROPDOWN HELPER FUNCTIONS ============
 
     async def get_active_brokers(self, db: AsyncSession) -> List[Broker]:
         """

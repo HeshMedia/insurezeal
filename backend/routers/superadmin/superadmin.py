@@ -243,6 +243,7 @@ async def create_admin_child_id(
     _rbac_check = Depends(require_superadmin_admin_child_ids_write)
 ):
     """Create a new admin child ID (SuperAdmin only)"""
+    # Check if child ID already exists
     existing_result = await db.execute(
         select(AdminChildID).where(AdminChildID.child_id == child_id_data.child_id)
     )
@@ -252,7 +253,8 @@ async def create_admin_child_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Child ID already exists"
         )
-
+    
+    # Validate insurer exists
     insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == child_id_data.insurer_code))
     insurer = insurer_result.scalar_one_or_none()
     if not insurer:
@@ -260,7 +262,8 @@ async def create_admin_child_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid insurer code: {child_id_data.insurer_code}"
         )
-
+    
+    # Validate broker exists if provided
     broker_id = None
     if child_id_data.broker_code:
         broker_result = await db.execute(select(Broker).where(Broker.broker_code == child_id_data.broker_code))
@@ -311,47 +314,6 @@ async def get_admin_child_ids(
     return result.scalars().all()
 
 
-@router.get("/admin-child-ids/available", response_model=List[AdminChildIDResponse])
-async def get_available_admin_child_ids(
-    insurer_code: str,
-    broker_code: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_admin_child_ids)
-):
-    """Get available admin child IDs filtered by insurer code and optionally broker code (Admin/SuperAdmin only)"""
-    insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
-    insurer = insurer_result.scalar_one_or_none()
-    if not insurer:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid insurer code: {insurer_code}"
-        )
-    
-    query = (
-        select(AdminChildID)
-        .options(selectinload(AdminChildID.insurer), selectinload(AdminChildID.broker))
-        .where(
-            AdminChildID.is_active == True,
-            AdminChildID.is_suspended == False,
-            AdminChildID.insurer_id == insurer.id
-        )
-    )
-
-    if broker_code:
-        broker_result = await db.execute(select(Broker).where(Broker.broker_code == broker_code))
-        broker = broker_result.scalar_one_or_none()
-        if not broker:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid broker code: {broker_code}"
-            )
-        query = query.where(AdminChildID.broker_id == broker.id)
-    
-    result = await db.execute(query)
-    return result.scalars().all()
-
-
 @router.get("/admin-child-ids/{child_id_id}", response_model=AdminChildIDResponse)
 async def get_admin_child_id(
     child_id_id: int,
@@ -394,6 +356,7 @@ async def update_admin_child_id(
     
     update_data = child_id_update.dict(exclude_unset=True)
     
+    # Handle insurer code resolution
     if "insurer_code" in update_data:
         insurer_code = update_data.pop("insurer_code")
         insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
@@ -404,7 +367,8 @@ async def update_admin_child_id(
                 detail=f"Invalid insurer code: {insurer_code}"
             )
         update_data["insurer_id"] = insurer.id
-
+    
+    # Handle broker code resolution
     if "broker_code" in update_data:
         broker_code = update_data.pop("broker_code")
         if broker_code:
@@ -472,6 +436,47 @@ async def toggle_admin_child_id_suspension(
     return {"message": f"Admin child ID {action} successfully"}
 
 
+@router.get("/admin-child-ids/available", response_model=List[AdminChildIDResponse])
+async def get_available_admin_child_ids(
+    insurer_code: str,
+    broker_code: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_superadmin_admin_child_ids)
+):
+    """Get available admin child IDs filtered by insurer code and optionally broker code (Admin/SuperAdmin only)"""
+    # Resolve insurer code to ID
+    insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
+    insurer = insurer_result.scalar_one_or_none()
+    if not insurer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid insurer code: {insurer_code}"
+        )
+    
+    query = (
+        select(AdminChildID)
+        .options(selectinload(AdminChildID.insurer), selectinload(AdminChildID.broker))
+        .where(
+            AdminChildID.is_active == True,
+            AdminChildID.is_suspended == False,
+            AdminChildID.insurer_id == insurer.id
+        )
+    )
+    
+    # Resolve broker code to ID if provided
+    if broker_code:
+        broker_result = await db.execute(select(Broker).where(Broker.broker_code == broker_code))
+        broker = broker_result.scalar_one_or_none()
+        if not broker:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid broker code: {broker_code}"
+            )
+        query = query.where(AdminChildID.broker_id == broker.id)
+    
+    result = await db.execute(query)
+    return result.scalars().all()
 
 # ============ USER ROLE MANAGEMENT ============
 
@@ -484,17 +489,13 @@ async def promote_agent_to_admin_superadmin(
 ):
     """
     Promote an agent to admin role (SuperAdmin only).
-    This endpoint updates both database and Supabase metadata.
-    
-    Note: Existing JWT tokens will still contain the old role until they expire or the user logs in again.
+    Updates both database and Supabase metadata.
     """
     from config import get_supabase_admin_client
-    import logging
-    
-    logger = logging.getLogger(__name__)
+    from uuid import UUID
     
     try:
-        from uuid import UUID
+        # Validate user_id format
         try:
             user_uuid = UUID(user_id)
         except ValueError:
@@ -503,85 +504,49 @@ async def promote_agent_to_admin_superadmin(
                 detail="Invalid user ID format. Must be a valid UUID."
             )
         
-        updated_in_database = False
-        updated_in_supabase = False
+        # Check if user exists and is currently an agent
+        result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_uuid))
+        user_profile = result.scalar_one_or_none()
         
-
-        try:
-            result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_uuid))
-            user_profile = result.scalar_one_or_none()
-            
-            if not user_profile:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"User with ID {user_id} not found in database"
-                )
-            
-            if user_profile.user_role != "agent":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
-                )
-            
-            user_profile.user_role = "admin"
-            await db.commit()
-            updated_in_database = True
-            logger.info(f"Updated role in database for user {user_id} to admin")
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Failed to update role in database: {str(e)}")
-            await db.rollback()
-            
-        try:
-            supabase_admin = get_supabase_admin_client()
-            
-            response = supabase_admin.auth.admin.update_user_by_id(
-                uid=user_id,
-                attributes={
-                    "user_metadata": {
-                        "role": "admin"
-                    }
-                }
+        if not user_profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with ID {user_id} not found in database"
             )
-            
-            if response.user:
-                updated_in_supabase = True
-                logger.info(f"Updated role in Supabase for user {user_id} to admin")
-            else:
-                logger.error(f"Failed to update role in Supabase for user {user_id}")
-                
-        except Exception as e:
-            logger.error(f"Failed to update role in Supabase: {str(e)}")
         
-        if updated_in_database and updated_in_supabase:
-            success = True
-            message = f"Successfully promoted agent to admin in both database and Supabase"
-        elif updated_in_database:
-            success = True
-            message = f"Promoted to admin in database, but failed to update Supabase metadata. User may need to log in again."
-        elif updated_in_supabase:
-            success = False
-            message = f"Updated role in Supabase to admin, but failed to update database. This is an inconsistent state."
-        else:
-            success = False
-            message = "Failed to promote user to admin in both database and Supabase"
+        if user_profile.user_role != "agent":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
+            )
+        
+        # Update role in database
+        user_profile.user_role = "admin"
+        await db.commit()
+        
+        # Update role in Supabase
+        supabase_admin = get_supabase_admin_client()
+        supabase_response = supabase_admin.auth.admin.update_user_by_id(
+            uid=user_id,
+            attributes={"user_metadata": {"role": "admin"}}
+        )
         
         return schemas.UserRoleUpdateResponse(
-            success=success,
-            message=message,
+            success=True,
+            message="Successfully promoted agent to admin",
             user_id=user_uuid,
             new_role="admin",
-            updated_in_supabase=updated_in_supabase,
-            updated_in_database=updated_in_database
+            updated_in_supabase=bool(supabase_response.user),
+            updated_in_database=True
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error promoting user to admin: {str(e)}")
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while promoting the user to admin"
         )
+
+

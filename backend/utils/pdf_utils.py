@@ -72,3 +72,12 @@ class PDFProcessor:
         except Exception as e:
             logger.error(f"PDF bytes validation failed: {str(e)}")
             return False
+
+# Standalone function for easy import
+def extract_text_from_bytes(pdf_bytes: bytes) -> Optional[str]:
+    """Extract text from PDF bytes - standalone function"""
+    return PDFProcessor.extract_text_from_bytes(pdf_bytes)
+
+def extract_text_from_pdf(pdf_path: str) -> Optional[str]:
+    """Extract text from PDF file - standalone function"""
+    return PDFProcessor.extract_text_from_pdf(pdf_path)

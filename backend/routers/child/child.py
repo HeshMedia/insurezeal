@@ -3,10 +3,8 @@ from fastapi import Depends, HTTPException, APIRouter, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from config import get_db
-from models import Insurer, Broker
 from routers.auth.auth import get_current_user
 from routers.child.helpers import ChildHelpers
 from routers.auth.helpers import AuthHelpers
@@ -84,7 +82,7 @@ async def create_child_id_request(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Create a new child ID request - Updated flow
+    Create a new child ID request - Updated flow with codes
     
     - **phone_number**: Valid Indian phone number
     - **email**: Email address
@@ -108,37 +106,11 @@ async def create_child_id_request(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Broker code should not be provided for Direct Code type"
             )
-
-        insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == request_data.insurer_code))
-        insurer = insurer_result.scalar_one_or_none()
-        if not insurer:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid insurer code: {request_data.insurer_code}"
-            )
-
-        broker_id = None
-        if request_data.broker_code:
-            broker_result = await db.execute(select(Broker).where(Broker.broker_code == request_data.broker_code))
-            broker = broker_result.scalar_one_or_none()
-            if not broker:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid broker code: {request_data.broker_code}"
-                )
-            broker_id = broker.id
-        
-
-        request_dict = request_data.dict()
-        request_dict["insurer_id"] = insurer.id
-        request_dict["broker_id"] = broker_id
-        request_dict.pop("insurer_code", None)
-        request_dict.pop("broker_code", None)
         
         child_request = await child_helpers.create_child_id_request(
             db=db,
             user_id=user_id,            
-            request_data=request_dict
+            request_data=request_data.dict()
         )
         
         from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
@@ -146,13 +118,11 @@ async def create_child_id_request(
         
         if child_request.insurer:
             req_dict["insurer"] = {
-                "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
         if child_request.broker:
             req_dict["broker_relation"] = {
-                "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
@@ -225,13 +195,11 @@ async def get_my_child_requests(
 
             if req.insurer:
                 req_dict["insurer"] = {
-                    "id": req.insurer.id,
                     "insurer_code": req.insurer.insurer_code,
                     "name": req.insurer.name
                 }
             if req.broker:
                 req_dict["broker_relation"] = {
-                    "id": req.broker.id,
                     "broker_code": req.broker.broker_code,
                     "name": req.broker.name
                 }
@@ -285,13 +253,11 @@ async def get_child_request_details(
         
         if child_request.insurer:
             req_dict["insurer"] = {
-                "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
         if child_request.broker:
             req_dict["broker_relation"] = {
-                "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
@@ -333,13 +299,11 @@ async def get_active_child_ids(
 
             if req.insurer:
                 req_dict["insurer"] = {
-                    "id": req.insurer.id,
                     "insurer_code": req.insurer.insurer_code,
                     "name": req.insurer.name
                 }
             if req.broker:
                 req_dict["broker_relation"] = {
-                    "id": req.broker.id,
                     "broker_code": req.broker.broker_code,
                     "name": req.broker.name
                 }
