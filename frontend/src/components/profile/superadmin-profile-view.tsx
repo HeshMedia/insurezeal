@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ProfileHeader } from './profile-header'
 import { ProfileTabs } from './profile-tabs'
 import { ProfileDetails } from './profile-details'
+
 import { ProfileEditForm } from './profile-edit-form'
 import { DocumentManagement } from './document-management'
 import { useProfile, useUpdateProfile, useUploadProfileImage, useDeleteProfileImage } from '@/hooks/profileQuery'

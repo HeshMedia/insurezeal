@@ -1,8 +1,8 @@
 'use client'
 
-import { useAuth } from '@/lib/auth-context'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useAuth } from '@/lib/auth-context-final'
+import { UserResponse } from '@/types/auth.types'
+import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -22,38 +22,12 @@ import {
 
 export default function Home() {
   const { user, loading } = useAuth()
-  const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  useEffect(() => {
-    // If user is already authenticated, redirect to their dashboard
-    if (!loading && user) {
-      if (user.user_role === 'admin') {
-        router.replace('/admin')
-      } else if (user.user_role === 'agent') {
-        router.replace('/agent')
-      } else if (user.user_role === 'superadmin') {
-        router.replace('/superadmin')
-      }
-    }
-  }, [user, loading, router])
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
-
-  // If user is authenticated, show loading while redirecting
-  if (user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to your dashboard...</p>
-        </div>
       </div>
     )
   }
@@ -93,16 +67,38 @@ export default function Home() {
 
             {/* Desktop CTA */}
             <div className="hidden md:flex items-center space-x-4">
-              <Link href="/register">
-                <Button variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50">
-                  Sign Up
-                </Button>
-              </Link>
-              <Link href="/login">
-                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg">
-                  Login
-                </Button>
-              </Link>
+              {!user && (
+                <>
+                  <Link href="/register">
+                    <Button variant="outline" className="border-blue-200 text-blue-600 hover:bg-blue-50">
+                      Sign Up
+                    </Button>
+                  </Link>
+                  <Link href="/login">
+                    <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg">
+                      Login
+                    </Button>
+                  </Link>
+                </>
+              )}
+              {user && (
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-700">
+                    Welcome, {(user as UserResponse).first_name || (user as UserResponse).username || 'User'}
+                  </span>
+                  <Link href={
+                    (user as UserResponse).user_role === 'admin' 
+                      ? '/admin' 
+                      : (user as UserResponse).user_role === 'superadmin' 
+                        ? '/superadmin' 
+                        : '/agent'
+                  }>
+                    <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg">
+                      Dashboard
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -131,16 +127,38 @@ export default function Home() {
                   Contact
                 </a>
                 <div className="flex flex-col space-y-2 pt-4 border-t border-gray-200">
-                  <Link href="/register">
-                    <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50">
-                      Sign Up
-                    </Button>
-                  </Link>
-                  <Link href="/login">
-                    <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
-                      Login
-                    </Button>
-                  </Link>
+                  {!user && (
+                    <>
+                      <Link href="/register">
+                        <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50">
+                          Sign Up
+                        </Button>
+                      </Link>
+                      <Link href="/login">
+                        <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
+                          Login
+                        </Button>
+                      </Link>
+                    </>
+                  )}
+                  {user && (
+                    <div className="flex flex-col space-y-2">
+                      <div className="text-sm text-gray-700 px-3 py-2">
+                        Welcome, {(user as UserResponse).first_name || (user as UserResponse).username || 'User'}
+                      </div>
+                      <Link href={
+                        (user as UserResponse).user_role === 'admin' 
+                          ? '/admin' 
+                          : (user as UserResponse).user_role === 'superadmin' 
+                            ? '/superadmin' 
+                            : '/agent'
+                      }>
+                        <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
+                          Go to Dashboard
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -172,16 +190,40 @@ export default function Home() {
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                <Link href="/register">
-                  <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
-                    Get Started Free
-                    <ArrowRight className="w-5 h-5 ml-2" />
-                  </Button>
-                </Link>
-                <Button size="lg" variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
-                  <Play className="w-5 h-5 mr-2" />
-                  Watch Demo
-                </Button>
+                {!user && (
+                  <>
+                    <Link href="/register">
+                      <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
+                        Get Started Free
+                        <ArrowRight className="w-5 h-5 ml-2" />
+                      </Button>
+                    </Link>
+                    <Button size="lg" variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+                      <Play className="w-5 h-5 mr-2" />
+                      Watch Demo
+                    </Button>
+                  </>
+                )}
+                {user && (
+                  <>
+                    <Link href={
+                      (user as UserResponse).user_role === 'admin' 
+                        ? '/admin' 
+                        : (user as UserResponse).user_role === 'superadmin' 
+                          ? '/superadmin' 
+                          : '/agent'
+                    }>
+                      <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
+                        Go to Dashboard
+                        <ArrowRight className="w-5 h-5 ml-2" />
+                      </Button>
+                    </Link>
+                    <Button size="lg" variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+                      <Play className="w-5 h-5 mr-2" />
+                      Watch Demo
+                    </Button>
+                  </>
+                )}
               </div>
               
               <div className="flex items-center justify-center lg:justify-start mt-8 text-sm text-gray-500">
@@ -343,17 +385,35 @@ export default function Home() {
             Join thousands of insurance professionals who have streamlined their workflows with InsureZeal.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/register">
-              <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
-                Start Free Trial
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button size="lg" variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
-                Sign In
-              </Button>
-            </Link>
+            {!user && (
+              <>
+                <Link href="/register">
+                  <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
+                    Start Free Trial
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button size="lg" variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+                    Sign In
+                  </Button>
+                </Link>
+              </>
+            )}
+            {user && (
+              <Link href={
+                (user as UserResponse).user_role === 'admin' 
+                  ? '/admin' 
+                  : (user as UserResponse).user_role === 'superadmin' 
+                    ? '/superadmin' 
+                    : '/agent'
+              }>
+                <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
+                  Go to Dashboard
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>

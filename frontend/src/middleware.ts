@@ -1,95 +1,134 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Define public routes that don't require authentication
+const isPublicRoute = (pathname: string): boolean => {
+  const publicRoutes = [
+    '/',
+    '/login',
+    '/register',
+    '/reset-password',
+    '/verify-email',
+    '/forgot-password'
+  ]
+  
+  return publicRoutes.includes(pathname) || 
+         pathname.startsWith('/api/') ||
+         pathname.startsWith('/_next/') ||
+         pathname.startsWith('/favicon.ico') ||
+         pathname.includes('.')
+}
+
+// Helper to decode JWT role safely
+const getJWTRole = (token: string): string | null => {
+  try {
+    const base64Payload = token.split('.')[1]
+    const payload = JSON.parse(atob(base64Payload))
+    
+    // Try to get role from user_metadata first (new format)
+    if (payload?.user_metadata?.role) {
+      return payload.user_metadata.role
+    }
+    
+    // Fallback to top-level role or other locations
+    return payload?.role || null
+  } catch (error) {
+    console.error('Middleware - Error decoding JWT:', error)
+    return null
+  }
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  
+  console.log('Middleware - Processing path:', pathname)
+  
+  // Skip middleware for public routes
+  if (isPublicRoute(pathname)) {
+    // console.log('Middleware - Public route, allowing access')
+    return NextResponse.next()
+  }
   
   // Get tokens from cookies
   const token = request.cookies.get('access_token')?.value
   const refreshToken = request.cookies.get('refresh_token')?.value
   
-  console.log('Middleware - Path:', pathname, 'Token exists:', !!token, 'Refresh exists:', !!refreshToken)
+  console.log('Middleware - Auth check:', { 
+    path: pathname, 
+    hasToken: !!token, 
+    hasRefreshToken: !!refreshToken 
+  })
   
   // If trying to access protected route without any token
-  if (!token && !refreshToken && !isPublicRoute(pathname)) {
-    console.log('Redirecting to login - no tokens')
+  if (!token && !refreshToken) {
+    console.log('Middleware - No tokens found, redirecting to login')
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Role-based route protection
+  // If we have a token, check role-based access
   if (token) {
-    try {
-      // Basic JWT decode to get user role (without verification since backend will verify)
-      const base64Payload = token.split('.')[1]
-      const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString())
-      const userRole = payload?.user_role
-      
-      console.log('Middleware - User role:', userRole, 'Accessing:', pathname)
-      
-      // Check role-based access
-      if (userRole) {
-        // Admin routes
-        if (pathname.startsWith('/admin') && userRole !== 'admin' && userRole !== 'superadmin') {
-          console.log('Redirecting admin route - insufficient permissions')
-          return NextResponse.redirect(new URL(userRole === 'agent' ? '/agent' : '/', request.url))
-        }
-        
-        // Agent routes
-        if (pathname.startsWith('/agent') && userRole !== 'agent' && userRole !== 'admin' && userRole !== 'superadmin') {
-          console.log('Redirecting agent route - insufficient permissions')
-          return NextResponse.redirect(new URL(userRole === 'admin' ? '/admin' : userRole === 'superadmin' ? '/superadmin' : '/', request.url))
-        }
-        
-        // Superadmin routes
-        if (pathname.startsWith('/superadmin') && userRole !== 'superadmin') {
-          console.log('Redirecting superadmin route - insufficient permissions')
-          return NextResponse.redirect(new URL(userRole === 'admin' ? '/admin' : userRole === 'agent' ? '/agent' : '/', request.url))
+    const userRole = getJWTRole(token)
+    console.log('Middleware - User role from JWT:', userRole)
+    
+    if (userRole) {
+      // Admin routes - accessible by admin and superadmin
+      if (pathname.startsWith('/admin')) {
+        if (userRole !== 'admin' && userRole !== 'superadmin') {
+          console.log('Middleware - Insufficient permissions for admin route')
+          const redirectTo = userRole === 'agent' ? '/agent' : '/'
+          return NextResponse.redirect(new URL(redirectTo, request.url))
         }
       }
-    } catch (error) {
-      console.error('Middleware - Error decoding token:', error)
-      // If token decode fails, let the backend handle the authentication
+      
+      // Agent routes - accessible by agent, admin, and superadmin
+      if (pathname.startsWith('/agent')) {
+        if (!['agent', 'admin', 'superadmin'].includes(userRole)) {
+          console.log('Middleware - Insufficient permissions for agent route')
+          return NextResponse.redirect(new URL('/', request.url))
+        }
+      }
+      
+      // Superadmin routes - only accessible by superadmin
+      if (pathname.startsWith('/superadmin')) {
+        if (userRole !== 'superadmin') {
+          console.log('Middleware - Insufficient permissions for superadmin route')
+          const redirectTo = userRole === 'admin' ? '/admin' : userRole === 'agent' ? '/agent' : '/'
+          return NextResponse.redirect(new URL(redirectTo, request.url))
+        }
+      }
     }
   }
 
-  // If authenticated and trying to access auth pages (but not home), redirect to appropriate dashboard
+  // If authenticated user is trying to access auth pages, redirect to dashboard
   if (token && ['/login', '/register'].includes(pathname)) {
-    try {
-      const base64Payload = token.split('.')[1]
-      const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString())
-      const userRole = payload?.user_role
-      
-      console.log('Redirecting from auth page - has token, role:', userRole)
-      
-      if (userRole === 'superadmin') {
-        return NextResponse.redirect(new URL('/superadmin', request.url))
-      } else if (userRole === 'admin') {
-        return NextResponse.redirect(new URL('/admin', request.url))
-      } else if (userRole === 'agent') {
-        return NextResponse.redirect(new URL('/agent', request.url))
-      }
-      
-      return NextResponse.redirect(new URL('/', request.url))
-    } catch (error) {
-      console.error('Middleware - Error redirecting from auth page:', error)
-      return NextResponse.redirect(new URL('/', request.url))
+    const userRole = getJWTRole(token)
+    console.log('Middleware - Authenticated user accessing auth page, redirecting to dashboard')
+    
+    let redirectTo = '/'
+    if (userRole === 'superadmin') {
+      redirectTo = '/superadmin'
+    } else if (userRole === 'admin') {
+      redirectTo = '/admin'
+    } else if (userRole === 'agent') {
+      redirectTo = '/agent'
     }
+    
+    return NextResponse.redirect(new URL(redirectTo, request.url))
   }
 
+  console.log('Middleware - Allowing access to:', pathname)
   return NextResponse.next()
-}
-
-function isPublicRoute(pathname: string): boolean {
-  const publicRoutes = ['/login', '/register', '/reset-password', '/verify-email', '/']
-  const publicPrefixes = ['/api/', '/_next/', '/favicon.ico']
-  
-  return publicRoutes.includes(pathname) || 
-         publicPrefixes.some(prefix => pathname.startsWith(prefix)) ||
-         pathname.includes('.')
 }
 
 export const config = {
   matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 }

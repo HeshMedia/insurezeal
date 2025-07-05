@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useAuth } from '@/lib/auth-context'
+import { useAuth } from '@/lib/auth-context-final'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'

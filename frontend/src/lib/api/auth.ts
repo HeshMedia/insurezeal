@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import Cookies from 'js-cookie'
-import { LoginData, RegisterData, AuthResponse, ResetPasswordData } from '@/types/auth.types'
+import { LoginData, RegisterData, AuthResponse, ResetPasswordData, RefreshTokenResponse } from '@/types/auth.types'
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
@@ -32,11 +32,19 @@ apiClient.interceptors.response.use(
       const refreshToken = Cookies.get('refresh_token')
       if (refreshToken) {
         try {
+          // Use the new refresh endpoint format with query parameter
           const response = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${refreshToken}`
+            `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
+            {}, // Empty body since token is in query param
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            }
           )
           
           const newToken = response.data.access_token
+          const newRefreshToken = response.data.refresh_token
           const rememberMe = localStorage.getItem('remember_me') === 'true'
           
           // Set cookie with appropriate expiry
@@ -45,6 +53,15 @@ apiClient.interceptors.response.use(
             sameSite: 'lax',
             secure: process.env.NODE_ENV === 'production'
           })
+          
+          // Update refresh token if provided
+          if (newRefreshToken) {
+            Cookies.set('refresh_token', newRefreshToken, { 
+              expires: rememberMe ? 365 : 30,
+              sameSite: 'lax',
+              secure: process.env.NODE_ENV === 'production'
+            })
+          }
           
           // Retry original request with new token
           originalRequest.headers.Authorization = `Bearer ${newToken}`
@@ -58,7 +75,8 @@ apiClient.interceptors.response.use(
           // Only redirect if we're not already on a public page
           if (typeof window !== 'undefined' && 
               !window.location.pathname.includes('/login') && 
-              !window.location.pathname.includes('/register')) {
+              !window.location.pathname.includes('/register') &&
+              !window.location.pathname.includes('/reset-password')) {
             window.location.href = '/login'
           }
           return Promise.reject(refreshError)
@@ -71,22 +89,25 @@ apiClient.interceptors.response.use(
         
         if (typeof window !== 'undefined' && 
             !window.location.pathname.includes('/login') && 
-            !window.location.pathname.includes('/register')) {
+            !window.location.pathname.includes('/register') &&
+            !window.location.pathname.includes('/reset-password')) {
           window.location.href = '/login'
         }
       }
     }
 
-    const message = error.response?.data?.detail || error.message || 'An error occurred'
+    const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'An error occurred'
     throw new Error(message)
   }
 )
 
-export const authApi = {  // Login
+export const authApi = {
+  // Login
   login: async (data: LoginData): Promise<AuthResponse> => {
     const response = await apiClient.post('/auth/login', data)
     return response.data
   },
+
   // Register
   register: async (data: RegisterData): Promise<AuthResponse> => {
     try {
@@ -95,15 +116,27 @@ export const authApi = {  // Login
           'Content-Type': 'application/json',
         },
       })
-      return response.data    } catch (error: unknown) {
+      return response.data
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.detail || error.response?.data?.message || error.message
+        throw new Error(message)
+      }
       const message = error instanceof Error ? error.message : 'An error occurred'
       throw new Error(message)
     }
   },
+
   // Refresh token
-  refreshToken: async (refreshToken: string) => {
+  refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
     const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${refreshToken}`
+      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
+      {}, // Empty body since token is in query param
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
     )
     const result = response.data
     
@@ -115,6 +148,7 @@ export const authApi = {  // Login
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production'
       })
+      // Note: refresh_token is optional in the response according to your API docs
       if (result.refresh_token) {
         Cookies.set('refresh_token', result.refresh_token, { 
           expires: rememberMe ? 365 : 30,
@@ -126,11 +160,14 @@ export const authApi = {  // Login
 
     return result
   },
+
   // Logout
   logout: async () => {
     try {
-      await apiClient.post('/auth/logout')    } catch {
+      await apiClient.post('/auth/logout')
+    } catch (error) {
       // Continue even if logout fails on server
+      console.error('Logout error:', error)
     } finally {
       // Always clear cookies
       Cookies.remove('access_token')
@@ -148,6 +185,12 @@ export const authApi = {  // Login
   // Reset password
   resetPassword: async (data: ResetPasswordData) => {
     const response = await apiClient.post('/auth/reset-password', data)
+    return response.data
+  },
+
+  // Verify reset token
+  verifyResetToken: async (data: { access_token: string; refresh_token: string }) => {
+    const response = await apiClient.post('/auth/verify-reset-token', data)
     return response.data
   },
 
