@@ -14,7 +14,7 @@ interface User {
   username?: string
   first_name?: string
   last_name?: string
-  user_role: 'admin' | 'agent'
+  user_role: 'admin' | 'agent' | 'superadmin'
 }
 
 interface AuthContextType {

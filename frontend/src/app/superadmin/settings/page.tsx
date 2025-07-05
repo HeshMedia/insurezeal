@@ -6,7 +6,7 @@ import { Settings, Database, Users, Shield } from "lucide-react"
 
 export default function SettingsPage() {
   return (
-    <DashboardWrapper requiredRole="admin">
+    <DashboardWrapper requiredRole="superadmin">
       <div className="space-y-6">
         {/* Page Header */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg p-6 shadow-sm">

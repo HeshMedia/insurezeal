@@ -26,6 +26,8 @@ export function DashboardWrapper({ children, requiredRole }: DashboardWrapperPro
           router.push('/admin')
         } else if (user.user_role === 'agent') {
           router.push('/agent')
+        } else if (user.user_role === 'superadmin') {
+          router.push('/superadmin')
         }
         return
       }

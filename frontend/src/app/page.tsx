@@ -32,6 +32,8 @@ export default function Home() {
         router.replace('/admin')
       } else if (user.user_role === 'agent') {
         router.replace('/agent')
+      } else if (user.user_role === 'superadmin') {
+        router.replace('/superadmin')
       }
     }
   }, [user, loading, router])

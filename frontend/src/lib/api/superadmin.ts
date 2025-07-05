@@ -66,15 +66,15 @@ export const superadminApi = {
       return response.data
     },
 
-    // Get broker by ID
-    getById: async (brokerId: number): Promise<Broker> => {
-      const response = await apiClient.get(`/superadmin/brokers/${brokerId}`)
+    // Get broker by code
+    getById: async (brokerCode: string): Promise<Broker> => {
+      const response = await apiClient.get(`/superadmin/brokers/${brokerCode}`)
       return response.data
     },
 
     // Update broker
-    update: async (brokerId: number, data: UpdateBrokerRequest): Promise<Broker> => {
-      const response = await apiClient.put(`/superadmin/brokers/${brokerId}`, data)
+    update: async (brokerCode: string, data: UpdateBrokerRequest): Promise<Broker> => {
+      const response = await apiClient.put(`/superadmin/brokers/${brokerCode}`, data)
       return response.data
     }
   },
@@ -94,14 +94,14 @@ export const superadminApi = {
     },
 
     // Get insurer by ID
-    getById: async (insurerId: number): Promise<Insurer> => {
-      const response = await apiClient.get(`/superadmin/insurers/${insurerId}`)
+    getById: async (insurerCode: string): Promise<Insurer> => {
+      const response = await apiClient.get(`/superadmin/insurers/${insurerCode}`)
       return response.data
     },
 
     // Update insurer
-    update: async (insurerId: number, data: UpdateInsurerRequest): Promise<Insurer> => {
-      const response = await apiClient.put(`/superadmin/insurers/${insurerId}`, data)
+    update: async (insurerCode: string, data: UpdateInsurerRequest): Promise<Insurer> => {
+      const response = await apiClient.put(`/superadmin/insurers/${insurerCode}`, data)
       return response.data
     }
   },
@@ -148,8 +148,8 @@ export const superadminApi = {
     getAvailable: async (params: AvailableChildIdsParams): Promise<AdminChildId[]> => {
       const response = await apiClient.get('/superadmin/admin-child-ids/available', {
         params: {
-          insurer_id: params.insurer_id,
-          broker_id: params.broker_id
+          insurer_code: params.insurer_code,
+          broker_code: params.broker_code
         }
       })
       return response.data

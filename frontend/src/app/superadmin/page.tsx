@@ -5,7 +5,7 @@ import { SuperAdminOverview } from '@/components/superadmin/superadmin-overview'
 
 export default function SuperAdminPage() {
   return (
-    <DashboardWrapper requiredRole="admin">
+    <DashboardWrapper requiredRole="superadmin">
       <SuperAdminOverview />
     </DashboardWrapper>
   )

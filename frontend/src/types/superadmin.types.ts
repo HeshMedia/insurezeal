@@ -81,8 +81,8 @@ export interface CreateAdminChildIdRequest {
   manager_email: string
   admin_notes?: string
   code_type: string
-  insurer_id: number
-  broker_id?: number
+  insurer_code: string
+  broker_code?: string
 }
 
 export interface UpdateAdminChildIdRequest {
@@ -93,16 +93,16 @@ export interface UpdateAdminChildIdRequest {
   manager_email?: string
   admin_notes?: string
   code_type?: string
-  insurer_id?: number
-  broker_id?: number
+  insurer_code?: string
+  broker_code?: string
   is_active?: boolean
   is_suspended?: boolean
 }
 
 // Query Parameters
 export interface AvailableChildIdsParams {
-  insurer_id: number
-  broker_id?: number
+  insurer_code: string
+  broker_code?: string
 }
 
 // Common Response Types

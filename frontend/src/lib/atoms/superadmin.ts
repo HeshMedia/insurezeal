@@ -2,13 +2,13 @@ import { atom } from 'jotai'
 
 // Broker state atoms
 export const brokerSearchAtom = atom('')
-export const selectedBrokerIdAtom = atom<number | null>(null)
+export const selectedBrokerCodeAtom = atom<string | null>(null)
 export const isBrokerDialogOpenAtom = atom(false)
 export const brokerDialogTypeAtom = atom<'create' | 'edit'>('create')
 
 // Insurer state atoms
 export const insurerSearchAtom = atom('')
-export const selectedInsurerIdAtom = atom<number | null>(null)
+export const selectedInsurerCodeAtom = atom<string | null>(null)
 export const isInsurerDialogOpenAtom = atom(false)
 export const insurerDialogTypeAtom = atom<'create' | 'edit'>('create')
 

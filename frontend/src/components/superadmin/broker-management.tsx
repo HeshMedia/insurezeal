@@ -124,7 +124,7 @@ export function BrokerManagement() {
           is_active: data.is_active,
         }
         await updateMutation.mutateAsync({
-          brokerId: selectedBroker.id,
+          brokerCode: selectedBroker.broker_code,
           data: updateData,
         })
         toast.success('Broker updated successfully')

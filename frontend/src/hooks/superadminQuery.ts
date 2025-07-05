@@ -13,9 +13,9 @@ import {
 // Query keys
 const SUPERADMIN_QUERY_KEYS = {
   brokers: ['superadmin', 'brokers'] as const,
-  broker: (id: number) => ['superadmin', 'brokers', id] as const,
+  broker: (code: string) => ['superadmin', 'brokers', code] as const,
   insurers: ['superadmin', 'insurers'] as const,
-  insurer: (id: number) => ['superadmin', 'insurers', id] as const,
+  insurer: (code: string) => ['superadmin', 'insurers', code] as const,
   brokersInsurersList: ['superadmin', 'brokers-insurers-list'] as const,
   adminChildIds: ['superadmin', 'adminChildIds'] as const,
   adminChildId: (id: number) => ['superadmin', 'adminChildIds', id] as const,
@@ -35,11 +35,11 @@ export const useBrokerList = () => {
   })
 }
 
-export const useBrokerById = (brokerId: number) => {
+export const useBrokerById = (brokerCode: string) => {
   return useQuery({
-    queryKey: SUPERADMIN_QUERY_KEYS.broker(brokerId),
-    queryFn: () => superadminApi.brokers.getById(brokerId),
-    enabled: !!brokerId,
+    queryKey: SUPERADMIN_QUERY_KEYS.broker(brokerCode),
+    queryFn: () => superadminApi.brokers.getById(brokerCode),
+    enabled: !!brokerCode,
   })
 }
 
@@ -61,11 +61,11 @@ export const useUpdateBroker = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: ({ brokerId, data }: { brokerId: number; data: UpdateBrokerRequest }) => 
-      superadminApi.brokers.update(brokerId, data),
+    mutationFn: ({ brokerCode, data }: { brokerCode: string; data: UpdateBrokerRequest }) => 
+      superadminApi.brokers.update(brokerCode, data),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.brokers })
-      queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.broker(variables.brokerId) })
+      queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.broker(variables.brokerCode) })
       queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.brokersInsurersList })
     },
   })
@@ -84,11 +84,11 @@ export const useInsurerList = () => {
   })
 }
 
-export const useInsurerById = (insurerId: number) => {
+export const useInsurerById = (insurerCode: string) => {
   return useQuery({
-    queryKey: SUPERADMIN_QUERY_KEYS.insurer(insurerId),
-    queryFn: () => superadminApi.insurers.getById(insurerId),
-    enabled: !!insurerId,
+    queryKey: SUPERADMIN_QUERY_KEYS.insurer(insurerCode),
+    queryFn: () => superadminApi.insurers.getById(insurerCode),
+    enabled: !!insurerCode,
   })
 }
 
@@ -110,11 +110,11 @@ export const useUpdateInsurer = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: ({ insurerId, data }: { insurerId: number; data: UpdateInsurerRequest }) => 
-      superadminApi.insurers.update(insurerId, data),
+    mutationFn: ({ insurerCode, data }: { insurerCode: string; data: UpdateInsurerRequest }) => 
+      superadminApi.insurers.update(insurerCode, data),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.insurers })
-      queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.insurer(variables.insurerId) })
+      queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.insurer(variables.insurerCode) })
       queryClient.invalidateQueries({ queryKey: SUPERADMIN_QUERY_KEYS.brokersInsurersList })
     },
   })
@@ -158,7 +158,7 @@ export const useAvailableAdminChildIds = (params: AvailableChildIdsParams) => {
   return useQuery({
     queryKey: SUPERADMIN_QUERY_KEYS.availableChildIds(params),
     queryFn: () => superadminApi.adminChildIds.getAvailable(params),
-    enabled: !!params.insurer_id,
+    enabled: !!params.insurer_code,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 2 * 60 * 1000, // 2 minutes

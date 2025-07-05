@@ -14,7 +14,7 @@ interface User {
   username?: string
   first_name?: string
   last_name?: string
-  user_role: 'admin' | 'agent'
+  user_role: 'admin' | 'agent' | 'superadmin'
 }
 
 interface AuthContextType {
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     username: profileUser.username,
     first_name: profileUser.first_name,
     last_name: profileUser.last_name,
-    user_role: (profileUser.user_role as 'admin' | 'agent') || 'agent'
+    user_role: (profileUser.user_role as 'admin' | 'agent' | 'superadmin') || 'agent'
   } : null
 
   const loading = authLoading || userLoading
@@ -125,6 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const response = await authApi.login({ email, password })
       
+      console.log('Auth Context - Login response:', response)
+      console.log('Auth Context - User from response:', response.user)
+      console.log('Auth Context - User role from response:', response.user?.user_role)
+      
       // Set cookie expiration based on remember me
       const tokenExpiry = rememberMe ? 30 : 7 // 30 days vs 7 days
       const refreshExpiry = rememberMe ? 365 : 30 // 1 year vs 30 days
@@ -148,14 +152,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await refetchUser()
       
       // Route based on role
+      console.log('Auth Context - Routing user based on role:', response.user.user_role)
       if (response.user.user_role === 'admin') {
         router.push('/admin')
       } else if (response.user.user_role === 'agent') {
         router.push('/agent')
+      } else if (response.user.user_role === 'superadmin') {
+        router.push('/superadmin')
       } else {
+        console.error('Auth Context - Invalid user role:', response.user.user_role)
         throw new Error('Invalid user role')
-      }    } catch (error: unknown) {
+      }
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Login failed'
+      console.error('Auth Context - Login error:', message, error)
       throw new Error(message)
     }
   }
@@ -175,6 +185,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.push('/admin')
         } else if (response.user.user_role === 'agent') {
           router.push('/agent')
+        } else if (response.user.user_role === 'superadmin') {
+          router.push('/superadmin')
         }
       } else {
         router.push(`/verify-email?email=${encodeURIComponent(data.email)}`)
