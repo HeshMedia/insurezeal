@@ -64,7 +64,7 @@ export interface AdminChildId {
   admin_notes: string | null
   code_type: string
   insurer_id: number
-  broker_id: number | null
+  broker_code: number | null
   is_active: boolean
   is_suspended: boolean
   created_at: string

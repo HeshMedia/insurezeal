@@ -27,29 +27,35 @@ const VerifyEmailContent = () => {
         </div>
         
         <h2 className="text-2xl font-semibold mb-2 text-center">
-          Check Your Email
+          Account Created Successfully!
         </h2>
-          <p className="text-gray-500 text-sm mb-6 text-center leading-relaxed">
+        <p className="text-gray-500 text-sm mb-6 text-center leading-relaxed">
           We&apos;ve sent a verification link to {email ? <span className="font-medium text-gray-700">{email}</span> : 'your email address'}. 
-          Please check your inbox and click the link to verify your account.
+          Please check your inbox and click the link to verify your account and complete your registration.
         </p>
 
         <div className="w-full mb-6">
           <div className="text-sm text-blue-600 text-center bg-blue-50 p-4 rounded-lg border border-blue-200 flex items-start gap-3">
             <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
             <div className="text-left">
-              <p className="font-medium mb-1">What&apos;s next?</p>
+              <p className="font-medium mb-1">Next Steps:</p>
               <ul className="text-xs space-y-1 text-blue-700">
                 <li>• Check your email inbox</li>
                 <li>• Look for an email from InsureZeal</li>
                 <li>• Click the verification link</li>
+                <li>• Return to login once verified</li>
               </ul>
             </div>
           </div>
         </div>
         
         <div className="text-center space-y-3 w-full">
-        
+          <Link 
+            href="/login"
+            className="inline-flex items-center justify-center w-full bg-gradient-to-b from-gray-700 to-gray-900 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 cursor-pointer transition"
+          >
+            Go to Login
+          </Link>
           
           <p className="text-sm text-gray-600">
             Wrong email?{' '}

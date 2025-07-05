@@ -1,0 +1,571 @@
+"use client"
+
+import { useState, useEffect, useMemo } from "react"
+import { useRouter, useParams } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle } from "lucide-react"
+import { useAssignChildId, useAdminBrokersInsurers, useAdminAvailableChildIds } from "@/hooks/adminQuery"
+import { AssignChildIdRequest } from "@/types/admin.types"
+import { adminApi } from "@/lib/api/admin"
+import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { useQuery } from "@tanstack/react-query"
+
+const statusColors = {
+  pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  accepted: "bg-green-100 text-green-800 border-green-200",
+  rejected: "bg-red-100 text-red-800 border-red-200",
+  suspended: "bg-gray-100 text-gray-800 border-gray-200",
+}
+
+const statusLabels = {
+  pending: "Pending",
+  accepted: "Accepted", 
+  rejected: "Rejected",
+  suspended: "Suspended",
+}
+
+export function AssignChildIdPage() {
+  const router = useRouter()
+  const params = useParams()
+  const requestId = params.id as string
+
+  const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
+  const [notes, setNotes] = useState('')
+  const [selectedInsurer, setSelectedInsurer] = useState<string>('')
+
+  // Fetch request details
+  const { data: request, isLoading: requestLoading, error: requestError } = useQuery({
+    queryKey: ['admin', 'childRequests', 'detail', requestId],
+    queryFn: () => adminApi.childRequests.getById(requestId),
+    enabled: !!requestId,
+  })
+
+  // Fetch brokers and insurers for dropdowns
+  const { data: brokersInsurers, isLoading: brokersLoading } = useAdminBrokersInsurers()
+
+  // Fetch available child IDs based on selected insurer and broker
+  const { data: availableChildIds, isLoading: childIdsLoading, refetch: refetchChildIds } = useAdminAvailableChildIds({
+    insurer_code: selectedInsurer,
+    broker_code: formData.broker_code
+  })
+
+  const assignMutation = useAssignChildId()
+
+  // Extract data from brokersInsurers with memoization
+  const brokers = useMemo(() => 
+    brokersInsurers?.brokers?.filter(broker => 
+      broker.broker_code && broker.broker_code.trim() !== "" && broker.is_active
+    ) || []
+  , [brokersInsurers?.brokers])
+  
+  const insurers = useMemo(() => 
+    brokersInsurers?.insurers?.filter(insurer => 
+      insurer.insurer_code && insurer.insurer_code.trim() !== ""
+    ) || []
+  , [brokersInsurers?.insurers])
+
+  // Set default insurer based on request data
+  useEffect(() => {
+    if (request && insurers.length > 0 && !selectedInsurer) {
+      // Try to match insurer from request to available insurers
+      const matchingInsurer = insurers.find(insurer => 
+        insurer.name.toLowerCase().includes(request.insurance_company?.toLowerCase() || '') ||
+        request.insurance_company?.toLowerCase().includes(insurer.name.toLowerCase())
+      )
+      if (matchingInsurer) {
+        setSelectedInsurer(matchingInsurer.insurer_code)
+      } else if (insurers.length === 1) {
+        // If only one insurer available, select it by default
+        setSelectedInsurer(insurers[0].insurer_code)
+      }
+    }
+  }, [request, insurers, selectedInsurer])
+
+  // Set default broker based on request data
+  useEffect(() => {
+    if (request && brokers.length > 0 && !formData.broker_code) {
+      // Try to match broker from request to available brokers
+      const matchingBroker = brokers.find(broker => 
+        broker.name.toLowerCase().includes(request.broker?.toLowerCase() || '') ||
+        request.broker?.toLowerCase().includes(broker.name.toLowerCase())
+      )
+      if (matchingBroker) {
+        setFormData(prev => ({ ...prev, broker_code: matchingBroker.broker_code }))
+      }
+    }
+  }, [request, brokers, formData.broker_code])
+
+  // Refetch child IDs when insurer or broker changes
+  useEffect(() => {
+    if (selectedInsurer) {
+      refetchChildIds()
+    }
+  }, [selectedInsurer, formData.broker_code, refetchChildIds])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!request) return
+
+    // Validation
+    if (!selectedInsurer) {
+      toast.error('Please select an insurance company first')
+      return
+    }
+    if (!formData.child_id) {
+      toast.error('Please select a Child ID')
+      return
+    }
+    if (!formData.broker_code) {
+      toast.error('Please select a Broker Code')
+      return
+    }
+    if (!availableChildIds || availableChildIds.length === 0) {
+      toast.error('No Child IDs are available for the selected criteria')
+      return
+    }
+
+    try {
+      await assignMutation.mutateAsync({
+        requestId: request.id,
+        data: {
+          child_id: formData.child_id,
+          broker_code: formData.broker_code,
+          branch_code: formData.branch_code || '',
+          region: formData.region || '',
+          manager_name: formData.manager_name || '',
+          manager_email: formData.manager_email || '',
+          commission_percentage: formData.commission_percentage || 0,
+          policy_limit: formData.policy_limit || 0,
+          admin_notes: notes,
+        }
+      })
+      
+      toast.success('Child ID assigned successfully')
+      router.push('/admin/child-requests')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'An error occurred')
+    }
+  }
+
+  const handleBack = () => {
+    router.push('/admin/child-requests')
+  }
+
+  if (requestLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-10" />
+          <Skeleton className="h-8 w-48" />
+        </div>
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    )
+  }
+
+  if (requestError || !request) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={handleBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Requests
+          </Button>
+        </div>
+        <Card className="border-red-200">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-red-700 mb-2">Request Not Found</h3>
+            <p className="text-red-600 mb-4">
+              The child request could not be found or you don&apos;t have permission to access it.
+            </p>
+            <Button onClick={handleBack}>
+              Return to Child Requests
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show error if failed to load dropdowns
+  if (brokersLoading && requestError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="sm" onClick={handleBack}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Requests
+          </Button>
+        </div>
+        <Card className="border-red-200">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-red-700 mb-2">Failed to Load Data</h3>
+            <p className="text-red-600 mb-4">
+              Unable to load brokers and insurers data. Please try refreshing the page.
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Refresh Page
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const isLoading = assignMutation.isPending
+  const isDataLoading = childIdsLoading || brokersLoading
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Button variant="outline" size="sm" onClick={handleBack} disabled={isLoading}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Requests
+        </Button>
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Assign Child ID</h1>
+          <p className="text-sm text-gray-600">Assign a child ID and broker code to this request</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Request Details */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building className="h-5 w-5" />
+              Request Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-700">Status:</span>
+                <Badge className={cn("text-xs", statusColors[request.status])}>
+                  {statusLabels[request.status]}
+                </Badge>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Building className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Insurance Company</p>
+                    <p className="text-sm text-gray-900">{request.insurance_company || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Broker</p>
+                    <p className="text-sm text-gray-900">{request.broker || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Location</p>
+                    <p className="text-sm text-gray-900">{request.location || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Phone</p>
+                    <p className="text-sm text-gray-900">{request.phone_number || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Email</p>
+                    <p className="text-sm text-gray-900">{request.email || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {request.admin_notes && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-1">Admin Notes</p>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                    {request.admin_notes}
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Assignment Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Assignment Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Required Fields */}
+              <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h3 className="font-medium text-blue-900">Required Information</h3>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="insurer_code">Insurance Company *</Label>
+                  {isDataLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <Select
+                      value={selectedInsurer}
+                      onValueChange={(value) => {
+                        setSelectedInsurer(value)
+                        // Reset child ID when insurer changes
+                        setFormData(prev => ({ ...prev, child_id: '' }))
+                      }}
+                      disabled={isLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an insurance company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {insurers.length === 0 ? (
+                          <SelectItem value="no-available" disabled>No insurers available</SelectItem>
+                        ) : (
+                          insurers.map((insurer) => (
+                            <SelectItem key={insurer.id} value={insurer.insurer_code}>
+                              {insurer.name} ({insurer.insurer_code})
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {selectedInsurer && (
+                    <p className="text-xs text-blue-600">
+                      Child IDs will be filtered based on this insurer selection
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="broker_code">Broker Code *</Label>
+                  {isDataLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <Select
+                      value={formData.broker_code || ''}
+                      onValueChange={(value) => {
+                        setFormData(prev => ({ ...prev, broker_code: value }))
+                        // Reset child ID when broker changes
+                        setFormData(prev => ({ ...prev, child_id: '' }))
+                      }}
+                      disabled={isLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a Broker Code" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {brokers.length === 0 ? (
+                          <SelectItem value="no-available" disabled>No brokers available</SelectItem>
+                        ) : (
+                          brokers.map((broker) => (
+                            <SelectItem key={broker.id} value={broker.broker_code}>
+                              {broker.broker_code} - {broker.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {formData.broker_code && (
+                    <p className="text-xs text-blue-600">
+                      Child IDs will be further filtered based on this broker
+                    </p>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="child_id">Available Child ID *</Label>
+                  {childIdsLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <Select
+                      value={formData.child_id || ''}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, child_id: value }))}
+                      disabled={isLoading || !selectedInsurer}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={!selectedInsurer ? "Select insurer first" : "Select an available Child ID"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!selectedInsurer ? (
+                          <SelectItem value="no-insurer" disabled>Please select an insurer first</SelectItem>
+                        ) : availableChildIds && availableChildIds.length === 0 ? (
+                          <SelectItem value="no-available" disabled>No Child IDs available for selected criteria</SelectItem>
+                        ) : !availableChildIds ? (
+                          <SelectItem value="loading" disabled>Loading available Child IDs...</SelectItem>
+                        ) : (
+                          availableChildIds.map((childId) => (
+                            <SelectItem key={childId.id} value={childId.child_id}>
+                              {childId.child_id} - {childId.region} ({childId.code_type})
+                              {childId.broker && ` - ${childId.broker.name}`}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {selectedInsurer && availableChildIds && (
+                    <p className="text-xs text-green-600">
+                      Found {availableChildIds.length} available Child ID{availableChildIds.length !== 1 ? 's' : ''} for selected criteria
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Optional Fields */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-gray-900">Additional Information</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="branch_code">Branch Code</Label>
+                    <Input
+                      id="branch_code"
+                      value={formData.branch_code || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, branch_code: e.target.value }))}
+                      placeholder="Enter branch code"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="region">Region</Label>
+                    <Input
+                      id="region"
+                      value={formData.region || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value }))}
+                      placeholder="Enter region"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="manager_name">Manager Name</Label>
+                    <Input
+                      id="manager_name"
+                      value={formData.manager_name || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, manager_name: e.target.value }))}
+                      placeholder="Enter manager name"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="manager_email">Manager Email</Label>
+                    <Input
+                      id="manager_email"
+                      type="email"
+                      value={formData.manager_email || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, manager_email: e.target.value }))}
+                      placeholder="Enter manager email"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="commission_percentage">Commission Percentage</Label>
+                    <Input
+                      id="commission_percentage"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={formData.commission_percentage || ''}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        commission_percentage: parseFloat(e.target.value) || undefined 
+                      }))}
+                      placeholder="Enter commission %"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="policy_limit">Policy Limit</Label>
+                    <Input
+                      id="policy_limit"
+                      type="number"
+                      min="0"
+                      value={formData.policy_limit || ''}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        policy_limit: parseFloat(e.target.value) || undefined 
+                      }))}
+                      placeholder="Enter policy limit"
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Admin Notes</Label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Enter any admin notes or comments..."
+                    rows={3}
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBack}
+                  disabled={isLoading}
+                  className="sm:order-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    isLoading || 
+                    !selectedInsurer || 
+                    !formData.child_id || 
+                    !formData.broker_code || 
+                    !availableChildIds ||
+                    availableChildIds.length === 0 || 
+                    brokers.length === 0 ||
+                    insurers.length === 0
+                  }
+                  className="sm:order-2 bg-green-600 hover:bg-green-700"
+                >
+                  {isLoading ? 'Assigning...' : 'Assign Child ID'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

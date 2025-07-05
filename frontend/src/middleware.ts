@@ -9,6 +9,7 @@ const isPublicRoute = (pathname: string): boolean => {
     '/register',
     '/reset-password',
     '/verify-email',
+    '/verify-email/success',
     '/forgot-password'
   ]
   
@@ -42,6 +43,16 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   
   console.log('Middleware - Processing path:', pathname)
+  
+  // Handle Supabase email verification redirect
+  if (pathname === '/' && request.nextUrl.searchParams.has('token') && request.nextUrl.searchParams.get('type') === 'signup') {
+    console.log('Middleware - Supabase verification link detected, redirecting to success page')
+    const url = new URL('/verify-email/success', request.url)
+    // Preserve the token and type parameters
+    url.searchParams.set('token', request.nextUrl.searchParams.get('token') || '')
+    url.searchParams.set('type', request.nextUrl.searchParams.get('type') || '')
+    return NextResponse.redirect(url)
+  }
   
   // Skip middleware for public routes
   if (isPublicRoute(pathname)) {

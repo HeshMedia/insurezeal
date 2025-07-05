@@ -212,11 +212,11 @@ export type ChildRequestStatus = 'pending' | 'accepted' | 'rejected' | 'suspende
 export interface ChildRequest {
   id: string
   user_id: string
-  insurance_company: string
-  broker: string
-  location: string
-  phone_number: string
-  email: string
+  insurance_company: string | null
+  broker: string | null
+  location: string | null
+  phone_number: string | null
+  email: string | null
   preferred_rm_name: string | null
   status: ChildRequestStatus
   child_id: string | null

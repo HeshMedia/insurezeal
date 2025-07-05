@@ -192,38 +192,19 @@ export const useLogin = () => {
 // Register mutation
 export const useRegister = () => {
   const router = useRouter()
-  const queryClient = useQueryClient()
-  const [, setUser] = useAtom(authUserAtom)
   const [, setAuthError] = useAtom(authErrorAtom)
 
   return useMutation({
     mutationFn: async (data: RegisterData) => {
       return await authApi.register(data)
     },
-    onSuccess: (response) => {
-      const { access_token, refresh_token, user } = response
-      
-      // Set cookies (default to not remember for registration)
-      setAuthCookies({ access_token, refresh_token }, false)
-      
-      // Update user state
-      setUser(user)
+    onSuccess: (response, variables) => {
+      // For registration, don't auto-login - redirect to email verification
+      // The backend should not return tokens for unverified users
       setAuthError(null)
       
-      // Invalidate and refetch user data
-      queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.profile })
-      
-      // Redirect based on role
-      const role = user.user_role || decodeJWTRole(access_token)
-      if (role === 'superadmin') {
-        router.push('/superadmin')
-      } else if (role === 'admin') {
-        router.push('/admin')
-      } else if (role === 'agent') {
-        router.push('/agent')
-      } else {
-        router.push('/')
-      }
+      // Redirect to email verification page with email parameter
+      router.push(`/verify-email?email=${encodeURIComponent(variables.email)}`)
     },
     onError: (error) => {
       console.error('Register error:', error)
