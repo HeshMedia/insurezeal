@@ -5,7 +5,7 @@ import { BrokerManagement } from '@/components/superadmin/broker-management'
 
 export default function BrokersPage() {
   return (
-    <DashboardWrapper requiredRole="admin">
+    <DashboardWrapper requiredRole="superadmin">
       <BrokerManagement />
     </DashboardWrapper>
   )

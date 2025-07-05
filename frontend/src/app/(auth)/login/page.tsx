@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState, useEffect } from "react"
 import { LogIn, Lock, Mail, Eye, EyeOff } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/lib/auth-context-final"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -20,7 +20,7 @@ const LoginPage = () => {
   useEffect(() => {
     const handleSupabaseRecovery = () => {
       const hash = window.location.hash
-      console.log('Hash:', hash) // Debug log
+      // console.log('Hash:', hash) // Debug log (removed for production safety)
       
       if (hash.includes('access_token') && hash.includes('type=recovery')) {
         // Parse the hash parameters
@@ -28,7 +28,7 @@ const LoginPage = () => {
         const access_token = params.get('access_token')
         const refresh_token = params.get('refresh_token')
         
-        console.log('Extracted tokens:', { access_token, refresh_token }) // Debug log
+        // Removed logging of extracted tokens for security
         
         if (access_token && refresh_token) {
           // Clear the hash from URL

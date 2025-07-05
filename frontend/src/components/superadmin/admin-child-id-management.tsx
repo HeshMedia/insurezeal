@@ -73,8 +73,8 @@ const adminChildIdFormSchema = z.object({
   manager_email: z.string().email("Valid email is required"),
   admin_notes: z.string().optional(),
   code_type: z.string().min(1, "Code type is required"),
-  insurer_id: z.string().min(1, "Insurer is required"),
-  broker_id: z.string().optional(),
+  insurer_code: z.string().min(1, "Insurer is required"),
+  broker_code: z.string().optional(),
   is_active: z.boolean().optional(),
   is_suspended: z.boolean().optional(),
 })
@@ -105,8 +105,8 @@ export function AdminChildIdManagement() {
       manager_email: "",
       admin_notes: "",
       code_type: "",
-      insurer_id: "",
-      broker_id: "",
+      insurer_code: "",
+      broker_code: "no-broker",
       is_active: true,
       is_suspended: false,
     },
@@ -132,8 +132,8 @@ export function AdminChildIdManagement() {
       manager_email: "",
       admin_notes: "",
       code_type: "",
-      insurer_id: "",
-      broker_id: "",
+      insurer_code: "",
+      broker_code: "no-broker",
       is_active: true,
       is_suspended: false,
     })
@@ -151,8 +151,8 @@ export function AdminChildIdManagement() {
       manager_email: childId.manager_email,
       admin_notes: childId.admin_notes || "",
       code_type: childId.code_type,
-      insurer_id: childId.insurer_id.toString(),
-      broker_id: childId.broker_id?.toString() || "",
+      insurer_code: childId.insurer.insurer_code,
+      broker_code: childId.broker?.broker_code || "no-broker",
       is_active: childId.is_active,
       is_suspended: childId.is_suspended,
     })
@@ -188,8 +188,8 @@ export function AdminChildIdManagement() {
           manager_email: data.manager_email,
           admin_notes: data.admin_notes,
           code_type: data.code_type,
-          insurer_id: parseInt(data.insurer_id),
-          broker_id: data.broker_id ? parseInt(data.broker_id) : undefined,
+          insurer_code: data.insurer_code,
+          broker_code: data.broker_code && data.broker_code !== "no-broker" ? data.broker_code : undefined,
         }
         await createMutation.mutateAsync(createData)
         toast.success('Admin Child ID created successfully')
@@ -202,8 +202,8 @@ export function AdminChildIdManagement() {
           manager_email: data.manager_email,
           admin_notes: data.admin_notes,
           code_type: data.code_type,
-          insurer_id: parseInt(data.insurer_id),
-          broker_id: data.broker_id ? parseInt(data.broker_id) : undefined,
+          insurer_code: data.insurer_code,
+          broker_code: data.broker_code && data.broker_code !== "no-broker" ? data.broker_code : undefined,
           is_active: data.is_active,
           is_suspended: data.is_suspended,
         }
@@ -348,7 +348,7 @@ export function AdminChildIdManagement() {
                   />
                   <FormField
                     control={form.control}
-                    name="insurer_id"
+                    name="insurer_code"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Insurer</FormLabel>
@@ -360,9 +360,11 @@ export function AdminChildIdManagement() {
                           </FormControl>
                           <SelectContent>
                             {brokersInsurers?.insurers?.map((insurer) => (
-                              <SelectItem key={insurer.id} value={insurer.id.toString()}>
-                                {insurer.name}
-                              </SelectItem>
+                              insurer.insurer_code && insurer.insurer_code.trim() !== "" ? (
+                                <SelectItem key={insurer.id} value={insurer.insurer_code}>
+                                  {insurer.name}
+                                </SelectItem>
+                              ) : null
                             ))}
                           </SelectContent>
                         </Select>
@@ -372,7 +374,7 @@ export function AdminChildIdManagement() {
                   />
                   <FormField
                     control={form.control}
-                    name="broker_id"
+                    name="broker_code"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Broker (Optional)</FormLabel>
@@ -383,11 +385,13 @@ export function AdminChildIdManagement() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">No Broker</SelectItem>
+                            <SelectItem value="no-broker">No Broker</SelectItem>
                             {brokersInsurers?.brokers?.map((broker) => (
-                              <SelectItem key={broker.id} value={broker.id.toString()}>
-                                {broker.name}
-                              </SelectItem>
+                              broker.broker_code && broker.broker_code.trim() !== "" ? (
+                                <SelectItem key={broker.id} value={broker.broker_code}>
+                                  {broker.name}
+                                </SelectItem>
+                              ) : null
                             ))}
                           </SelectContent>
                         </Select>

@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/lib/auth-context-final"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function AdminHeader() {

@@ -5,7 +5,7 @@ import { AdminChildIdManagement } from '@/components/superadmin/admin-child-id-m
 
 export default function AdminChildIdsPage() {
   return (
-    <DashboardWrapper requiredRole="admin">
+    <DashboardWrapper requiredRole="superadmin">
       <AdminChildIdManagement />
     </DashboardWrapper>
   )

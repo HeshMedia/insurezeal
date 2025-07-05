@@ -104,7 +104,7 @@ export function InsurerManagement() {
           is_active: data.is_active,
         }
         await updateMutation.mutateAsync({
-          insurerId: selectedInsurer.id,
+          insurerCode: selectedInsurer.insurer_code,
           data: updateData,
         })
         toast.success('Insurer updated successfully')

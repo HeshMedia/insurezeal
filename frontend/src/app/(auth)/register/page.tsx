@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useState } from "react"
 import { UserPlus, Lock, Mail, User, Users, Eye, EyeOff } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+import { useAuth } from "@/lib/auth-context-final"
 import Link from "next/link"
 
 const RegisterPage = () => {

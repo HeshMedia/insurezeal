@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Building, Database, Activity } from "lucide-react"
+import { Building2, Building, Database } from "lucide-react"
 import { useBrokerList, useInsurerList, useAdminChildIdList } from "@/hooks/superadminQuery"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -38,7 +38,7 @@ export function SuperAdminOverview() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Total Brokers */}
         <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -102,22 +102,6 @@ export function SuperAdminOverview() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* System Status */}
-        <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-700">System Status</CardTitle>
-            <Activity className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-1">
-              <div className="text-2xl font-bold text-green-600">Online</div>
-              <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
-                All Systems Operational
-              </Badge>
-            </div>
           </CardContent>
         </Card>
       </div>
