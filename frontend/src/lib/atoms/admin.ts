@@ -1,8 +1,14 @@
 import { atom } from 'jotai'
 import { CutPayListParams, AgentListParams } from '@/types/admin.types'
 
+// Extended params with pagination for UI
+interface CutPayUIParams extends Omit<CutPayListParams, 'skip' | 'limit'> {
+  page?: number
+  page_size?: number
+}
+
 // Cutpay state atoms
-export const cutpayListParamsAtom = atom<CutPayListParams>({
+export const cutpayListParamsAtom = atom<CutPayUIParams>({
   page: 1,
   page_size: 20,
 })

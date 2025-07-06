@@ -3,6 +3,7 @@ import { adminApi } from '@/lib/api/admin'
 import { 
   UpdateCutPayRequest, 
   CutPayListParams,
+  CreateCutPayRequest,
   AgentListParams,
   ChildRequestListParams,
   AssignChildIdRequest,
@@ -19,6 +20,7 @@ const ADMIN_QUERY_KEYS = {
     details: () => [...ADMIN_QUERY_KEYS.cutpay.all, 'detail'] as const,
     detail: (id: number) => [...ADMIN_QUERY_KEYS.cutpay.details(), id] as const,
     stats: () => [...ADMIN_QUERY_KEYS.cutpay.all, 'stats'] as const,
+    dropdowns: () => [...ADMIN_QUERY_KEYS.cutpay.all, 'dropdowns'] as const,
   },
   agents: {
     all: ['admin', 'agents'] as const,
@@ -27,7 +29,8 @@ const ADMIN_QUERY_KEYS = {
     details: () => [...ADMIN_QUERY_KEYS.agents.all, 'detail'] as const,
     detail: (id: string) => [...ADMIN_QUERY_KEYS.agents.details(), id] as const,
   },
-  stats: ['admin', 'stats'] as const,  childRequests: {
+  stats: ['admin', 'stats'] as const,
+  childRequests: {
     all: ['admin', 'childRequests'] as const,
     lists: () => [...ADMIN_QUERY_KEYS.childRequests.all, 'list'] as const,
     list: (params?: ChildRequestListParams) => [...ADMIN_QUERY_KEYS.childRequests.lists(), params] as const,
@@ -37,7 +40,10 @@ const ADMIN_QUERY_KEYS = {
   }
 }
 
-// Cutpay Queries
+// =========================================================================
+// CUTPAY QUERIES
+// =========================================================================
+
 export const useCutPayList = (params?: CutPayListParams) => {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.cutpay.list(params),
@@ -57,26 +63,49 @@ export const useCutPayById = (cutpayId: number) => {
   })
 }
 
-export const useCutPayStats = () => {
-  return useQuery({
-    queryKey: ADMIN_QUERY_KEYS.cutpay.stats(),
-    queryFn: adminApi.cutpay.getStats,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-  })
-}
+// COMMENTED OUT: Stats query - API endpoint returning 500 error
+// export const useCutPayStats = () => {
+//   return useQuery({
+//     queryKey: ADMIN_QUERY_KEYS.cutpay.stats(),
+//     queryFn: adminApi.cutpay.getStats,
+//     retry: 3,
+//     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+//     staleTime: 5 * 60 * 1000, // 5 minutes
+//     gcTime: 10 * 60 * 1000, // 10 minutes
+//   })
+// }
 
-// Cutpay Mutations
+// COMMENTED OUT: Dropdown queries - not needed per requirements
+// export const useCutPayDropdowns = () => {
+//   return useQuery({
+//     queryKey: ADMIN_QUERY_KEYS.cutpay.dropdowns(),
+//     queryFn: adminApi.cutpay.getDropdowns,
+//     staleTime: 10 * 60 * 1000, // 10 minutes - dropdowns change infrequently
+//     gcTime: 30 * 60 * 1000, // 30 minutes
+//   })
+// }
+
+// export const useCutPayFilteredDropdowns = (params: { insurer_code?: string; broker_code?: string }) => {
+//   return useQuery({
+//     queryKey: [...ADMIN_QUERY_KEYS.cutpay.dropdowns(), 'filtered', params],
+//     queryFn: () => adminApi.cutpay.getFilteredDropdowns(params),
+//     enabled: !!(params.insurer_code || params.broker_code),
+//     staleTime: 5 * 60 * 1000, // 5 minutes
+//   })
+// }
+
+// =========================================================================
+// CUTPAY MUTATIONS
+// =========================================================================
+
 export const useCreateCutPay = () => {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: adminApi.cutpay.create,
+    mutationFn: (data: CreateCutPayRequest) => adminApi.cutpay.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.lists() })
-      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.stats() })
+      // queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.stats() }) // Commented out - API returning 500
     },
   })
 }
@@ -90,12 +119,62 @@ export const useUpdateCutPay = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.lists() })
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.detail(variables.cutpayId) })
-      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.stats() })
+      // queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.stats() }) // Commented out - API returning 500
     },
   })
 }
 
-// Agent Queries
+export const useDeleteCutPay = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (cutpayId: number) => adminApi.cutpay.delete(cutpayId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.lists() })
+      // queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.stats() }) // Commented out - API returning 500
+    },
+  })
+}
+
+// COMMENTED OUT: Real-time calculation hook - not needed per requirements
+// export const useCutPayCalculation = () => {
+//   return useMutation({
+//     mutationFn: (data: CalculationRequest) => adminApi.cutpay.calculate(data),
+//   })
+// }
+
+// ========================================================================
+// NEW FLOW: PDF Extraction for creation (step 1)
+// ========================================================================
+
+// Extract PDF without cutpay ID (for creation flow - step 1)
+// NOTE: This is now handled in useCutPayFlow.ts - this is kept for backward compatibility
+export const useExtractPdfForCreation = () => {
+  return useMutation({
+    mutationFn: (file: File) => adminApi.cutpay.extractPdfForCreation(file),
+  })
+}
+
+// ========================================================================
+// Legacy document upload mutations (for edit mode - existing transactions)
+// ========================================================================
+export const useUploadDocument = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: ({ cutpayId, file, document_type }: { cutpayId: number; file: File; document_type: string }) => 
+      adminApi.cutpay.uploadDocument(cutpayId, file, document_type),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.cutpay.detail(variables.cutpayId) })
+    },
+  })
+}
+
+
+
+// =========================================================================
+// AGENT QUERIES (Unchanged)
+// ========================================================================= Agent Queries
 export const useAgentList = (params?: AgentListParams) => {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.agents.list(params),
@@ -197,7 +276,7 @@ export const useDeleteAgent = () => {
 export const useExportCutPayCsv = () => {
   return useMutation({
     mutationFn: ({ startDate, endDate }: { startDate?: string; endDate?: string }) => 
-      adminApi.cutpay.exportCsv(startDate, endDate),
+      adminApi.cutpay.exportCsv({ date_from: startDate, date_to: endDate }),
   })
 }
 

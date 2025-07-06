@@ -703,7 +703,7 @@
       "type": "text",
       "x": 2633.14383468398,
       "y": 1785.203360929251,
-      "width": 831.3595581054688,
+      "width": 833,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -718,8 +718,8 @@
       "index": "aM",
       "roundness": null,
       "seed": 1277381957,
-      "version": 200,
-      "versionNonce": 1107085771,
+      "version": 201,
+      "versionNonce": 485888843,
       "isDeleted": false,
       "boundElements": [
         {
@@ -735,7 +735,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704558067,
+      "updated": 1751801794609,
       "link": null,
       "locked": false,
       "text": "Policy Number, Gross Premium (GP), Net Premium (NP), TP Premium, OD Premium, GST",
@@ -751,10 +751,10 @@
     {
       "id": "jzB7QKpFgVNpvFOw149oQ",
       "type": "arrow",
-      "x": 3002.7888433658977,
+      "x": 3004.979278682865,
       "y": 1814.1030613775752,
-      "width": 21.97469184222291,
-      "height": 67.85147061780026,
+      "width": 16.42668644387095,
+      "height": 64.08024806287244,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -770,11 +770,11 @@
         "type": 2
       },
       "seed": 2135879653,
-      "version": 140,
-      "versionNonce": 1592201995,
+      "version": 150,
+      "versionNonce": 2125186859,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704558068,
+      "updated": 1751801810349,
       "link": null,
       "locked": false,
       "points": [
@@ -783,8 +783,8 @@
           0
         ],
         [
-          -21.97469184222291,
-          67.85147061780026
+          -16.42668644387095,
+          64.08024806287244
         ]
       ],
       "lastCommittedPoint": null,
@@ -805,9 +805,9 @@
     {
       "id": "A44MdqCNR-FzL6qPhan25",
       "type": "text",
-      "x": 2861.6746597061046,
-      "y": 1892.006601716531,
-      "width": 197.4998779296875,
+      "x": 2869.2170760438157,
+      "y": 1888.2353791616029,
+      "width": 200,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -822,8 +822,8 @@
       "index": "aO",
       "roundness": null,
       "seed": 227119269,
-      "version": 68,
-      "versionNonce": 1357780165,
+      "version": 79,
+      "versionNonce": 810899883,
       "isDeleted": false,
       "boundElements": [
         {
@@ -835,7 +835,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750695472001,
+      "updated": 1751801812090,
       "link": null,
       "locked": false,
       "text": "Agent Code Entered",
@@ -851,10 +851,10 @@
     {
       "id": "kwRTjsHgZdS7WlSS76mJD",
       "type": "arrow",
-      "x": 2964.708374347948,
-      "y": 1920.906302164853,
-      "width": 1.256508715144264,
-      "height": 79.16004905410023,
+      "x": 2971.0147470894285,
+      "y": 1917.135079609925,
+      "width": 5.049864026336309,
+      "height": 82.93127160902827,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -870,11 +870,11 @@
         "type": 2
       },
       "seed": 1076923179,
-      "version": 51,
-      "versionNonce": 1876592997,
+      "version": 61,
+      "versionNonce": 933210571,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750695472001,
+      "updated": 1751801810349,
       "link": null,
       "locked": false,
       "points": [
@@ -883,8 +883,8 @@
           0
         ],
         [
-          1.256508715144264,
-          79.16004905410023
+          -5.049864026336309,
+          82.93127160902827
         ]
       ],
       "lastCommittedPoint": null,
@@ -1020,7 +1020,7 @@
       "type": "text",
       "x": 2708.3451469127485,
       "y": 2076.8715045736494,
-      "width": 73.03997802734375,
+      "width": 74,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -1035,11 +1035,11 @@
       "index": "aU",
       "roundness": null,
       "seed": 1210756965,
-      "version": 49,
-      "versionNonce": 610871429,
+      "version": 50,
+      "versionNonce": 1764901061,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750697422972,
+      "updated": 1751801776647,
       "link": null,
       "locked": false,
       "text": "AGENT",
@@ -1100,9 +1100,9 @@
     {
       "id": "DKTq-3T5PY8WXugcb2svH",
       "type": "text",
-      "x": 3104.978933213363,
+      "x": 3104.0595536992587,
       "y": 2075.4344256377776,
-      "width": 133.9799346923828,
+      "width": 135,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -1117,11 +1117,11 @@
       "index": "aW",
       "roundness": null,
       "seed": 149087787,
-      "version": 72,
-      "versionNonce": 2044391621,
+      "version": 74,
+      "versionNonce": 1320450251,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750703903765,
+      "updated": 1751802081855,
       "link": null,
       "locked": false,
       "text": "INSUREZEAL",
@@ -1185,7 +1185,7 @@
       "type": "text",
       "x": 3209.8856955320043,
       "y": 2200.4602930586234,
-      "width": 187.419921875,
+      "width": 188,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -1200,8 +1200,8 @@
       "index": "aY",
       "roundness": null,
       "seed": 409791179,
-      "version": 78,
-      "versionNonce": 28360043,
+      "version": 79,
+      "versionNonce": 262787045,
       "isDeleted": false,
       "boundElements": [
         {
@@ -1233,7 +1233,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750696662445,
+      "updated": 1751799218257,
       "link": null,
       "locked": false,
       "text": "PAYMENT SOURCE",
@@ -1817,11 +1817,11 @@
         "type": 2
       },
       "seed": 1871820485,
-      "version": 77,
-      "versionNonce": 1725260293,
+      "version": 79,
+      "versionNonce": 1849742603,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750696672069,
+      "updated": 1751799217999,
       "link": null,
       "locked": false,
       "points": [
@@ -2208,7 +2208,7 @@
       "type": "text",
       "x": 2685.3518839388003,
       "y": 2496.498553848216,
-      "width": 115.61991882324219,
+      "width": 117,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -2223,11 +2223,11 @@
       "index": "b00",
       "roundness": null,
       "seed": 972332101,
-      "version": 124,
-      "versionNonce": 1642621163,
+      "version": 125,
+      "versionNonce": 1089935749,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750697368239,
+      "updated": 1751802271914,
       "link": null,
       "locked": false,
       "text": "Direct Code",
@@ -2325,9 +2325,9 @@
     {
       "id": "wLKJYU4g_xdXd6G1uVLYi",
       "type": "text",
-      "x": 2425.240596546006,
+      "x": 2424.4715255304923,
       "y": 2493.6243959764724,
-      "width": 193.5198974609375,
+      "width": 194,
       "height": 50,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -2342,8 +2342,8 @@
       "index": "b08",
       "roundness": null,
       "seed": 373475435,
-      "version": 162,
-      "versionNonce": 127950565,
+      "version": 164,
+      "versionNonce": 643887397,
       "isDeleted": false,
       "boundElements": [
         {
@@ -2351,7 +2351,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750697451614,
+      "updated": 1751802281818,
       "link": null,
       "locked": false,
       "text": "SELECT INSURER\nFROM DROPDOWN ",
@@ -2409,9 +2409,9 @@
     {
       "id": "F2QtRmv2jG4eMtA2GIqv0",
       "type": "arrow",
-      "x": 2519.725281762043,
+      "x": 2520.356569898922,
       "y": 2555.3213577568667,
-      "width": 440.1830176977355,
+      "width": 454.4123831388806,
       "height": 250.05173484169154,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -2428,11 +2428,11 @@
         "type": 2
       },
       "seed": 1584154987,
-      "version": 400,
-      "versionNonce": 557165931,
+      "version": 404,
+      "versionNonce": 1142583243,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704447157,
+      "updated": 1751802281606,
       "link": null,
       "locked": false,
       "points": [
@@ -2441,7 +2441,7 @@
           0
         ],
         [
-          440.1830176977355,
+          454.4123831388806,
           250.05173484169154
         ]
       ],
@@ -2463,9 +2463,9 @@
     {
       "id": "vTo5ooQs2bG4QLPGJ2qIj",
       "type": "arrow",
-      "x": 3494.876610441519,
+      "x": 3494.818094627464,
       "y": 2543.824726269893,
-      "width": 482.67273889022545,
+      "width": 467.78137451647353,
       "height": 261.548366328665,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -2482,11 +2482,11 @@
         "type": 2
       },
       "seed": 2128492683,
-      "version": 357,
-      "versionNonce": 1502727435,
+      "version": 359,
+      "versionNonce": 744411531,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704448518,
+      "updated": 1751802260390,
       "link": null,
       "locked": false,
       "points": [
@@ -2495,7 +2495,7 @@
           0
         ],
         [
-          -482.67273889022545,
+          -467.78137451647353,
           261.548366328665
         ]
       ],
@@ -2517,9 +2517,9 @@
     {
       "id": "Gr2TbLrmVnQnIM1BYaHQB",
       "type": "text",
-      "x": 2555.3911044281895,
+      "x": 2571.5415224099324,
       "y": 2816.8697240855327,
-      "width": 881.759521484375,
+      "width": 885,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -2534,8 +2534,8 @@
       "index": "b0C",
       "roundness": null,
       "seed": 1052898181,
-      "version": 244,
-      "versionNonce": 1167817253,
+      "version": 247,
+      "versionNonce": 340892773,
       "isDeleted": false,
       "boundElements": [
         {
@@ -2551,7 +2551,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704442503,
+      "updated": 1751802342818,
       "link": null,
       "locked": false,
       "text": "SHOW AVAILABLE CHILD IDs ON THE BASIS OF ABOVE INFO(ADMIN CHILD IDS ONLY)",
@@ -2654,10 +2654,10 @@
     {
       "id": "SYjWFMn2V1YpTxiNO8s_4",
       "type": "arrow",
-      "x": 2987.8868092339917,
-      "y": 2853.27573841301,
-      "width": 2.9392127633495875,
-      "height": 77.60226253707651,
+      "x": 3000.2169520163798,
+      "y": 2853.2757384130095,
+      "width": 9.390930019038478,
+      "height": 77.60226253707697,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -2673,11 +2673,11 @@
         "type": 2
       },
       "seed": 1255917227,
-      "version": 142,
-      "versionNonce": 993988677,
+      "version": 144,
+      "versionNonce": 851061451,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704442503,
+      "updated": 1751802260390,
       "link": null,
       "locked": false,
       "points": [
@@ -2686,8 +2686,8 @@
           0
         ],
         [
-          2.9392127633495875,
-          77.60226253707651
+          -9.390930019038478,
+          77.60226253707697
         ]
       ],
       "lastCommittedPoint": null,
@@ -2706,7 +2706,7 @@
       "type": "text",
       "x": 2895.9788122298037,
       "y": 2936.6263166935732,
-      "width": 196.89991760253906,
+      "width": 200,
       "height": 75,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -2721,8 +2721,8 @@
       "index": "b0G",
       "roundness": null,
       "seed": 1930479339,
-      "version": 90,
-      "versionNonce": 1896049739,
+      "version": 91,
+      "versionNonce": 1850851813,
       "isDeleted": false,
       "boundElements": [
         {
@@ -2730,7 +2730,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750699598708,
+      "updated": 1751802360745,
       "link": null,
       "locked": false,
       "text": "FILL IN MANUALLY\nINCOMING GRID %\nAGENT PAYOUT %",
@@ -3936,11 +3936,11 @@
         "type": 2
       },
       "seed": 2136557093,
-      "version": 23,
-      "versionNonce": 939441035,
+      "version": 24,
+      "versionNonce": 2069874251,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750702799674,
+      "updated": 1751802522280,
       "link": null,
       "locked": false,
       "points": [
@@ -4021,10 +4021,10 @@
     {
       "id": "Lk8-WZkDqnkuvDJP6mOd-",
       "type": "arrow",
-      "x": 3131.6005963767125,
-      "y": 3559.371944544203,
-      "width": 47.95501636283416,
-      "height": 59.19107972396159,
+      "x": 3131.5996578382656,
+      "y": 3559.3719445442034,
+      "width": 47.955952938122664,
+      "height": 59.19107972396114,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4040,11 +4040,11 @@
         "type": 2
       },
       "seed": 769607525,
-      "version": 308,
-      "versionNonce": 550793772,
+      "version": 309,
+      "versionNonce": 2014632523,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1751015387638,
+      "updated": 1751802667653,
       "link": null,
       "locked": false,
       "points": [
@@ -4053,8 +4053,8 @@
           0
         ],
         [
-          47.95501636283416,
-          59.19107972396159
+          47.955952938122664,
+          59.19107972396114
         ]
       ],
       "lastCommittedPoint": null,
@@ -4177,7 +4177,7 @@
       "type": "text",
       "x": 2475.904013766379,
       "y": 3403.220028645062,
-      "width": 220.29989624023438,
+      "width": 223,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4192,11 +4192,11 @@
       "index": "b0p",
       "roundness": null,
       "seed": 265915339,
-      "version": 70,
-      "versionNonce": 1910700308,
+      "version": 71,
+      "versionNonce": 230726533,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1751015348030,
+      "updated": 1751802525587,
       "link": null,
       "locked": false,
       "text": "OD X Agent Payout %",
@@ -4214,7 +4214,7 @@
       "type": "text",
       "x": 3146.6356988411203,
       "y": 3405.502606986137,
-      "width": 215.95989990234375,
+      "width": 219,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4229,11 +4229,11 @@
       "index": "b0q",
       "roundness": null,
       "seed": 766748645,
-      "version": 252,
-      "versionNonce": 1988598188,
+      "version": 253,
+      "versionNonce": 729351813,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1751015361173,
+      "updated": 1751802552690,
       "link": null,
       "locked": false,
       "text": "NP X Agent Payout %",
@@ -4251,7 +4251,7 @@
       "type": "text",
       "x": 2718.6799511436884,
       "y": 3405.8243491520298,
-      "width": 218.5398712158203,
+      "width": 220,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4266,11 +4266,11 @@
       "index": "b0s",
       "roundness": null,
       "seed": 485706117,
-      "version": 205,
-      "versionNonce": 542407444,
+      "version": 206,
+      "versionNonce": 1731735813,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1751015353419,
+      "updated": 1751802531937,
       "link": null,
       "locked": false,
       "text": "OD X Incoming Grid %",
@@ -4288,7 +4288,7 @@
       "type": "text",
       "x": 3409.6304384611703,
       "y": 3405.82434915203,
-      "width": 206.1998748779297,
+      "width": 208,
       "height": 25,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4303,11 +4303,11 @@
       "index": "b0t",
       "roundness": null,
       "seed": 1031412107,
-      "version": 383,
-      "versionNonce": 1788378412,
+      "version": 384,
+      "versionNonce": 199433221,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1751015371168,
+      "updated": 1751802571394,
       "link": null,
       "locked": false,
       "text": "NP X Incoming Grid%",
@@ -4323,9 +4323,9 @@
     {
       "id": "-sXfom8yzseSmyj2XlfWp",
       "type": "text",
-      "x": 2658.834117684104,
+      "x": 2657.254009041526,
       "y": 3636.497867586013,
-      "width": 355.83978271484375,
+      "width": 359,
       "height": 75,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4340,8 +4340,8 @@
       "index": "b0u",
       "roundness": null,
       "seed": 61286437,
-      "version": 179,
-      "versionNonce": 1798502411,
+      "version": 180,
+      "versionNonce": 1980156357,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4349,7 +4349,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750703467111,
+      "updated": 1751802642146,
       "link": null,
       "locked": false,
       "text": "OD X OD Payout% (input seprately)\n+\nTP X TP Payout% (input seprately)",
@@ -4365,9 +4365,9 @@
     {
       "id": "j0378ueb0Z98SjFfRxS8q",
       "type": "text",
-      "x": 3073.0666426736293,
+      "x": 3071.9765547830043,
       "y": 3635.919539936379,
-      "width": 322.81982421875,
+      "width": 325,
       "height": 75,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4382,8 +4382,8 @@
       "index": "b0v",
       "roundness": null,
       "seed": 703796613,
-      "version": 446,
-      "versionNonce": 782387116,
+      "version": 447,
+      "versionNonce": 1087835813,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4391,7 +4391,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1751015387638,
+      "updated": 1751802667852,
       "link": null,
       "locked": false,
       "text": "OD X OD Incoming Grid% (input)\n+\nTP X TP Incoming Grid% (input)",
@@ -4578,10 +4578,10 @@
     {
       "id": "ceMro1Te895StOvnL6pXs",
       "type": "text",
-      "x": 3528.8202086526385,
+      "x": 3528.4698116626864,
       "y": 2072.2001734598334,
-      "width": 375.2992060200959,
-      "height": 59.685024153777285,
+      "width": 376,
+      "height": 59.685024153777356,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4595,11 +4595,11 @@
       "index": "b0z",
       "roundness": null,
       "seed": 1478109861,
-      "version": 382,
-      "versionNonce": 450920843,
+      "version": 383,
+      "versionNonce": 945260875,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750703868747,
+      "updated": 1751799216305,
       "link": null,
       "locked": false,
       "text": "Cut Pay Amount",
@@ -4615,10 +4615,10 @@
     {
       "id": "rxJWBbAWF10_V58Rc_KqU",
       "type": "text",
-      "x": 2501.358329380108,
+      "x": 2499.8106204853902,
       "y": 3885.3192345839448,
-      "width": 298.90458221056406,
-      "height": 31.08151934353711,
+      "width": 302,
+      "height": 31.081519343537117,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4632,8 +4632,8 @@
       "index": "b10",
       "roundness": null,
       "seed": 543216773,
-      "version": 76,
-      "versionNonce": 358260517,
+      "version": 77,
+      "versionNonce": 1480386469,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4645,7 +4645,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704425037,
+      "updated": 1751802052859,
       "link": null,
       "locked": false,
       "text": "Cut Pay WILL BE ZERO",
@@ -4661,10 +4661,10 @@
     {
       "id": "z-yvTlqefvjmlWPvmZOSK",
       "type": "text",
-      "x": 2910.728493785989,
+      "x": 2912.1524038194784,
       "y": 3884.146410953926,
-      "width": 901.8478200669782,
-      "height": 35.0695470046455,
+      "width": 899,
+      "height": 35.069547004645486,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4678,8 +4678,8 @@
       "index": "b11",
       "roundness": null,
       "seed": 1383538853,
-      "version": 304,
-      "versionNonce": 1707748293,
+      "version": 305,
+      "versionNonce": 1193287109,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4687,7 +4687,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704343784,
+      "updated": 1751802415602,
       "link": null,
       "locked": false,
       "text": "Cut Pay amount = gross premium - (net premium * agent payout%)",
@@ -4703,10 +4703,10 @@
     {
       "id": "DD7SlqkavOi-Hvyks0Tsx",
       "type": "arrow",
-      "x": 2688.6999606405275,
-      "y": 3928.5008864945216,
-      "width": 204.3850384805205,
-      "height": 132.02284236114792,
+      "x": 2688.663707891735,
+      "y": 3928.500886494522,
+      "width": 204.42129122931237,
+      "height": 132.022842361147,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4722,11 +4722,11 @@
         "type": 2
       },
       "seed": 2125582725,
-      "version": 206,
-      "versionNonce": 1034717093,
+      "version": 207,
+      "versionNonce": 1402289963,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704631008,
+      "updated": 1751802704424,
       "link": null,
       "locked": false,
       "points": [
@@ -4735,8 +4735,8 @@
           0
         ],
         [
-          204.3850384805205,
-          132.02284236114792
+          204.42129122931237,
+          132.022842361147
         ]
       ],
       "lastCommittedPoint": null,
@@ -4757,9 +4757,9 @@
     {
       "id": "dcYq2ywW-jNyMGoZMV8lm",
       "type": "arrow",
-      "x": 3316.334571513873,
+      "x": 3316.136868294291,
       "y": 3928.922381815017,
-      "width": 400.3299526800615,
+      "width": 400.1936418615951,
       "height": 136.8941374344413,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4776,11 +4776,11 @@
         "type": 2
       },
       "seed": 1602753157,
-      "version": 245,
-      "versionNonce": 2045998341,
+      "version": 246,
+      "versionNonce": 546972107,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704628983,
+      "updated": 1751802704424,
       "link": null,
       "locked": false,
       "points": [
@@ -4789,7 +4789,7 @@
           0
         ],
         [
-          -400.3299526800615,
+          -400.1936418615951,
           136.8941374344413
         ]
       ],
@@ -4811,10 +4811,10 @@
     {
       "id": "SWbzgo2DcYq6ksGJqANam",
       "type": "text",
-      "x": 2675.5881295938348,
+      "x": 2677.162937627816,
       "y": 4068.6820615946726,
-      "width": 463.1496160679623,
-      "height": 114.85713413783466,
+      "width": 460,
+      "height": 114.85713413783469,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4828,8 +4828,8 @@
       "index": "b14",
       "roundness": null,
       "seed": 14227531,
-      "version": 264,
-      "versionNonce": 2109843173,
+      "version": 265,
+      "versionNonce": 380231461,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4845,7 +4845,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704628983,
+      "updated": 1751802704675,
       "link": null,
       "locked": false,
       "text": "then we fill in\nAmount Recieved\nCustomer Details - Phone Number & Email\nand ofc date",
@@ -4861,9 +4861,9 @@
     {
       "id": "Xmnoeg-r-NiD5b0wP7niz",
       "type": "arrow",
-      "x": 2910.0155915518462,
+      "x": 2910.0155915518453,
       "y": 4193.64732583895,
-      "width": 1.1033842454821752,
+      "width": 1.1033842454812657,
       "height": 88.9627739072439,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4880,11 +4880,11 @@
         "type": 2
       },
       "seed": 1426108549,
-      "version": 217,
-      "versionNonce": 1160153125,
+      "version": 218,
+      "versionNonce": 738232459,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704638976,
+      "updated": 1751802704423,
       "link": null,
       "locked": false,
       "points": [
@@ -4893,7 +4893,7 @@
           0
         ],
         [
-          -1.1033842454821752,
+          -1.1033842454812657,
           88.9627739072439
         ]
       ],
@@ -6672,7 +6672,7 @@
       "type": "arrow",
       "x": 3043.475306476579,
       "y": 3712.274825784147,
-      "width": 8,
+      "width": 7.999999999999545,
       "height": 82,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -6689,11 +6689,11 @@
         "type": 2
       },
       "seed": 678175764,
-      "version": 87,
-      "versionNonce": 168151852,
+      "version": 88,
+      "versionNonce": 489425771,
       "isDeleted": false,
-      "boundElements": null,
-      "updated": 1751015423056,
+      "boundElements": [],
+      "updated": 1751802682090,
       "link": null,
       "locked": false,
       "points": [
@@ -6702,7 +6702,7 @@
           0
         ],
         [
-          -8,
+          -7.999999999999545,
           82
         ]
       ],
@@ -6722,7 +6722,7 @@
       "type": "text",
       "x": 2831.475306476579,
       "y": 3804.274825784147,
-      "width": 418.83984375,
+      "width": 420,
       "height": 50,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -6737,8 +6737,8 @@
       "index": "b1k",
       "roundness": null,
       "seed": 1809347756,
-      "version": 124,
-      "versionNonce": 1543210412,
+      "version": 125,
+      "versionNonce": 880822149,
       "isDeleted": false,
       "boundElements": [
         {
@@ -6746,7 +6746,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1751015423056,
+      "updated": 1751802682291,
       "link": null,
       "locked": false,
       "text": "RESULT IS EITHER AGENT PO AMOUNT\nOR INCOMING PO AMOUNT",

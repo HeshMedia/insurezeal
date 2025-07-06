@@ -1,16 +1,18 @@
 "use client"
 
 import { StatsCards } from "./stats-cards"
-import { AnalyticsCharts } from "./analytics-charts"
+// import { AnalyticsCharts } from "./analytics-charts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Activity, Clock, Users, FileText, TrendingUp } from "lucide-react"
-import { useAdminStats, useCutPayStats, useChildRequestStats } from "@/hooks/adminQuery"
+import { useAdminStats, /* useCutPayStats, */ useChildRequestStats } from "@/hooks/adminQuery"
 
 export function AdminOverview() {
   const { data: adminStats } = useAdminStats()
-  const { data: cutpayStats } = useCutPayStats()
+  // const { data: cutpayStats } = useCutPayStats() // Commented out - API returning 500 error
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cutpayStats: any = null // Temporary fallback until API is fixed
   const { data: childStats } = useChildRequestStats()
 
   const formatCurrency = (amount: number) => {
@@ -25,16 +27,16 @@ export function AdminOverview() {
     const activities = []
     
     // Add top agents from cutpay stats
-    if (cutpayStats?.stats?.top_agents && cutpayStats.stats.top_agents.length > 0) {
-      cutpayStats.stats.top_agents.slice(0, 3).forEach((agent, index) => {
+    if (cutpayStats?.top_agents && cutpayStats.top_agents.length > 0) {
+      cutpayStats.top_agents.slice(0, 3).forEach((agent: Record<string, unknown>, index: number) => {
         if (agent.agent_code && agent.total_cut_pay_amount) {
           activities.push({
             id: `agent-${index}`,
             type: 'cutpay',
             title: `High CutPay Transaction`,
-            description: `${agent.agent_code} - ${formatCurrency(agent.total_cut_pay_amount)}`,
+            description: `${agent.agent_code} - ${formatCurrency(agent.total_cut_pay_amount as number)}`,
             time: 'Recent',
-            avatar: agent.agent_code.charAt(0),
+            avatar: (agent.agent_code as string).charAt(0),
             color: 'bg-green-100 text-green-600'
           })
         }
@@ -83,7 +85,7 @@ export function AdminOverview() {
           </div>
           <div className="text-right">
             <div className="text-xl font-bold text-gray-900">
-              {cutpayStats?.stats ? formatCurrency(cutpayStats.stats.total_cut_pay_amount) : '₹0'}
+              {cutpayStats ? formatCurrency(cutpayStats.total_cut_pay_amount) : '₹0'}
             </div>
             <div className="text-xs text-gray-500">Total CutPay Volume</div>
           </div>
@@ -112,7 +114,7 @@ export function AdminOverview() {
               <div>
                 <p className="text-xs font-medium text-gray-600">CutPay Transactions</p>
                 <p className="text-lg font-bold text-gray-900">
-                  {cutpayStats?.stats?.total_transactions || 0}
+                  {cutpayStats?.total_transactions || 0}
                 </p>
               </div>
               <TrendingUp className="h-6 w-6 text-slate-600" />
@@ -153,7 +155,7 @@ export function AdminOverview() {
       <StatsCards />
 
       {/* Analytics Charts */}
-      <AnalyticsCharts />
+      {/* <AnalyticsCharts /> */}
 
       {/* Recent Activity */}
       <div className="grid gap-4 md:grid-cols-1">

@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCutPayList } from "@/hooks/adminQuery"
 import { cutpayListParamsAtom } from "@/lib/atoms/admin"
-import { CutPaySummary } from "@/types/admin.types"
+import { CutPayTransaction, CutPayListParams } from "@/types/admin.types"
 import { cn } from "@/lib/utils"
 import { 
   Search, 
@@ -35,10 +35,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-function CutPayCard({ cutpay, onViewDetails, onEdit }: { 
-  cutpay: CutPaySummary; 
+function CutPayCard({ cutpay, onViewDetails, onEdit, onEditSplit }: { 
+  cutpay: CutPayTransaction; 
   onViewDetails: (id: number) => void;
   onEdit: (id: number) => void;
+  onEditSplit: (id: number) => void;
 }) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -100,6 +101,13 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Transaction
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onEditSplit(cutpay.id)}
+                className="cursor-pointer"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Edit with Document View
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -148,14 +156,31 @@ export function CutPayManagement() {
   const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
-  const { data: cutpayData, isLoading, error } = useCutPayList(params)
+  const { data: cutpayData, isLoading, error } = useCutPayList({
+    skip: params.page ? (params.page - 1) * (params.page_size || 20) : 0,
+    limit: params.page_size || 20,
+    search: params.search,
+    insurer_code: params.insurer_code,
+    broker_code: params.broker_code,
+    date_from: params.date_from,
+    date_to: params.date_to,
+  })
+
+  // Since the API returns an array directly, we need to handle pagination client-side
+  const pageSize = params.page_size || 20
+  const currentPage = params.page || 1
+  const transactions = cutpayData || []
+  const totalCount = transactions.length
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedTransactions = transactions.slice(startIndex, endIndex)
 
   const handleSearch = () => {
-    setParams(prev => ({ ...prev, search: searchQuery, page: 1 }))
+    setParams((prev: CutPayListParams) => ({ ...prev, search: searchQuery, page: 1 }))
   }
 
   const handlePageChange = (newPage: number) => {
-    setParams(prev => ({ ...prev, page: newPage }))
+    setParams((prev: CutPayListParams) => ({ ...prev, page: newPage }))
   }
 
   const handleViewDetails = (cutpayId: number) => {
@@ -164,6 +189,10 @@ export function CutPayManagement() {
 
   const handleEdit = (cutpayId: number) => {
     router.push(`/admin/cutpay/${cutpayId}/edit`)
+  }
+
+  const handleEditSplit = (cutpayId: number) => {
+    router.push(`/admin/cutpay/${cutpayId}/edit-split`)
   }
 
   const handleCreateNew = () => {
@@ -219,7 +248,7 @@ export function CutPayManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
-              {cutpayData?.total_count || 0}
+              {totalCount}
             </div>
             <p className="text-xs text-gray-500 mt-1">Total cutpay transactions</p>
           </CardContent>
@@ -234,8 +263,10 @@ export function CutPayManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
-              {cutpayData?.transactions?.filter(t => {
-                const transactionDate = new Date(t.transaction_date)
+              {transactions.filter((t: CutPayTransaction) => {
+                const transactionDate = t.transaction_date ? new Date(t.transaction_date) : null
+                if (!transactionDate) return false
+                
                 const thirtyDaysAgo = new Date()
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
                 return transactionDate > thirtyDaysAgo
@@ -254,7 +285,7 @@ export function CutPayManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
-              ₹{cutpayData?.transactions?.reduce((sum, t) => sum + (t.cut_pay_amount || 0), 0).toLocaleString('en-IN') || '0'}
+              ₹{transactions.reduce((sum: number, t: CutPayTransaction) => sum + (t.cut_pay_amount || 0), 0).toLocaleString('en-IN') || '0'}
             </div>
             <p className="text-xs text-gray-500 mt-1">Total cut pay amount</p>
           </CardContent>
@@ -345,7 +376,7 @@ export function CutPayManagement() {
                 </Card>
               ))}
             </div>
-          ) : cutpayData?.transactions?.length === 0 ? (
+          ) : transactions.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-2">
                 <CreditCard className="h-12 w-12 mx-auto" />
@@ -362,43 +393,44 @@ export function CutPayManagement() {
               "grid gap-4",
               viewMode === 'grid' ? "md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
             )}>
-              {cutpayData?.transactions?.map((cutpay) => (
+              {paginatedTransactions.map((cutpay: CutPayTransaction) => (
                 <CutPayCard
                   key={cutpay.id}
                   cutpay={cutpay}
                   onViewDetails={handleViewDetails}
                   onEdit={handleEdit}
+                  onEditSplit={handleEditSplit}
                 />
               ))}
             </div>
           )}
 
           {/* Pagination */}
-          {cutpayData && cutpayData.transactions.length > 0 && (
+          {transactions.length > 0 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-gray-500">
-                Showing {((cutpayData.page - 1) * cutpayData.page_size) + 1} to{' '}
-                {Math.min(cutpayData.page * cutpayData.page_size, cutpayData.total_count)} of{' '}
-                {cutpayData.total_count} transactions
+                Showing {startIndex + 1} to{' '}
+                {Math.min(endIndex, totalCount)} of{' '}
+                {totalCount} transactions
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(cutpayData.page - 1)}
-                  disabled={cutpayData.page <= 1}
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
                 >
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Previous
                 </Button>
                 <span className="text-sm text-gray-600">
-                  Page {cutpayData.page} of {Math.ceil(cutpayData.total_count / cutpayData.page_size)}
+                  Page {currentPage} of {Math.ceil(totalCount / pageSize)}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(cutpayData.page + 1)}
-                  disabled={cutpayData.page >= Math.ceil(cutpayData.total_count / cutpayData.page_size)}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= Math.ceil(totalCount / pageSize)}
                 >
                   Next
                   <ArrowRight className="h-4 w-4 ml-1" />

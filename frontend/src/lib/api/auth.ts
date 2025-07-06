@@ -1,105 +1,5 @@
-import axios, { AxiosInstance } from 'axios'
-import Cookies from 'js-cookie'
 import { LoginData, RegisterData, AuthResponse, ResetPasswordData, RefreshTokenResponse } from '@/types/auth.types'
-
-// Create axios instance
-const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Request interceptor to add auth token
-apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
-// Response interceptor for error handling and token refresh
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config
-
-    // If we get 401 and haven't already tried refreshing
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true
-
-      const refreshToken = Cookies.get('refresh_token')
-      if (refreshToken) {
-        try {
-          // Use the new refresh endpoint format with query parameter
-          const response = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
-            {}, // Empty body since token is in query param
-            {
-              headers: {
-                'Content-Type': 'application/json',
-              },
-            }
-          )
-          
-          const newToken = response.data.access_token
-          const newRefreshToken = response.data.refresh_token
-          const rememberMe = localStorage.getItem('remember_me') === 'true'
-          
-          // Set cookie with appropriate expiry
-          Cookies.set('access_token', newToken, { 
-            expires: rememberMe ? 30 : 7,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production'
-          })
-          
-          // Update refresh token if provided
-          if (newRefreshToken) {
-            Cookies.set('refresh_token', newRefreshToken, { 
-              expires: rememberMe ? 365 : 30,
-              sameSite: 'lax',
-              secure: process.env.NODE_ENV === 'production'
-            })
-          }
-          
-          // Retry original request with new token
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return apiClient(originalRequest)
-        } catch (refreshError) {
-          // Refresh failed, clear tokens and redirect to login
-          Cookies.remove('access_token')
-          Cookies.remove('refresh_token')
-          localStorage.removeItem('remember_me')
-          
-          // Only redirect if we're not already on a public page
-          if (typeof window !== 'undefined' && 
-              !window.location.pathname.includes('/login') && 
-              !window.location.pathname.includes('/register') &&
-              !window.location.pathname.includes('/reset-password')) {
-            window.location.href = '/login'
-          }
-          return Promise.reject(refreshError)
-        }
-      } else {
-        // No refresh token, redirect to login
-        Cookies.remove('access_token')
-        Cookies.remove('refresh_token')
-        localStorage.removeItem('remember_me')
-        
-        if (typeof window !== 'undefined' && 
-            !window.location.pathname.includes('/login') && 
-            !window.location.pathname.includes('/register') &&
-            !window.location.pathname.includes('/reset-password')) {
-          window.location.href = '/login'
-        }
-      }
-    }
-
-    const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'An error occurred'
-    throw new Error(message)
-  }
-)
+import apiClient from '.'
 
 export const authApi = {
   // Login
@@ -110,109 +10,29 @@ export const authApi = {
 
   // Register
   register: async (data: RegisterData): Promise<AuthResponse> => {
-    try {
-      console.log('Registration attempt with data:', { ...data, password: '[REDACTED]' })
-      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
-      
-      const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, data, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      console.log('Registration successful:', response.data)
-      return response.data
-    } catch (error: unknown) {
-      console.error('Registration error details:', error)
-      
-      if (axios.isAxiosError(error)) {
-        console.error('Response status:', error.response?.status)
-        console.error('Response data:', error.response?.data)
-        console.error('Response headers:', error.response?.headers)
-        
-        // Handle different error response formats
-        let message = 'Registration failed'
-        
-        if (error.response?.data) {
-          const errorData = error.response.data
-          
-          // Try different error message formats
-          if (typeof errorData === 'string') {
-            message = errorData
-          } else if (errorData.detail) {
-            message = errorData.detail
-          } else if (errorData.message) {
-            message = errorData.message
-          } else if (errorData.error) {
-            message = errorData.error
-          } else if (errorData.errors) {
-            // Handle validation errors array
-            if (Array.isArray(errorData.errors)) {
-              message = errorData.errors.map((err: { msg?: string; message?: string }) => err.msg || err.message || String(err)).join(', ')
-            } else {
-              message = JSON.stringify(errorData.errors)
-            }
-          } else {
-            message = `Registration failed: ${JSON.stringify(errorData)}`
-          }
-        } else if (error.message) {
-          message = error.message
-        }
-        
-        throw new Error(message)
-      }
-      
-      const message = error instanceof Error ? error.message : 'An unexpected error occurred during registration'
-      throw new Error(message)
-    }
+    const response = await apiClient.post('/auth/register', data)
+    return response.data
   },
 
   // Refresh token
   refreshToken: async (refreshToken: string): Promise<RefreshTokenResponse> => {
-    const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
-      {}, // Empty body since token is in query param
+    const response = await apiClient.post(
+      `/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
+      {},
       {
         headers: {
-          'Content-Type': 'application/json',
-        },
+          'Content-Type': 'application/json'
+        }
       }
     )
-    const result = response.data
-    
-    // Update cookies with new tokens
-    if (result.access_token) {
-      const rememberMe = localStorage.getItem('remember_me') === 'true'
-      Cookies.set('access_token', result.access_token, { 
-        expires: rememberMe ? 30 : 7,
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
-      })
-      // Note: refresh_token is optional in the response according to your API docs
-      if (result.refresh_token) {
-        Cookies.set('refresh_token', result.refresh_token, { 
-          expires: rememberMe ? 365 : 30,
-          sameSite: 'lax',
-          secure: process.env.NODE_ENV === 'production'
-        })
-      }
-    }
-
-    return result
+    return response.data
   },
 
   // Logout
   logout: async () => {
-    try {
-      await apiClient.post('/auth/logout')
-    } catch (error) {
-      // Continue even if logout fails on server
-      console.error('Logout error:', error)
-    } finally {
-      // Always clear cookies
-      Cookies.remove('access_token')
-      Cookies.remove('refresh_token')
-      localStorage.removeItem('remember_me')
-    }
+    // Assuming there is an endpoint for logout that invalidates the token on the server
+    // If not, this can just be a client-side cookie removal
+    // await apiClient.post('/auth/logout')
   },
 
   // Forgot password
@@ -235,13 +55,13 @@ export const authApi = {
 
   // Verify email
   verifyEmail: async (token: string) => {
-    const response = await apiClient.post('/auth/verify-email', { token })
+    const response = await apiClient.post(`/auth/verify-email?token=${token}`)
     return response.data
   },
 
   // Resend verification email
   resendVerificationEmail: async (email: string) => {
-    const response = await apiClient.post('/auth/resend-verification', { email })
+    const response = await apiClient.post('/auth/resend-verification-email', { email })
     return response.data
-  },
+  }
 }

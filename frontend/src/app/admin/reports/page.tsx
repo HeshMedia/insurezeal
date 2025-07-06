@@ -15,21 +15,21 @@ import {
   Filter
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AnalyticsCharts } from '@/components/admin/analytics-charts'
+// import { AnalyticsCharts } from '@/components/admin/analytics-charts'
 import { CutPayExport } from '@/components/admin/cutpay-export'
-import { useCutPayStats, useAdminStats } from '@/hooks/adminQuery'
+import { /* useCutPayStats, */ useAdminStats } from '@/hooks/adminQuery'
 
 export default function ReportsPage() {
-  const { data: cutpayStats } = useCutPayStats()
+  // const { data: cutpayStats } = useCutPayStats() // Commented out - API returning 500 error
   const { data: adminStats } = useAdminStats()
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  // const formatCurrency = (amount: number) => {
+  //   return new Intl.NumberFormat('en-IN', {
+  //     style: 'currency',
+  //     currency: 'INR',
+  //     maximumFractionDigits: 0,
+  //   }).format(amount)
+  // }
 
   return (
     <DashboardWrapper requiredRole="admin">
@@ -67,7 +67,7 @@ export default function ReportsPage() {
                 <div>
                   <div className="text-xs text-gray-600">Total Revenue</div>
                   <div className="text-lg font-bold text-gray-900">
-                    {cutpayStats?.stats ? formatCurrency(cutpayStats.stats.total_cut_pay_amount) : '₹0'}
+                    ₹0 {/* Placeholder while API is broken */}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-green-600">
                     <TrendingUp className="h-2.5 w-2.5" />
@@ -107,7 +107,7 @@ export default function ReportsPage() {
                 <div>
                   <div className="text-xs text-gray-600">Transactions</div>
                   <div className="text-lg font-bold text-gray-900">
-                    {cutpayStats?.stats.total_transactions || 0}
+                    0 {/* Placeholder while API is broken */}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-green-600">
                     <TrendingUp className="h-2.5 w-2.5" />
@@ -150,12 +150,12 @@ export default function ReportsPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <AnalyticsCharts />
+            {/* <AnalyticsCharts /> */}
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <AnalyticsCharts />
+              {/* <AnalyticsCharts /> */}
             </div>
           </TabsContent>
 
@@ -167,7 +167,17 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent className="p-3">
                   <div className="space-y-4">
-                    {cutpayStats?.stats.monthly_breakdown?.map((month, index) => (
+                    {/* Placeholder while API is broken */}
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <div className="font-medium">No data available</div>
+                        <div className="text-sm text-gray-600">CutPay stats API is currently unavailable</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-gray-600">₹0</div>
+                      </div>
+                    </div>
+                    {/* {cutpayStats?.stats.monthly_breakdown?.map((month, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
                           <div className="font-medium">{month.month} {month.year}</div>
@@ -179,7 +189,7 @@ export default function ReportsPage() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    ))} */}
                   </div>
                 </CardContent>
               </Card>
@@ -190,7 +200,20 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {cutpayStats?.stats.top_agents?.map((agent, index) => (
+                    {/* Placeholder while API is broken */}
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="secondary">-</Badge>
+                        <div>
+                          <div className="font-medium">No data available</div>
+                          <div className="text-sm text-gray-600">CutPay stats API is currently unavailable</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-gray-600">₹0</div>
+                      </div>
+                    </div>
+                    {/* {cutpayStats?.stats.top_agents?.map((agent, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center gap-3">
                           <Badge variant="secondary">{index + 1}</Badge>
@@ -205,7 +228,7 @@ export default function ReportsPage() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    ))} */}
                   </div>
                 </CardContent>
               </Card>

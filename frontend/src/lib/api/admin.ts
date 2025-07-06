@@ -1,12 +1,12 @@
-import axios, { AxiosInstance } from 'axios'
-import Cookies from 'js-cookie'
+import apiClient from '.'
 import { 
   CutPayTransaction,
   CreateCutPayRequest,
   UpdateCutPayRequest,
-  CutPayListResponse,
   CutPayListParams,
-  CutPayStatsResponse,
+  // CutPayStatsResponse, // Commented out - API endpoint not working (500 error)
+  DocumentUploadResponse,
+  ExtractPdfResponse,
   AgentListResponse,
   AgentListParams,
   AgentDetails,
@@ -19,23 +19,6 @@ import {
   UniversalRecordUploadResponse
 } from '@/types/admin.types'
 
-// Create axios instance
-const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Request interceptor to add auth token
-apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => response,
@@ -45,84 +28,72 @@ apiClient.interceptors.response.use(
       status: error.response?.status,
       message: error.message
     })
-    
-    let message = 'An unexpected error occurred'
-    
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        message = error.response.data
-      } else if (error.response.data.detail) {
-        message = error.response.data.detail
-      } else if (error.response.data.message) {
-        message = error.response.data.message
-      } else if (error.response.data.error) {
-        message = error.response.data.error
-      } else {
-        message = `Server error (${error.response.status})`
-      }
-    } else if (error.message) {
-      message = error.message
-    }
-    
-    throw new Error(message)
+    // Optionally re-throw the error to be handled by the calling code
+    return Promise.reject(error)
   }
 )
 
 export const adminApi = {
-  
-  // Cutpay APIs
   cutpay: {
-    // Create cutpay transaction
     create: async (data: CreateCutPayRequest): Promise<CutPayTransaction> => {
-      const response = await apiClient.post('/admin/cutpay/', data)
+      const response = await apiClient.post<CutPayTransaction>('/cutpay/', data)
       return response.data
     },
-
-    // List cutpay transactions
-    list: async (params?: CutPayListParams): Promise<CutPayListResponse> => {
-      const response = await apiClient.get('/admin/cutpay/', {
-        params: {
-          agent_code: params?.agent_code,
-          page: params?.page || 1,
-          page_size: params?.page_size || 20,
-          search: params?.search
-        }
+    list: async (params?: CutPayListParams): Promise<CutPayTransaction[]> => {
+      const response = await apiClient.get<CutPayTransaction[]>('/cutpay/', { params })
+      return response.data
+    },
+    // getStats: async (): Promise<CutPayStatsResponse> => {
+    //   const response = await apiClient.get<CutPayStatsResponse>('/Prod/cutpay/stats')
+    //   return response.data
+    // },
+    getById: async (cutpayId: number): Promise<CutPayTransaction> => {
+      const response = await apiClient.get<CutPayTransaction>(`/cutpay/${cutpayId}`)
+      return response.data
+    },
+    update: async (cutpayId: number, data: UpdateCutPayRequest): Promise<CutPayTransaction> => {
+      const response = await apiClient.put<CutPayTransaction>(`/cutpay/${cutpayId}`, data)
+      return response.data
+    },
+    delete: async (cutpayId: number): Promise<{ message: string }> => {
+      const response = await apiClient.delete(`/cutpay/${cutpayId}`)
+      return response.data
+    },
+    exportCsv: async (params: { date_from?: string, date_to?: string, format?: string }): Promise<Blob> => {
+      const response = await apiClient.get<Blob>('/cutpay/export', { 
+        params,
+        responseType: 'blob' 
+      })
+      return response.data
+    },
+    
+    // ========================================================================
+    // CUTPAY CREATION FLOW - Only /Prod/cutpay/extract endpoint
+    // ========================================================================
+    
+    // Step 1: Extract PDF data (only API endpoint used in creation flow)
+    extractPdfForCreation: async (file: File): Promise<ExtractPdfResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await apiClient.post<ExtractPdfResponse>('/Prod/cutpay/extract-pdf', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       })
       return response.data
     },
 
-    // Get cutpay statistics
-    getStats: async (): Promise<CutPayStatsResponse> => {
-      const response = await apiClient.get('/admin/cutpay/stats')
-      return response.data
-    },
-
-    // Get specific cutpay transaction
-    getById: async (cutpayId: number): Promise<CutPayTransaction> => {
-      const response = await apiClient.get(`/admin/cutpay/${cutpayId}`)
-      return response.data
-    },
-
-    // Update cutpay transaction
-    update: async (cutpayId: number, data: UpdateCutPayRequest): Promise<CutPayTransaction> => {
-      const response = await apiClient.put(`/admin/cutpay/${cutpayId}`, data)
-      return response.data
-    },
-
-    // Export cutpay transactions to CSV
-    exportCsv: async (startDate?: string, endDate?: string): Promise<Blob> => {
-      const params = new URLSearchParams()
-      if (startDate) params.append('start_date', startDate)
-      if (endDate) params.append('end_date', endDate)
-      
-      const response = await apiClient.get(`/admin/cutpay/export/csv?${params.toString()}`, {
-        responseType: 'blob'
+    // ========================================================================
+    // EXISTING METHODS - For actual transaction operations
+    // ========================================================================
+    uploadDocument: async (cutpayId: number, file: File, document_type: string = 'policy_pdf'): Promise<DocumentUploadResponse> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('document_type', document_type)
+      const response = await apiClient.post<DocumentUploadResponse>(`/cutpay/${cutpayId}/upload-document`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       })
       return response.data
     }
   },
-
-  // Agent APIs
   agents: {
     // List all agents
     list: async (params?: AgentListParams): Promise<AgentListResponse> => {

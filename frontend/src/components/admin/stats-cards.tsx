@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, TrendingDown, Users, FileText, DollarSign, MessageSquare } from "lucide-react"
-import { useAdminStats, useCutPayStats, useChildRequestStats } from "@/hooks/adminQuery"
+import { useAdminStats, /* useCutPayStats, */ useChildRequestStats } from "@/hooks/adminQuery"
 import { cn } from "@/lib/utils"
 
 interface StatCardProps {
@@ -82,33 +82,34 @@ function StatCard({
 
 export function StatsCards() {
   const { data: adminStats, isLoading: adminStatsLoading } = useAdminStats()
-  const { data: cutpayStats, isLoading: cutpayStatsLoading } = useCutPayStats()
+  // const { data: cutpayStats, isLoading: cutpayStatsLoading } = useCutPayStats() // Commented out - API returning 500 error
   const { data: childStats, isLoading: childStatsLoading } = useChildRequestStats()
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  // const formatCurrency = (amount: number) => {
+  //   return new Intl.NumberFormat('en-IN', {
+  //     style: 'currency',
+  //     currency: 'INR',
+  //     maximumFractionDigits: 0,
+  //   }).format(amount)
+  // }
 
-  const getMonthlyGrowth = (breakdown?: Array<{ month?: string; year?: number; total_amount?: number; transaction_count?: number }>) => {
-    if (!breakdown || breakdown.length < 2) return 0
+  // const getMonthlyGrowth = (breakdown?: Array<{ month?: string; year?: number; total_amount?: number; transaction_count?: number }>) => {
+  //   if (!breakdown || breakdown.length < 2) return 0
     
-    const sortedData = [...breakdown].sort((a, b) => {
-      const dateA = new Date(a.year || 0, (new Date(`${a.month} 1`).getMonth()) || 0)
-      const dateB = new Date(b.year || 0, (new Date(`${b.month} 1`).getMonth()) || 0)
-      return dateB.getTime() - dateA.getTime()
-    })
+  //   const sortedData = [...breakdown].sort((a, b) => {
+  //     const dateA = new Date(a.year || 0, (new Date(`${a.month} 1`).getMonth()) || 0)
+  //     const dateB = new Date(b.year || 0, (new Date(`${b.month} 1`).getMonth()) || 0)
+  //     return dateB.getTime() - dateA.getTime()
+  //   })
     
-    const current = sortedData[0]?.total_amount || 0
-    const previous = sortedData[1]?.total_amount || 0
+  //   const current = sortedData[0]?.total_amount || 0
+  //   const previous = sortedData[1]?.total_amount || 0
     
-    if (previous === 0) return 0
-    return ((current - previous) / previous) * 100
-  }
-  const monthlyGrowth = getMonthlyGrowth(cutpayStats?.stats?.monthly_breakdown)
+  //   if (previous === 0) return 0
+  //   return ((current - previous) / previous) * 100
+  // }
+  // const monthlyGrowth = getMonthlyGrowth(cutpayStats?.stats?.monthly_breakdown) // Commented out - API returning 500 error
+  // const monthlyGrowth = 0 // Placeholder
 
   return (
     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -133,11 +134,12 @@ export function StatsCards() {
       
       <StatCard
         title="Total CutPay Amount"
-        value={cutpayStats?.stats ? formatCurrency(cutpayStats.stats.total_cut_pay_amount) : '₹0'}
-        change={monthlyGrowth ? Math.round(monthlyGrowth) : undefined}        changeLabel="vs last month"
+        value="₹0" // Placeholder while API is broken
+        change={undefined}
+        changeLabel="vs last month"
         icon={DollarSign}
-        isLoading={cutpayStatsLoading}
-        trend={monthlyGrowth > 0 ? 'up' : monthlyGrowth < 0 ? 'down' : 'neutral'}
+        isLoading={false} // Placeholder
+        trend="neutral"
         className="shadow-sm"
       />
       
