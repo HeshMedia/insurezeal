@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, Edit, Eye, Building, Phone, Mail, MapPin, User } from "lucide-react"
-import { useAssignChildId, useRejectChildRequest, useSuspendChildId } from "@/hooks/adminQuery"
-import { ChildRequest, AssignChildIdRequest } from "@/types/admin.types"
+import { useAssignChildId, useRejectChildRequest, useSuspendChildId, useAdminBrokersInsurers, useAdminAvailableChildIds } from "@/hooks/adminQuery"
+import type { ChildRequest, AssignChildIdRequest } from "@/types/admin.types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
@@ -36,13 +37,30 @@ const statusLabels = {
 }
 
 function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (action: 'assign' | 'reject' | 'suspend' | 'view', request: ChildRequest) => void }) {
+  const router = useRouter()
+
+  // Safety check for request object
+  if (!request || typeof request !== 'object') {
+    return (
+      <Card className="border border-red-200">
+        <CardContent className="p-4 text-center">
+          <p className="text-red-600 text-sm">Invalid request data</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const handleAssignClick = () => {
+    router.push(`/admin/child-requests/${request.id}/assign`)
+  }
+
   return (
     <Card className="hover:shadow-sm transition-shadow border border-gray-200">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-gray-900">
-              {request.insurance_company}
+              {request.insurance_company || 'N/A'}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={cn("text-xs font-medium", statusColors[request.status])}>
@@ -68,7 +86,7 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onAction('assign', request)}
+                onClick={handleAssignClick}
                 className="h-8 w-8 p-0 hover:bg-green-50 hover:text-green-600"
               >
                 <Edit className="h-4 w-4" />
@@ -82,22 +100,22 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
           <div className="flex items-center gap-2 text-gray-600">
             <Building className="h-4 w-4 text-gray-400" />
             <span className="font-medium">Broker:</span>
-            <span>{request.broker}</span>
+            <span>{request.broker || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <MapPin className="h-4 w-4 text-gray-400" />
             <span className="font-medium">Location:</span>
-            <span>{request.location}</span>
+            <span>{request.location || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <Phone className="h-4 w-4 text-gray-400" />
             <span className="font-medium">Phone:</span>
-            <span>{request.phone_number}</span>
+            <span>{request.phone_number || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-2 text-gray-600">
             <Mail className="h-4 w-4 text-gray-400" />
             <span className="font-medium">Email:</span>
-            <span className="truncate">{request.email}</span>
+            <span className="truncate">{request.email || 'N/A'}</span>
           </div>
         </div>
         
@@ -113,14 +131,14 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
 
         <div className="flex items-center justify-between mt-4 pt-3 border-t">
           <span className="text-xs text-gray-500">
-            Created: {new Date(request.created_at).toLocaleDateString()}
+            Created: {request.created_at ? new Date(request.created_at).toLocaleDateString() : 'N/A'}
           </span>
           <div className="flex gap-2">
             {request.status === 'pending' && (
               <>
                 <Button
                   size="sm"
-                  onClick={() => onAction('assign', request)}
+                  onClick={handleAssignClick}
                   className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white"
                 >
                   Assign ID
@@ -160,10 +178,31 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
 }) {
   const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
   const [notes, setNotes] = useState('')
+  const [selectedInsurer, setSelectedInsurer] = useState<string>('')
   
   const assignMutation = useAssignChildId()
   const rejectMutation = useRejectChildRequest()
   const suspendMutation = useSuspendChildId()
+
+  // Fetch dropdown data only for assign action
+  const { data: brokersInsurers } = useAdminBrokersInsurers()
+  const { data: availableChildIds } = useAdminAvailableChildIds({
+    insurer_code: selectedInsurer,
+    broker_code: formData.broker_code
+  })
+
+  // Memoized dropdowns data
+  const brokers = useMemo(() => 
+    brokersInsurers?.brokers?.filter(broker => 
+      broker.broker_code && broker.broker_code.trim() !== "" && broker.is_active
+    ) || []
+  , [brokersInsurers?.brokers])
+  
+  const insurers = useMemo(() => 
+    brokersInsurers?.insurers?.filter(insurer => 
+      insurer.insurer_code && insurer.insurer_code.trim() !== ""
+    ) || []
+  , [brokersInsurers?.insurers])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -171,8 +210,16 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
 
     try {
       if (action === 'assign') {
+        if (!selectedInsurer) {
+          toast.error('Please select an insurance company')
+          return
+        }
+        if (!formData.broker_code) {
+          toast.error('Please select a broker code')
+          return
+        }
         if (!formData.child_id) {
-          toast.error('Child ID is required')
+          toast.error('Please select a Child ID')
           return
         }
         await assignMutation.mutateAsync({
@@ -240,23 +287,23 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="font-medium text-gray-700">Insurance Company:</span>
-                <p className="text-gray-900">{request.insurance_company}</p>
+                <p className="text-gray-900">{request.insurance_company || 'N/A'}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Broker:</span>
-                <p className="text-gray-900">{request.broker}</p>
+                <p className="text-gray-900">{request.broker || 'N/A'}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Location:</span>
-                <p className="text-gray-900">{request.location}</p>
+                <p className="text-gray-900">{request.location || 'N/A'}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Phone:</span>
-                <p className="text-gray-900">{request.phone_number}</p>
+                <p className="text-gray-900">{request.phone_number || 'N/A'}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Email:</span>
-                <p className="text-gray-900">{request.email}</p>
+                <p className="text-gray-900">{request.email || 'N/A'}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Status:</span>
@@ -270,28 +317,85 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
           {action !== 'view' && (
             <form onSubmit={handleSubmit} className="space-y-4">
               {action === 'assign' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="insurer_code">Insurance Company *</Label>
+                      <Select
+                        value={selectedInsurer}
+                        onValueChange={(value) => {
+                          setSelectedInsurer(value)
+                          // Reset child ID when insurer changes
+                          setFormData(prev => ({ ...prev, child_id: '' }))
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select insurance company" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {insurers.length === 0 ? (
+                            <SelectItem value="no-available" disabled>No insurers available</SelectItem>
+                          ) : (
+                            insurers.map((insurer) => (
+                              <SelectItem key={insurer.id} value={insurer.insurer_code}>
+                                {insurer.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="broker_code">Broker Code *</Label>
+                      <Select
+                        value={formData.broker_code || ''}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, broker_code: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select broker code" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {brokers.length === 0 ? (
+                            <SelectItem value="no-available" disabled>No brokers available</SelectItem>
+                          ) : (
+                            brokers.map((broker) => (
+                              <SelectItem key={broker.id} value={broker.broker_code}>
+                                {broker.broker_code} - {broker.name}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label htmlFor="child_id">Child ID *</Label>
-                    <Input
-                      id="child_id"
+                    <Label htmlFor="child_id">Available Child ID *</Label>
+                    <Select
                       value={formData.child_id || ''}
-                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, child_id: e.target.value }))}
-                      placeholder="Enter child ID"
-                      required
-                    />
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, child_id: value }))}
+                      disabled={!selectedInsurer}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={!selectedInsurer ? "Select insurer first" : "Select available Child ID"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!selectedInsurer ? (
+                          <SelectItem value="no-insurer" disabled>Please select an insurer first</SelectItem>
+                        ) : availableChildIds && availableChildIds.length === 0 ? (
+                          <SelectItem value="no-available" disabled>No Child IDs available</SelectItem>
+                        ) : !availableChildIds ? (
+                          <SelectItem value="loading" disabled>Loading...</SelectItem>
+                        ) : (
+                          availableChildIds.map((childId) => (
+                            <SelectItem key={childId.id} value={childId.child_id}>
+                              {childId.child_id} - {childId.region}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="broker_code">Broker Code *</Label>
-                    <Input
-                      id="broker_code"
-                      value={formData.broker_code || ''}
-                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, broker_code: e.target.value }))}
-                      placeholder="Enter broker code"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Label htmlFor="branch_code">Branch Code</Label>
                     <Input
                       id="branch_code"
@@ -410,30 +514,38 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogAction, setDialogAction] = useState<'assign' | 'reject' | 'suspend' | 'view' | null>(null)
 
-  const filteredRequests = requests.filter(request => {
+  // Ensure requests is always an array
+  const safeRequests = Array.isArray(requests) ? requests : []
+
+  const filteredRequests = safeRequests.filter(request => {
     const matchesSearch = 
-      request.insurance_company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      request.broker.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      request.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      request.phone_number.includes(searchQuery)
+      (request.insurance_company?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (request.broker?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (request.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (request.phone_number || '').includes(searchQuery)
     
     const matchesStatus = statusFilter === 'all' || request.status === statusFilter
-      return matchesSearch && matchesStatus
+    return matchesSearch && matchesStatus
   })
 
   const handleAction = (action: 'assign' | 'reject' | 'suspend' | 'view', request: ChildRequest) => {
-    setSelectedRequest(request)
-    setDialogAction(action)
-    setDialogOpen(true)
+    try {
+      setSelectedRequest(request)
+      setDialogAction(action)
+      setDialogOpen(true)
+    } catch (error) {
+      console.error('Error handling action:', error)
+      toast.error('An error occurred while opening the dialog')
+    }
   }
 
   const getStatusCounts = () => {
     return {
-      all: requests.length,
-      pending: requests.filter(r => r.status === 'pending').length,
-      accepted: requests.filter(r => r.status === 'accepted').length,
-      rejected: requests.filter(r => r.status === 'rejected').length,
-      suspended: requests.filter(r => r.status === 'suspended').length,
+      all: safeRequests.length,
+      pending: safeRequests.filter(r => r.status === 'pending').length,
+      accepted: safeRequests.filter(r => r.status === 'accepted').length,
+      rejected: safeRequests.filter(r => r.status === 'rejected').length,
+      suspended: safeRequests.filter(r => r.status === 'suspended').length,
     }
   }
 
@@ -530,13 +642,26 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
             </CardContent>
           </Card>
         ) : (
-          filteredRequests.map((request) => (
-            <RequestCard
-              key={request.id}
-              request={request}
-              onAction={handleAction}
-            />
-          ))
+          filteredRequests.map((request) => {
+            try {
+              return (
+                <RequestCard
+                  key={request?.id || Math.random()}
+                  request={request}
+                  onAction={handleAction}
+                />
+              )
+            } catch (error) {
+              console.error('Error rendering request card:', error, request)
+              return (
+                <Card key={request?.id || Math.random()} className="border border-red-200">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-red-600 text-sm">Error displaying request</p>
+                  </CardContent>
+                </Card>
+              )
+            }
+          })
         )}
       </div>
 

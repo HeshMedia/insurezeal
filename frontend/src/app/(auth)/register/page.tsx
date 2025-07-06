@@ -37,11 +37,46 @@ const RegisterPage = () => {
 
     try {
       // Remove confirmPassword from the data sent to register
-      const { confirmPassword, ...registerData } = formData
-      console.log('Removed confirmPassword:', confirmPassword) // Use the variable
+      const registerData = {
+        email: formData.email,
+        password: formData.password,
+        username: formData.username,
+        first_name: formData.first_name,
+        last_name: formData.last_name
+      }
+      console.log('Attempting registration with:', { ...registerData, password: '[REDACTED]' })
       await register(registerData)
+      // Success will be handled by the useRegister hook
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      console.error('Registration error in component:', err)
+      
+      // Extract meaningful error message
+      let errorMessage = 'Registration failed. Please try again.'
+      
+      if (err instanceof Error) {
+        errorMessage = err.message
+        
+        // Handle specific error cases for better UX
+        if (err.message.toLowerCase().includes('email')) {
+          if (err.message.toLowerCase().includes('already')) {
+            errorMessage = 'This email is already registered. Please use a different email or try signing in.'
+          } else if (err.message.toLowerCase().includes('invalid')) {
+            errorMessage = 'Please enter a valid email address.'
+          }
+        } else if (err.message.toLowerCase().includes('username')) {
+          if (err.message.toLowerCase().includes('already')) {
+            errorMessage = 'This username is already taken. Please choose a different username.'
+          }
+        } else if (err.message.toLowerCase().includes('password')) {
+          errorMessage = 'Password does not meet requirements. Please check and try again.'
+        } else if (err.message.toLowerCase().includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else if (err.message.toLowerCase().includes('server') || err.message.includes('500')) {
+          errorMessage = 'Server error. Please try again later.'
+        }
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -173,8 +208,11 @@ const RegisterPage = () => {
           </div>
 
           {error && (
-            <div className="text-sm text-red-500 text-left bg-red-50 p-2 rounded-lg border border-red-200">
-              {error}
+            <div className="text-sm text-red-600 text-left bg-red-50 p-3 rounded-lg border border-red-200 max-w-full break-words">
+              <div className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5">⚠</span>
+                <span>{error}</span>
+              </div>
             </div>
           )}
         </div>

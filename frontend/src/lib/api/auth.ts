@@ -111,18 +111,57 @@ export const authApi = {
   // Register
   register: async (data: RegisterData): Promise<AuthResponse> => {
     try {
+      console.log('Registration attempt with data:', { ...data, password: '[REDACTED]' })
+      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL)
+      
       const response = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, data, {
         headers: {
           'Content-Type': 'application/json',
         },
       })
+      console.log('Registration successful:', response.data)
       return response.data
     } catch (error: unknown) {
+      console.error('Registration error details:', error)
+      
       if (axios.isAxiosError(error)) {
-        const message = error.response?.data?.detail || error.response?.data?.message || error.message
+        console.error('Response status:', error.response?.status)
+        console.error('Response data:', error.response?.data)
+        console.error('Response headers:', error.response?.headers)
+        
+        // Handle different error response formats
+        let message = 'Registration failed'
+        
+        if (error.response?.data) {
+          const errorData = error.response.data
+          
+          // Try different error message formats
+          if (typeof errorData === 'string') {
+            message = errorData
+          } else if (errorData.detail) {
+            message = errorData.detail
+          } else if (errorData.message) {
+            message = errorData.message
+          } else if (errorData.error) {
+            message = errorData.error
+          } else if (errorData.errors) {
+            // Handle validation errors array
+            if (Array.isArray(errorData.errors)) {
+              message = errorData.errors.map((err: { msg?: string; message?: string }) => err.msg || err.message || String(err)).join(', ')
+            } else {
+              message = JSON.stringify(errorData.errors)
+            }
+          } else {
+            message = `Registration failed: ${JSON.stringify(errorData)}`
+          }
+        } else if (error.message) {
+          message = error.message
+        }
+        
         throw new Error(message)
       }
-      const message = error instanceof Error ? error.message : 'An error occurred'
+      
+      const message = error instanceof Error ? error.message : 'An unexpected error occurred during registration'
       throw new Error(message)
     }
   },

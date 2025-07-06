@@ -142,10 +142,6 @@ const LoginPage = () => {
         
         <div className="text-center space-y-2">
           <p className="text-sm text-gray-600">
-            <Link href="/reset-password" className="font-medium text-blue-600 hover:text-blue-500">
-              Forgot your password?
-            </Link>
-          </p>          <p className="text-sm text-gray-600">
             Don&apos;t have an account?{' '}
             <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
               Sign up

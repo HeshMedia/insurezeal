@@ -8,6 +8,7 @@ import {
   AssignChildIdRequest,
   ChildRequestStatusUpdate
 } from '@/types/admin.types'
+import { useBrokersInsurersList, useAvailableAdminChildIds } from './superadminQuery'
 
 // Query keys
 const ADMIN_QUERY_KEYS = {
@@ -219,3 +220,7 @@ export const useDownloadUniversalRecordTemplate = () => {
     mutationFn: adminApi.universalRecords.downloadTemplate,
   })
 }
+
+// Convenience re-exports for admin use
+export const useAdminBrokersInsurers = useBrokersInsurersList
+export const useAdminAvailableChildIds = useAvailableAdminChildIds
