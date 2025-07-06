@@ -1,11 +1,7 @@
 import { atom } from 'jotai'
-import { CutPayListParams, AgentListParams } from '@/types/admin.types'
+import { AgentListParams } from '@/types/admin.types'
 
-// Cutpay state atoms
-export const cutpayListParamsAtom = atom<CutPayListParams>({
-  page: 1,
-  page_size: 20,
-})
+
 
 export const selectedCutpayIdAtom = atom<number | null>(null)
 
