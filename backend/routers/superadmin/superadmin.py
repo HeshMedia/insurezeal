@@ -10,12 +10,13 @@ from config import get_db
 from models import Broker, Insurer, AdminChildID, UserProfile
 from routers.auth.auth import get_current_user
 from dependencies.rbac import (
-    require_superadmin_brokers_write, require_superadmin_brokers,
-    require_superadmin_insurers_write, require_superadmin_insurers,
+    require_superadmin_brokers_write, require_brokers_read,
+    require_superadmin_insurers_write, require_insurers_read,
     require_superadmin_admin_child_ids_write, require_superadmin_admin_child_ids,
     require_superadmin_admin_child_ids_update, require_superadmin_admin_child_ids_delete,
     require_superadmin_brokers_insurers_list, require_superadmin_brokers_update,
-    require_superadmin_insurers_update, require_superadmin_write
+    require_superadmin_insurers_update, require_superadmin_write,
+    require_superadmin_brokers_delete, require_superadmin_insurers_delete
 )
 from .schemas import (
     BrokerCreate, BrokerResponse, BrokerUpdate,
@@ -70,7 +71,7 @@ async def create_broker(
 async def get_brokers(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_brokers)
+    _rbac_check = Depends(require_brokers_read)
 ):
     """Get all active brokers (Admin/SuperAdmin only)"""
     result = await db.execute(select(Broker).where(Broker.is_active == True))
@@ -82,7 +83,7 @@ async def get_broker(
     broker_code: str,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_brokers)
+    _rbac_check = Depends(require_brokers_read)
 ):
     """Get specific broker by code (Admin/SuperAdmin only)"""
     result = await db.execute(select(Broker).where(Broker.broker_code == broker_code))
@@ -161,7 +162,7 @@ async def create_insurer(
 async def get_insurers(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_insurers)
+    _rbac_check = Depends(require_insurers_read)
 ):
     """Get all active insurers (Admin/SuperAdmin only)"""
     result = await db.execute(select(Insurer).where(Insurer.is_active == True))
@@ -173,7 +174,7 @@ async def get_insurer(
     insurer_code: str,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_insurers)
+    _rbac_check = Depends(require_insurers_read)
 ):
     """Get specific insurer by code (Admin/SuperAdmin only)"""
     result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
