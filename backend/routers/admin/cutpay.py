@@ -22,6 +22,7 @@ from config import get_db, get_supabase_admin_client
 from ..auth.auth import get_current_user
 from dependencies.rbac import require_admin_cutpay
 from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID
+from fastapi.concurrency import run_in_threadpool
 from .cutpay_schemas import (
     CutPayCreate,
     CutPayUpdate,
@@ -41,7 +42,7 @@ from .cutpay_helpers import (
     get_dropdown_options,
     get_filtered_dropdowns,
     auto_populate_relationship_data,
-    sync_cutpay_transaction,
+
     validate_cutpay_data,
     validate_and_resolve_codes,
     resolve_broker_code_to_id,
@@ -75,164 +76,114 @@ def safe_cutpay_response(cutpay_obj) -> CutPayResponse:
 @router.post("/", response_model=CutPayResponse)
 async def create_cutpay_transaction(
     cutpay_data: CutPayCreate,
-    current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    Create new CutPay transaction
-    
-    Supports the comprehensive flow with:
-    - Document upload fields
-    - Extracted data from PDF
-    - Admin manual input
-    - Auto-calculated fields
-    - Relationship auto-population
+    Create new CutPay transaction with a robust, two-phase commit process.
     """
+    # --- Transaction 1: Create Core Data ---
+    cutpay = None
     try:
-        # Validate the data
-        validation_errors = validate_cutpay_data(cutpay_data.dict())
-        if validation_errors:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"errors": validation_errors}
-            )
-        
-        # Create the CutPay transaction with flattened data
-        cutpay_dict = {
-            "created_by": current_user["user_id"],
-            "status": "completed",  # CutPay transactions are always completed by default
-            "policy_pdf_url": cutpay_data.policy_pdf_url,
-            "additional_documents": cutpay_data.additional_documents,
-            "notes": cutpay_data.notes,
-            "claimed_by": cutpay_data.claimed_by,
-            "already_given_to_agent": cutpay_data.already_given_to_agent,
-            "po_paid_to_agent": cutpay_data.po_paid_to_agent,
-            "running_bal": cutpay_data.running_bal,
-            "match_status": cutpay_data.match_status,
-            "invoice_number": cutpay_data.invoice_number
-        }
-        
-        # Extract and flatten extracted_data fields
-        if cutpay_data.extracted_data:
-            extracted_fields = cutpay_data.extracted_data.dict(exclude_unset=True)
-            cutpay_dict.update(extracted_fields)
-        
-        # Extract and flatten admin_input fields  
-        if cutpay_data.admin_input:
-            admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
-            
-            # Resolve broker and insurer codes to IDs before storing
-            broker_code = admin_fields.pop('broker_code', None)
-            insurer_code = admin_fields.pop('insurer_code', None)
-            
-            if broker_code or insurer_code:
-                try:
-                    broker_id, insurer_id = await validate_and_resolve_codes(
-                        db, broker_code, insurer_code
-                    )
-                    if broker_id:
-                        admin_fields['broker_id'] = broker_id
-                    if insurer_id:
-                        admin_fields['insurer_id'] = insurer_id
-                except HTTPException as e:
-                    logger.error(f"Code resolution failed: {e.detail}")
-                    raise e
+        logger.info("Step 1: Beginning core data transaction for new CutPay.")
+        async with db.begin():
+            validation_errors = validate_cutpay_data(cutpay_data.dict())
+            if validation_errors:
+                raise HTTPException(status_code=400, detail={"errors": validation_errors})
 
-            cutpay_dict.update(admin_fields)
-        
-        # Extract and flatten calculations fields
-        if cutpay_data.calculations:
-            calc_fields = cutpay_data.calculations.dict(exclude_unset=True)
-            cutpay_dict.update(calc_fields)
-        
-        # Remove None values to avoid overriding defaults
-        cutpay_dict = {k: v for k, v in cutpay_dict.items() if v is not None}
-        
-        # Check if admin_child_id exists in the database, remove if not
-        if cutpay_dict.get('admin_child_id'):
-            admin_child_exists_result = await db.execute(
-                select(AdminChildID.id).where(AdminChildID.id == cutpay_dict['admin_child_id'])
-            )
-            if not admin_child_exists_result.scalar_one_or_none():
-                logger.warning(f"Admin child ID {cutpay_dict['admin_child_id']} not found, removing from CutPay creation")
-                cutpay_dict.pop('admin_child_id', None)
-        
-        cutpay = CutPay(**cutpay_dict)
-        
-        # Auto-populate relationship data
-        auto_populate_relationship_data(cutpay, db)
-        
-        # Calculate amounts if sufficient data is provided
-        if (cutpay_data.admin_input and cutpay_data.extracted_data and 
-            cutpay_data.extracted_data.gross_premium):
+            # Flatten the nested Pydantic model into a single dictionary for the DB model
+            cutpay_dict = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
+            if cutpay_data.extracted_data:
+                cutpay_dict.update(cutpay_data.extracted_data.dict(exclude_unset=True))
+            if cutpay_data.admin_input:
+                admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
+                broker_code = admin_fields.pop('broker_code', None)
+                insurer_code = admin_fields.pop('insurer_code', None)
+                if broker_code or insurer_code:
+                    try:
+                        broker_id, insurer_id = await validate_and_resolve_codes(db, broker_code, insurer_code)
+                        if broker_id: admin_fields['broker_id'] = broker_id
+                        if insurer_id: admin_fields['insurer_id'] = insurer_id
+                    except HTTPException as e:
+                        logger.error(f"Code resolution failed for broker '{broker_code}' or insurer '{insurer_code}': {e.detail}")
+                        raise e
+                cutpay_dict.update(admin_fields)
+            if cutpay_data.calculations:
+                cutpay_dict.update(cutpay_data.calculations.dict(exclude_unset=True))
             
-            calc_request = CalculationRequest(
-                gross_premium=cutpay_data.extracted_data.gross_premium,
-                net_premium=cutpay_data.extracted_data.net_premium,
-                od_premium=cutpay_data.extracted_data.od_premium,
-                tp_premium=cutpay_data.extracted_data.tp_premium,
-                incoming_grid_percent=cutpay_data.admin_input.incoming_grid_percent,
-                extra_grid=cutpay_data.admin_input.extra_grid,
-                commissionable_premium=cutpay_data.admin_input.commissionable_premium,
-                agent_commission_given_percent=cutpay_data.admin_input.agent_commission_given_percent,
-                agent_extra_percent=cutpay_data.admin_input.agent_extra_percent,
-                payment_by=cutpay_data.admin_input.payment_by,
-                payout_on=cutpay_data.admin_input.payout_on
-            )
+            cutpay_dict["created_by"] = current_user["user_id"]
             
+            # Remove None values to avoid overriding DB defaults
+            cutpay_dict = {k: v for k, v in cutpay_dict.items() if v is not None}
+
+            cutpay = CutPay(**cutpay_dict)
+            auto_populate_relationship_data(cutpay, db)
+
+            calc_request = CalculationRequest.model_validate(cutpay, from_attributes=True)
             calculations = await calculate_commission_amounts(calc_request.dict())
+            for field, value in calculations.items():
+                if hasattr(cutpay, field):
+                    setattr(cutpay, field, value)
             
-            # Update calculated fields
-            cutpay.receivable_from_broker = calculations['receivable_from_broker']
-            cutpay.extra_amount_receivable_from_broker = calculations['extra_amount_receivable_from_broker']
-            cutpay.total_receivable_from_broker = calculations['total_receivable_from_broker']
-            cutpay.total_receivable_from_broker_with_gst = calculations['total_receivable_from_broker_with_gst']
-            cutpay.cut_pay_amount = calculations['cut_pay_amount']
-            cutpay.agent_po_amt = calculations['agent_po_amt']
-            cutpay.agent_extra_amount = calculations.get('agent_extra_amount', 0)
-            cutpay.total_agent_po_amt = calculations['total_agent_po_amt']
-        
-        db.add(cutpay)
-        await db.commit()
+            db.add(cutpay)
+
         await db.refresh(cutpay)
+        logger.info(f"Step 1 SUCCESS: Successfully created CutPay ID {cutpay.id}.")
 
-        # Convert to Pydantic model safely
-        cutpay_response = safe_cutpay_response(cutpay)
-
-        # Auto-sync to Google Sheets after successful creation
-        try:
-            from utils.google_sheets import google_sheets_sync
-            
-            # Always sync to both CutPay and Master sheets since CutPay transactions are always completed
-            await google_sheets_sync.sync_cutpay_to_sheets(cutpay)
-            cutpay.synced_to_cutpay_sheet = True
-            
-            await google_sheets_sync.sync_to_master_sheet(cutpay)
-            cutpay.synced_to_master_sheet = True
-            
-            # Update sync status in database
-            await db.commit()
-            logger.info(f"Auto-synced CutPay {cutpay.id} to both CutPay and Master Google Sheets")
-            
-        except Exception as sync_error:
-            # Log sync error but don't fail the entire creation
-            logger.error(f"Auto-sync failed for CutPay {cutpay.id}: {str(sync_error)}")
-            # Don't raise exception here as the transaction was created successfully
-
-        logger.info(f"Created CutPay transaction {cutpay.id} by user {current_user['user_id']}")
-        return cutpay_response
-        
-    except HTTPException:
-        # Let FastAPI handle HTTPExceptions (like your 400 validation error)
-        raise
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to create CutPay transaction: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create transaction: {str(e)}"
-        )
+        logger.critical(f"Step 1 FAILED: Database creation failed. Traceback:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to create CutPay transaction in the database: {str(e)}")
+
+    # --- Step 2: Google Sheets Synchronization ---
+    sync_results = None
+    try:
+        logger.info(f"Step 2: Starting Google Sheets sync for new CutPay ID {cutpay.id}.")
+        from utils.google_sheets import google_sheets_sync
+        
+        cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
+        for key, value in cutpay_dict.items():
+            if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
+            elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+
+        cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
+        master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
+        sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+        logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
+        
+    except Exception as e:
+        logger.critical(f"Step 2 FAILED: Google Sheets sync failed for CutPay ID {cutpay.id}, but database changes are saved. Traceback:\n{traceback.format_exc()}")
+        return safe_cutpay_response(cutpay)
+
+    # --- Transaction 2: Update Sync Flags ---
+    if not sync_results:
+        logger.warning("Step 3 SKIPPED: No sync results to update flags.")
+        return safe_cutpay_response(cutpay)
+
+    try:
+        logger.info("Step 3: Beginning transaction to update sync flags with a new session.")
+        from config import AsyncSessionLocal
+        async with AsyncSessionLocal() as final_db_session:
+            async with final_db_session.begin():
+                result = await final_db_session.execute(select(CutPay).filter(CutPay.id == cutpay.id))
+                final_cutpay = result.scalar_one()
+
+                if sync_results.get("cutpay", {}).get("success"):
+                    final_cutpay.cutpay_sheet_row_id = sync_results["cutpay"].get("row_id")
+                    final_cutpay.synced_to_cutpay_sheet = True
+                
+                if sync_results.get("master", {}).get("success"):
+                    final_cutpay.master_sheet_row_id = sync_results["master"].get("row_id")
+                    final_cutpay.synced_to_master_sheet = True
+
+            await final_db_session.refresh(final_cutpay)
+            logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
+            logger.info(f"--- Create for CutPay ID: {cutpay.id} finished successfully. ---")
+            return safe_cutpay_response(final_cutpay)
+            
+    except Exception as e:
+        logger.critical(f"Step 3 FAILED: Updating sync flags failed for CutPay ID {cutpay.id}. Traceback:\n{traceback.format_exc()}")
+        return safe_cutpay_response(cutpay)
 
 @router.get("/", response_model=List[CutPayResponse])
 async def list_cutpay_transactions(
@@ -400,7 +351,6 @@ async def export_cutpay_data(
         if export_request.date_to:
             query = query.where(CutPay.booking_date <= export_request.date_to)
         
-        # Remove status filter since all CutPay are completed
         
         if hasattr(export_request, 'insurer_codes') and export_request.insurer_codes:
             # Resolve insurer codes to IDs for filtering
@@ -415,75 +365,59 @@ async def export_cutpay_data(
             if insurer_ids:
                 query = query.where(CutPay.insurer_id.in_(insurer_ids))
         
+        if hasattr(export_request, 'broker_codes') and export_request.broker_codes:
+            # Resolve broker codes to IDs for filtering
+            broker_ids = []
+            for code in export_request.broker_codes:
+                try:
+                    broker_id = await resolve_broker_code_to_id(db, code)
+                    broker_ids.append(broker_id)
+                except HTTPException:
+                    # Skip invalid codes
+                    continue
+            if broker_ids:
+                query = query.where(CutPay.broker_id.in_(broker_ids))
+        
         result = await db.execute(query)
         transactions = result.scalars().all()
         
-        # Generate CSV content
+        # Create a string buffer for CSV data
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write headers
-        headers = [
-            "ID", "Policy Number", "Customer Name", "Reporting Month", "Booking Date",
-            "Agent Code", "Code Type", "Insurer Name", "Broker Name", "Major Categorisation",
-            "Product Type", "Gross Premium", "Net Premium", "OD Premium", "TP Premium",
-            "Incoming Grid %", "Agent Commission %", "CutPay Amount", "Agent Payout"
-        ]
-        writer.writerow(headers)
+        # Write header
+        writer.writerow(CutPayResponse.model_fields.keys())
         
-        # Write data
+        # Write data rows
         for txn in transactions:
-            row = [
-                txn.id, txn.policy_number or '', txn.customer_name or '', txn.reporting_month or '',
-                txn.booking_date or '', txn.agent_code or '', txn.code_type or '', 
-                txn.insurer_name or '', txn.broker_name or '', txn.major_categorisation or '', 
-                txn.product_type or '', txn.gross_premium or 0, txn.net_premium or 0, 
-                txn.od_premium or 0, txn.tp_premium or 0, txn.incoming_grid_percent or 0,
-                txn.agent_commission_given_percent or 0, txn.cut_pay_amount or 0, 
-                txn.total_agent_po_amt or 0
-            ]
-            writer.writerow(row)
+            writer.writerow([getattr(txn, field) for field in CutPayResponse.model_fields.keys()])
         
         output.seek(0)
         
-        # Return as streaming response
         return StreamingResponse(
-            io.BytesIO(output.getvalue().encode()),
+            output,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=cutpay_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+            headers={"Content-Disposition": f"attachment; filename=cutpay_export_{date.today()}.csv"}
         )
         
     except Exception as e:
-        logger.error(f"Export failed: {str(e)}")
+        logger.error(f"Failed to export CutPay data: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Export failed: {str(e)}"
+            detail=f"Failed to export data: {str(e)}"
         )
 
 @router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_statistics(
+async def get_dashboard_stats(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_cutpay)
 ):
-    """Get dashboard statistics for CutPay overview"""
-    
+    """Get dashboard statistics for CutPay"""
     try:
-        # Basic counts (all CutPay transactions are completed)
-        total_result = await db.execute(select(func.count(CutPay.id)))
-        total_transactions = total_result.scalar()
-        
-        # All transactions are completed, so completed = total
-        completed_transactions = total_transactions
-        draft_transactions = 0  # No drafts in CutPay
-        
-        # Financial totals
-        cutpay_sum_result = await db.execute(select(func.coalesce(func.sum(CutPay.cut_pay_amount), 0)))
-        total_cut_pay = cutpay_sum_result.scalar() or 0
-        
-        agent_sum_result = await db.execute(select(func.coalesce(func.sum(CutPay.total_agent_po_amt), 0)))
-        total_agent_payouts = agent_sum_result.scalar() or 0
-        
+        total_transactions = await db.scalar(select(func.count(CutPay.id)))
+        total_gross_premium = await db.scalar(select(func.sum(CutPay.gross_premium)))
+        total_cutpay_amount = await db.scalar(select(func.sum(CutPay.cut_pay_amount)))
         commission_sum_result = await db.execute(select(func.coalesce(func.sum(CutPay.total_receivable_from_broker), 0)))
         total_commission = commission_sum_result.scalar() or 0
         
@@ -522,7 +456,6 @@ async def get_dashboard_statistics(
         )
 
 # =============================================================================
-# SPECIFIC CUTPAY TRANSACTION ENDPOINTS (parameterized routes)
 # =============================================================================
 
 @router.get("/{cutpay_id}", response_model=CutPayResponse)
@@ -550,152 +483,100 @@ async def get_cutpay_transaction(
 async def update_cutpay_transaction(
     cutpay_id: int,
     cutpay_data: CutPayUpdate,
-    current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    _rbac_check = Depends(require_admin_cutpay)
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    Update CutPay transaction with recalculation
-    
-    Automatically recalculates amounts when relevant fields are updated
-    Auto-populates relationship data when IDs are changed
+    Updates a transaction using a robust, decoupled two-transaction approach.
+    This definitive version uses a NEW, independent database session for the second
+    transaction to guarantee it is not affected by the Google Sheets operation.
     """
+    # --- Transaction 1: Core Data Update ---
     try:
-        result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
-        cutpay = result.scalar_one_or_none()
-        if not cutpay:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"CutPay transaction {cutpay_id} not found"
+        async with db.begin():
+            result = await db.execute(
+                select(CutPay).options(selectinload('*')).filter(CutPay.id == cutpay_id)
             )
-        
-        # Validate update data
-        validation_errors = validate_cutpay_data(cutpay_data.dict(exclude_unset=True))
-        if validation_errors:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"errors": validation_errors}
-            )
-        
-        # Update fields
-        update_data = cutpay_data.dict(exclude_unset=True)
-        
-        # Remove status from update data since CutPay transactions are always completed
-        update_data.pop('status', None)
-        
-        # Handle broker and insurer code resolution
-        broker_code = update_data.pop('broker_code', None)
-        insurer_code = update_data.pop('insurer_code', None)
-        
-        if broker_code or insurer_code:
-            try:
-                broker_id, insurer_id = await validate_and_resolve_codes(
-                    db, broker_code, insurer_code
-                )
-                if broker_id:
-                    update_data['broker_id'] = broker_id
-                if insurer_id:
-                    update_data['insurer_id'] = insurer_id
-            except HTTPException as e:
-                logger.error(f"Code resolution failed during update: {e.detail}")
-                raise e
-        
-        # Remove child_id_request_id if it doesn't exist in the database
-        if update_data.get('child_id_request_id'):
-            child_id_exists_result = await db.execute(
-                select(ChildIdRequest.id).where(ChildIdRequest.id == update_data['child_id_request_id'])
-            )
-            if not child_id_exists_result.scalar_one_or_none():
-                logger.warning(f"Child ID request {update_data['child_id_request_id']} not found, removing from update")
-                update_data.pop('child_id_request_id', None)
-        
-        # Remove admin_child_id if it doesn't exist in the database
-        if update_data.get('admin_child_id'):
-            admin_child_exists_result = await db.execute(
-                select(AdminChildID.id).where(AdminChildID.id == update_data['admin_child_id'])
-            )
-            if not admin_child_exists_result.scalar_one_or_none():
-                logger.warning(f"Admin child ID {update_data['admin_child_id']} not found, removing from update")
-                update_data.pop('admin_child_id', None)
-        
-        for field, value in update_data.items():
-            if hasattr(cutpay, field):
-                setattr(cutpay, field, value)
-        
-        # Auto-populate relationship data if IDs changed
-        if any(field in update_data for field in ["insurer_id", "broker_id", "code_type"]):
+            cutpay = result.scalar_one_or_none()
+
+            if not cutpay:
+                raise HTTPException(status_code=404, detail=f"CutPay transaction with ID {cutpay_id} not found")
+
+            update_data = cutpay_data.dict(exclude_unset=True)
+            for field, value in update_data.items():
+                if hasattr(cutpay, field):
+                    setattr(cutpay, field, value)
+            
             auto_populate_relationship_data(cutpay, db)
-        
-        # Recalculate amounts if relevant fields changed
-        calculation_fields = [
-            "gross_premium", "net_premium", "od_premium", "tp_premium",
-            "incoming_grid_percent", "agent_commission_given_percent", "extra_grid",
-            "commissionable_premium", "agent_extra_percent", "payment_by", "payout_on"
-        ]
-        
-        if any(field in update_data for field in calculation_fields):
-            calc_request = CalculationRequest(
-                gross_premium=cutpay.gross_premium,
-                net_premium=cutpay.net_premium,
-                od_premium=cutpay.od_premium,
-                tp_premium=cutpay.tp_premium,
-                incoming_grid_percent=cutpay.incoming_grid_percent,
-                extra_grid=cutpay.extra_grid,
-                commissionable_premium=cutpay.commissionable_premium,
-                agent_commission_given_percent=cutpay.agent_commission_given_percent,
-                agent_extra_percent=cutpay.agent_extra_percent,
-                payment_by=cutpay.payment_by,
-                payout_on=cutpay.payout_on
-            )
-            
-            calculations = await calculate_commission_amounts(calc_request.dict())
-            
-            # Update calculated fields
-            cutpay.receivable_from_broker = calculations['receivable_from_broker']
-            cutpay.extra_amount_receivable_from_broker = calculations['extra_amount_receivable_from_broker']
-            cutpay.total_receivable_from_broker = calculations['total_receivable_from_broker']
-            cutpay.total_receivable_from_broker_with_gst = calculations['total_receivable_from_broker_with_gst']
-            cutpay.cut_pay_amount = calculations['cut_pay_amount']
-            cutpay.agent_po_amt = calculations['agent_po_amt']
-            cutpay.agent_extra_amount = calculations.get('agent_extra_amount', 0)
-            cutpay.total_agent_po_amt = calculations['total_agent_po_amt']
-        
-        await db.commit()
+
+            recalculation_fields = [
+                "gross_premium", "net_premium", "od_premium", "tp_premium", "commissionable_premium",
+                "incoming_grid_perc", "agent_commission_perc", "extra_grid_perc", "agent_extra_perc"
+            ]
+            if any(field in update_data for field in recalculation_fields):
+                calc_request = CalculationRequest.model_validate(cutpay, from_attributes=True)
+                calculations = await calculate_commission_amounts(calc_request.dict())
+                for field, value in calculations.items():
+                    if hasattr(cutpay, field):
+                        setattr(cutpay, field, value)
+
         await db.refresh(cutpay)
-        
-        # Convert to Pydantic model immediately after refresh to avoid lazy loading issues
-        cutpay_response = safe_cutpay_response(cutpay)
-        
-        # Auto-sync to Google Sheets if significant changes occurred
-        try:
-            from utils.google_sheets import google_sheets_sync
-            
-            # Re-sync to both CutPay and Master sheets if any data changed (since all CutPay are completed)
-            if update_data:
-                await google_sheets_sync.sync_cutpay_to_sheets(cutpay)
-                cutpay.synced_to_cutpay_sheet = True
-                
-                await google_sheets_sync.sync_to_master_sheet(cutpay)
-                cutpay.synced_to_master_sheet = True
-                
-                # Update sync status
-                await db.commit()
-                logger.info(f"Auto-synced updated CutPay {cutpay_id} to both CutPay and Master Google Sheets")
-                
-        except Exception as sync_error:
-            # Log sync error but don't fail the entire update
-            logger.error(f"Auto-sync failed for updated CutPay {cutpay_id}: {str(sync_error)}")
-        
-        logger.info(f"Updated CutPay transaction {cutpay_id} by user {current_user['user_id']}")
-        return cutpay_response
-        
+        logger.info(f"Successfully committed core data updates for CutPay ID {cutpay.id}.")
+
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to update CutPay transaction {cutpay_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update transaction: {str(e)}"
-        )
+        logger.error(f"Database update failed for CutPay ID {cutpay_id}: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Failed to update CutPay transaction in the database.")
+
+    # --- Step 2: Google Sheets Synchronization (in background thread) ---
+    sync_results = None
+    try:
+        from utils.google_sheets import google_sheets_sync
+        logger.info(f"Starting Google Sheets sync for CutPay ID {cutpay.id}.")
+        
+        cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay)
+        master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay)
+        sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+        
+    except Exception as sync_error:
+        logger.error(f"Google Sheets sync failed for CutPay ID {cutpay.id}, but database changes are saved. Error: {sync_error}")
+        return safe_cutpay_response(cutpay)
+
+    # --- Transaction 2: Update Sync Flags and Row IDs (with a NEW session) ---
+    if not sync_results:
+        return safe_cutpay_response(cutpay)
+
+    try:
+        from config import AsyncSessionLocal
+        async with AsyncSessionLocal() as final_db_session:
+            async with final_db_session.begin():
+                result = await final_db_session.execute(select(CutPay).filter(CutPay.id == cutpay_id))
+                final_cutpay = result.scalar_one()
+
+                if sync_results["cutpay"].get("success"):
+                    final_cutpay.cutpay_sheet_row_id = sync_results["cutpay"].get("row_id")
+                    final_cutpay.synced_to_cutpay_sheet = True
+                else:
+                    final_cutpay.synced_to_cutpay_sheet = False
+
+                if sync_results["master"].get("success"):
+                    final_cutpay.master_sheet_row_id = sync_results["master"].get("row_id")
+                    final_cutpay.synced_to_master_sheet = True
+                else:
+                    final_cutpay.synced_to_master_sheet = False
+
+            await final_db_session.refresh(final_cutpay)
+            logger.info(f"Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
+            return safe_cutpay_response(final_cutpay)
+            
+    except Exception as flag_update_error:
+        logger.error(f"Failed to update sync flags for CutPay ID {cutpay.id} after successful sync. Error: {flag_update_error}")
+        return safe_cutpay_response(cutpay)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in update_cutpay_transaction for ID {cutpay_id}: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred. Check logs.")
 
 @router.delete("/{cutpay_id}")
 async def delete_cutpay_transaction(
@@ -832,9 +713,8 @@ async def upload_policy_document(
             detail=f"Document upload failed: {str(e)}"
         )
 
-@router.post("/{cutpay_id}/extract-pdf", response_model=ExtractionResponse)
+@router.post("/extract-pdf", response_model=ExtractionResponse)
 async def extract_pdf_data_endpoint(
-    cutpay_id: int,
     file: UploadFile = File(..., description="Policy PDF file for extraction"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -850,15 +730,7 @@ async def extract_pdf_data_endpoint(
     - Customer information
     """
     try:
-        # Verify CutPay record exists
-        result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
-        cutpay = result.scalar_one_or_none()
-        if not cutpay:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"CutPay transaction {cutpay_id} not found"
-            )
-        
+     
         # Validate uploaded file
         if not file.filename or not file.filename.lower().endswith('.pdf'):
             raise HTTPException(
@@ -866,8 +738,6 @@ async def extract_pdf_data_endpoint(
                 detail="Please upload a valid PDF file"
             )
         
-        # Read PDF bytes directly (stateless approach)
-        logger.info(f"Starting stateless PDF extraction for CutPay {cutpay_id}")
         pdf_bytes = await file.read()
         
         if len(pdf_bytes) == 0:
@@ -888,47 +758,17 @@ async def extract_pdf_data_endpoint(
         
         # Convert to Pydantic model for validation
         extracted_data = ExtractedPolicyData(**extracted_data_dict)
-        
-        # Update CutPay record with extracted data
-        for field, value in extracted_data.dict(exclude_unset=True).items():
-            if hasattr(cutpay, field) and value is not None:
-                setattr(cutpay, field, value)
-        
-        await db.commit()
-        
-        # Auto-sync updated extracted data to both CutPay and Master sheets
-        try:
-            from utils.google_sheets import google_sheets_sync
-            await google_sheets_sync.sync_cutpay_to_sheets(cutpay)
-            cutpay.synced_to_cutpay_sheet = True
-            
-            await google_sheets_sync.sync_to_master_sheet(cutpay)
-            cutpay.synced_to_master_sheet = True
-            
-            await db.commit()
-            logger.info(f"Auto-synced extracted data for CutPay {cutpay_id} to both CutPay and Master Google Sheets")
-        except Exception as sync_error:
-            logger.error(f"Auto-sync failed after extraction for CutPay {cutpay_id}: {str(sync_error)}")
-        
-        logger.info(f"Stateless PDF extraction completed for CutPay {cutpay_id}")
-        
+             
         return ExtractionResponse(
-            cutpay_id=cutpay_id,
             extraction_status="completed", 
             extracted_data=extracted_data,
             extraction_time=datetime.now()
         )
         
     except Exception as e:
-        logger.error(f"PDF extraction failed for CutPay {cutpay_id}: {str(e)}")
+        logger.error(f"PDF extraction failed for CutPay {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF extraction failed: {str(e)}"
         )
 
-# =============================================================================
-# NOTE: Auto-sync is enabled for all create/update operations
-# CutPay transactions are always completed by default (created by admins)
-# Both CutPay Sheet and Master Sheet are auto-synced for all transactions
-# Manual sync endpoints removed - sync happens automatically
-# =============================================================================

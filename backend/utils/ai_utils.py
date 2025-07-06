@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 import logging
 import os
 import requests
-from utils.pdf_utils import extract_text_from_bytes
+from utils.pdf_utils import PDFProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -232,7 +232,7 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
             pdf_bytes = response.content
             
             # Extract text from PDF bytes
-            pdf_text = extract_text_from_bytes(pdf_bytes)
+            pdf_text = PDFProcessor.extract_text_from_bytes(pdf_bytes)
             if not pdf_text or len(pdf_text.strip()) < 50:
                 logger.warning("No meaningful text extracted from PDF")
                 return {}
@@ -302,7 +302,7 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
             return {}
         
         # Extract text directly from PDF bytes
-        pdf_text = extract_text_from_bytes(pdf_bytes)
+        pdf_text = PDFProcessor.extract_text_from_bytes(pdf_bytes)
         if not pdf_text or len(pdf_text.strip()) < 50:
             logger.warning("No meaningful text extracted from PDF bytes")
             return {}

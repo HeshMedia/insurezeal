@@ -5,7 +5,7 @@ from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID
 from .cutpay_schemas import (
     CutPayCreate, CutPayUpdate, ExtractedPolicyData, InsurerDropdown, BrokerDropdown, ChildIdDropdown, CutPayStats
 )
-from utils.google_sheets import sync_cutpay_to_sheets
+
 from fastapi import HTTPException, status
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
@@ -89,53 +89,6 @@ async def validate_and_resolve_codes(
 class CutPayHelpers:
     """Helper class for cut pay operations with new flow support"""
     
-    async def create_cutpay_transaction(
-        self, 
-        db: AsyncSession, 
-        cutpay_data: CutPayCreate, 
-        created_by_user_id: str
-    ) -> CutPay:
-        """Create a new cut pay transaction with new flow support"""
-        try:
-            # Calculate cut_pay_amount if sufficient data is provided
-            cut_pay_amount = None
-            payout_amount = None
-            
-            if (cutpay_data.gross_amount and cutpay_data.net_premium and 
-                cutpay_data.agent_commission_given_percent):
-                calculation = await self.calculate_cutpay_amounts(
-                    gross_amount=cutpay_data.gross_amount,
-                    net_premium=cutpay_data.net_premium,
-                    agent_commission_given_percent=cutpay_data.agent_commission_given_percent,
-                    payment_mode=cutpay_data.payment_mode,
-                    payout_percent=cutpay_data.payout_percent
-                )
-                cut_pay_amount = calculation["cut_pay_amount"]
-                payout_amount = calculation["payout_amount"]
-            
-            cutpay = CutPay(
-                **cutpay_data.model_dump(exclude_unset=True),
-                cut_pay_amount=cut_pay_amount,
-                payout_amount=payout_amount,
-                created_by=created_by_user_id
-            )
-            
-            db.add(cutpay)
-            await db.commit()
-            await db.refresh(cutpay, attribute_names=[
-                'insurer', 'broker', 'child_id_request'
-            ])
-            
-            logger.info(f"Cut pay transaction created with ID: {cutpay.id}")
-            return cutpay
-            
-        except Exception as e:
-            await db.rollback()
-            logger.error(f"Error creating cut pay transaction: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create cut pay transaction"
-            )
     
     async def get_cutpay_by_id(self, db: AsyncSession, cutpay_id: int) -> Optional[CutPay]:
         """Get a cut pay transaction by ID with relationships"""
@@ -566,6 +519,7 @@ class CutPayHelpers:
 async def calculate_commission_amounts(calculation_data: Dict[str, Any]) -> Dict[str, Any]:
     """Calculate commission amounts using real business logic from README"""
     try:
+        # Extract input values
         gross_premium = calculation_data.get('gross_premium', 0) or 0
         net_premium = calculation_data.get('net_premium', 0) or 0
         od_premium = calculation_data.get('od_premium', 0) or 0
@@ -576,7 +530,8 @@ async def calculate_commission_amounts(calculation_data: Dict[str, Any]) -> Dict
         agent_commission_percent = calculation_data.get('agent_commission_given_percent', 0) or 0
         payment_by = calculation_data.get('payment_by', 'Agent')
         payout_on = calculation_data.get('payout_on', 'NP')
-
+        
+        # Initialize results
         result = {
             'receivable_from_broker': 0,
             'extra_amount_receivable_from_broker': 0,
@@ -748,28 +703,7 @@ def auto_populate_relationship_data(cutpay: CutPay, db: AsyncSession):
     except Exception as e:
         logger.error(f"Error auto-populating relationship data: {str(e)}")
 
-async def sync_cutpay_transaction(cutpay_id: int, db: AsyncSession) -> Dict[str, Any]:
-    """Sync CutPay transaction to Google Sheets using real sync function"""
-    try:
-        # Get the CutPay transaction
-        helper = CutPayHelpers()
-        cutpay = await helper.get_cutpay_by_id(db, cutpay_id)
-        
-        if not cutpay:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="CutPay transaction not found"
-            )
-        
-        # Use the real Google Sheets sync function
-        result = await sync_cutpay_to_sheets(cutpay)
-        
-        logger.info(f"Successfully synced CutPay transaction {cutpay_id} to Google Sheets")
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error syncing CutPay transaction {cutpay_id}: {str(e)}")
-        return {"status": "error", "message": str(e)}
+
 
 def validate_cutpay_data(cutpay_data: Dict[str, Any]) -> List[str]:
     """Validate CutPay data (standalone function)"""

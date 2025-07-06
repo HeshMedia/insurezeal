@@ -400,7 +400,7 @@ class CutPay(Base):
     insurer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("insurers.id"), nullable=True)
     broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
     child_id_request_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("child_id_requests.id"), nullable=True)
-    admin_child_id: Mapped[Optional[int]] = mapped_column(ForeignKey("admin_child_ids.id"), nullable=True)
+    admin_child_id: Mapped[Optional[str]] = mapped_column(ForeignKey("admin_child_ids.child_id"), nullable=True)
     
     # =============================================================================
     # AUTO-CALCULATED FIELDS
@@ -440,8 +440,7 @@ class CutPay(Base):
     # SYSTEM FIELDS
     # =============================================================================
     
-    # Status tracking
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
+
     
     # Google Sheets sync tracking
     synced_to_cutpay_sheet: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -470,22 +469,6 @@ class CutPay(Base):
         nullable=False
     )
     
-    # Legacy/Deprecated fields (kept for backward compatibility)
-    policy_holder_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # Use customer_name instead
-    policy_start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
-    policy_end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
-    premium_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Use gross_premium instead
-    sum_insured: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    insurance_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Use major_categorisation instead
-    gross_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Use gross_premium instead
-    commission_grid: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    payment_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Use payment_by instead
-    payout_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    amount_received: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    payment_source: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    payment_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
-    transaction_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)  # Use booking_date instead
     
     # Relationships
     insurer: Mapped[Optional["Insurer"]] = relationship("Insurer", back_populates="cutpay_transactions")
