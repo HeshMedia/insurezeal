@@ -1,3 +1,19 @@
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:     %(message)s",
+    stream=sys.stdout,
+)
+logger = logging.getLogger()
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
@@ -8,10 +24,11 @@ import os
 from routers.auth.auth import router as auth_router
 from routers.users.users import router as users_router
 from routers.admin.admin import router as admin_router
-from routers.admin.cutpay import router as cutpay_router
 from routers.child.child import router as child_router
 from routers.policies.policies import router as policies_router
 from routers.superadmin.superadmin import router as superadmin_router
+from routers.admin.cutpay import router as cutpay_router
+from routers.admin.public import router as public_router
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 IS_PRODUCTION = ENVIRONMENT == "prod"
@@ -42,10 +59,11 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(admin_router)
-app.include_router(cutpay_router)
 app.include_router(superadmin_router)
 app.include_router(child_router)
 app.include_router(policies_router)
+app.include_router(cutpay_router)
+app.include_router(public_router)
 
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):

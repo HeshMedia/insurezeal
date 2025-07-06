@@ -73,7 +73,7 @@ class AdminInputData(BaseModel):
     # Relationship Selection
     insurer_code: Optional[str] = Field(None, description="Selected insurer code")
     broker_code: Optional[str] = Field(None, description="Selected broker code")
-    admin_child_id: Optional[int] = Field(None, description="Selected admin child ID")
+    admin_child_id: Optional[str] = Field(None, description="Selected admin child ID")
     
     @validator('code_type')
     def validate_code_type(cls, v):
@@ -166,11 +166,8 @@ class CutPayCreate(BaseModel):
     match_status: Optional[str] = Field(None, description="Reconciliation status")
     invoice_number: Optional[str] = Field(None, description="Invoice reference")
     
-    # Status and notes (CutPay transactions are always completed)
-    status: Optional[str] = Field("completed", description="Transaction status - always completed for CutPay")
+    # Notes
     notes: Optional[str] = Field(None, description="Additional notes")
-    
-    # Remove status validator since CutPay is always completed
 
 class CutPayUpdate(BaseModel):
     """Schema for updating cut pay transactions"""
@@ -238,7 +235,7 @@ class CutPayUpdate(BaseModel):
     match_status: Optional[str] = Field(None)
     invoice_number: Optional[str] = Field(None)
     
-    status: Optional[str] = Field(None)
+    # Notes
     notes: Optional[str] = Field(None)
 
 class CutPayResponse(BaseModel):
@@ -352,7 +349,6 @@ class CutPayResponse(BaseModel):
     # SYSTEM FIELDS
     # =============================================================================
     
-    status: str
     synced_to_cutpay_sheet: bool
     synced_to_master_sheet: bool
     cutpay_sheet_row_id: Optional[str]
@@ -364,25 +360,10 @@ class CutPayResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    # Legacy fields (kept for backward compatibility)
-    policy_holder_name: Optional[str]
-    policy_start_date: Optional[date]
-    policy_end_date: Optional[date]
-    premium_amount: Optional[float]
-    sum_insured: Optional[float]
-    insurance_type: Optional[str]
-    gross_amount: Optional[float]
-    commission_grid: Optional[str]
-    payment_mode: Optional[str]
-    payout_percent: Optional[float]
-    payout_amount: Optional[float]
-    amount_received: Optional[float]
-    payment_source: Optional[str]
-    payment_date: Optional[date]
-    transaction_date: Optional[date]
     
     class Config:
         from_attributes = True
+        arbitary_types_allowed = True
 
 # =============================================================================
 # DROPDOWN & UTILITY SCHEMAS
@@ -446,7 +427,6 @@ class ExtractionRequest(BaseModel):
 
 class ExtractionResponse(BaseModel):
     """Schema for PDF extraction response"""
-    cutpay_id: int
     extraction_status: str
     extracted_data: Optional[ExtractedPolicyData]
     confidence_scores: Optional[Dict[str, float]] = None
@@ -479,9 +459,7 @@ class ExportRequest(BaseModel):
     format: str = Field("csv", description="Export format: csv, excel")
     date_from: Optional[date] = Field(None, description="Start date filter")
     date_to: Optional[date] = Field(None, description="End date filter")
-    # Removed status_filter since all CutPay transactions are completed
-    insurer_codes: Optional[List[str]] = Field(None, description="Insurer codes filter")
-    
+
     @validator('format')
     def validate_format(cls, v):
         if v not in ['csv', 'excel']:
@@ -504,6 +482,42 @@ class DashboardStats(BaseModel):
     # Top performers
     top_agents: List[Dict[str, Any]]
     top_insurers: List[Dict[str, Any]]
+    
+    # Calculated fields
+    cut_pay_amount: Optional[float]
+    
+    # Payment tracking
+    payment_by: Optional[str]
+    amount_received: Optional[float]
+    payment_method: Optional[str]
+    payment_source: Optional[str]
+    payment_date: Optional[date]
+    
+    # Dates
+    transaction_date: Optional[date]
+    
+
+    
+    # Google Sheets sync tracking
+    synced_to_cutpay_sheet: bool
+    synced_to_master_sheet: bool
+    cutpay_sheet_row_id: Optional[str]
+    master_sheet_row_id: Optional[str]
+    
+    # Additional info
+    notes: Optional[str]
+    
+    # Audit fields
+    created_at: datetime
+    updated_at: datetime
+    
+    # Relationship data (loaded when needed)
+    insurer: Optional[Dict[str, Any]] = None
+    broker: Optional[Dict[str, Any]] = None
+    child_id_request: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
 
 class CutPaySummary(BaseModel):
     """Schema for cut pay transaction summary (for card view in lists)"""
@@ -515,7 +529,6 @@ class CutPaySummary(BaseModel):
     cut_pay_amount: Optional[float]
     amount_received: Optional[float]
     transaction_date: Optional[date]
-    status: str
     created_at: datetime
     
     # Relationship names for display
@@ -549,7 +562,6 @@ class ChildIdDropdown(BaseModel):
     insurer_name: Optional[str]
     broker_name: Optional[str]
     code_type: Optional[str]
-    status: Optional[str]
 
 class CutPayStats(BaseModel):
     total_transactions: int

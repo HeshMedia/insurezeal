@@ -33,6 +33,8 @@ from .schemas import (
 )
 from . import schemas
 from .helpers import AdminHelpers
+from routers.child.helpers import ChildHelpers
+from .cutpay import router as cutpay_router
 from .public import router as public_router
 from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
 from utils.google_sheets import google_sheets_sync
@@ -47,8 +49,8 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 security = HTTPBearer()
 
 admin_helpers = AdminHelpers()
+child_helpers = ChildHelpers()
 
-router.include_router(public_router)
 
 @router.get("/agents", response_model=AgentListResponse)
 async def list_all_agents(
@@ -233,27 +235,17 @@ async def get_all_child_requests(
             req_dict = convert_uuids_to_strings(model_data_from_orm(req))
             
             if req.insurer:
-                req_dict["insurer_id"] = req.insurer.id
                 req_dict["insurer"] = {
                     "id": req.insurer.id,
                     "insurer_code": req.insurer.insurer_code,
                     "name": req.insurer.name
                 }
-            else:
-              
-                logger.warning(f"ChildIdRequest {req.id} has no insurer relationship")
-                continue 
-            
             if req.broker:
-                req_dict["broker_id"] = req.broker.id
                 req_dict["broker_relation"] = {
                     "id": req.broker.id,
                     "broker_code": req.broker.broker_code,
                     "name": req.broker.name
                 }
-            else:
-                req_dict["broker_id"] = None
-                req_dict["broker_relation"] = None
             
             formatted_requests.append(ChildIdResponse.model_validate(req_dict))
         
@@ -271,6 +263,63 @@ async def get_all_child_requests(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch child ID requests"
         )
+
+@router.get("/child-requests/{request_id}", response_model=ChildIdResponse)
+async def get_child_request_by_id(
+    request_id: str,
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_child_requests)
+):
+    """
+    Admin: Get details of a specific child ID request
+    
+    **Admin only endpoint**
+    
+    - **request_id**: The ID of the child ID request to retrieve
+    - Returns complete request details including user, insurer, and broker information
+    """
+    
+    try:
+        child_request = await child_helpers.get_child_request_by_id(db=db, request_id=request_id)
+
+        if not child_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Child ID request not found"
+            )
+        
+        from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+        req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        
+        if child_request.insurer:
+            # Add insurer_id field required by ChildIdResponse schema
+            req_dict["insurer_id"] = child_request.insurer.id
+            req_dict["insurer"] = {
+                "id": str(child_request.insurer.id),
+                "insurer_code": child_request.insurer.insurer_code,
+                "name": child_request.insurer.name
+            }
+        if child_request.broker:
+            # Add broker_id field required by ChildIdResponse schema
+            req_dict["broker_id"] = child_request.broker.id
+            req_dict["broker_relation"] = {
+                "id": str(child_request.broker.id),
+                "broker_code": child_request.broker.broker_code,
+                "name": child_request.broker.name
+            }
+        
+        return ChildIdResponse.model_validate(req_dict)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching child request details: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch child ID request details"
+        )
+
 
 @router.put("/child-requests/{request_id}/assign", response_model=ChildIdResponse)
 async def assign_child_id(
@@ -305,29 +354,17 @@ async def assign_child_id(
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
 
         if child_request.insurer:
-            req_dict["insurer_id"] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
-        else:
-            logger.warning(f"ChildIdRequest {child_request.id} has no insurer relationship")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Child ID request has invalid insurer relationship"
-            )
-        
         if child_request.broker:
-            req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
-        else:
-            req_dict["broker_id"] = None
-            req_dict["broker_relation"] = None
 
         google_sheets_dict = {
             'id': str(child_request.id),
@@ -389,29 +426,17 @@ async def reject_child_request(
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
 
         if child_request.insurer:
-            req_dict["insurer_id"] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
-        else:
-            logger.warning(f"ChildIdRequest {child_request.id} has no insurer relationship")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Child ID request has invalid insurer relationship"
-            )
-        
         if child_request.broker:
-            req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
-        else:
-            req_dict["broker_id"] = None
-            req_dict["broker_relation"] = None
 
         google_sheets_dict = {
             'id': str(child_request.id),
@@ -475,29 +500,17 @@ async def suspend_child_id(
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
         
         if child_request.insurer:
-            req_dict["insurer_id"] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
-        else:
-            logger.warning(f"ChildIdRequest {child_request.id} has no insurer relationship")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Child ID request has invalid insurer relationship"
-            )
-        
         if child_request.broker:
-            req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": child_request.broker.id,
                 "broker_code": child_request.broker.broker_code,
                 "name": child_request.broker.name
             }
-        else:
-            req_dict["broker_id"] = None
-            req_dict["broker_relation"] = None
 
         google_sheets_dict = {
             'id': str(child_request.id),
@@ -749,7 +762,7 @@ async def promote_agent_to_admin(
     user_id: str,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    _: dict = Depends(require_admin_write)
+    _: dict = Depends(require_admin_write)  # Only admins can promote agents
 ):
     """
     Promote an agent to admin role. Only accessible by existing admins.
@@ -760,6 +773,7 @@ async def promote_agent_to_admin(
     from uuid import UUID
     
     try:
+        # Validate user_id format
         try:
             user_uuid = UUID(user_id)
         except ValueError:

@@ -10,6 +10,7 @@ from datetime import datetime
 from supabase import Client
 from config import get_supabase_admin_client
 from utils.google_sheets import google_sheets_sync
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -377,7 +378,32 @@ class AdminHelpers:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch child ID requests"
             )
+        
+    async def get_child_request_by_id(
+        self,
+        db: AsyncSession,
+        request_id: str
+    ) -> ChildIdRequest:
+        """        Get a specific child ID request by ID
+        Args:
+            db: Database session
+            request_id: Child ID request ID
+        Returns:
+            ChildIdRequest object       
+        Raises:
+            HTTPException: If request not found
+        """
+        query = select(ChildIdRequest).where(ChildIdRequest.id == uuid.UUID(request_id))
+        result = await db.execute(query)
+        child_request = result.scalar_one_or_none()
 
+        if not child_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Child ID request not found"
+            )
+        return child_request
+    
     async def approve_child_request(
         self,
         db: AsyncSession,
