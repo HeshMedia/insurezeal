@@ -27,6 +27,7 @@ import {
 // Import components
 import PolicyPdfUpload from '@/components/admin/cutpay/policy-pdf-upload'
 import AdditionalDocumentsUpload from '@/components/admin/cutpay/additional-documents-upload'
+import AdminInputForm from '@/components/admin/cutpay/admin-input-form'
 
 // Import IndexedDB utilities
 import { initializeIndexedDB, debugIndexedDB } from '@/lib/utils/indexeddb'
@@ -108,10 +109,10 @@ const CreateCutPayPage = () => {
         )
       case 3:
         return (
-          <div className="text-center py-12">
-            <h3 className="text-lg font-semibold mb-2">Admin Input Step</h3>
-            <p className="text-muted-foreground">Coming in next implementation...</p>
-          </div>
+          <AdminInputForm 
+            onNext={handleNextStep} 
+            onPrev={handlePreviousStep}
+          />
         )
       default:
         return null
