@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useAtom } from "jotai"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,10 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useCutPayList } from "@/hooks/adminQuery"
-import { cutpayListParamsAtom } from "@/lib/atoms/admin"
-import { CutPaySummary } from "@/types/admin.types"
+
+import { useCutPayList } from "@/hooks/cutpayQuery"
+import { CutPayListParams, CutPayTransaction } from "@/types/cutpay.types"
 import { cn } from "@/lib/utils"
 import { 
   Search, 
@@ -36,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 function CutPayCard({ cutpay, onViewDetails, onEdit }: { 
-  cutpay: CutPaySummary; 
+  cutpay: CutPayTransaction; 
   onViewDetails: (id: number) => void;
   onEdit: (id: number) => void;
 }) {
@@ -111,15 +109,15 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
             <span className="font-bold text-green-600">{formatCurrency(cutpay.cut_pay_amount || 0)}</span>
           </div>
           <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-            <span className="text-gray-600 font-medium">Amount Received:</span>
-            <span className="font-bold text-blue-600">{formatCurrency(cutpay.amount_received || 0)}</span>
+            <span className="text-gray-600 font-medium">Total Agent PO:</span>
+            <span className="font-bold text-blue-600">{formatCurrency(cutpay.total_agent_po_amt || 0)}</span>
           </div>
           <div className="flex items-center gap-3 text-gray-600 pt-2">
             <div className="p-1.5 bg-gray-100 rounded-md">
               <Calendar className="h-3.5 w-3.5 text-gray-500" />
             </div>
             <span>
-              {cutpay.transaction_date ? new Date(cutpay.transaction_date).toLocaleDateString('en-IN', {
+              {cutpay.created_at ? new Date(cutpay.created_at).toLocaleDateString('en-IN', {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric'
@@ -144,18 +142,43 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
 
 export function CutPayManagement() {
   const router = useRouter()
-  const [params, setParams] = useAtom(cutpayListParamsAtom)
+  const [params, setParams] = useState<CutPayListParams>({
+    limit: 100,
+    skip: 0
+  })
   const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [currentPage, setCurrentPage] = useState(1)
+  const pageSize = 20
 
-  const { data: cutpayData, isLoading, error } = useCutPayList(params)
+  const { data: cutpayTransactions, isLoading, error } = useCutPayList(params)
+
+  // Client-side pagination and filtering
+  const filteredTransactions = cutpayTransactions?.filter(transaction => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      transaction.policy_number?.toLowerCase().includes(query) ||
+      transaction.customer_name?.toLowerCase().includes(query) ||
+      transaction.registration_no?.toLowerCase().includes(query) ||
+      transaction.agent_code?.toLowerCase().includes(query)
+    )
+  }) || []
+
+  const totalTransactions = filteredTransactions.length
+  const totalPages = Math.ceil(totalTransactions / pageSize)
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const currentTransactions = filteredTransactions.slice(startIndex, endIndex)
 
   const handleSearch = () => {
-    setParams(prev => ({ ...prev, search: searchQuery, page: 1 }))
+    setParams(prev => ({ ...prev, search: searchQuery }))
+    setCurrentPage(1) // Reset to first page when searching
   }
 
+  // Handle pagination
   const handlePageChange = (newPage: number) => {
-    setParams(prev => ({ ...prev, page: newPage }))
+    setCurrentPage(newPage)
   }
 
   const handleViewDetails = (cutpayId: number) => {
@@ -168,10 +191,6 @@ export function CutPayManagement() {
 
   const handleCreateNew = () => {
     router.push('/admin/cutpay/create')
-  }
-
-  const handlePageSizeChange = (newPageSize: string) => {
-    setParams(prev => ({ ...prev, page_size: parseInt(newPageSize), page: 1 }))
   }
 
   if (error) {
@@ -219,7 +238,7 @@ export function CutPayManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
-              {cutpayData?.total_count || 0}
+              {totalTransactions}
             </div>
             <p className="text-xs text-gray-500 mt-1">Total cutpay transactions</p>
           </CardContent>
@@ -234,8 +253,8 @@ export function CutPayManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
-              {cutpayData?.transactions?.filter(t => {
-                const transactionDate = new Date(t.transaction_date)
+              {cutpayTransactions?.filter(t => {
+                const transactionDate = new Date(t.created_at)
                 const thirtyDaysAgo = new Date()
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
                 return transactionDate > thirtyDaysAgo
@@ -254,7 +273,7 @@ export function CutPayManagement() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="text-2xl font-bold text-gray-900">
-              ₹{cutpayData?.transactions?.reduce((sum, t) => sum + (t.cut_pay_amount || 0), 0).toLocaleString('en-IN') || '0'}
+              ₹{cutpayTransactions?.reduce((sum, t) => sum + (t.cut_pay_amount || 0), 0).toLocaleString('en-IN') || '0'}
             </div>
             <p className="text-xs text-gray-500 mt-1">Total cut pay amount</p>
           </CardContent>
@@ -299,22 +318,7 @@ export function CutPayManagement() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg font-semibold text-gray-900">Transactions</CardTitle>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Show</span>
-              <Select
-                value={params.page_size?.toString() || "20"}
-                onValueChange={handlePageSizeChange}
-              >
-                <SelectTrigger className="w-20 border-gray-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-gray-500">entries</span>
+              <span className="text-sm text-gray-500">Page size: {pageSize}</span>
             </div>
           </div>
         </CardHeader>
@@ -345,7 +349,7 @@ export function CutPayManagement() {
                 </Card>
               ))}
             </div>
-          ) : cutpayData?.transactions?.length === 0 ? (
+          ) : totalTransactions === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-2">
                 <CreditCard className="h-12 w-12 mx-auto" />
@@ -362,7 +366,7 @@ export function CutPayManagement() {
               "grid gap-4",
               viewMode === 'grid' ? "md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
             )}>
-              {cutpayData?.transactions?.map((cutpay) => (
+              {currentTransactions.map((cutpay) => (
                 <CutPayCard
                   key={cutpay.id}
                   cutpay={cutpay}
@@ -374,31 +378,29 @@ export function CutPayManagement() {
           )}
 
           {/* Pagination */}
-          {cutpayData && cutpayData.transactions.length > 0 && (
+          {totalTransactions > 0 && totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-gray-500">
-                Showing {((cutpayData.page - 1) * cutpayData.page_size) + 1} to{' '}
-                {Math.min(cutpayData.page * cutpayData.page_size, cutpayData.total_count)} of{' '}
-                {cutpayData.total_count} transactions
+                Showing {startIndex + 1} to {Math.min(endIndex, totalTransactions)} of {totalTransactions} transactions
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(cutpayData.page - 1)}
-                  disabled={cutpayData.page <= 1}
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
                 >
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Previous
                 </Button>
                 <span className="text-sm text-gray-600">
-                  Page {cutpayData.page} of {Math.ceil(cutpayData.total_count / cutpayData.page_size)}
+                  Page {currentPage} of {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handlePageChange(cutpayData.page + 1)}
-                  disabled={cutpayData.page >= Math.ceil(cutpayData.total_count / cutpayData.page_size)}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
                 >
                   Next
                   <ArrowRight className="h-4 w-4 ml-1" />

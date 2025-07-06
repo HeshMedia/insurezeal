@@ -6,8 +6,8 @@ import {
   UpdateCutPayRequest,
   CutPayListParams,
   CutPayDocumentUploadResponse,
-  ExtractPdfResponse,
-  CutPayDeleteResponse
+  CutPayDeleteResponse,
+  ExtractPdfResponse
 } from '@/types/cutpay.types'
 
 // Create axios instance

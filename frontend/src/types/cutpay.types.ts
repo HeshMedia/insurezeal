@@ -31,6 +31,15 @@ export interface ExtractedPolicyData {
   veh_wheels?: number | null
 }
 
+// PDF extraction response
+export interface ExtractPdfResponse {
+  extraction_status: string
+  extracted_data: ExtractedPolicyData | null
+  confidence_scores?: Record<string, number>
+  errors?: string[]
+  extraction_time: string
+}
+
 // Admin input data
 export interface AdminInputData {
   reporting_month?: string | null
@@ -282,14 +291,7 @@ export interface CutPayDocumentUploadResponse {
   message: string
 }
 
-// PDF extraction response
-export interface ExtractPdfResponse {
-  extraction_status: string
-  extracted_data: ExtractedPolicyData | null
-  confidence_scores?: Record<string, number>
-  errors?: string[]
-  extraction_time: string
-}
+
 
 // Delete response
 export interface CutPayDeleteResponse {
