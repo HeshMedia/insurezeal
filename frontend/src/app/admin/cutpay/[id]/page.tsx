@@ -203,7 +203,8 @@ export default function CutPayDetailPage() {
               </h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <DetailItem label="Agent Code" value={cutpay.agent_code} />
+                  {/* value={cutpay.agent_code} */}
+                  <DetailItem label="Agent Code" value="102"  />
                   <DetailItem 
                     label="Commission Percentage" 
                     value={`${cutpay.agent_commission_given_percent}%`}

@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import { ExtractPdfResponse } from '@/types/cutpay.types'
+import { ExtractPdfResponse, CutPayCalculationResponse } from '@/types/cutpay.types'
 
 // Cutpay creation flow state
 export const cutpayCreationStepAtom = atom<number>(1)
@@ -66,6 +66,9 @@ export const cutpayFormCompletionAtom = atom<{
   step1Complete: false,
   step2Complete: false,
 })
+
+// Cutpay calculation response data
+export const cutpayCalculationResultAtom = atom<CutPayCalculationResponse | null>(null)
 
 // Utility function to get all stored documents from IndexedDB
 export const getAllStoredDocuments = async (): Promise<{

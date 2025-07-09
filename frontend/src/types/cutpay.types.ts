@@ -72,65 +72,14 @@ export interface CalculationData {
   total_agent_po_amt?: number | null
 }
 
-// Create cutpay transaction request (flattened structure as per API)
+// Create cutpay transaction request (structured as per API schema)
 export interface CreateCutPayRequest {
   policy_pdf_url: string
   additional_documents?: Record<string, unknown>
-  // Extracted data fields (flattened)
-  policy_number?: string | null
-  formatted_policy_number?: string | null
-  major_categorisation?: string | null
-  product_insurer_report?: string | null
-  product_type?: string | null
-  plan_type?: string | null
-  customer_name?: string | null
-  gross_premium?: number | null
-  net_premium?: number | null
-  od_premium?: number | null
-  tp_premium?: number | null
-  gst_amount?: number | null
-  registration_no?: string | null
-  make_model?: string | null
-  model?: string | null
-  vehicle_variant?: string | null
-  gvw?: number | null
-  rto?: string | null
-  state?: string | null
-  fuel_type?: string | null
-  cc?: number | null
-  age_year?: number | null
-  ncb?: string | null
-  discount_percent?: number | null
-  business_type?: string | null
-  seating_capacity?: number | null
-  veh_wheels?: number | null
-  // Admin input fields (flattened)
-  reporting_month?: string | null
-  booking_date?: string | null
-  agent_code?: string | null
-  code_type?: string | null
-  incoming_grid_percent?: number | null
-  agent_commission_given_percent?: number | null
-  extra_grid?: number | null
-  commissionable_premium?: number | null
-  payment_by?: string | null
-  payment_method?: string | null
-  payout_on?: string | null
-  agent_extra_percent?: number | null
-  payment_by_office?: string | null
-  insurer_code?: string | null
-  broker_code?: string | null
-  admin_child_id?: string | null
-  // Calculation fields (flattened)
-  receivable_from_broker?: number | null
-  extra_amount_receivable_from_broker?: number | null
-  total_receivable_from_broker?: number | null
-  total_receivable_from_broker_with_gst?: number | null
-  cut_pay_amount?: number | null
-  agent_po_amt?: number | null
-  agent_extra_amount?: number | null
-  total_agent_po_amt?: number | null
-  // Additional fields
+  extracted_data?: ExtractedPolicyData
+  admin_input?: AdminInputData
+  calculations?: CalculationData
+  // Additional fields (flattened at root level)
   claimed_by?: string | null
   already_given_to_agent?: number | null
   po_paid_to_agent?: number | null
@@ -186,7 +135,7 @@ export interface UpdateCutPayRequest {
   payment_by_office?: string | null
   insurer_code?: string | null
   broker_code?: string | null
-  admin_child_id?: number | null
+  admin_child_id?: string | null
   claimed_by?: string | null
   already_given_to_agent?: number | null
   po_paid_to_agent?: number | null
@@ -291,9 +240,33 @@ export interface CutPayDocumentUploadResponse {
   message: string
 }
 
+// Cutpay calculation request
+export interface CutPayCalculationRequest {
+  gross_premium: number
+  net_premium: number
+  od_premium: number
+  tp_premium: number
+  incoming_grid_percent: number
+  extra_grid: number
+  commissionable_premium: number
+  agent_commission_given_percent: number
+  agent_extra_percent: number
+  payment_by: string
+  payout_on: string
+}
 
+// Cutpay calculation response
+export interface CutPayCalculationResponse {
+  receivable_from_broker: number
+  extra_amount_receivable_from_broker: number
+  total_receivable_from_broker: number
+  total_receivable_from_broker_with_gst: number
+  cut_pay_amount: number
+  agent_po_amt: number
+  agent_extra_amount: number
+  total_agent_po_amt: number
+}
 
-// Delete response
 export interface CutPayDeleteResponse {
   message?: string
   success?: boolean

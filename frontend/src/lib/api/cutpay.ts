@@ -7,7 +7,9 @@ import {
   CutPayListParams,
   CutPayDocumentUploadResponse,
   CutPayDeleteResponse,
-  ExtractPdfResponse
+  ExtractPdfResponse,
+  CutPayCalculationRequest,
+  CutPayCalculationResponse
 } from '@/types/cutpay.types'
 
 // Create axios instance
@@ -34,13 +36,40 @@ apiClient.interceptors.response.use(
     console.error('Cutpay API Error:', {
       response: error.response?.data,
       status: error.response?.status,
-      message: error.message
+      message: error.message,
+      url: error.config?.url,
+      method: error.config?.method
     })
+    
+    // Log the full error response for debugging
+    if (error.response?.data) {
+      console.error('Full API Error Response:', JSON.stringify(error.response.data, null, 2))
+    }
     
     let message = 'An unexpected error occurred'
     
     if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
+      // Handle 422 validation errors specifically
+      if (error.response.status === 422) {
+        if (Array.isArray(error.response.data)) {
+          // FastAPI validation errors format
+          const validationErrors = error.response.data.map((err: { loc: string[], msg: string, type: string }) => 
+            `${err.loc.join('.')}: ${err.msg}`
+          ).join(', ')
+          message = `Validation Error: ${validationErrors}`
+        } else if (error.response.data.detail) {
+          if (Array.isArray(error.response.data.detail)) {
+            const validationErrors = error.response.data.detail.map((err: { loc: string[], msg: string, type: string }) => 
+              `${err.loc.join('.')}: ${err.msg}`
+            ).join(', ')
+            message = `Validation Error: ${validationErrors}`
+          } else {
+            message = error.response.data.detail
+          }
+        } else {
+          message = `Validation Error: ${JSON.stringify(error.response.data)}`
+        }
+      } else if (typeof error.response.data === 'string') {
         message = error.response.data
       } else if (error.response.data.detail) {
         message = error.response.data.detail
@@ -62,6 +91,7 @@ apiClient.interceptors.response.use(
 export const cutpayApi = {
   // Create cutpay transaction
   create: async (data: CreateCutPayRequest): Promise<CutPayTransaction> => {
+    console.log('Creating cutpay transaction with data:', JSON.stringify(data, null, 2))
     const response = await apiClient.post('/cutpay/', data)
     return response.data
   },
@@ -128,6 +158,12 @@ export const cutpayApi = {
         'Content-Type': 'multipart/form-data',
       },
     })
+    return response.data
+  },
+
+  // Calculate cutpay amounts
+  calculate: async (data: CutPayCalculationRequest): Promise<CutPayCalculationResponse> => {
+    const response = await apiClient.post('/cutpay/calculate', data)
     return response.data
   }
 }
