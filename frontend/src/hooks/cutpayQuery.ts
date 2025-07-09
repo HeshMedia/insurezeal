@@ -4,7 +4,8 @@ import {
   CutPayTransaction,
   CreateCutPayRequest,
   UpdateCutPayRequest,
-  CutPayListParams
+  CutPayListParams,
+  CutPayCalculationRequest
 } from '@/types/cutpay.types'
 
 // Query keys
@@ -126,6 +127,16 @@ export const useExtractPdf = () => {
     mutationFn: (file: File) => cutpayApi.extractPdf(file),
     onError: (error) => {
       console.error('Failed to extract PDF data:', error)
+    },
+  })
+}
+
+// Cutpay calculation mutation
+export const useCutPayCalculation = () => {
+  return useMutation({
+    mutationFn: (data: CutPayCalculationRequest) => cutpayApi.calculate(data),
+    onError: (error) => {
+      console.error('Cutpay calculation error:', error)
     },
   })
 }

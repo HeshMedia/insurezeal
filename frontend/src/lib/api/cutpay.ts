@@ -7,12 +7,14 @@ import {
   CutPayListParams,
   CutPayDocumentUploadResponse,
   CutPayDeleteResponse,
-  ExtractPdfResponse
+  ExtractPdfResponse,
+  CutPayCalculationRequest,
+  CutPayCalculationResponse
 } from '@/types/cutpay.types'
 
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
-  baseURL: 'https://bha0h2t0a2.execute-api.ap-south-1.amazonaws.com/Prod',
+  baseURL: process.env.NEXT_PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -128,6 +130,12 @@ export const cutpayApi = {
         'Content-Type': 'multipart/form-data',
       },
     })
+    return response.data
+  },
+
+  // Calculate cutpay amounts
+  calculate: async (data: CutPayCalculationRequest): Promise<CutPayCalculationResponse> => {
+    const response = await apiClient.post('/cutpay/calculate', data)
     return response.data
   }
 }

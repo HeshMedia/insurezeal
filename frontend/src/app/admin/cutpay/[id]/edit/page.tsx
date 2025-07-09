@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useCutPayById, useUpdateCutPay } from '@/hooks/adminQuery'
+import { useCutPayById, useUpdateCutPay } from '@/hooks/cutpayQuery'
 import { Button } from '@/components/ui/button'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -26,19 +26,19 @@ import { useEffect } from 'react'
 const cutpayFormSchema = z.object({
   policy_number: z.string().min(1, "Policy number is required"),
   agent_code: z.string().min(1, "Agent code is required"),
-  insurance_company: z.string().min(1, "Insurance company is required"),
-  broker: z.string().min(1, "Broker is required"),
-  gross_amount: z.number().min(0, "Gross amount must be positive"),
+  insurer_name: z.string().min(1, "Insurance company is required"),
+  broker_name: z.string().min(1, "Broker is required"),
+  gross_premium: z.number().min(0, "Gross premium must be positive"),
   net_premium: z.number().min(0, "Net premium must be positive"),
-  commission_grid: z.string().min(1, "Commission grid is required"),
+  incoming_grid_percent: z.number().min(0).max(100, "Percentage must be between 0-100"),
   agent_commission_given_percent: z.number().min(0).max(100, "Percentage must be between 0-100"),
   cut_pay_amount: z.number().min(0, "Cut pay amount must be positive"),
   payment_by: z.string().min(1, "Payment by is required"),
-  amount_received: z.number().min(0, "Amount received must be positive"),
+  total_receivable_from_broker: z.number().min(0, "Total receivable must be positive"),
   payment_method: z.string().min(1, "Payment method is required"),
-  payment_source: z.string().min(1, "Payment source is required"),
-  transaction_date: z.string().min(1, "Transaction date is required"),
-  payment_date: z.string().optional(),
+  payment_by_office: z.string().min(1, "Payment source is required"),
+  booking_date: z.string().min(1, "Booking date is required"),
+  payout_on: z.string().optional(),
   notes: z.string().optional(),
 })
 
@@ -60,19 +60,19 @@ export default function CutPayEditPage() {
     defaultValues: {
       policy_number: "",
       agent_code: "",
-      insurance_company: "",
-      broker: "",
-      gross_amount: 0,
+      insurer_name: "",
+      broker_name: "",
+      gross_premium: 0,
       net_premium: 0,
-      commission_grid: "",
+      incoming_grid_percent: 0,
       agent_commission_given_percent: 0,
       cut_pay_amount: 0,
       payment_by: "",
-      amount_received: 0,
+      total_receivable_from_broker: 0,
       payment_method: "",
-      payment_source: "",
-      transaction_date: "",
-      payment_date: "",
+      payment_by_office: "",
+      booking_date: "",
+      payout_on: "",
       notes: "",
     },
   })
@@ -81,21 +81,21 @@ export default function CutPayEditPage() {
   useEffect(() => {
     if (cutpayData) {
       form.reset({
-        policy_number: cutpayData.policy_number,
-        agent_code: cutpayData.agent_code,
-        insurance_company: cutpayData.insurance_company,
-        broker: cutpayData.broker,
-        gross_amount: cutpayData.gross_amount,
-        net_premium: cutpayData.net_premium,
-        commission_grid: cutpayData.commission_grid,
-        agent_commission_given_percent: cutpayData.agent_commission_given_percent,
-        cut_pay_amount: cutpayData.cut_pay_amount,
-        payment_by: cutpayData.payment_by,
-        amount_received: cutpayData.amount_received,
-        payment_method: cutpayData.payment_method,
-        payment_source: cutpayData.payment_source,
-        transaction_date: cutpayData.transaction_date,
-        payment_date: cutpayData.payment_date || "",
+        policy_number: cutpayData.policy_number || "",
+        agent_code: cutpayData.agent_code || "",
+        insurer_name: cutpayData.insurer_name || "",
+        broker_name: cutpayData.broker_name || "",
+        gross_premium: cutpayData.gross_premium || 0,
+        net_premium: cutpayData.net_premium || 0,
+        incoming_grid_percent: cutpayData.incoming_grid_percent || 0,
+        agent_commission_given_percent: cutpayData.agent_commission_given_percent || 0,
+        cut_pay_amount: cutpayData.cut_pay_amount || 0,
+        payment_by: cutpayData.payment_by || "",
+        total_receivable_from_broker: cutpayData.total_receivable_from_broker || 0,
+        payment_method: cutpayData.payment_method || "",
+        payment_by_office: cutpayData.payment_by_office || "",
+        booking_date: cutpayData.booking_date || "",
+        payout_on: cutpayData.payout_on || "",
         notes: cutpayData.notes || "",
       })
     }
@@ -234,7 +234,7 @@ export default function CutPayEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="insurance_company"
+                      name="insurer_name"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Insurance Company *</FormLabel>
@@ -248,7 +248,7 @@ export default function CutPayEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="broker"
+                      name="broker_name"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Broker *</FormLabel>
@@ -262,12 +262,19 @@ export default function CutPayEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="commission_grid"
+                      name="incoming_grid_percent"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Commission Grid *</FormLabel>
+                          <FormLabel>Incoming Grid % *</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter commission grid" {...field} />
+                            <Input 
+                              type="number" 
+                              placeholder="0" 
+                              min="0" 
+                              max="100"
+                              {...field}
+                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -285,10 +292,10 @@ export default function CutPayEditPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="gross_amount"
+                      name="gross_premium"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Gross Amount *</FormLabel>
+                          <FormLabel>Gross Premium *</FormLabel>
                           <FormControl>
                             <Input 
                               type="number" 
@@ -363,10 +370,10 @@ export default function CutPayEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="amount_received"
+                      name="total_receivable_from_broker"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Amount Received *</FormLabel>
+                          <FormLabel>Total Receivable *</FormLabel>
                           <FormControl>
                             <Input 
                               type="number" 
@@ -430,7 +437,7 @@ export default function CutPayEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="payment_source"
+                      name="payment_by_office"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Payment Source *</FormLabel>
@@ -464,10 +471,10 @@ export default function CutPayEditPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="transaction_date"
+                      name="booking_date"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Transaction Date *</FormLabel>
+                          <FormLabel>Booking Date *</FormLabel>
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>
@@ -478,10 +485,10 @@ export default function CutPayEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="payment_date"
+                      name="payout_on"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Payment Date</FormLabel>
+                          <FormLabel>Payout Date</FormLabel>
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>

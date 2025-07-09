@@ -9,6 +9,14 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -23,21 +31,197 @@ import {
   Save,
   ArrowLeft,
   ArrowRight,
-  Info
+  Info,
+  Database
 } from 'lucide-react'
+
+// Import APIs
+import { useAgentList } from '@/hooks/adminQuery'
+import { useBrokerList, useInsurerList } from '@/hooks/superadminQuery'
+import { useCutPayCalculation, useCreateCutPay, useUploadCutPayDocument } from '@/hooks/cutpayQuery'
 
 // Import atoms
 import {
   pdfExtractionDataAtom,
   policyPdfUrlAtom,
-  additionalDocumentsUrlsAtom
+  additionalDocumentsUrlsAtom,
+  cutpayCalculationResultAtom
 } from '@/lib/atoms/cutpay'
 
 // Import IndexedDB utilities
 import { getFileFromIndexedDB, arrayBufferToFile } from '@/lib/utils/indexeddb'
 
 // Import types
-import { CreateCutPayRequest } from '@/types/cutpay.types'
+// No additional types needed - using local interfaces
+
+// Import toast for notifications
+import { toast } from 'sonner'
+
+// Define form state structure that matches the API - flattened structure
+interface FormState {
+  // Document URLs
+  policy_pdf_url: string
+  additional_documents: Record<string, unknown>
+  
+  // Extracted Policy Data (flattened)
+  policy_number: string | null
+  formatted_policy_number: string | null
+  major_categorisation: string | null
+  product_insurer_report: string | null
+  product_type: string | null
+  plan_type: string | null
+  customer_name: string | null
+  gross_premium: number | null
+  net_premium: number | null
+  od_premium: number | null
+  tp_premium: number | null
+  gst_amount: number | null
+  registration_no: string | null
+  make_model: string | null
+  model: string | null
+  vehicle_variant: string | null
+  gvw: number | null
+  rto: string | null
+  state: string | null
+  fuel_type: string | null
+  cc: number | null
+  age_year: number | null
+  ncb: string | null
+  discount_percent: number | null
+  business_type: string | null
+  seating_capacity: number | null
+  veh_wheels: number | null
+  
+  // Admin Input Data (flattened)
+  reporting_month: string | null
+  booking_date: string | null
+  agent_code: string | null
+  code_type: string | null
+  incoming_grid_percent: number | null
+  agent_commission_given_percent: number | null
+  extra_grid: number | null
+  commissionable_premium: number | null
+  payment_by: string | null
+  payment_method: string | null
+  payout_on: string | null
+  agent_extra_percent: number | null
+  payment_by_office: string | null
+  insurer_code: string | null
+  broker_code: string | null
+  admin_child_id: string | null
+  
+  // Calculation Results (flattened)
+  receivable_from_broker: number | null
+  extra_amount_receivable_from_broker: number | null
+  total_receivable_from_broker: number | null
+  total_receivable_from_broker_with_gst: number | null
+  cut_pay_amount: number | null
+  agent_po_amt: number | null
+  agent_extra_amount: number | null
+  total_agent_po_amt: number | null
+  
+  // Additional Transaction Fields
+  claimed_by: string | null
+  already_given_to_agent: number | null
+  po_paid_to_agent: number | null
+  running_bal: number | null
+  match_status: string | null
+  invoice_number: string | null
+  notes: string | null
+}
+
+// Define flat request type for API
+interface FlatCreateCutPayRequest {
+  policy_pdf_url: string
+  additional_documents: Record<string, unknown>
+  
+  // All fields flattened at root level
+  policy_number: string | null
+  formatted_policy_number: string | null
+  major_categorisation: string | null
+  product_insurer_report: string | null
+  product_type: string | null
+  plan_type: string | null
+  customer_name: string | null
+  gross_premium: number | null
+  net_premium: number | null
+  od_premium: number | null
+  tp_premium: number | null
+  gst_amount: number | null
+  registration_no: string | null
+  make_model: string | null
+  model: string | null
+  vehicle_variant: string | null
+  gvw: number | null
+  rto: string | null
+  state: string | null
+  fuel_type: string | null
+  cc: number | null
+  age_year: number | null
+  ncb: string | null
+  discount_percent: number | null
+  business_type: string | null
+  seating_capacity: number | null
+  veh_wheels: number | null
+  reporting_month: string | null
+  booking_date: string | null
+  agent_code: string | null
+  code_type: string | null
+  incoming_grid_percent: number | null
+  agent_commission_given_percent: number | null
+  extra_grid: number | null
+  commissionable_premium: number | null
+  payment_by: string | null
+  payment_method: string | null
+  payout_on: string | null
+  agent_extra_percent: number | null
+  payment_by_office: string | null
+  insurer_code: string | null
+  broker_code: string | null
+  admin_child_id: string | null
+  insurer_id: number | null
+  broker_id: number | null
+  child_id_request_id: string | null
+  insurer_name: string | null
+  broker_name: string | null
+  insurer_broker_code: string | null
+  cluster: string | null
+  receivable_from_broker: number | null
+  extra_amount_receivable_from_broker: number | null
+  total_receivable_from_broker: number | null
+  total_receivable_from_broker_with_gst: number | null
+  cut_pay_amount: number | null
+  agent_po_amt: number | null
+  agent_extra_amount: number | null
+  total_agent_po_amt: number | null
+  claimed_by: string | null
+  already_given_to_agent: number | null
+  po_paid_to_agent: number | null
+  running_bal: number | null
+  match_status: string | null
+  invoice_number: string | null
+  notes: string | null
+}
+
+// Define types for form field configurations
+interface FormFieldOption {
+  value: string
+  label: string
+}
+
+interface FormFieldConditional {
+  field: string
+  value: string | number | null
+}
+
+interface FormField {
+  key: string
+  label: string
+  type: string
+  options?: string[] | FormFieldOption[]
+  conditional?: FormFieldConditional
+  conditionalOr?: FormFieldConditional[]
+}
 
 interface AdminInputFormProps {
   onNext?: () => void
@@ -45,16 +229,47 @@ interface AdminInputFormProps {
 }
 
 const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
+  const [odPayoutPercent, setOdPayoutPercent] = useState<number | null>(null)
+  const [tpPayoutPercent, setTpPayoutPercent] = useState<number | null>(null)
+  const [odIncomingGridPercent, setOdIncomingGridPercent] = useState<number | null>(null)
+  const [tpIncomingGridPercent, setTpIncomingGridPercent] = useState<number | null>(null)
+  const [incomingPoAmt, setIncomingPoAmt] = useState<number | null>(null)
   const [extractedData] = useAtom(pdfExtractionDataAtom)
   const [policyPdfUrl] = useAtom(policyPdfUrlAtom)
   const [additionalDocUrls, setAdditionalDocUrls] = useAtom(additionalDocumentsUrlsAtom)
+  const [calculationResult] = useAtom(cutpayCalculationResultAtom)
   
   const [showDocumentViewer, setShowDocumentViewer] = useState(true)
   const [activeDocument, setActiveDocument] = useState<'policy' | 'kyc' | 'rc' | 'previous'>('policy')
   const [availableDocuments, setAvailableDocuments] = useState<Array<{key: string, label: string, available: boolean}>>([])
-  const [formData, setFormData] = useState<CreateCutPayRequest>({
+  
+  // Loading states for transaction creation and document upload
+  const [isCreatingTransaction, setIsCreatingTransaction] = useState(false)
+  const [isUploadingDocuments, setIsUploadingDocuments] = useState(false)
+  const [creationStep, setCreationStep] = useState('')
+  
+  // Query hooks for dropdown data
+  const { data: agentsData } = useAgentList({ page_size: 1000 })
+  const { data: insurersData } = useInsurerList()
+  const { data: brokersData } = useBrokerList()
+  
+  // Calculation mutation
+  const cutpayCalculation = useCutPayCalculation()
+  
+  // Create and upload mutations
+  const createCutPayMutation = useCreateCutPay()
+  const uploadDocumentMutation = useUploadCutPayDocument()
+  
+  // Remove separate paymentSource state and use formData.payment_method
+  // const [paymentSource, setPaymentSource] = useState<string>('')
+
+  // Form state that matches the API structure - flattened
+  const [formData, setFormData] = useState<FormState>({
+    // Document URLs
     policy_pdf_url: '',
-    // Initialize all fields to null/empty
+    additional_documents: {},
+    
+    // Extracted Policy Data (flattened)
     policy_number: null,
     formatted_policy_number: null,
     major_categorisation: null,
@@ -82,6 +297,8 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
     business_type: null,
     seating_capacity: null,
     veh_wheels: null,
+    
+    // Admin Input Data (flattened)
     reporting_month: null,
     booking_date: null,
     agent_code: null,
@@ -98,6 +315,8 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
     insurer_code: null,
     broker_code: null,
     admin_child_id: null,
+    
+    // Calculation Results (flattened)
     receivable_from_broker: null,
     extra_amount_receivable_from_broker: null,
     total_receivable_from_broker: null,
@@ -106,6 +325,8 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
     agent_po_amt: null,
     agent_extra_amount: null,
     total_agent_po_amt: null,
+    
+    // Additional Transaction Fields
     claimed_by: null,
     already_given_to_agent: null,
     po_paid_to_agent: null,
@@ -114,6 +335,103 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
     invoice_number: null,
     notes: null
   })
+
+  useEffect(() => {
+    // Extract values from formData to avoid dependency on entire object
+    const payment_by = formData.payment_by;
+    const payout_on = formData.payout_on;
+    const gross_premium = formData.gross_premium;
+    const net_premium = formData.net_premium;
+    const agent_commission_given_percent = formData.agent_commission_given_percent;
+    const incoming_grid_percent = formData.incoming_grid_percent;
+    const od_premium = formData.od_premium;
+    const tp_premium = formData.tp_premium;
+    const commissionable_premium = formData.commissionable_premium;
+    const extra_grid = formData.extra_grid;
+    const agent_extra_percent = formData.agent_extra_percent;
+
+    let cutPay = 0
+    let agentPo = 0
+    let incomingPo = 0
+    let receivableFromBroker = 0
+    let extraAmountReceivableFromBroker = 0
+    let agentExtraAmount = 0
+
+    // Cut Pay Amount Calculation
+    if (payment_by === 'agent') {
+      cutPay = 0
+    } else if (payment_by === 'insurezeal' && typeof gross_premium === 'number' && typeof net_premium === 'number' && typeof agent_commission_given_percent === 'number') {
+      cutPay = gross_premium - (net_premium * (agent_commission_given_percent / 100))
+    }
+
+    // Agent PO and Incoming PO Calculation
+    if (payment_by === 'agent') {
+      if (payout_on === 'od_premium' && typeof od_premium === 'number' && typeof agent_commission_given_percent === 'number') {
+        agentPo = od_premium * (agent_commission_given_percent / 100)
+      } else if (payout_on === 'net_premium' && typeof net_premium === 'number' && typeof agent_commission_given_percent === 'number') {
+        agentPo = net_premium * (agent_commission_given_percent / 100)
+      } else if (payout_on === 'od+tp' && typeof od_premium === 'number' && typeof tp_premium === 'number' && typeof odPayoutPercent === 'number' && typeof tpPayoutPercent === 'number') {
+        agentPo = (od_premium * (odPayoutPercent / 100)) + (tp_premium * (tpPayoutPercent / 100))
+      }
+      incomingPo = 0
+    } else if (payment_by === 'insurezeal') {
+      agentPo = 0
+      if (payout_on === 'od_premium' && typeof od_premium === 'number' && typeof incoming_grid_percent === 'number') {
+        incomingPo = od_premium * (incoming_grid_percent / 100)
+      } else if (payout_on === 'net_premium' && typeof net_premium === 'number' && typeof incoming_grid_percent === 'number') {
+        incomingPo = net_premium * (incoming_grid_percent / 100)
+      } else if (payout_on === 'od+tp' && typeof od_premium === 'number' && typeof tp_premium === 'number' && typeof odIncomingGridPercent === 'number' && typeof tpIncomingGridPercent === 'number') {
+        incomingPo = (od_premium * (odIncomingGridPercent / 100)) + (tp_premium * (tpIncomingGridPercent / 100))
+      }
+    }
+
+    // Commission Calculations
+    if (typeof gross_premium === 'number' && typeof incoming_grid_percent === 'number') {
+      receivableFromBroker = gross_premium * (incoming_grid_percent / 100)
+    }
+    if (typeof commissionable_premium === 'number' && typeof extra_grid === 'number') {
+      extraAmountReceivableFromBroker = commissionable_premium * (extra_grid / 100)
+    }
+    const totalReceivableFromBroker = receivableFromBroker + extraAmountReceivableFromBroker
+    const totalReceivableFromBrokerWithGst = totalReceivableFromBroker * 1.18
+
+    // Agent Extra Amount & Total PO
+    if (typeof commissionable_premium === 'number' && typeof agent_extra_percent === 'number') {
+      agentExtraAmount = commissionable_premium * (agent_extra_percent / 100)
+    }
+    const totalAgentPoAmt = agentPo + agentExtraAmount
+
+    setIncomingPoAmt(incomingPo)
+    setFormData(prev => ({
+      ...prev,
+      cut_pay_amount: cutPay,
+      agent_po_amt: agentPo,
+      receivable_from_broker: receivableFromBroker,
+      extra_amount_receivable_from_broker: extraAmountReceivableFromBroker,
+      total_receivable_from_broker: totalReceivableFromBroker,
+      total_receivable_from_broker_with_gst: totalReceivableFromBrokerWithGst,
+      agent_extra_amount: agentExtraAmount,
+      total_agent_po_amt: totalAgentPoAmt,
+    }))
+
+ 
+  }, [
+    formData.payment_by,
+    formData.payout_on,
+    formData.gross_premium,
+    formData.net_premium,
+    formData.agent_commission_given_percent,
+    formData.incoming_grid_percent,
+    formData.od_premium,
+    formData.tp_premium,
+    formData.commissionable_premium,
+    formData.extra_grid,
+    formData.agent_extra_percent,
+    odPayoutPercent,
+    tpPayoutPercent,
+    odIncomingGridPercent,
+    tpIncomingGridPercent
+  ])
 
   // Auto-fill extracted data when component mounts
   useEffect(() => {
@@ -221,11 +539,223 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
     }
   }, [additionalDocUrls])
 
-  const handleInputChange = (field: keyof CreateCutPayRequest, value: string | number | null) => {
+  const handleInputChange = (field: keyof FormState, value: string | number | null) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }))
+  }
+
+  const handleCreateTransaction = async () => {
+    try {
+      setIsCreatingTransaction(true)
+      setCreationStep('Creating new cutpay transaction...')
+
+      // Validate required fields
+      if (!formData.gross_premium || !formData.od_premium || !formData.tp_premium) {
+        throw new Error('Missing required premium fields')
+      }
+
+      if (!formData.payment_by || !formData.payout_on) {
+        throw new Error('Missing required payment configuration')
+      }
+
+      // Ensure date formats are correct
+      const reportingMonth = formData.reporting_month 
+        ? formData.reporting_month.slice(0, 7) // Ensure YYYY-MM format
+        : null;
+      
+      const bookingDate = formData.booking_date 
+        ? formData.booking_date // Should already be in YYYY-MM-DD format from date input
+        : null;
+
+      // Prepare the create request with flattened structure (matching your working payload)
+      const createRequest: FlatCreateCutPayRequest = {
+        policy_pdf_url: policyPdfUrl || 'policy_pdf',
+        additional_documents: {},
+        // Flatten all fields at the root level
+        policy_number: formData.policy_number || null,
+        formatted_policy_number: formData.formatted_policy_number || null,
+        major_categorisation: formData.major_categorisation || null,
+        product_insurer_report: formData.product_insurer_report || null,
+        product_type: formData.product_type || null,
+        plan_type: formData.plan_type || null,
+        customer_name: formData.customer_name || null,
+        gross_premium: formData.gross_premium || null,
+        net_premium: formData.net_premium || null,
+        od_premium: formData.od_premium || null,
+        tp_premium: formData.tp_premium || null,
+        gst_amount: formData.gst_amount || null,
+        registration_no: formData.registration_no || null,
+        make_model: formData.make_model || null,
+        model: formData.model || null,
+        vehicle_variant: formData.vehicle_variant || null,
+        gvw: formData.gvw || null,
+        rto: formData.rto || null,
+        state: formData.state || null,
+        fuel_type: formData.fuel_type || null,
+        cc: formData.cc || null,
+        age_year: formData.age_year || null,
+        ncb: formData.ncb || null,
+        discount_percent: formData.discount_percent || null,
+        business_type: formData.business_type || null,
+        seating_capacity: formData.seating_capacity || null,
+        veh_wheels: formData.veh_wheels || null,
+        reporting_month: reportingMonth,
+        booking_date: bookingDate,
+        agent_code: formData.agent_code || null,
+        code_type: formData.code_type || null,
+        incoming_grid_percent: formData.incoming_grid_percent || null,
+        agent_commission_given_percent: formData.agent_commission_given_percent || null,
+        extra_grid: formData.extra_grid || null,
+        commissionable_premium: formData.commissionable_premium || null,
+        payment_by: formData.payment_by || null,
+        payment_method: formData.payment_method || null,
+        payout_on: formData.payout_on || null,
+        agent_extra_percent: formData.agent_extra_percent || null,
+        payment_by_office: formData.payment_by_office || null,
+        insurer_code: formData.insurer_code || null,
+        broker_code: formData.broker_code || null,
+        admin_child_id: formData.admin_child_id || null,
+        // Additional fields that might be expected by the API
+        insurer_id: null,
+        broker_id: null,
+        child_id_request_id: null,
+        insurer_name: null,
+        broker_name: null,
+        insurer_broker_code: null,
+        cluster: null,
+        // Calculation fields
+        receivable_from_broker: formData.receivable_from_broker || null,
+        extra_amount_receivable_from_broker: formData.extra_amount_receivable_from_broker || null,
+        total_receivable_from_broker: formData.total_receivable_from_broker || null,
+        total_receivable_from_broker_with_gst: formData.total_receivable_from_broker_with_gst || null,
+        cut_pay_amount: formData.cut_pay_amount || null,
+        agent_po_amt: formData.agent_po_amt || null,
+        agent_extra_amount: formData.agent_extra_amount || null,
+        total_agent_po_amt: formData.total_agent_po_amt || null,
+        // Additional transaction fields
+        claimed_by: formData.claimed_by || null,
+        already_given_to_agent: formData.already_given_to_agent || null,
+        po_paid_to_agent: formData.po_paid_to_agent || null,
+        running_bal: formData.running_bal || null,
+        match_status: formData.match_status || null,
+        invoice_number: formData.invoice_number || null,
+        notes: formData.notes || null
+      };
+
+      // Log the request for debugging
+      console.log('Create request payload:', JSON.stringify(createRequest, null, 2));
+
+      // Create the cutpay transaction
+      let createdTransaction
+      try {
+        createdTransaction = await createCutPayMutation.mutateAsync(createRequest)
+        
+        if (!createdTransaction?.id) {
+          throw new Error('Failed to create transaction - no ID returned')
+        }
+
+        toast.success('Transaction created successfully!')
+      } catch (apiError) {
+        console.error('API Error Details:', apiError)
+        throw apiError
+      }
+      
+      // Now upload documents
+      setIsUploadingDocuments(true)
+      setCreationStep('Uploading documents to database...')
+
+      const cutpayId = createdTransaction.id
+      const documentsToUpload = []
+
+      // Get policy PDF from atom
+      if (policyPdfUrl) {
+        try {
+          const response = await fetch(policyPdfUrl)
+          const blob = await response.blob()
+          const policyFile = new File([blob], 'policy.pdf', { type: 'application/pdf' })
+          documentsToUpload.push({ file: policyFile, type: 'policy_pdf' })
+        } catch (error) {
+          console.error('Error converting policy PDF URL to file:', error)
+        }
+      }
+
+      // Get additional documents from IndexedDB
+      try {
+        const [kycDoc, rcDoc, previousDoc] = await Promise.all([
+          getFileFromIndexedDB('kyc_documents'),
+          getFileFromIndexedDB('rc_document'),
+          getFileFromIndexedDB('previous_policy')
+        ])
+
+        if (kycDoc) {
+          const file = arrayBufferToFile(kycDoc.content, kycDoc.name, kycDoc.type)
+          documentsToUpload.push({ file, type: 'kyc_documents' })
+        }
+
+        if (rcDoc) {
+          const file = arrayBufferToFile(rcDoc.content, rcDoc.name, rcDoc.type)
+          documentsToUpload.push({ file, type: 'rc_document' })
+        }
+
+        if (previousDoc) {
+          const file = arrayBufferToFile(previousDoc.content, previousDoc.name, previousDoc.type)
+          documentsToUpload.push({ file, type: 'previous_policy' })
+        }
+      } catch (error) {
+        console.error('Error retrieving documents from IndexedDB:', error)
+      }
+
+      // Upload all documents
+      const uploadPromises = documentsToUpload.map(({ file, type }) =>
+        uploadDocumentMutation.mutateAsync({
+          cutpayId,
+          file,
+          documentType: type
+        })
+      )
+
+      await Promise.all(uploadPromises)
+      
+      toast.success('Documents uploaded successfully!')
+      
+      // Clear loading states
+      setIsCreatingTransaction(false)
+      setIsUploadingDocuments(false)
+      setCreationStep('')
+
+      // Call onNext if provided
+      if (onNext) {
+        onNext()
+      }
+
+    } catch (error) {
+      console.error('Error creating transaction:', error)
+      
+      // Enhanced error logging for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', error.message)
+        if ('response' in error) {
+          const response = (error as { response?: { data?: unknown; status?: number } }).response
+          console.error('API Response Status:', response?.status)
+          console.error('API Response Data:', JSON.stringify(response?.data, null, 2))
+        }
+      } else {
+        console.error('Error (not Error instance):', JSON.stringify(error, null, 2))
+      }
+      
+      const errorMessage = error instanceof Error 
+        ? error.message
+        : 'Failed to create transaction';
+        
+      toast.error(`Transaction creation failed: ${errorMessage}`)
+      
+      // Clear loading states
+      setIsCreatingTransaction(false)
+      setIsUploadingDocuments(false)
+      setCreationStep('')
+    }
   }
 
   const getDocumentUrl = (docType: string) => {
@@ -315,20 +845,20 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
       bgColor: 'bg-indigo-100',
       textColor: 'text-indigo-600',
       fields: [
-        { key: 'reporting_month', label: 'Reporting Month', type: 'text' },
+        { key: 'reporting_month', label: 'Reporting Month', type: 'month' },
         { key: 'booking_date', label: 'Booking Date', type: 'date' },
         { key: 'agent_code', label: 'Agent Code', type: 'text' },
-        { key: 'code_type', label: 'Code Type', type: 'text' },
+        { key: 'code_type', label: 'Code Type', type: 'select', options: ['DIRECT', 'BROKER'] },
         { key: 'incoming_grid_percent', label: 'Incoming Grid %', type: 'number' },
         { key: 'agent_commission_given_percent', label: 'Agent Commission Given %', type: 'number' },
         { key: 'extra_grid', label: 'Extra Grid', type: 'number' },
-        { key: 'payment_by', label: 'Payment By', type: 'text' },
-        { key: 'payment_method', label: 'Payment Method', type: 'text' },
-        { key: 'payout_on', label: 'Payout On', type: 'text' },
+        { key: 'payment_by', label: 'Payment By', type: 'select', options: ['agent', 'insurezeal'] },
+        { key: 'payment_method', label: 'Payment Method', type: 'select', options: ['CASH', 'CHEQUE', 'ONLINE', 'UPI', 'NEFT', 'RTGS'], conditional: { field: 'payment_by', value: 'insurezeal' } },
+        { key: 'payout_on', label: 'Payout On', type: 'select', options: ['od_premium', 'net_premium', 'od+tp'] },
         { key: 'agent_extra_percent', label: 'Agent Extra %', type: 'number' },
         { key: 'payment_by_office', label: 'Payment By Office', type: 'text' },
-        { key: 'insurer_code', label: 'Insurer Code', type: 'text' },
-        { key: 'broker_code', label: 'Broker Code', type: 'text' },
+        { key: 'broker_code', label: 'Broker Code', type: 'broker_select', conditional: { field: 'code_type', value: 'BROKER' } },
+        { key: 'insurer_code', label: 'Insurer Code', type: 'insurer_select', conditionalOr: [{ field: 'code_type', value: 'DIRECT' }, { field: 'code_type', value: 'BROKER' }] },
         { key: 'admin_child_id', label: 'Admin Child ID', type: 'text' }
       ]
     },
@@ -347,6 +877,7 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
         { key: 'agent_po_amt', label: 'Agent PO Amount', type: 'number' },
         { key: 'agent_extra_amount', label: 'Agent Extra Amount', type: 'number' },
         { key: 'total_agent_po_amt', label: 'Total Agent PO Amount', type: 'number' },
+        { key: 'incoming_po_amt', label: 'Incoming PO Amount', type: 'number' },
         { key: 'claimed_by', label: 'Claimed By', type: 'text' },
         { key: 'already_given_to_agent', label: 'Already Given to Agent', type: 'number' },
         { key: 'po_paid_to_agent', label: 'PO Paid to Agent', type: 'number' },
@@ -359,6 +890,36 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Loading Dialog */}
+      <Dialog open={isCreatingTransaction || isUploadingDocuments} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LoadingSpinner size="sm" />
+              {isCreatingTransaction ? 'Creating Transaction' : 'Uploading Documents'}
+            </DialogTitle>
+            <DialogDescription>
+              {creationStep}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-4">
+            <div className="flex flex-col items-center space-y-3">
+              {isCreatingTransaction && (
+                <div className="flex items-center gap-2">
+                  <Database className="h-5 w-5 text-blue-600 animate-pulse" />
+                  <span className="text-sm text-gray-600">Creating new cutpay transaction...</span>
+                </div>
+              )}
+              {isUploadingDocuments && (
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-green-600 animate-pulse" />
+                  <span className="text-sm text-gray-600">Uploading documents to database...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Header with toggle */}
       <div className="flex items-center justify-between">
         <div>
@@ -402,52 +963,240 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {section.fields.map((field) => (
-                      <div key={field.key} className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={field.key} className="text-sm font-medium">
-                            {field.label}
-                          </Label>
-                          {extractedData?.extracted_data?.[field.key as keyof typeof extractedData.extracted_data] && (
-                            <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                              Auto-filled
-                            </Badge>
-                          )}
+                    {section.fields.map((field) => {
+                      // Check if field should be conditionally rendered
+                      if (field.conditional && formData[field.conditional.field as keyof FormState] !== field.conditional.value) {
+                        return null
+                      }
+                      
+                      // Check conditionalOr (show field if ANY of the conditions match)
+                      if (field.conditionalOr) {
+                        const shouldShow = field.conditionalOr.some(condition => 
+                          formData[condition.field as keyof FormState] === condition.value
+                        )
+                        if (!shouldShow) {
+                          return null
+                        }
+                      }
+                      
+                      const renderField = (field: FormField) => {
+                        if (field.type === 'select') {
+                          if (field.key === 'payout_on') {
+                            return (
+                              <div>
+                                <Select onValueChange={(value) => handleInputChange('payout_on', value)} value={formData.payout_on || ''}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select Payout On" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="od_premium">OD Premium</SelectItem>
+                                    <SelectItem value="net_premium">Net Premium</SelectItem>
+                                    <SelectItem value="od+tp">OD+TP</SelectItem>
+                                  </SelectContent>
+                                </Select>
+    
+                                {formData.payout_on === 'od+tp' && (
+                                  <div className="grid grid-cols-2 gap-4 mt-4">
+                                    {formData.payment_by === 'agent' ? (
+                                      <>
+                                        <div>
+                                          <Label htmlFor="od_payout_percent">OD Payout %</Label>
+                                          <Input id="od_payout_percent" type="number" onChange={(e) => setOdPayoutPercent(Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                          <Label htmlFor="tp_payout_percent">TP Payout %</Label>
+                                          <Input id="tp_payout_percent" type="number" onChange={(e) => setTpPayoutPercent(Number(e.target.value))} />
+                                        </div>
+                                      </>
+                                    ) : formData.payment_by === 'insurezeal' ? (
+                                      <>
+                                        <div>
+                                          <Label htmlFor="od_incoming_grid_percent">OD Incoming Grid %</Label>
+                                          <Input id="od_incoming_grid_percent" type="number" onChange={(e) => setOdIncomingGridPercent(Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                          <Label htmlFor="tp_incoming_grid_percent">TP Incoming Grid %</Label>
+                                          <Input id="tp_incoming_grid_percent" type="number" onChange={(e) => setTpIncomingGridPercent(Number(e.target.value))} />
+                                        </div>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <Select
+                                value={formData[field.key as keyof FormState] as string || ''}
+                                onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder={`Select ${field.label}`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {field.options?.map((option: string | FormFieldOption) => {
+                                    const value = typeof option === 'string' ? option : option.value;
+                                    const label = typeof option === 'string' ? option : option.label;
+                                    return (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            );
+                          }
+                        } else if (field.type === 'agent_select') {
+                          return (
+                            <Select
+                              value={formData[field.key as keyof FormState] as string || ''}
+                              onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select Agent" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {agentsData?.agents?.map((agent) => (
+                                  <SelectItem key={agent.id} value={agent.agent_code || ''}>
+                                    {agent.agent_code} - {`${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        } else if (field.type === 'insurer_select') {
+                          return (
+                            <Select
+                              value={formData[field.key as keyof FormState] as string || ''}
+                              onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select Insurer" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {insurersData?.map((insurer) => (
+                                  <SelectItem key={insurer.insurer_code} value={insurer.insurer_code}>
+                                    {insurer.insurer_code} - {insurer.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        } else if (field.type === 'broker_select') {
+                          return (
+                            <Select
+                              value={formData[field.key as keyof FormState] as string || ''}
+                              onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select Broker" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {brokersData?.map((broker) => (
+                                  <SelectItem key={broker.broker_code} value={broker.broker_code}>
+                                    {broker.broker_code} - {broker.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          );
+                        } else if (field.key === 'incoming_po_amt') {
+                          return (
+                            <Input
+                              id="incoming_po_amt"
+                              type="number"
+                              value={incomingPoAmt ?? ''}
+                              readOnly
+                              className="w-full"
+                              title="Incoming PO Amount is auto-calculated based on Payout On selection when Payment By is Insurezeal"
+                            />
+                          );
+                        } else {
+                          const calculatedFieldsConfig: { [key: string]: string } = {
+                            receivable_from_broker: 'Auto-calculated: Gross Premium × (Incoming Grid % / 100)',
+                            extra_amount_receivable_from_broker: 'Auto-calculated: Commissionable Premium × (Extra Grid / 100)',
+                            total_receivable_from_broker: 'Auto-calculated: Receivable from Broker + Extra Amount Receivable',
+                            total_receivable_from_broker_with_gst: 'Auto-calculated: Total Receivable from Broker × 1.18',
+                            cut_pay_amount: formData.payment_by === 'agent'
+                              ? 'Automatically set to 0 when Payment By is Agent'
+                              : 'Auto-calculated: Gross Premium - (Net Premium * Agent Payout %)',
+                            agent_po_amt: 'Auto-calculated based on Payout On selection',
+                            agent_extra_amount: 'Auto-calculated: Commissionable Premium × (Agent Extra % / 100)',
+                            total_agent_po_amt: 'Auto-calculated: Agent PO Amount + Agent Extra Amount',
+                            incoming_po_amt: 'Auto-calculated based on Payout On selection when Payment By is Insurezeal'
+                          };
+                          const isCalculated = Object.keys(calculatedFieldsConfig).includes(field.key);
+
+                          const rawValue = formData[field.key as keyof FormState];
+                          const value = typeof rawValue === 'object' && rawValue !== null ? '' : (rawValue ?? '');
+
+                          return (
+                            <Input
+                              id={field.key}
+                              type={field.type}
+                              value={value}
+                              onChange={(e) => {
+                                let value: string | number = e.target.value;
+                                
+                                // Handle different input types
+                                if (field.type === 'number') {
+                                  value = parseFloat(value) || 0;
+                                } else if (field.type === 'date') {
+                                  // Ensure date is in YYYY-MM-DD format
+                                  value = value;
+                                } else if (field.type === 'month') {
+                                  // Ensure month is in YYYY-MM format  
+                                  value = value;
+                                }
+                                
+                                handleInputChange(field.key as keyof FormState, value);
+                              }}
+                              placeholder={`Enter ${field.label}`}
+                              className="w-full"
+                              disabled={isCalculated}
+                              title={isCalculated ? calculatedFieldsConfig[field.key] : ''}
+                            />
+                          );
+                        }
+                      };
+
+                      return (
+                        <div key={field.key} className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor={field.key} className="text-sm font-medium">
+                              {field.label}
+                            </Label>
+                            {extractedData?.extracted_data?.[field.key as keyof typeof extractedData.extracted_data] && (
+                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                                Auto-filled
+                              </Badge>
+                            )}
+                            {field.key === 'cut_pay_amount' && formData.payment_by === 'agent' && (
+                              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
+                                Auto-zero
+                              </Badge>
+                            )}
+                            {[
+                              'receivable_from_broker',
+                              'extra_amount_receivable_from_broker',
+                              'total_receivable_from_broker',
+                              'total_receivable_from_broker_with_gst',
+                              'agent_extra_amount',
+                              'total_agent_po_amt',
+                              'agent_po_amt',
+                              'cut_pay_amount',
+                              'incoming_po_amt'
+                            ].includes(field.key) && !(field.key === 'cut_pay_amount' && formData.payment_by === 'agent') && (
+                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                                Auto-calculated
+                              </Badge>
+                            )}
+                          </div>
+                          {renderField(field)}
                         </div>
-                        
-                        {field.type === 'select' ? (
-                          <Select
-                            value={formData[field.key as keyof CreateCutPayRequest] as string || ''}
-                            onValueChange={(value) => handleInputChange(field.key as keyof CreateCutPayRequest, value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder={`Select ${field.label}`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {field.options?.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input
-                            id={field.key}
-                            type={field.type}
-                            value={formData[field.key as keyof CreateCutPayRequest] as string || ''}
-                            onChange={(e) => {
-                              const value = field.type === 'number' 
-                                ? (e.target.value ? parseFloat(e.target.value) : null)
-                                : e.target.value || null
-                              handleInputChange(field.key as keyof CreateCutPayRequest, value)
-                            }}
-                            placeholder={`Enter ${field.label}`}
-                            className="w-full"
-                          />
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -463,6 +1212,7 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <Input id="cut_pay_amount" type="number" value={formData.cut_pay_amount || ''} readOnly />
               <Textarea
                 value={formData.notes as string || ''}
                 onChange={(e) => handleInputChange('notes', e.target.value)}
@@ -471,6 +1221,53 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
               />
             </CardContent>
           </Card>
+
+          {/* Calculation Summary */}
+          {(formData.payment_by && formData.payout_on) && (
+            <Card className="border-l-4 border-yellow-500">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-yellow-100">
+                    <Calculator className="h-5 w-5 text-yellow-600" />
+                  </div>
+                  Calculation Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="font-medium text-gray-700">
+                    Payment Mode: <span className="text-blue-600">{formData.payment_by}</span>
+                  </div>
+                  <div className="font-medium text-gray-700">
+                    Payout Basis: <span className="text-blue-600">{formData.payout_on}</span>
+                  </div>
+                  {cutpayCalculation.isPending && (
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <div className="text-gray-600 text-sm">Calculating amounts...</div>
+                    </div>
+                  )}
+                  {cutpayCalculation.isError && (
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <div className="text-red-800 font-medium">Calculation Error:</div>
+                      <div className="text-red-700 text-xs mt-1">
+                        {cutpayCalculation.error?.message || 'Failed to calculate amounts'}
+                      </div>
+                    </div>
+                  )}
+                  {calculationResult && (
+                    <div className="bg-green-50 p-3 rounded-lg">
+                      <div className="text-green-800 font-medium">API Calculation Complete:</div>
+                      <div className="text-green-700 text-xs mt-1 space-y-1">
+                        <div>• Agent PO Amount: ₹{calculationResult.agent_po_amt?.toLocaleString()}</div>
+                        <div>• Cut Pay Amount: ₹{calculationResult.cut_pay_amount?.toLocaleString()}</div>
+                        <div>• Total Agent PO Amount: ₹{calculationResult.total_agent_po_amt?.toLocaleString()}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Document Viewer Section */}
@@ -568,7 +1365,7 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
             <Save className="h-4 w-4" />
             Save Draft
           </Button>
-          <Button onClick={onNext} className="flex items-center gap-2">
+          <Button onClick={handleCreateTransaction} className="flex items-center gap-2">
             Create Transaction
             <ArrowRight className="h-4 w-4" />
           </Button>
@@ -578,4 +1375,4 @@ const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
   )
 }
 
-export default AdminInputForm
+export default AdminInputForm;
