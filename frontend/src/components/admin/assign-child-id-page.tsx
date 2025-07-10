@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText } from "lucide-react"
-import { useAssignChildId, useAdminBrokersInsurers } from "@/hooks/adminQuery"
+import { useAssignChildId } from "@/hooks/adminQuery"
 import { AssignChildIdRequest } from "@/types/admin.types"
 import { adminApi } from "@/lib/api/admin"
 import { toast } from "sonner"
@@ -38,7 +38,6 @@ export function AssignChildIdPage() {
 
   const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
   const [notes, setNotes] = useState('')
-  const [selectedInsurer, setSelectedInsurer] = useState<string>('')
 
   // Fetch request details
   const { data: request, isLoading: requestLoading, error: requestError } = useQuery({
@@ -47,46 +46,15 @@ export function AssignChildIdPage() {
     enabled: !!requestId,
   })
 
-  // Fetch brokers and insurers for dropdowns
-  const { data: brokersInsurers, isLoading: brokersLoading } = useAdminBrokersInsurers()
-
   const assignMutation = useAssignChildId()
-
-  // Extract data from brokersInsurers with memoization
-  const insurers = useMemo(() => 
-    brokersInsurers?.insurers?.filter(insurer => 
-      insurer.insurer_code && insurer.insurer_code.trim() !== ""
-    ) || []
-  , [brokersInsurers?.insurers])
-
-  // Set default insurer based on request data
-  useEffect(() => {
-    if (request && insurers.length > 0 && !selectedInsurer) {
-      // Try to match insurer from request to available insurers
-      const matchingInsurer = insurers.find(insurer => 
-        insurer.name.toLowerCase().includes(request.code_type?.toLowerCase() || '') ||
-        request.code_type?.toLowerCase().includes(insurer.name.toLowerCase())
-      )
-      if (matchingInsurer) {
-        setSelectedInsurer(matchingInsurer.insurer_code)
-      } else if (insurers.length === 1) {
-        // If only one insurer available, select it by default
-        setSelectedInsurer(insurers[0].insurer_code)
-      }
-    }
-  }, [request, insurers, selectedInsurer])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!request) return
 
     // Validation
-    if (!selectedInsurer) {
-      toast.error('Please select an insurance company first')
-      return
-    }
     if (!formData.child_id) {
-      toast.error('Please select a Child ID')
+      toast.error('Please enter a Child ID')
       return
     }
 
@@ -145,32 +113,6 @@ export function AssignChildIdPage() {
             </p>
             <Button onClick={handleBack}>
               Return to Child Requests
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Show error if failed to load dropdowns
-  if (brokersLoading && requestError) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={handleBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Requests
-          </Button>
-        </div>
-        <Card className="border-red-200">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-red-700 mb-2">Failed to Load Data</h3>
-            <p className="text-red-600 mb-4">
-              Unable to load brokers and insurers data. Please try refreshing the page.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Refresh Page
             </Button>
           </CardContent>
         </Card>
@@ -406,9 +348,7 @@ export function AssignChildIdPage() {
                   type="submit"
                   disabled={
                     isLoading || 
-                    !selectedInsurer || 
-                    !formData.child_id || 
-                    insurers.length === 0
+                    !formData.child_id
                   }
                   className="sm:order-2 bg-green-600 hover:bg-green-700"
                 >
