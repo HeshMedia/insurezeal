@@ -100,6 +100,18 @@ export interface AdminStats {
 // Child Request Types
 export type ChildRequestStatus = 'pending' | 'accepted' | 'rejected' | 'suspended'
 
+export interface InsurerInfo {
+  id: string
+  insurer_code: string
+  name: string
+}
+
+export interface BrokerInfo {
+  id: string
+  broker_code: string
+  name: string
+}
+
 export interface ChildRequest {
   id: string
   user_id: string
@@ -121,8 +133,8 @@ export interface ChildRequest {
   approved_at: string | null
   created_at: string
   updated_at: string
-  insurer?: Record<string, unknown> | null
-  broker_relation?: Record<string, unknown> | null
+  insurer?: InsurerInfo | null
+  broker_relation?: BrokerInfo | null
 }
 
 export interface AssignChildIdRequest {
