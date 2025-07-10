@@ -64,7 +64,7 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-gray-900">
-              {request.location || 'No Location'}
+              {request.agent_name || 'Unknown Agent'}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={cn("text-xs font-medium", statusColors[request.status])}>
@@ -78,6 +78,11 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
               {request.code_type && (
                 <Badge variant="outline" className="text-xs">
                   {request.code_type}
+                </Badge>
+              )}
+              {request.agent_code && (
+                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
+                  {request.agent_code}
                 </Badge>
               )}
             </div>
@@ -229,7 +234,8 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
           <div className="bg-gray-50 p-4 rounded-lg">
             <h3 className="font-medium text-gray-900 mb-2">Request Summary</h3>
             <div className="space-y-1 text-sm">
-              <p><span className="font-medium">Location:</span> {request.location || 'N/A'}</p>
+              <p><span className="font-medium">Agent Name:</span> {request.agent_name || 'N/A'}</p>
+              <p><span className="font-medium">Agent Code:</span> {request.agent_code || 'N/A'}</p>
               <p><span className="font-medium">Email:</span> {request.email || 'N/A'}</p>
               <p><span className="font-medium">Phone:</span> {request.phone_number || 'N/A'}</p>
               {request.child_id && (
@@ -298,7 +304,8 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
 
   const filteredRequests = safeRequests.filter(request => {
     const matchesSearch = 
-      (request.location?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (request.agent_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (request.agent_code?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
       (request.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
       (request.phone_number || '').includes(searchQuery) ||
       (request.child_id || '').includes(searchQuery)
@@ -387,7 +394,7 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search by location, email, phone, or child ID..."
+            placeholder="Search by agent name, agent code, email, phone, or child ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
