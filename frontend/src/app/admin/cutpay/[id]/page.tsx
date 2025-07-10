@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useCutPayById } from '@/hooks/adminQuery'
+import { useCutPayById } from '@/hooks/cutpayQuery'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/ui/loader'
@@ -47,7 +47,8 @@ export default function CutPayDetailPage() {
     )
   }
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | null) => {
+    if (amount === null || amount === undefined) return '₹0.00'
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -95,7 +96,7 @@ export default function CutPayDetailPage() {
                   {cutpay.policy_number}
                 </h1>
                 <p className="text-lg text-gray-600 dark:text-gray-300 mt-1">
-                  {cutpay.insurance_company} • Agent: {cutpay.agent_code}
+                  {cutpay.insurer_name} • Agent: {cutpay.agent_code}
                 </p>
               </div>
 
@@ -109,15 +110,15 @@ export default function CutPayDetailPage() {
                 </div>
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <p className="text-2xl font-bold text-blue-600">
-                    {formatCurrency(cutpay.gross_amount)}
+                    {formatCurrency(cutpay.gross_premium)}
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">Gross Amount</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Gross Premium</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <p className="text-2xl font-bold text-purple-600">
-                    {formatCurrency(cutpay.amount_received)}
+                    {formatCurrency(cutpay.total_receivable_from_broker)}
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">Received</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Total Receivable</p>
                 </div>
                 <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <p className="text-2xl font-bold text-orange-600">
@@ -150,12 +151,12 @@ export default function CutPayDetailPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <DetailItem label="Policy Number" value={cutpay.policy_number} />
-                  <DetailItem label="Insurance Company" value={cutpay.insurance_company} />
-                  <DetailItem label="Broker" value={cutpay.broker} />
+                  <DetailItem label="Insurance Company" value={cutpay.insurer_name} />
+                  <DetailItem label="Broker" value={cutpay.broker_name} />
                 </div>
                 <div className="space-y-4">
-                  <DetailItem label="Commission Grid" value={cutpay.commission_grid} />
-                  <DetailItem label="Payment Source" value={cutpay.payment_source} />
+                  <DetailItem label="Commission Grid" value={cutpay.incoming_grid_percent ? `${cutpay.incoming_grid_percent}%` : null} />
+                  <DetailItem label="Payment Source" value={cutpay.payment_by_office} />
                   <DetailItem label="Payment By" value={cutpay.payment_by} />
                 </div>
               </div>
@@ -170,8 +171,8 @@ export default function CutPayDetailPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <DetailItem 
-                    label="Gross Amount" 
-                    value={formatCurrency(cutpay.gross_amount)}
+                    label="Gross Premium" 
+                    value={formatCurrency(cutpay.gross_premium)}
                     highlight="blue"
                   />
                   <DetailItem 
@@ -187,8 +188,8 @@ export default function CutPayDetailPage() {
                     highlight="green"
                   />
                   <DetailItem 
-                    label="Amount Received" 
-                    value={formatCurrency(cutpay.amount_received)}
+                    label="Total Receivable" 
+                    value={formatCurrency(cutpay.total_receivable_from_broker)}
                     highlight="orange"
                   />
                 </div>
@@ -228,13 +229,13 @@ export default function CutPayDetailPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <DetailItem 
-                    label="Transaction Date" 
-                    value={formatDate(cutpay.transaction_date)}
+                    label="Booking Date" 
+                    value={cutpay.booking_date ? formatDate(cutpay.booking_date) : null}
                   />
-                  {cutpay.payment_date && (
+                  {cutpay.payout_on && (
                     <DetailItem 
-                      label="Payment Date" 
-                      value={formatDate(cutpay.payment_date)}
+                      label="Payout Date" 
+                      value={formatDate(cutpay.payout_on)}
                     />
                   )}
                 </div>

@@ -1,112 +1,3 @@
-// Cutpay Transaction Types
-export interface CutPayTransaction {
-  id: number
-  policy_number: string
-  agent_code: string
-  insurance_company: string
-  broker: string
-  gross_amount: number
-  net_premium: number
-  commission_grid: string
-  agent_commission_given_percent: number
-  cut_pay_amount: number
-  payment_by: string
-  amount_received: number
-  payment_method: string
-  payment_source: string
-  transaction_date: string
-  payment_date: string | null
-  notes: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface CreateCutPayRequest {
-  policy_number: string
-  agent_code: string
-  insurance_company: string
-  broker: string
-  gross_amount: number
-  net_premium: number
-  commission_grid: string
-  agent_commission_given_percent: number
-  cut_pay_amount: number
-  payment_by: string
-  amount_received: number
-  payment_method: string
-  payment_source: string
-  transaction_date: string
-  payment_date?: string
-  notes?: string
-}
-
-export interface UpdateCutPayRequest {
-  policy_number?: string
-  agent_code?: string
-  insurance_company?: string
-  broker?: string
-  gross_amount?: number
-  net_premium?: number
-  commission_grid?: string
-  agent_commission_given_percent?: number
-  cut_pay_amount?: number
-  payment_by?: string
-  amount_received?: number
-  payment_method?: string
-  payment_source?: string
-  transaction_date?: string
-  payment_date?: string
-  notes?: string
-}
-
-export interface CutPaySummary {
-  id: number
-  policy_number: string
-  agent_code: string
-  insurance_company: string
-  broker: string
-  cut_pay_amount: number
-  amount_received: number
-  transaction_date: string
-  created_at: string
-}
-
-export interface CutPayListResponse {
-  transactions: CutPaySummary[]
-  total_count: number
-  page: number
-  page_size: number
-}
-
-export interface CutPayListParams {
-  agent_code?: string
-  page?: number
-  page_size?: number
-  search?: string
-}
-
-export interface CutPayStats {
-  total_transactions: number
-  total_cut_pay_amount: number
-  total_amount_received: number
-  average_cut_pay_amount: number
-  monthly_breakdown: Array<{
-    month?: string
-    year?: number
-    total_amount?: number
-    transaction_count?: number
-  }>
-  top_agents: Array<{
-    agent_code?: string
-    agent_name?: string
-    total_cut_pay_amount?: number
-    transaction_count?: number
-  }>
-}
-
-export interface CutPayStatsResponse {
-  stats: CutPayStats
-}
 
 // Agent Types
 export type GenderEnum = 'male' | 'female' | 'other' | null
@@ -209,40 +100,49 @@ export interface AdminStats {
 // Child Request Types
 export type ChildRequestStatus = 'pending' | 'accepted' | 'rejected' | 'suspended'
 
+export interface InsurerInfo {
+  id: string
+  insurer_code: string
+  name: string
+}
+
+export interface BrokerInfo {
+  id: string
+  broker_code: string
+  name: string
+}
+
 export interface ChildRequest {
   id: string
   user_id: string
-  insurance_company: string | null
-  broker: string | null
-  location: string | null
   phone_number: string | null
   email: string | null
+  location: string | null
+  code_type: string | null
+  insurer_id: number | null
+  broker_id: number | null
   preferred_rm_name: string | null
   status: ChildRequestStatus
   child_id: string | null
-  broker_code: string | null
   branch_code: string | null
   region: string | null
   manager_name: string | null
   manager_email: string | null
-  commission_percentage: number | null
-  policy_limit: number | null
   admin_notes: string | null
   approved_by: string | null
   approved_at: string | null
   created_at: string
   updated_at: string
+  insurer?: InsurerInfo | null
+  broker_relation?: BrokerInfo | null
 }
 
 export interface AssignChildIdRequest {
   child_id: string
-  broker_code: string
   branch_code?: string
   region?: string
   manager_name?: string
   manager_email?: string
-  commission_percentage?: number
-  policy_limit?: number
   admin_notes?: string
 }
 
@@ -251,6 +151,7 @@ export interface ChildRequestListResponse {
   total_count: number
   page: number
   page_size: number
+  total_pages: number
 }
 
 export interface ChildRequestListParams {
@@ -261,9 +162,7 @@ export interface ChildRequestListParams {
 }
 
 export interface ChildRequestStatusUpdate {
-  status: 'rejected' | 'suspended'
-  reason?: string
-  admin_notes?: string
+  admin_notes: string
 }
 
 export type UpdateChildRequestStatusRequest = ChildRequestStatusUpdate

@@ -1,12 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import Cookies from 'js-cookie'
 import { 
-  CutPayTransaction,
-  CreateCutPayRequest,
-  UpdateCutPayRequest,
-  CutPayListResponse,
-  CutPayListParams,
-  CutPayStatsResponse,
   AgentListResponse,
   AgentListParams,
   AgentDetails,
@@ -70,57 +64,6 @@ apiClient.interceptors.response.use(
 
 export const adminApi = {
   
-  // Cutpay APIs
-  cutpay: {
-    // Create cutpay transaction
-    create: async (data: CreateCutPayRequest): Promise<CutPayTransaction> => {
-      const response = await apiClient.post('/admin/cutpay/', data)
-      return response.data
-    },
-
-    // List cutpay transactions
-    list: async (params?: CutPayListParams): Promise<CutPayListResponse> => {
-      const response = await apiClient.get('/admin/cutpay/', {
-        params: {
-          agent_code: params?.agent_code,
-          page: params?.page || 1,
-          page_size: params?.page_size || 20,
-          search: params?.search
-        }
-      })
-      return response.data
-    },
-
-    // Get cutpay statistics
-    getStats: async (): Promise<CutPayStatsResponse> => {
-      const response = await apiClient.get('/admin/cutpay/stats')
-      return response.data
-    },
-
-    // Get specific cutpay transaction
-    getById: async (cutpayId: number): Promise<CutPayTransaction> => {
-      const response = await apiClient.get(`/admin/cutpay/${cutpayId}`)
-      return response.data
-    },
-
-    // Update cutpay transaction
-    update: async (cutpayId: number, data: UpdateCutPayRequest): Promise<CutPayTransaction> => {
-      const response = await apiClient.put(`/admin/cutpay/${cutpayId}`, data)
-      return response.data
-    },
-
-    // Export cutpay transactions to CSV
-    exportCsv: async (startDate?: string, endDate?: string): Promise<Blob> => {
-      const params = new URLSearchParams()
-      if (startDate) params.append('start_date', startDate)
-      if (endDate) params.append('end_date', endDate)
-      
-      const response = await apiClient.get(`/admin/cutpay/export/csv?${params.toString()}`, {
-        responseType: 'blob'
-      })
-      return response.data
-    }
-  },
 
   // Agent APIs
   agents: {
@@ -180,7 +123,9 @@ export const adminApi = {
     assign: async (requestId: string, data: AssignChildIdRequest): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/assign`, data)
       return response.data
-    },    // Reject child request
+    },
+
+    // Reject child request
     reject: async (requestId: string, data: ChildRequestStatusUpdate): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/reject`, data)
       return response.data
