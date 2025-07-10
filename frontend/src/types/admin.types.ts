@@ -131,6 +131,8 @@ export interface ChildRequest {
   admin_notes: string | null
   approved_by: string | null
   approved_at: string | null
+  agent_name: string | null
+  agent_code: string | null
   created_at: string
   updated_at: string
   insurer?: InsurerInfo | null

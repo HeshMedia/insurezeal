@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle } from "lucide-react"
+import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText } from "lucide-react"
 import { useAssignChildId, useAdminBrokersInsurers } from "@/hooks/adminQuery"
 import { AssignChildIdRequest } from "@/types/admin.types"
 import { adminApi } from "@/lib/api/admin"
@@ -214,6 +214,22 @@ export function AssignChildIdPage() {
               </div>
               
               <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Agent Name</p>
+                    <p className="text-sm text-gray-900">{request.agent_name || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Agent Code</p>
+                    <p className="text-sm text-gray-900">{request.agent_code || 'N/A'}</p>
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <Building className="h-4 w-4 text-gray-400" />
                   <div>

@@ -130,6 +130,22 @@ export function ChildRequestDetailPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4">
               <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Agent Name</p>
+                  <p className="text-sm text-gray-900">{request.agent_name || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-gray-400" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Agent Code</p>
+                  <p className="text-sm text-gray-900">{request.agent_code || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-gray-400" />
                 <div>
                   <p className="text-sm font-medium text-gray-700">Location</p>
