@@ -51,21 +51,15 @@ export function AssignChildIdPage() {
   // Fetch brokers and insurers for dropdowns
   const { data: brokersInsurers, isLoading: brokersLoading } = useAdminBrokersInsurers()
 
-  // Fetch available child IDs based on selected insurer and broker
+  // Fetch available child IDs based on selected insurer
   const { data: availableChildIds, isLoading: childIdsLoading, refetch: refetchChildIds } = useAdminAvailableChildIds({
     insurer_code: selectedInsurer,
-    broker_code: formData.broker_code
+    broker_code: undefined
   })
 
   const assignMutation = useAssignChildId()
 
   // Extract data from brokersInsurers with memoization
-  const brokers = useMemo(() => 
-    brokersInsurers?.brokers?.filter(broker => 
-      broker.broker_code && broker.broker_code.trim() !== "" && broker.is_active
-    ) || []
-  , [brokersInsurers?.brokers])
-  
   const insurers = useMemo(() => 
     brokersInsurers?.insurers?.filter(insurer => 
       insurer.insurer_code && insurer.insurer_code.trim() !== ""
@@ -77,8 +71,8 @@ export function AssignChildIdPage() {
     if (request && insurers.length > 0 && !selectedInsurer) {
       // Try to match insurer from request to available insurers
       const matchingInsurer = insurers.find(insurer => 
-        insurer.name.toLowerCase().includes(request.insurance_company?.toLowerCase() || '') ||
-        request.insurance_company?.toLowerCase().includes(insurer.name.toLowerCase())
+        insurer.name.toLowerCase().includes(request.code_type?.toLowerCase() || '') ||
+        request.code_type?.toLowerCase().includes(insurer.name.toLowerCase())
       )
       if (matchingInsurer) {
         setSelectedInsurer(matchingInsurer.insurer_code)
@@ -89,26 +83,12 @@ export function AssignChildIdPage() {
     }
   }, [request, insurers, selectedInsurer])
 
-  // Set default broker based on request data
-  useEffect(() => {
-    if (request && brokers.length > 0 && !formData.broker_code) {
-      // Try to match broker from request to available brokers
-      const matchingBroker = brokers.find(broker => 
-        broker.name.toLowerCase().includes(request.broker?.toLowerCase() || '') ||
-        request.broker?.toLowerCase().includes(broker.name.toLowerCase())
-      )
-      if (matchingBroker) {
-        setFormData(prev => ({ ...prev, broker_code: matchingBroker.broker_code }))
-      }
-    }
-  }, [request, brokers, formData.broker_code])
-
-  // Refetch child IDs when insurer or broker changes
+  // Refetch child IDs when insurer changes
   useEffect(() => {
     if (selectedInsurer) {
       refetchChildIds()
     }
-  }, [selectedInsurer, formData.broker_code, refetchChildIds])
+  }, [selectedInsurer, refetchChildIds])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -123,10 +103,6 @@ export function AssignChildIdPage() {
       toast.error('Please select a Child ID')
       return
     }
-    if (!formData.broker_code) {
-      toast.error('Please select a Broker Code')
-      return
-    }
     if (!availableChildIds || availableChildIds.length === 0) {
       toast.error('No Child IDs are available for the selected criteria')
       return
@@ -137,13 +113,10 @@ export function AssignChildIdPage() {
         requestId: request.id,
         data: {
           child_id: formData.child_id,
-          broker_code: formData.broker_code,
           branch_code: formData.branch_code || '',
           region: formData.region || '',
           manager_name: formData.manager_name || '',
           manager_email: formData.manager_email || '',
-          commission_percentage: formData.commission_percentage || 0,
-          policy_limit: formData.policy_limit || 0,
           admin_notes: notes,
         }
       })
@@ -262,16 +235,16 @@ export function AssignChildIdPage() {
                 <div className="flex items-center gap-2">
                   <Building className="h-4 w-4 text-gray-400" />
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Insurance Company</p>
-                    <p className="text-sm text-gray-900">{request.insurance_company || 'N/A'}</p>
+                    <p className="text-sm font-medium text-gray-700">Code Type</p>
+                    <p className="text-sm text-gray-900">{request.code_type || 'N/A'}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-gray-400" />
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Broker</p>
-                    <p className="text-sm text-gray-900">{request.broker || 'N/A'}</p>
+                    <p className="text-sm font-medium text-gray-700">Preferred RM</p>
+                    <p className="text-sm text-gray-900">{request.preferred_rm_name || 'N/A'}</p>
                   </div>
                 </div>
 
@@ -361,43 +334,6 @@ export function AssignChildIdPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="broker_code">Broker Code *</Label>
-                  {isDataLoading ? (
-                    <Skeleton className="h-10 w-full" />
-                  ) : (
-                    <Select
-                      value={formData.broker_code || ''}
-                      onValueChange={(value) => {
-                        setFormData(prev => ({ ...prev, broker_code: value }))
-                        // Reset child ID when broker changes
-                        setFormData(prev => ({ ...prev, child_id: '' }))
-                      }}
-                      disabled={isLoading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a Broker Code" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {brokers.length === 0 ? (
-                          <SelectItem value="no-available" disabled>No brokers available</SelectItem>
-                        ) : (
-                          brokers.map((broker) => (
-                            <SelectItem key={broker.id} value={broker.broker_code}>
-                              {broker.broker_code} - {broker.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {formData.broker_code && (
-                    <p className="text-xs text-blue-600">
-                      Child IDs will be further filtered based on this broker
-                    </p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
                   <Label htmlFor="child_id">Available Child ID *</Label>
                   {childIdsLoading ? (
                     <Skeleton className="h-10 w-full" />
@@ -421,7 +357,6 @@ export function AssignChildIdPage() {
                           availableChildIds.map((childId) => (
                             <SelectItem key={childId.id} value={childId.child_id}>
                               {childId.child_id} - {childId.region} ({childId.code_type})
-                              {childId.broker && ` - ${childId.broker.name}`}
                             </SelectItem>
                           ))
                         )}
@@ -484,41 +419,7 @@ export function AssignChildIdPage() {
                       placeholder="Enter manager email"
                       disabled={isLoading}
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="commission_percentage">Commission Percentage</Label>
-                    <Input
-                      id="commission_percentage"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.commission_percentage || ''}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        commission_percentage: parseFloat(e.target.value) || undefined 
-                      }))}
-                      placeholder="Enter commission %"
-                      disabled={isLoading}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="policy_limit">Policy Limit</Label>
-                    <Input
-                      id="policy_limit"
-                      type="number"
-                      min="0"
-                      value={formData.policy_limit || ''}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        policy_limit: parseFloat(e.target.value) || undefined 
-                      }))}
-                      placeholder="Enter policy limit"
-                      disabled={isLoading}
-                    />
-                  </div>
+                  </div> 
                 </div>
 
                 <div className="space-y-2">
@@ -551,10 +452,8 @@ export function AssignChildIdPage() {
                     isLoading || 
                     !selectedInsurer || 
                     !formData.child_id || 
-                    !formData.broker_code || 
                     !availableChildIds ||
                     availableChildIds.length === 0 || 
-                    brokers.length === 0 ||
                     insurers.length === 0
                   }
                   className="sm:order-2 bg-green-600 hover:bg-green-700"

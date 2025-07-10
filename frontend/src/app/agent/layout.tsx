@@ -1,4 +1,5 @@
 import { AgentSidebar } from "@/components/agent/sidebar"
+import { AgentHeader } from "@/components/agent/agent-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 interface AgentLayoutProps {
@@ -15,6 +16,8 @@ export default function AgentLayout({ children }: AgentLayoutProps) {
     >
       <AgentSidebar />
       <SidebarInset>
+        <AgentHeader />
+        
         {/* Main Content */}
         <div className="flex flex-1 flex-col gap-3 p-3 bg-gray-50/30 min-h-screen">
           {children}

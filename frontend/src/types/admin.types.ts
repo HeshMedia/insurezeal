@@ -103,37 +103,34 @@ export type ChildRequestStatus = 'pending' | 'accepted' | 'rejected' | 'suspende
 export interface ChildRequest {
   id: string
   user_id: string
-  insurance_company: string | null
-  broker: string | null
-  location: string | null
   phone_number: string | null
   email: string | null
+  location: string | null
+  code_type: string | null
+  insurer_id: number | null
+  broker_id: number | null
   preferred_rm_name: string | null
   status: ChildRequestStatus
   child_id: string | null
-  broker_code: string | null
   branch_code: string | null
   region: string | null
   manager_name: string | null
   manager_email: string | null
-  commission_percentage: number | null
-  policy_limit: number | null
   admin_notes: string | null
   approved_by: string | null
   approved_at: string | null
   created_at: string
   updated_at: string
+  insurer?: Record<string, unknown> | null
+  broker_relation?: Record<string, unknown> | null
 }
 
 export interface AssignChildIdRequest {
   child_id: string
-  broker_code: string
   branch_code?: string
   region?: string
   manager_name?: string
   manager_email?: string
-  commission_percentage?: number
-  policy_limit?: number
   admin_notes?: string
 }
 
@@ -142,6 +139,7 @@ export interface ChildRequestListResponse {
   total_count: number
   page: number
   page_size: number
+  total_pages: number
 }
 
 export interface ChildRequestListParams {
@@ -152,9 +150,7 @@ export interface ChildRequestListParams {
 }
 
 export interface ChildRequestStatusUpdate {
-  status: 'rejected' | 'suspended'
-  reason?: string
-  admin_notes?: string
+  admin_notes: string
 }
 
 export type UpdateChildRequestStatusRequest = ChildRequestStatusUpdate

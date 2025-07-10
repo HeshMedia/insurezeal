@@ -123,7 +123,9 @@ export const adminApi = {
     assign: async (requestId: string, data: AssignChildIdRequest): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/assign`, data)
       return response.data
-    },    // Reject child request
+    },
+
+    // Reject child request
     reject: async (requestId: string, data: ChildRequestStatusUpdate): Promise<ChildRequest> => {
       const response = await apiClient.put(`/admin/child-requests/${requestId}/reject`, data)
       return response.data

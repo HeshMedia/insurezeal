@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Edit, Eye, Building, Phone, Mail, MapPin, User } from "lucide-react"
+import { Search, Edit, Eye, Phone, Mail, User } from "lucide-react"
 import { useAssignChildId, useRejectChildRequest, useSuspendChildId, useAdminBrokersInsurers, useAdminAvailableChildIds } from "@/hooks/adminQuery"
 import type { ChildRequest, AssignChildIdRequest } from "@/types/admin.types"
 import { toast } from "sonner"
@@ -60,7 +60,7 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-gray-900">
-              {request.insurance_company || 'N/A'}
+              {request.location || 'No Location'}
             </CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={cn("text-xs font-medium", statusColors[request.status])}>
@@ -69,6 +69,11 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
               {request.child_id && (
                 <Badge variant="secondary" className="text-xs">
                   ID: {request.child_id}
+                </Badge>
+              )}
+              {request.code_type && (
+                <Badge variant="outline" className="text-xs">
+                  {request.code_type}
                 </Badge>
               )}
             </div>
@@ -97,16 +102,6 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
       </CardHeader>
       <CardContent className="pt-0">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 text-gray-600">
-            <Building className="h-4 w-4 text-gray-400" />
-            <span className="font-medium">Broker:</span>
-            <span>{request.broker || 'N/A'}</span>
-          </div>
-          <div className="flex items-center gap-2 text-gray-600">
-            <MapPin className="h-4 w-4 text-gray-400" />
-            <span className="font-medium">Location:</span>
-            <span>{request.location || 'N/A'}</span>
-          </div>
           <div className="flex items-center gap-2 text-gray-600">
             <Phone className="h-4 w-4 text-gray-400" />
             <span className="font-medium">Phone:</span>
@@ -178,7 +173,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
 }) {
   const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
   const [notes, setNotes] = useState('')
-  const [selectedInsurer, setSelectedInsurer] = useState<string>('')
+  const [selectedInsurer, setSelectedInsurer] = useState('')
   
   const assignMutation = useAssignChildId()
   const rejectMutation = useRejectChildRequest()
@@ -188,16 +183,10 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
   const { data: brokersInsurers } = useAdminBrokersInsurers()
   const { data: availableChildIds } = useAdminAvailableChildIds({
     insurer_code: selectedInsurer,
-    broker_code: formData.broker_code
+    broker_code: undefined // No longer using broker selection
   })
 
   // Memoized dropdowns data
-  const brokers = useMemo(() => 
-    brokersInsurers?.brokers?.filter(broker => 
-      broker.broker_code && broker.broker_code.trim() !== "" && broker.is_active
-    ) || []
-  , [brokersInsurers?.brokers])
-  
   const insurers = useMemo(() => 
     brokersInsurers?.insurers?.filter(insurer => 
       insurer.insurer_code && insurer.insurer_code.trim() !== ""
@@ -210,14 +199,6 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
 
     try {
       if (action === 'assign') {
-        if (!selectedInsurer) {
-          toast.error('Please select an insurance company')
-          return
-        }
-        if (!formData.broker_code) {
-          toast.error('Please select a broker code')
-          return
-        }
         if (!formData.child_id) {
           toast.error('Please select a Child ID')
           return
@@ -226,21 +207,18 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
           requestId: request.id,
           data: {
             child_id: formData.child_id,
-            broker_code: formData.broker_code || '',
             branch_code: formData.branch_code,
             region: formData.region,
             manager_name: formData.manager_name,
             manager_email: formData.manager_email,
-            commission_percentage: formData.commission_percentage,
-            policy_limit: formData.policy_limit,
             admin_notes: notes,
           }
         })
-        toast.success('Child ID assigned successfully')      } else if (action === 'reject') {
+        toast.success('Child ID assigned successfully')
+      } else if (action === 'reject') {
         await rejectMutation.mutateAsync({
           requestId: request.id,
           data: { 
-            status: 'rejected' as const,
             admin_notes: notes 
           }
         })
@@ -249,7 +227,6 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
         await suspendMutation.mutateAsync({
           requestId: request.id,
           data: { 
-            status: 'suspended' as const,
             admin_notes: notes 
           }
         })
@@ -259,6 +236,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
       onOpenChange(false)
       setFormData({})
       setNotes('')
+      setSelectedInsurer('')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'An error occurred')
     }
@@ -286,12 +264,12 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
             <h3 className="font-medium text-gray-900">Request Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="font-medium text-gray-700">Insurance Company:</span>
-                <p className="text-gray-900">{request.insurance_company || 'N/A'}</p>
+                <span className="font-medium text-gray-700">Insurer ID:</span>
+                <p className="text-gray-900">{request.insurer_id || 'N/A'}</p>
               </div>
               <div>
-                <span className="font-medium text-gray-700">Broker:</span>
-                <p className="text-gray-900">{request.broker || 'N/A'}</p>
+                <span className="font-medium text-gray-700">Broker ID:</span>
+                <p className="text-gray-900">{request.broker_id || 'N/A'}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Location:</span>
@@ -311,6 +289,18 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                   {statusLabels[request.status]}
                 </Badge>
               </div>
+              {request.code_type && (
+                <div>
+                  <span className="font-medium text-gray-700">Code Type:</span>
+                  <p className="text-gray-900">{request.code_type}</p>
+                </div>
+              )}
+              {request.preferred_rm_name && (
+                <div>
+                  <span className="font-medium text-gray-700">Preferred RM:</span>
+                  <p className="text-gray-900">{request.preferred_rm_name}</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -345,28 +335,6 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="broker_code">Broker Code *</Label>
-                      <Select
-                        value={formData.broker_code || ''}
-                        onValueChange={(value) => setFormData(prev => ({ ...prev, broker_code: value }))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select broker code" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {brokers.length === 0 ? (
-                            <SelectItem value="no-available" disabled>No brokers available</SelectItem>
-                          ) : (
-                            brokers.map((broker) => (
-                              <SelectItem key={broker.id} value={broker.broker_code}>
-                                {broker.broker_code} - {broker.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="child_id">Available Child ID *</Label>
@@ -395,7 +363,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
                     <Label htmlFor="branch_code">Branch Code</Label>
                     <Input
                       id="branch_code"
@@ -430,30 +398,6 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                       value={formData.manager_email || ''}
                       onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, manager_email: e.target.value }))}
                       placeholder="Enter manager email"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="commission_percentage">Commission %</Label>
-                    <Input
-                      id="commission_percentage"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="100"
-                      value={formData.commission_percentage || ''}
-                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, commission_percentage: parseFloat(e.target.value) || undefined }))}
-                      placeholder="Enter commission percentage"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="policy_limit">Policy Limit</Label>
-                    <Input
-                      id="policy_limit"
-                      type="number"
-                      min="0"
-                      value={formData.policy_limit || ''}
-                      onChange={(e) => setFormData((prev: Partial<AssignChildIdRequest>) => ({ ...prev, policy_limit: parseFloat(e.target.value) || undefined }))}
-                      placeholder="Enter policy limit"
                     />
                   </div>
                 </div>
@@ -519,10 +463,10 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
 
   const filteredRequests = safeRequests.filter(request => {
     const matchesSearch = 
-      (request.insurance_company?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (request.broker?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+      (request.location?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
       (request.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (request.phone_number || '').includes(searchQuery)
+      (request.phone_number || '').includes(searchQuery) ||
+      (request.child_id || '').includes(searchQuery)
     
     const matchesStatus = statusFilter === 'all' || request.status === statusFilter
     return matchesSearch && matchesStatus
@@ -608,7 +552,7 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search by company, broker, email, or phone..."
+            placeholder="Search by location, email, phone, or child ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
