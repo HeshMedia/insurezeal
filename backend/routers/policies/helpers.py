@@ -131,7 +131,6 @@ class PolicyHelpers:
     async def get_agent_by_user_id(db: AsyncSession, user_id: str) -> Optional[UserProfile]:
         """Get agent profile by user ID"""
         try:
-            # Convert string user_id to UUID for database query
             user_uuid = uuid.UUID(user_id)
             result = await db.execute(
                 select(UserProfile).where(
@@ -450,12 +449,9 @@ class PolicyHelpers:
             import io
             
             query = select(Policy)
-            
-            # Apply user filter if provided (for agents)
             if user_id:
                 query = query.where(Policy.uploaded_by == uuid.UUID(user_id))
             
-            # Apply date filters
             if start_date and end_date:
                 query = query.where(
                     and_(
@@ -476,7 +472,6 @@ class PolicyHelpers:
             output = io.StringIO()
             writer = csv.writer(output)
             
-            # CSV Headers
             headers = [
                 'ID', 'Policy Number', 'Policy Type', 'Insurance Type',
                 'Agent ID', 'Agent Code', 'Child ID', 'Broker Name', 'Insurance Company',
@@ -487,7 +482,6 @@ class PolicyHelpers:
             ]
             writer.writerow(headers)
             
-            # Write policy data
             for policy in policies:
                 row = [
                     str(policy.id),

@@ -1,19 +1,3 @@
-import logging
-import sys
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s:     %(message)s",
-    stream=sys.stdout,
-)
-logger = logging.getLogger()
-if not logger.handlers:
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
-    logger.addHandler(handler)
-logger.setLevel(logging.INFO)
-
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum

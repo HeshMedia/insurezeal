@@ -48,8 +48,7 @@ class ChildHelpers:
         """
         try:
             from sqlalchemy.orm import selectinload
-            
-            # Validate insurer_code
+
             insurer_code = request_data.get("insurer_code")
             if not insurer_code:
                 raise HTTPException(
@@ -57,15 +56,11 @@ class ChildHelpers:
                     detail="Insurer code is required"
                 )
             
-            # Validate the insurer code exists and is active
             await self.validate_insurer_code(db, insurer_code)
-            
-            # Validate broker_code if provided (for Broker Code type)
             broker_code = request_data.get("broker_code")
             if broker_code:
                 await self.validate_broker_code(db, broker_code)
             
-            # Create the child ID request
             child_request = ChildIdRequest(
                 user_id=uuid.UUID(user_id),
                 **request_data
@@ -74,8 +69,7 @@ class ChildHelpers:
             db.add(child_request)
             await db.commit()
             await db.refresh(child_request)
-            
-            # Fetch with relationships
+
             query = select(ChildIdRequest).options(
                 selectinload(ChildIdRequest.insurer),
                 selectinload(ChildIdRequest.broker)
@@ -119,10 +113,21 @@ class ChildHelpers:
         try:
             from sqlalchemy.orm import selectinload
             
+            # Validate UUID format before attempting conversion
+            try:
+                user_uuid = uuid.UUID(user_id)
+                logger.info(f"Successfully parsed user_id UUID: {user_id}")
+            except ValueError as uuid_error:
+                logger.error(f"Invalid UUID format for user_id: '{user_id}' - Length: {len(user_id)} - Error: {str(uuid_error)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid user ID format. Expected valid UUID, got: '{user_id}'"
+                )
+            
             query = select(ChildIdRequest).options(
                 selectinload(ChildIdRequest.insurer),
                 selectinload(ChildIdRequest.broker)
-            ).where(ChildIdRequest.user_id == uuid.UUID(user_id))
+            ).where(ChildIdRequest.user_id == user_uuid)
             
             count_query = select(func.count()).select_from(query.subquery())
             total_count = await db.scalar(count_query)
@@ -141,11 +146,13 @@ class ChildHelpers:
                 "total_pages": (total_count + page_size - 1) // page_size if total_count else 0
             }
             
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error fetching user child requests: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to fetch child ID requests"
+                detail="Failed to fetch user child requests"
             )
 
     async def get_child_request_by_id(
@@ -168,18 +175,38 @@ class ChildHelpers:
         try:
             from sqlalchemy.orm import selectinload
             
+            # Validate UUID format before attempting conversion
+            try:
+                request_uuid = uuid.UUID(request_id)
+                logger.info(f"Successfully parsed request_id UUID: {request_id}")
+            except ValueError as uuid_error:
+                logger.error(f"Invalid UUID format for request_id: '{request_id}' - Length: {len(request_id)} - Error: {str(uuid_error)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'"
+                )
+            
             query = select(ChildIdRequest).options(
                 selectinload(ChildIdRequest.insurer),
                 selectinload(ChildIdRequest.broker)
-            ).where(ChildIdRequest.id == uuid.UUID(request_id))
+            ).where(ChildIdRequest.id == request_uuid)
             
             if user_id:
-                query = query.where(ChildIdRequest.user_id == uuid.UUID(user_id))
+                try:
+                    user_uuid = uuid.UUID(user_id)
+                    query = query.where(ChildIdRequest.user_id == user_uuid)
+                except ValueError as uuid_error:
+                    logger.error(f"Invalid UUID format for user_id: '{user_id}' - Error: {str(uuid_error)}")
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid user ID format. Expected valid UUID, got: '{user_id}'"
+                    )
             
             result = await db.execute(query)
             child_request = result.scalar_one_or_none()
             
             if not child_request:
+                logger.warning(f"Child ID request not found for UUID: {request_id}")
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Child ID request not found"
@@ -190,7 +217,7 @@ class ChildHelpers:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error fetching child request {request_id}: {str(e)}")
+            logger.error(f"Unexpected error fetching child request {request_id}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to fetch child ID request"

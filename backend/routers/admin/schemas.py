@@ -72,6 +72,10 @@ class ChildIdResponse(BaseModel):
     approved_by: Optional[UUID] = None
     approved_at: Optional[datetime] = None
     
+    # Agent information (who requested the child ID)
+    agent_name: Optional[str] = None
+    agent_code: Optional[str] = None
+    
     # Timestamps
     created_at: datetime
     updated_at: datetime

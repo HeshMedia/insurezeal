@@ -12,18 +12,16 @@ from routers.auth.auth import get_current_user
 from dependencies.rbac import (
     require_superadmin_brokers_write, require_brokers_read,
     require_superadmin_insurers_write, require_insurers_read,
-    require_superadmin_admin_child_ids_write, require_superadmin_admin_child_ids,
+    require_superadmin_admin_child_ids_write, require_admin_child_ids_read,
     require_superadmin_admin_child_ids_update, require_superadmin_admin_child_ids_delete,
     require_superadmin_brokers_insurers_list, require_superadmin_brokers_update,
     require_superadmin_insurers_update, require_superadmin_write,
-    require_superadmin_brokers_delete, require_superadmin_insurers_delete
 )
 from .schemas import (
     BrokerCreate, BrokerResponse, BrokerUpdate,
     InsurerCreate, InsurerResponse, InsurerUpdate,
     AdminChildIDCreate, AdminChildIDResponse, AdminChildIDUpdate,
     BrokerInsurerListResponse,
-    UserRoleUpdateResponse
 )
 from . import schemas
 
@@ -133,7 +131,6 @@ async def create_insurer(
     _rbac_check = Depends(require_superadmin_insurers_write)
 ):
     """Create a new insurer (SuperAdmin only)"""
-    # Generate insurer code (simplified version)
     result = await db.execute(select(Insurer).order_by(desc(Insurer.id)).limit(1))
     last_insurer = result.scalar_one_or_none()
     if last_insurer and last_insurer.insurer_code:
@@ -244,7 +241,6 @@ async def create_admin_child_id(
     _rbac_check = Depends(require_superadmin_admin_child_ids_write)
 ):
     """Create a new admin child ID (SuperAdmin only)"""
-    # Check if child ID already exists
     existing_result = await db.execute(
         select(AdminChildID).where(AdminChildID.child_id == child_id_data.child_id)
     )
@@ -254,8 +250,7 @@ async def create_admin_child_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Child ID already exists"
         )
-    
-    # Validate insurer exists
+
     insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == child_id_data.insurer_code))
     insurer = insurer_result.scalar_one_or_none()
     if not insurer:
@@ -263,8 +258,7 @@ async def create_admin_child_id(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid insurer code: {child_id_data.insurer_code}"
         )
-    
-    # Validate broker exists if provided
+
     broker_id = None
     if child_id_data.broker_code:
         broker_result = await db.execute(select(Broker).where(Broker.broker_code == child_id_data.broker_code))
@@ -304,7 +298,7 @@ async def create_admin_child_id(
 async def get_admin_child_ids(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_admin_child_ids)
+    _rbac_check = Depends(require_admin_child_ids_read)
 ):
     """Get all admin child IDs (Admin/SuperAdmin only)"""
     result = await db.execute(
@@ -315,12 +309,53 @@ async def get_admin_child_ids(
     return result.scalars().all()
 
 
+@router.get("/admin-child-ids/available", response_model=List[AdminChildIDResponse])
+async def get_available_admin_child_ids(
+    insurer_code: str,
+    broker_code: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_child_ids_read)
+):
+    """Get available admin child IDs filtered by insurer code and optionally broker code (Admin/SuperAdmin only)""" 
+    insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
+    insurer = insurer_result.scalar_one_or_none()
+    if not insurer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid insurer code: {insurer_code}"
+        )
+    
+    query = (
+        select(AdminChildID)
+        .options(selectinload(AdminChildID.insurer), selectinload(AdminChildID.broker))
+        .where(
+            AdminChildID.is_active == True,
+            AdminChildID.is_suspended == False,
+            AdminChildID.insurer_id == insurer.id
+        )
+    )
+    
+    if broker_code:
+        broker_result = await db.execute(select(Broker).where(Broker.broker_code == broker_code))
+        broker = broker_result.scalar_one_or_none()
+        if not broker:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid broker code: {broker_code}"
+            )
+        query = query.where(AdminChildID.broker_id == broker.id)
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
 @router.get("/admin-child-ids/{child_id_id}", response_model=AdminChildIDResponse)
 async def get_admin_child_id(
     child_id_id: int,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_admin_child_ids)
+    _rbac_check = Depends(require_admin_child_ids_read)
 ):
     """Get specific admin child ID by ID (Admin/SuperAdmin only)"""
     result = await db.execute(
@@ -356,8 +391,7 @@ async def update_admin_child_id(
         )
     
     update_data = child_id_update.dict(exclude_unset=True)
-    
-    # Handle insurer code resolution
+
     if "insurer_code" in update_data:
         insurer_code = update_data.pop("insurer_code")
         insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
@@ -368,8 +402,7 @@ async def update_admin_child_id(
                 detail=f"Invalid insurer code: {insurer_code}"
             )
         update_data["insurer_id"] = insurer.id
-    
-    # Handle broker code resolution
+
     if "broker_code" in update_data:
         broker_code = update_data.pop("broker_code")
         if broker_code:
@@ -437,47 +470,7 @@ async def toggle_admin_child_id_suspension(
     return {"message": f"Admin child ID {action} successfully"}
 
 
-@router.get("/admin-child-ids/available", response_model=List[AdminChildIDResponse])
-async def get_available_admin_child_ids(
-    insurer_code: str,
-    broker_code: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_superadmin_admin_child_ids)
-):
-    """Get available admin child IDs filtered by insurer code and optionally broker code (Admin/SuperAdmin only)"""
-    # Resolve insurer code to ID
-    insurer_result = await db.execute(select(Insurer).where(Insurer.insurer_code == insurer_code))
-    insurer = insurer_result.scalar_one_or_none()
-    if not insurer:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid insurer code: {insurer_code}"
-        )
-    
-    query = (
-        select(AdminChildID)
-        .options(selectinload(AdminChildID.insurer), selectinload(AdminChildID.broker))
-        .where(
-            AdminChildID.is_active == True,
-            AdminChildID.is_suspended == False,
-            AdminChildID.insurer_id == insurer.id
-        )
-    )
-    
-    # Resolve broker code to ID if provided
-    if broker_code:
-        broker_result = await db.execute(select(Broker).where(Broker.broker_code == broker_code))
-        broker = broker_result.scalar_one_or_none()
-        if not broker:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid broker code: {broker_code}"
-            )
-        query = query.where(AdminChildID.broker_id == broker.id)
-    
-    result = await db.execute(query)
-    return result.scalars().all()
+
 
 # ============ USER ROLE MANAGEMENT ============
 
@@ -505,7 +498,6 @@ async def promote_agent_to_admin_superadmin(
                 detail="Invalid user ID format. Must be a valid UUID."
             )
         
-        # Check if user exists and is currently an agent
         result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_uuid))
         user_profile = result.scalar_one_or_none()
         
@@ -521,11 +513,9 @@ async def promote_agent_to_admin_superadmin(
                 detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
             )
         
-        # Update role in database
         user_profile.user_role = "admin"
         await db.commit()
         
-        # Update role in Supabase
         supabase_admin = get_supabase_admin_client()
         supabase_response = supabase_admin.auth.admin.update_user_by_id(
             uid=user_id,

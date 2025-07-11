@@ -200,7 +200,6 @@ require_admin_child_requests = require_permission("admin/child-requests", "read"
 require_admin_child_requests_write = require_permission("admin/child-requests", "write")
 require_admin_child_requests_update = require_permission("admin/child-requests", "update")
 
-# SuperAdmin permissions
 require_superadmin_read = require_permission("superadmin", "read")
 require_superadmin_write = require_permission("superadmin", "write")
 require_superadmin_manage = require_permission("superadmin", "manage")
@@ -215,9 +214,10 @@ require_superadmin_insurers_write = require_permission("superadmin/insurers", "w
 require_superadmin_insurers_update = require_permission("superadmin/insurers", "update")
 require_superadmin_insurers_delete = require_permission("superadmin/insurers", "delete")
 
-require_superadmin_admin_child_ids = require_permission("superadmin/admin-child-ids", "read")
+require_admin_child_ids_read = require_permission("superadmin/admin-child-ids", "read")
 require_superadmin_admin_child_ids_write = require_permission("superadmin/admin-child-ids", "write")
 require_superadmin_admin_child_ids_update = require_permission("superadmin/admin-child-ids", "update")
 require_superadmin_admin_child_ids_delete = require_permission("superadmin/admin-child-ids", "delete")
 
 require_superadmin_brokers_insurers_list = require_permission("superadmin/brokers-insurers-list", "read")
+

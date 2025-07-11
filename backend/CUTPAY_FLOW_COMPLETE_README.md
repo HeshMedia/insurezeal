@@ -317,7 +317,7 @@ const useFilteredDropdowns = () => {
 ### **Commission Calculation**
 ```python
 # 1. Receivable from Broker = Gross Premium × Incoming Grid %
-receivable = gross_premium * (incoming_grid_percent / 100)
+receivable = commissionable_premium * (incoming_grid / 100)
 
 # 2. Extra Receivable = Commissionable Premium × Extra Grid %
 extra = commissionable_premium * (extra_grid / 100)

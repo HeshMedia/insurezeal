@@ -29,14 +29,10 @@ async def promote_to_superadmin(
     from uuid import UUID
     
     try:
-        # Initialize response tracking
         updated_in_database = False
         updated_in_supabase = False
-        
-        # Update role in the database
+
         try:
-            # Check if user exists in database and verify email matches
-            # Join with Users table to get email
             result = await db.execute(
                 select(UserProfile, Users.email)
                 .join(Users, UserProfile.user_id == Users.id)
@@ -52,14 +48,12 @@ async def promote_to_superadmin(
             
             user_profile, user_email = user_data
             
-            # Verify email matches for security
             if user_email != promotion_request.email:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Email does not match the user record. Cannot promote to superadmin."
                 )
-            
-            # Update the role in database
+
             user_profile.user_role = "superadmin"
             await db.commit()
             updated_in_database = True
@@ -70,14 +64,12 @@ async def promote_to_superadmin(
         except Exception as e:
             logger.error(f"Failed to update role in database: {str(e)}")
             await db.rollback()
-            
-        # Update role in Supabase user metadata
+
         try:
             supabase_admin = get_supabase_admin_client()
             
             logger.info(f"Attempting to update user {promotion_request.user_id} in Supabase")
             
-            # Update user metadata in Supabase
             response = supabase_admin.auth.admin.update_user_by_id(
                 uid=str(promotion_request.user_id),
                 attributes={
@@ -98,13 +90,11 @@ async def promote_to_superadmin(
         except Exception as e:
             logger.error(f"Failed to update role in Supabase: {str(e)}")
             logger.error(f"Exception type: {type(e)}")
-            # Check if it's a specific Supabase error
             if hasattr(e, 'details'):
                 logger.error(f"Supabase error details: {e.details}")
             if hasattr(e, 'message'):
                 logger.error(f"Supabase error message: {e.message}")
         
-        # Determine success and message
         if updated_in_database and updated_in_supabase:
             success = True
             message = f"Successfully promoted user to superadmin in both database and Supabase"

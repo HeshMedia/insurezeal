@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-from fastapi import Depends, HTTPException, APIRouter, status, Query
+from fastapi import Depends, HTTPException, APIRouter, status, Query, Path
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,9 +19,33 @@ router = APIRouter(tags=["User Child ID Routes"])
 security = HTTPBearer()
 child_helpers = ChildHelpers()
 auth_helpers = AuthHelpers()
+
 logger = logging.getLogger(__name__)
 
-# ============ DROPDOWN ROUTES FOR CHILD ID REQUESTS ============
+def validate_uuid_string(uuid_string: str, field_name: str = "UUID") -> str:
+    """
+    Validate that a string is a proper UUID format
+    
+    Args:
+        uuid_string: String to validate
+        field_name: Name of the field for error messages
+        
+    Returns:
+        The original string if valid
+        
+    Raises:
+        HTTPException: If the string is not a valid UUID
+    """
+    try:
+        uuid.UUID(uuid_string)
+        return uuid_string
+    except ValueError as e:
+        logger.error(f"Invalid {field_name} format: '{uuid_string}' - Length: {len(uuid_string)} - Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid {field_name} format. Expected valid UUID, got: '{uuid_string}'"
+        )
+logger = logging.getLogger(__name__)
 
 @router.get("/get-insurers", response_model=List[InsurerDropdownResponse])
 async def get_insurers_for_child_request(
@@ -224,7 +248,7 @@ async def get_my_child_requests(
 
 @router.get("/request/{request_id}", response_model=ChildIdResponse)
 async def get_child_request_details(
-    request_id: str,
+    request_id: str = Path(..., description="Child ID request UUID"),
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -235,11 +259,15 @@ async def get_child_request_details(
     - Returns complete request details including status and assignment info
     """
     try:
+        # Validate UUID format early with detailed logging
+        validated_request_id = validate_uuid_string(request_id, "request_id")
+        logger.info(f"Fetching child request details for request_id: {validated_request_id} by user: {current_user.get('user_id')}")
+        
         user_id = current_user["user_id"]
         
         child_request = await child_helpers.get_child_request_by_id(
             db=db,
-            request_id=request_id,
+            request_id=validated_request_id,
             user_id=user_id
         )
         
@@ -298,11 +326,14 @@ async def get_active_child_ids(
             from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
             req_dict = convert_uuids_to_strings(model_data_from_orm(req))
 
+            # Add insurer details with both code and name
             if req.insurer:
                 req_dict["insurer"] = {
                     "insurer_code": req.insurer.insurer_code,
                     "name": req.insurer.name
                 }
+            
+            # Add broker details with both code and name  
             if req.broker:
                 req_dict["broker_relation"] = {
                     "broker_code": req.broker.broker_code,

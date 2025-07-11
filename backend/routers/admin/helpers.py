@@ -336,6 +336,8 @@ class AdminHelpers:
             query = select(ChildIdRequest).options(
                 selectinload(ChildIdRequest.insurer),
                 selectinload(ChildIdRequest.broker)
+            ).join(
+                UserProfile, ChildIdRequest.user_id == UserProfile.user_id, isouter=True
             )
             
             conditions = []
@@ -366,8 +368,36 @@ class AdminHelpers:
             result = await db.execute(query)
             requests = result.scalars().all()
             
+            # Fetch agent information for each request
+            enriched_requests = []
+            for request in requests:
+                # Get the UserProfile for this request
+                user_query = select(UserProfile).where(UserProfile.user_id == request.user_id)
+                user_result = await db.execute(user_query)
+                user_profile = user_result.scalar_one_or_none()
+                
+                # Add agent information to the request object
+                if user_profile:
+                    # Create agent name from first_name and last_name
+                    agent_name = None
+                    if user_profile.first_name or user_profile.last_name:
+                        agent_name = f"{user_profile.first_name or ''} {user_profile.last_name or ''}".strip()
+                    
+                    # Debug logging for agent information
+                    logger.info(f"Agent info for request {request.id}: agent_name={agent_name}, agent_code={user_profile.agent_code}")
+                    
+                    # Add agent attributes to the request object
+                    request.agent_name = agent_name
+                    request.agent_code = user_profile.agent_code
+                else:
+                    logger.warning(f"No user profile found for user_id {request.user_id}")
+                    request.agent_name = None
+                    request.agent_code = None
+                    
+                enriched_requests.append(request)
+            
             return {
-                "requests": requests,
+                "requests": enriched_requests,
                 "total_count": total_count,
                 "total_pages": total_pages
             }

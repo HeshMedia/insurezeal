@@ -7,13 +7,11 @@ from config import get_db
 from routers.auth.auth import get_current_user
 from dependencies.rbac import (
     require_admin_agents, 
-    require_admin_agents_write, 
     require_admin_agents_delete,
     require_admin_read,
     require_admin_write,
     require_admin_stats,
     require_admin_child_requests,
-    require_admin_child_requests_write,
     require_admin_child_requests_update
 )
 from .schemas import (
@@ -27,21 +25,18 @@ from .schemas import (
     ChildIdAssignment,
     ChildIdStatusUpdate,
     UniversalRecordUploadResponse,
-    UserRoleUpdateRequest,
-    UserRoleUpdateResponse,
-    SuperadminPromotionRequest
 )
 from . import schemas
 from .helpers import AdminHelpers
 from routers.child.helpers import ChildHelpers
-from .cutpay import router as cutpay_router
-from .public import router as public_router
 from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
 from utils.google_sheets import google_sheets_sync
+from models import UserProfile
 from typing import Optional
 import logging
 import io
 import csv
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +195,6 @@ async def get_admin_stats(
 
 
 #<------------------child id management endpoints------------------>
-
 @router.get("/child-requests", response_model=ChildIdRequestList)
 async def get_all_child_requests(
     page: int = Query(1, ge=1, description="Page number"),
@@ -233,8 +227,27 @@ async def get_all_child_requests(
         formatted_requests = []
         for req in result["requests"]:
             req_dict = convert_uuids_to_strings(model_data_from_orm(req))
+            req_dict['insurer_id'] = None  # Add insurer_id to the response dictionary
+            
+            # Get agent information
+            user_query = select(UserProfile).where(UserProfile.user_id == req.user_id)
+            user_result = await db.execute(user_query)
+            user_profile = user_result.scalar_one_or_none()
+            
+            if user_profile:
+                # Create agent name from first_name and last_name
+                agent_name = None
+                if user_profile.first_name or user_profile.last_name:
+                    agent_name = f"{user_profile.first_name or ''} {user_profile.last_name or ''}".strip()
+                
+                req_dict['agent_name'] = agent_name
+                req_dict['agent_code'] = user_profile.agent_code
+            else:
+                req_dict['agent_name'] = None
+                req_dict['agent_code'] = None
             
             if req.insurer:
+                req_dict['insurer_id'] = req.insurer.id
                 req_dict["insurer"] = {
                     "id": req.insurer.id,
                     "insurer_code": req.insurer.insurer_code,
@@ -281,6 +294,17 @@ async def get_child_request_by_id(
     """
     
     try:
+        # Validate UUID format before proceeding
+        try:
+            uuid.UUID(request_id)
+            logger.info(f"Successfully parsed request_id UUID: {request_id}")
+        except ValueError as uuid_error:
+            logger.error(f"Invalid UUID format for request_id: '{request_id}' - Error: {str(uuid_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'"
+            )
+        
         child_request = await child_helpers.get_child_request_by_id(db=db, request_id=request_id)
 
         if not child_request:
@@ -291,17 +315,35 @@ async def get_child_request_by_id(
         
         from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        req_dict['insurer_id'] = None  # Add insurer_id to the response dictionary
+        
+        # Get agent information
+        user_query = select(UserProfile).where(UserProfile.user_id == child_request.user_id)
+        user_result = await db.execute(user_query)
+        user_profile = user_result.scalar_one_or_none()
+        
+        if user_profile:
+            # Create agent name from first_name and last_name
+            agent_name = None
+            if user_profile.first_name or user_profile.last_name:
+                agent_name = f"{user_profile.first_name or ''} {user_profile.last_name or ''}".strip()
+            
+            req_dict['agent_name'] = agent_name
+            req_dict['agent_code'] = user_profile.agent_code
+            logger.info(f"Agent info for child request {request_id}: name='{agent_name}', code='{user_profile.agent_code}'")
+        else:
+            req_dict['agent_name'] = None
+            req_dict['agent_code'] = None
+            logger.warning(f"No user profile found for user_id: {child_request.user_id}")
         
         if child_request.insurer:
-            # Add insurer_id field required by ChildIdResponse schema
-            req_dict["insurer_id"] = child_request.insurer.id
+            req_dict['insurer_id'] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": str(child_request.insurer.id),
                 "insurer_code": child_request.insurer.insurer_code,
                 "name": child_request.insurer.name
             }
         if child_request.broker:
-            # Add broker_id field required by ChildIdResponse schema
             req_dict["broker_id"] = child_request.broker.id
             req_dict["broker_relation"] = {
                 "id": str(child_request.broker.id),
@@ -343,6 +385,17 @@ async def assign_child_id(
     """
     
     try:
+        # Validate UUID format before proceeding
+        try:
+            uuid.UUID(request_id)
+            logger.info(f"Successfully parsed request_id UUID: {request_id}")
+        except ValueError as uuid_error:
+            logger.error(f"Invalid UUID format for request_id: '{request_id}' - Error: {str(uuid_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'"
+            )
+        
         admin_user_id = current_user["user_id"]
         child_request = await admin_helpers.approve_child_request(
             db=db,
@@ -352,8 +405,27 @@ async def assign_child_id(
         )
         
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        req_dict['insurer_id'] = None  # Add insurer_id to the response dictionary
+
+        # Get agent information
+        user_query = select(UserProfile).where(UserProfile.user_id == child_request.user_id)
+        user_result = await db.execute(user_query)
+        user_profile = user_result.scalar_one_or_none()
+        
+        if user_profile:
+            # Create agent name from first_name and last_name
+            agent_name = None
+            if user_profile.first_name or user_profile.last_name:
+                agent_name = f"{user_profile.first_name or ''} {user_profile.last_name or ''}".strip()
+            
+            req_dict['agent_name'] = agent_name
+            req_dict['agent_code'] = user_profile.agent_code
+        else:
+            req_dict['agent_name'] = None
+            req_dict['agent_code'] = None
 
         if child_request.insurer:
+            req_dict['insurer_id'] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
@@ -415,6 +487,17 @@ async def reject_child_request(
     """
     
     try:
+        # Validate UUID format before proceeding
+        try:
+            uuid.UUID(request_id)
+            logger.info(f"Successfully parsed request_id UUID: {request_id}")
+        except ValueError as uuid_error:
+            logger.error(f"Invalid UUID format for request_id: '{request_id}' - Error: {str(uuid_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'"
+            )
+        
         admin_user_id = current_user["user_id"]
         child_request = await admin_helpers.reject_child_request(
             db=db,
@@ -424,8 +507,27 @@ async def reject_child_request(
         )
         
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        req_dict['insurer_id'] = None  # Add insurer_id to the response dictionary
+
+        # Get agent information
+        user_query = select(UserProfile).where(UserProfile.user_id == child_request.user_id)
+        user_result = await db.execute(user_query)
+        user_profile = user_result.scalar_one_or_none()
+        
+        if user_profile:
+            # Create agent name from first_name and last_name
+            agent_name = None
+            if user_profile.first_name or user_profile.last_name:
+                agent_name = f"{user_profile.first_name or ''} {user_profile.last_name or ''}".strip()
+            
+            req_dict['agent_name'] = agent_name
+            req_dict['agent_code'] = user_profile.agent_code
+        else:
+            req_dict['agent_name'] = None
+            req_dict['agent_code'] = None
 
         if child_request.insurer:
+            req_dict['insurer_id'] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
@@ -488,6 +590,17 @@ async def suspend_child_id(
     """
     
     try:
+        # Validate UUID format before proceeding
+        try:
+            uuid.UUID(request_id)
+            logger.info(f"Successfully parsed request_id UUID: {request_id}")
+        except ValueError as uuid_error:
+            logger.error(f"Invalid UUID format for request_id: '{request_id}' - Error: {str(uuid_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'"
+            )
+        
         admin_user_id = current_user["user_id"]
         
         child_request = await admin_helpers.suspend_child_id(
@@ -498,8 +611,27 @@ async def suspend_child_id(
         )
         
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
+        req_dict['insurer_id'] = None  # Add insurer_id to the response dictionary
+        
+        # Get agent information
+        user_query = select(UserProfile).where(UserProfile.user_id == child_request.user_id)
+        user_result = await db.execute(user_query)
+        user_profile = user_result.scalar_one_or_none()
+        
+        if user_profile:
+            # Create agent name from first_name and last_name
+            agent_name = None
+            if user_profile.first_name or user_profile.last_name:
+                agent_name = f"{user_profile.first_name or ''} {user_profile.last_name or ''}".strip()
+            
+            req_dict['agent_name'] = agent_name
+            req_dict['agent_code'] = user_profile.agent_code
+        else:
+            req_dict['agent_name'] = None
+            req_dict['agent_code'] = None
         
         if child_request.insurer:
+            req_dict['insurer_id'] = child_request.insurer.id
             req_dict["insurer"] = {
                 "id": child_request.insurer.id,
                 "insurer_code": child_request.insurer.insurer_code,
@@ -646,7 +778,7 @@ async def upload_universal_record(
             report=result,
             processing_time_seconds=result['processing_time_seconds']
         )
-        
+    
     except HTTPException:
         raise
     except Exception as e:
@@ -690,7 +822,6 @@ async def download_universal_record_template(
             'start_date',
             'end_date',
             
-            # Cut pay fields
             'cut_pay_amount',
             'commission_grid',
             'agent_commission_given_percent',
@@ -703,7 +834,6 @@ async def download_universal_record_template(
             'notes'
         ]
         
-        # Create sample data
         sample_data = [
             'POL-2024-001',  # policy_number
             'Motor Insurance',  # policy_type

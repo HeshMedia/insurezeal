@@ -237,6 +237,11 @@ class CutPayUpdate(BaseModel):
     
     # Notes
     notes: Optional[str] = Field(None)
+    
+    # Nested update support - allow the same nested structure as create
+    extracted_data: Optional[ExtractedPolicyData] = Field(None)
+    admin_input: Optional[AdminInputData] = Field(None)
+    calculations: Optional[CalculationResult] = Field(None)
 
 class CutPayResponse(BaseModel):
     """Comprehensive schema for cut pay transaction response"""
