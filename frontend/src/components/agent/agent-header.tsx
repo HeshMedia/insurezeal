@@ -16,10 +16,15 @@ export function AgentHeader() {
     const segments = pathname.split('/').filter(Boolean)
     if (segments.length <= 1) return null
 
-    const breadcrumbs = segments.map((segment, index) => {
-      const path = `/${segments.slice(0, index + 1).join('/')}`
+    // Skip the first segment if it's 'agent' to avoid duplication  
+    const relevantSegments = segments[0] === 'agent' ? segments.slice(1) : segments
+    if (relevantSegments.length === 0) return null
+
+    const breadcrumbs = relevantSegments.map((segment, index) => {
+      // Build the correct path from the original segments including 'agent'
+      const path = `/${segments.slice(0, index + 2).join('/')}`
       const title = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ')
-      return { title, path, isLast: index === segments.length - 1 }
+      return { title, path, isLast: index === relevantSegments.length - 1 }
     })
 
     return breadcrumbs
@@ -32,15 +37,15 @@ export function AgentHeader() {
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
       
-      {breadcrumbs && (
+      {breadcrumbs && breadcrumbs.length > 0 && (
         <Breadcrumb>
           <BreadcrumbList>
             <BreadcrumbItem className="hidden md:block">
               <BreadcrumbLink href="/agent">Agent</BreadcrumbLink>
             </BreadcrumbItem>
-            <BreadcrumbSeparator className="hidden md:block" />
-            {breadcrumbs.map((breadcrumb,) => (
+            {breadcrumbs.map((breadcrumb) => (
               <div key={breadcrumb.path} className="flex items-center gap-2">
+                <BreadcrumbSeparator className="hidden md:block" />
                 <BreadcrumbItem>
                   {breadcrumb.isLast ? (
                     <BreadcrumbPage className="font-medium">{breadcrumb.title}</BreadcrumbPage>
@@ -48,7 +53,6 @@ export function AgentHeader() {
                     <BreadcrumbLink href={breadcrumb.path}>{breadcrumb.title}</BreadcrumbLink>
                   )}
                 </BreadcrumbItem>
-                {!breadcrumb.isLast && <BreadcrumbSeparator />}
               </div>
             ))}
           </BreadcrumbList>

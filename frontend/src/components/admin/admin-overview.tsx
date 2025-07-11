@@ -1,7 +1,7 @@
 "use client"
 
 import { StatsCards } from "./stats-cards"
-import { AnalyticsCharts } from "./analytics-charts"
+// import { AnalyticsCharts } from "./analytics-charts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -24,23 +24,6 @@ export function AdminOverview() {
   const getRecentActivity = () => {
     const activities = []
     
-    // Add top agents from cutpay stats
-    if (cutpayStats?.stats?.top_agents && cutpayStats.stats.top_agents.length > 0) {
-      cutpayStats.stats.top_agents.slice(0, 3).forEach((agent, index) => {
-        if (agent.agent_code && agent.total_cut_pay_amount) {
-          activities.push({
-            id: `agent-${index}`,
-            type: 'cutpay',
-            title: `High CutPay Transaction`,
-            description: `${agent.agent_code} - ${formatCurrency(agent.total_cut_pay_amount)}`,
-            time: 'Recent',
-            avatar: agent.agent_code.charAt(0),
-            color: 'bg-green-100 text-green-600'
-          })
-        }
-      })
-    }
-
     // Add new agents activity if available
     if (adminStats?.new_agents_this_month && adminStats.new_agents_this_month > 0) {
       activities.push({
@@ -151,10 +134,6 @@ export function AdminOverview() {
 
       {/* Statistics Cards */}
       <StatsCards />
-
-      {/* Analytics Charts */}
-      <AnalyticsCharts />
-
       {/* Recent Activity */}
       <div className="grid gap-4 md:grid-cols-1">
         <Card className="border border-gray-200 shadow-sm">
