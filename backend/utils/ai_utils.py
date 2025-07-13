@@ -28,32 +28,46 @@ class GeminiPolicyExtractor:
         - For dates, use "YYYY-MM-DD" format
         - For numbers, use actual numeric values (not strings)
         - Confidence score should be between 0.0 and 1.0 based on text clarity
+        
+        PREMIUM CALCULATION RULES:
+        - gross_premium = Final Premium (the total amount customer pays)
+        - If you see "Final premium ₹4,030.88", then gross_premium should be 4030.88
+        - tp_premium should be the base third party amount (before taxes)
+        - gst_amount should be total GST/tax amount
+        - net_premium is usually the base premium before any additions
 
         COMPREHENSIVE FIELD MAPPING:
         
         BASIC POLICY INFORMATION:
-        - policy_number: Certificate No, Policy No, Certificate Number, Policy Certificate No
-        - formatted_policy_number: Formatted version with dashes/spaces
+        - policy_number: Extract ONLY the main policy number (first part before any "/" or "-"). For "P0026100026/4103/100341", extract "P0026100026". Remove all spaces, dashes, and slashes.
+        - formatted_policy_number: Prefix with semicolon and include complete policy number with original formatting. For "P0026100026/4103/100341", return ";P0026100026/4103/100341"
         - major_categorisation: Motor, Life, Health, Travel, General Insurance
         - product_insurer_report: Product name from insurer report
-        - product_type: Private Car, Two Wheeler, Commercial Vehicle, etc.
+        - product_type: Private Car, Two Wheeler, Commercial Vehicle, etc. Include vehicle category like (GCV), (SCV), (PCV) in brackets
         - plan_type: Comprehensive, Third Party, Package Policy, Liability Only
         - customer_name: Policy holder name, insured name
+        - customer_phone_number: Customer phone number or mobile number if available
 
         PREMIUM & FINANCIAL DETAILS:
-        - gross_premium: Total Premium, Gross Premium, Premium Amount
-        - net_premium: Net Premium, Premium Payable, Final Premium
+        - gross_premium: Final Premium, Total Premium (sum of all components including taxes)
+        - net_premium: Base Premium, Net Premium (before taxes and additions)
         - od_premium: Own Damage Premium, OD Premium, Own Damage
-        - tp_premium: Third Party Premium, TP Premium, Liability Premium
-        - gst_amount: Service Tax, GST, IGST, CGST+SGST, Tax Amount
+        - tp_premium: Third Party Premium, TP Premium, Liability Premium, Base Premium including Premium for TPPD
+        - gst_amount: Service Tax, GST, IGST, CGST+SGST, Tax Amount, CGST, SGST
+        
+        IMPORTANT: 
+        - gross_premium should be the FINAL PREMIUM amount (the total you pay)
+        - If you see "Final Premium" or "Total Premium", that is the gross_premium
+        - tp_premium should be the base third party premium amount (like ₹3416 in liability section)
+        - gst_amount should be the total tax amount (CGST + SGST combined)
 
         VEHICLE DETAILS (for Motor Insurance):
-        - registration_no: Vehicle Reg No, Registration No, Reg. No, Vehicle No
+        - registration_no: Vehicle Reg No, Registration No, Reg. No, Vehicle No (clean format without dashes or spaces)
         - make_model: Vehicle make and model combined
         - model: Specific model name
         - vehicle_variant: Variant like VXI, ZXI, LXI, etc.
         - gvw: Gross Vehicle Weight
-        - rto: RTO code like MH01, DL01, etc.
+        - rto: RTO code like MH01, DL01, etc. (extract first 4 characters of registration number)
         - state: State of registration
         - fuel_type: Petrol, Diesel, CNG, Electric
         - cc: Engine capacity in CC
@@ -73,6 +87,7 @@ class GeminiPolicyExtractor:
             "product_type": "string or null",
             "plan_type": "string or null",
             "customer_name": "string or null",
+            "customer_phone_number": "string or null",
             "gross_premium": number or null,
             "net_premium": number or null,
             "od_premium": number or null,
@@ -158,6 +173,9 @@ class GeminiPolicyExtractor:
             if 'confidence_score' not in extracted_data:
                 extracted_data['confidence_score'] = 0.5
             
+            # Post-process extracted data
+            extracted_data = self._post_process_extracted_data(extracted_data)
+            
             logger.info(f"Successfully extracted policy data with confidence: {extracted_data.get('confidence_score', 0)}")
             return extracted_data
             
@@ -217,6 +235,41 @@ class GeminiPolicyExtractor:
         
         return None
 
+    def _post_process_extracted_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Post-process extracted data to clean and format fields"""
+        try:
+            # Process policy numbers
+            if data.get('policy_number'):
+                policy_num = str(data['policy_number'])
+                # Extract just the main policy number (before first "/" or "-")
+                main_policy = policy_num.split('/')[0].split('-')[0].strip()
+                # Remove spaces, dashes from main policy number
+                main_policy = main_policy.replace(' ', '').replace('-', '')
+                data['policy_number'] = main_policy
+                
+                # Set formatted policy number with ";" prefix and full original format
+                if not data.get('formatted_policy_number'):
+                    data['formatted_policy_number'] = ';' + policy_num
+                elif not str(data['formatted_policy_number']).startswith(';'):
+                    data['formatted_policy_number'] = ';' + str(data['formatted_policy_number'])
+            
+            # Clean registration number - remove dashes, spaces, and special characters
+            if data.get('registration_no'):
+                reg_no = str(data['registration_no']).upper()
+                # Remove common separators and spaces
+                reg_no = reg_no.replace('-', '').replace(' ', '').replace('_', '').replace('.', '')
+                data['registration_no'] = reg_no
+                
+                # Extract RTO from first 4 characters of registration number
+                if len(reg_no) >= 4:
+                    data['rto'] = reg_no[:4]
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error in post-processing extracted data: {str(e)}")
+            return data
+
 async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
     """Extract comprehensive policy data from PDF using the Gemini extractor"""
     try:
@@ -260,6 +313,7 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "product_type": extracted_data.get("product_type"),
                 "plan_type": extracted_data.get("plan_type"),
                 "customer_name": extracted_data.get("customer_name"),
+                "customer_phone_number": extracted_data.get("customer_phone_number"),
                 
                 # Premium & Financial Details
                 "gross_premium": extracted_data.get("gross_premium"),
@@ -323,6 +377,7 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "product_type": extracted_data.get("product_type"),
                 "plan_type": extracted_data.get("plan_type"),
                 "customer_name": extracted_data.get("customer_name"),
+                "customer_phone_number": extracted_data.get("customer_phone_number"),
                 
                 # Premium & Financial Details
                 "gross_premium": extracted_data.get("gross_premium"),

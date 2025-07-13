@@ -91,6 +91,26 @@ class GoogleSheetsSync:
             result = chr(65 + remainder) + result
         return result
     
+    def _find_next_empty_row(self, worksheet) -> int:
+        """Find the next empty row in the worksheet starting from column A"""
+        try:
+            # Get all values in column A to find the last non-empty row
+            col_a_values = worksheet.col_values(1)  # Column A (1-indexed)
+            
+            # Find the next empty row (add 1 to the length to get next row)
+            next_row = len(col_a_values) + 1
+            
+            # Ensure we don't overwrite the header row
+            if next_row <= 1:
+                next_row = 2
+                
+            return next_row
+            
+        except Exception as e:
+            logger.error(f"Error finding next empty row: {str(e)}")
+            # Fallback to row 2 if there's an error
+            return 2
+    
     def _safe_sync(self, sync_function, *args, **kwargs):
         """Safely execute sync function with error handling"""
         try:
@@ -138,8 +158,14 @@ class GoogleSheetsSync:
             
             row_values = [str(val) if val is not None else '' for val in row_values]
             
-            worksheet.append_row(row_values, value_input_option='RAW')
-            logger.info(f"Synced child ID request {child_id_data.get('id')} to Google Sheets")
+            # Find the next empty row starting from A column
+            next_row = self._find_next_empty_row(worksheet)
+            
+            # Insert the row data starting from column A
+            cell_range = f"A{next_row}:{self._col_to_a1(len(row_values))}{next_row}"
+            worksheet.update(cell_range, [row_values], value_input_option='RAW')
+            
+            logger.info(f"Synced child ID request {child_id_data.get('id')} to Google Sheets at row {next_row}")
         
         self._safe_sync(_sync)   
     def sync_cutpay_transaction(self, cutpay_data: Dict[str, Any], action: str = "CREATE"):
@@ -190,8 +216,14 @@ class GoogleSheetsSync:
 
             row_values = [str(val) if val is not None else '' for val in row_values]
             
-            worksheet.append_row(row_values, value_input_option='RAW')
-            logger.info(f"Synced cut pay transaction {cutpay_data.get('id')} to CutPay sheet")
+            # Find the next empty row starting from A column
+            next_row = self._find_next_empty_row(worksheet)
+            
+            # Insert the row data starting from column A
+            cell_range = f"A{next_row}:{self._col_to_a1(len(row_values))}{next_row}"
+            worksheet.update(cell_range, [row_values], value_input_option='RAW')
+            
+            logger.info(f"Synced cut pay transaction {cutpay_data.get('id')} to CutPay sheet at row {next_row}")
         
         self._safe_sync(_sync)
     
@@ -289,8 +321,14 @@ class GoogleSheetsSync:
             
             row_values = [str(val) if val is not None else '' for val in row_values]
 
-            worksheet.append_row(row_values, value_input_option='RAW')
-            logger.info(f"Synced policy {policy_data.get('policy_number')} to Google Sheets")
+            # Find the next empty row starting from A column
+            next_row = self._find_next_empty_row(worksheet)
+            
+            # Insert the row data starting from column A
+            cell_range = f"A{next_row}:{self._col_to_a1(len(row_values))}{next_row}"
+            worksheet.update(cell_range, [row_values], value_input_option='RAW')
+            
+            logger.info(f"Synced policy {policy_data.get('policy_number')} to Google Sheets at row {next_row}")
         
         self._safe_sync(_sync)
     
@@ -360,7 +398,7 @@ class GoogleSheetsSync:
         """Prepares a list of values for a row in the 'CutPay' sheet, ordered according to headers."""
         keys_in_order = [
             'id', 'reporting_month', 'booking_date', 'agent_code', 'code_type',
-            'policy_number', 'formatted_policy_number', 'customer_name', 'major_categorisation',
+            'policy_number', 'formatted_policy_number', 'customer_name', 'customer_phone_number', 'major_categorisation',
             'product_insurer_report', 'product_type', 'plan_type',
             'gross_premium', 'net_premium', 'od_premium', 'tp_premium', 'gst_amount',
             'registration_no', 'make_model', 'model', 'vehicle_variant', 'gvw', 'rto',
@@ -371,12 +409,18 @@ class GoogleSheetsSync:
             'payment_by', 'payment_method', 'payout_on', 'payment_by_office',
             'receivable_from_broker', 'extra_amount_receivable_from_broker', 'total_receivable_from_broker',
             'total_receivable_from_broker_with_gst', 'cut_pay_amount', 'agent_po_amt', 'agent_extra_amount', 'total_agent_po_amt',
-            'claimed_by', 'already_given_to_agent', 'po_paid_to_agent', 'running_bal',
-            'match_status', 'invoice_number',
+            'claimed_by', 'running_bal', 'cutpay_received',
             'synced_to_cutpay_sheet', 'synced_to_master_sheet', 'notes', 'created_at', 'updated_at'
         ]
-        # Ensure all values are strings to avoid gspread errors
-        row = [str(cutpay_data.get(key, '')) if cutpay_data.get(key) is not None else '' for key in keys_in_order]
+        
+        # Prepare row data - AI already adds semicolon prefix to formatted_policy_number
+        row = []
+        for key in keys_in_order:
+            value = cutpay_data.get(key, '')
+            if value is not None:
+                row.append(str(value))
+            else:
+                row.append('')
         return row
 
     def _prepare_master_sheet_row_data(self, cutpay_data: Dict[str, Any]) -> List[Any]:
@@ -384,7 +428,7 @@ class GoogleSheetsSync:
         keys_in_order = [
             'id', 'reporting_month', 'booking_date', 'agent_code', 'code_type',
             'insurer_name', 'broker_name', 'insurer_broker_code',
-            'policy_number', 'formatted_policy_number', 'customer_name', 'major_categorisation',
+            'policy_number', 'formatted_policy_number', 'customer_name', 'customer_phone_number', 'major_categorisation',
             'product_insurer_report', 'product_type', 'plan_type',
             'gross_premium', 'net_premium', 'od_premium', 'tp_premium', 'gst_amount', 'commissionable_premium',
             'registration_no', 'make_model', 'model', 'vehicle_variant', 'gvw', 'rto',
@@ -394,12 +438,20 @@ class GoogleSheetsSync:
             'payment_by', 'payment_method', 'payout_on', 'payment_by_office',
             'receivable_from_broker', 'extra_amount_receivable_from_broker', 'total_receivable_from_broker', 'total_receivable_from_broker_with_gst',
             'cut_pay_amount', 'agent_po_amt', 'agent_extra_amount', 'total_agent_po_amt',
-            'claimed_by', 'already_given_to_agent', 'po_paid_to_agent', 'running_bal',
-            'match_status', 'invoice_number',
+            'claimed_by', 'running_bal', 'cutpay_received',
             'notes',
             'created_at', 'updated_at'
         ]
-        # Ensure all values are strings to avoid gspread errors
+        
+        # Prepare row data - AI already adds semicolon prefix to formatted_policy_number
+        row = []
+        for key in keys_in_order:
+            value = cutpay_data.get(key, '')
+            if value is not None:
+                row.append(str(value))
+            else:
+                row.append('')
+        return row
         row = [str(cutpay_data.get(key, '')) if cutpay_data.get(key) is not None else '' for key in keys_in_order]
         return row
 
@@ -410,7 +462,7 @@ class GoogleSheetsSync:
             "ID", "Reporting Month", "Booking Date", "Agent Code", "Code Type",
             
             # Policy Information (Extracted)
-            "Policy Number", "Formatted Policy Number", "Customer Name", "Major Categorisation",
+            "Policy Number", "Formatted Policy Number", "Customer Name", "Customer Phone Number", "Major Categorisation",
             "Product Insurer Report", "Product Type", "Plan Type",
             
             # Financial Details (Extracted)
@@ -435,8 +487,7 @@ class GoogleSheetsSync:
             "Total Receivable with GST", "CutPay Amount", "Agent PO Amount", "Agent Extra Amount", "Total Agent PO",
             
             # Tracking Fields
-            "Claimed By", "Already Given to Agent", "PO Paid to Agent", "Running Balance",
-            "Match Status", "Invoice Number",
+            "Claimed By", "Running Balance", "CutPay Received",
             
             # System Fields
             "Synced to CutPay Sheet", "Synced to Master Sheet", "Notes", "Created At", "Updated At"
@@ -450,7 +501,7 @@ class GoogleSheetsSync:
             "Insurer Name", "Broker Name", "Insurer Broker Code",
             
             # Policy Information
-            "Policy Number", "Formatted Policy Number", "Customer Name", "Major Categorisation",
+            "Policy Number", "Formatted Policy Number", "Customer Name", "Customer Phone Number", "Major Categorisation",
             "Product Insurer Report", "Product Type", "Plan Type",
             
             # Premium Details
@@ -474,8 +525,7 @@ class GoogleSheetsSync:
             "CutPay Amount", "Agent PO Amount", "Agent Extra Amount", "Total Agent PO",
             
             # Transaction Tracking
-            "Claimed By", "Already Given to Agent", "PO Paid to Agent", "Running Balance",
-            "Match Status", "Invoice Number",
+            "Claimed By", "Running Balance", "CutPay Received",
             
             # Notes
             "Notes",

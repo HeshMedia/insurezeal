@@ -348,6 +348,7 @@ class CutPay(Base):
     product_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Private Car, etc.
     plan_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comp, STP, SAOD
     customer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    customer_phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 🤖 PDF Extraction
     
     # 🤖 PDF Extraction - Premium & Financial Details
     gross_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
@@ -410,7 +411,7 @@ class CutPay(Base):
     insurer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     broker_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     insurer_broker_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    cluster: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    cluster: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # 👤 Admin Input
     
     # 🔄 Commission Calculations
     receivable_from_broker: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
@@ -430,11 +431,8 @@ class CutPay(Base):
     
     # Transaction Progress Tracking
     claimed_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    already_given_to_agent: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    po_paid_to_agent: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
     running_bal: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    match_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    cutpay_received: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 👤 Admin Input: yes, no, partial
     
     # =============================================================================
     # SYSTEM FIELDS

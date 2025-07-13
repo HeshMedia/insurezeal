@@ -19,6 +19,7 @@ class ExtractedPolicyData(BaseModel):
     product_type: Optional[str] = Field(None, description="Specific product type")
     plan_type: Optional[str] = Field(None, description="Coverage type (Comp, STP, SAOD)")
     customer_name: Optional[str] = Field(None, description="Policy holder name")
+    customer_phone_number: Optional[str] = Field(None, description="Customer phone number")
     
     # Premium & Financial Details
     gross_premium: Optional[float] = Field(None, description="Total premium amount")
@@ -160,11 +161,8 @@ class CutPayCreate(BaseModel):
     
     # Admin tracking fields
     claimed_by: Optional[str] = Field(None, description="Who claimed the commission")
-    already_given_to_agent: Optional[float] = Field(None, description="Advance amount given")
-    po_paid_to_agent: Optional[float] = Field(None, description="Actual payout made")
     running_bal: Optional[float] = Field(None, description="Remaining balance")
-    match_status: Optional[str] = Field(None, description="Reconciliation status")
-    invoice_number: Optional[str] = Field(None, description="Invoice reference")
+    cutpay_received: Optional[str] = Field(None, description="CutPay received status: yes, no, partial")
     
     # Notes
     notes: Optional[str] = Field(None, description="Additional notes")
@@ -184,6 +182,7 @@ class CutPayUpdate(BaseModel):
     product_type: Optional[str] = Field(None)
     plan_type: Optional[str] = Field(None)
     customer_name: Optional[str] = Field(None)
+    customer_phone_number: Optional[str] = Field(None)
     gross_premium: Optional[float] = Field(None)
     net_premium: Optional[float] = Field(None)
     od_premium: Optional[float] = Field(None)
@@ -226,14 +225,12 @@ class CutPayUpdate(BaseModel):
     insurer_code: Optional[str] = Field(None)
     broker_code: Optional[str] = Field(None)
     admin_child_id: Optional[int] = Field(None)
+    cluster: Optional[str] = Field(None)
     
     # Tracking fields
     claimed_by: Optional[str] = Field(None)
-    already_given_to_agent: Optional[float] = Field(None)
-    po_paid_to_agent: Optional[float] = Field(None)
     running_bal: Optional[float] = Field(None)
-    match_status: Optional[str] = Field(None)
-    invoice_number: Optional[str] = Field(None)
+    cutpay_received: Optional[str] = Field(None)
     
     # Notes
     notes: Optional[str] = Field(None)
@@ -264,6 +261,7 @@ class CutPayResponse(BaseModel):
     product_type: Optional[str]
     plan_type: Optional[str]
     customer_name: Optional[str]
+    customer_phone_number: Optional[str]
     
     # Premium & Financial Details
     gross_premium: Optional[float]
@@ -344,11 +342,8 @@ class CutPayResponse(BaseModel):
     # =============================================================================
     
     claimed_by: Optional[str]
-    already_given_to_agent: Optional[float]
-    po_paid_to_agent: Optional[float]
     running_bal: Optional[float]
-    match_status: Optional[str]
-    invoice_number: Optional[str]
+    cutpay_received: Optional[str]
     
     # =============================================================================
     # SYSTEM FIELDS
