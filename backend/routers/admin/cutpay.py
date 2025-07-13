@@ -21,7 +21,7 @@ import os
 from config import get_db, get_supabase_admin_client
 from ..auth.auth import get_current_user
 from dependencies.rbac import require_admin_cutpay
-from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID
+from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID, CutPayAgentConfig
 from fastapi.concurrency import run_in_threadpool
 from .cutpay_schemas import (
     CutPayCreate,
@@ -35,7 +35,11 @@ from .cutpay_schemas import (
     DocumentUploadResponse,
     ExtractionResponse,
     ExportRequest,
-    DashboardStats
+    DashboardStats,
+    CutPayAgentConfigCreate,
+    CutPayAgentConfigUpdate,
+    CutPayAgentConfigResponse,
+    AgentPOResponse
 )
 from .cutpay_helpers import (
     calculate_commission_amounts,
@@ -443,6 +447,208 @@ async def get_dashboard_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch statistics: {str(e)}"
         )
+
+# =============================================================================
+# CUTPAY AGENT CONFIG ENDPOINTS
+# =============================================================================
+
+@router.post("/agent-config", response_model=CutPayAgentConfigResponse)
+async def create_agent_config(
+    config_data: CutPayAgentConfigCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """Create new CutPay agent configuration"""
+    try:
+        # Check if config already exists for this agent and date
+        existing_config = await db.execute(
+            select(CutPayAgentConfig).where(
+                CutPayAgentConfig.agent_code == config_data.agent_code,
+                CutPayAgentConfig.date == config_data.config_date
+            )
+        )
+        if existing_config.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Configuration already exists for agent {config_data.agent_code} on date {config_data.config_date}"
+            )
+        
+        config_dict = config_data.dict()
+        config_dict["date"] = config_dict.pop("config_date")  # Map config_date to date
+        config_dict["created_by"] = current_user["user_id"]
+        
+        agent_config = CutPayAgentConfig(**config_dict)
+        db.add(agent_config)
+        await db.commit()
+        await db.refresh(agent_config)
+        
+        logger.info(f"Created agent config {agent_config.id} for agent {config_data.agent_code}")
+        return CutPayAgentConfigResponse.model_validate(agent_config)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create agent config: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create agent configuration: {str(e)}"
+        )
+
+@router.get("/agent-config", response_model=List[CutPayAgentConfigResponse])
+async def list_agent_configs(
+    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
+    date_from: Optional[date] = Query(None, description="Filter from date"),
+    date_to: Optional[date] = Query(None, description="Filter to date"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """List CutPay agent configurations with filtering"""
+    try:
+        query = select(CutPayAgentConfig)
+        
+        if agent_code:
+            query = query.where(CutPayAgentConfig.agent_code == agent_code)
+        if date_from:
+            query = query.where(CutPayAgentConfig.date >= date_from)
+        if date_to:
+            query = query.where(CutPayAgentConfig.date <= date_to)
+            
+        query = query.order_by(desc(CutPayAgentConfig.date)).offset(skip).limit(limit)
+        result = await db.execute(query)
+        configs = result.scalars().all()
+        
+        return [CutPayAgentConfigResponse.model_validate(config) for config in configs]
+        
+    except Exception as e:
+        logger.error(f"Failed to list agent configs: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch agent configurations: {str(e)}"
+        )
+
+@router.get("/agent-config/agent/{agent_code}/po-paid", response_model=AgentPOResponse)
+async def get_agent_po_paid(
+    agent_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """Get total PO paid amount for a specific agent"""
+    try:
+        # Get all configurations for the agent
+        result = await db.execute(
+            select(CutPayAgentConfig).where(CutPayAgentConfig.agent_code == agent_code)
+        )
+        configs = result.scalars().all()
+        
+        if not configs:
+            return AgentPOResponse(
+                agent_code=agent_code,
+                total_po_paid=0.0,
+                latest_config_date=None,
+                configurations_count=0
+            )
+        
+        total_po_paid = sum(float(config.po_paid_to_agent) for config in configs)
+        latest_config_date = max(config.date for config in configs)
+        
+        return AgentPOResponse(
+            agent_code=agent_code,
+            total_po_paid=total_po_paid,
+            latest_config_date=latest_config_date,
+            configurations_count=len(configs)
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get PO paid for agent {agent_code}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch agent PO data: {str(e)}"
+        )
+
+@router.get("/agent-config/{config_id}", response_model=CutPayAgentConfigResponse)
+async def get_agent_config(
+    config_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """Get specific agent configuration by ID"""
+    result = await db.execute(select(CutPayAgentConfig).where(CutPayAgentConfig.id == config_id))
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent configuration {config_id} not found"
+        )
+    
+    return CutPayAgentConfigResponse.model_validate(config)
+
+@router.put("/agent-config/{config_id}", response_model=CutPayAgentConfigResponse)
+async def update_agent_config(
+    config_id: int,
+    config_data: CutPayAgentConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """Update agent configuration"""
+    try:
+        result = await db.execute(select(CutPayAgentConfig).where(CutPayAgentConfig.id == config_id))
+        config = result.scalar_one_or_none()
+        
+        if not config:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent configuration {config_id} not found"
+            )
+        
+        update_data = config_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(config, field, value)
+        
+        await db.commit()
+        await db.refresh(config)
+        
+        logger.info(f"Updated agent config {config_id}")
+        return CutPayAgentConfigResponse.model_validate(config)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update agent config {config_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update agent configuration: {str(e)}"
+        )
+
+@router.delete("/agent-config/{config_id}")
+async def delete_agent_config(
+    config_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """Delete agent configuration"""
+    result = await db.execute(select(CutPayAgentConfig).where(CutPayAgentConfig.id == config_id))
+    config = result.scalar_one_or_none()
+    
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent configuration {config_id} not found"
+        )
+    
+    await db.delete(config)
+    await db.commit()
+    
+    logger.info(f"Deleted agent config {config_id}")
+    return {"message": f"Agent configuration {config_id} deleted successfully"}
 
 @router.get("/{cutpay_id}", response_model=CutPayResponse)
 async def get_cutpay_transaction(

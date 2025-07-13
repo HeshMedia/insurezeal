@@ -569,4 +569,45 @@ class CutPayStats(BaseModel):
     total_amount_received: float
     average_cut_pay_amount: float
 
+# =============================================================================
+# CUTPAY AGENT CONFIG SCHEMAS
+# =============================================================================
+
+class CutPayAgentConfigCreate(BaseModel):
+    """Schema for creating a new CutPay agent configuration"""
+    agent_code: str = Field(..., description="Agent code")
+    config_date: date = Field(..., description="Configuration date")
+    payment_mode: str = Field(..., description="Payment mode (NEFT, Cash, Cheque)")
+    payment_mode_detail: Optional[str] = Field(None, description="Additional payment details")
+    po_paid_to_agent: float = Field(0.0, ge=0, description="PO amount paid to agent")
+
+class CutPayAgentConfigUpdate(BaseModel):
+    """Schema for updating a CutPay agent configuration"""
+    payment_mode: Optional[str] = Field(None, description="Payment mode (NEFT, Cash, Cheque)")
+    payment_mode_detail: Optional[str] = Field(None, description="Additional payment details")
+    po_paid_to_agent: Optional[float] = Field(None, ge=0, description="PO amount paid to agent")
+
+class CutPayAgentConfigResponse(BaseModel):
+    """Schema for CutPay agent configuration response"""
+    id: int
+    agent_code: str
+    config_date: date = Field(..., alias="date")
+    payment_mode: str
+    payment_mode_detail: Optional[str]
+    po_paid_to_agent: float
+    created_by: Optional[UUID]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+        allow_population_by_field_name = True
+
+class AgentPOResponse(BaseModel):
+    """Schema for agent PO paid amount response"""
+    agent_code: str
+    total_po_paid: float
+    latest_config_date: Optional[date]
+    configurations_count: int
+
 

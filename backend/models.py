@@ -640,3 +640,50 @@ class AdminChildID(Base):
     insurer: Mapped["Insurer"] = relationship("Insurer", foreign_keys=[insurer_id], overlaps="admin_child_ids")
     broker: Mapped[Optional["Broker"]] = relationship("Broker", foreign_keys=[broker_id], overlaps="admin_child_ids")
 
+
+class CutPayAgentConfig(Base):
+    """
+    CutPay Agent Configuration Model
+    Stores payment configuration and PO details for agents in CutPay workflow
+    """
+    __tablename__ = "cutpay_agent_configs"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    
+    # Agent Information
+    agent_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    
+    # Configuration Details
+    date: Mapped[Date] = mapped_column(Date, nullable=False)
+    payment_mode: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "NEFT", "Cash", "Cheque"
+    payment_mode_detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Additional details
+    po_paid_to_agent: Mapped[Numeric] = mapped_column(Numeric(15, 2), nullable=False, default=0.0)
+    
+    # Audit fields
+    created_by: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        nullable=True
+    )
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    
+    # Relationships
+    created_by_user: Mapped[Optional["Users"]] = relationship("Users", foreign_keys=[created_by])
+    
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('agent_code', 'date', name='unique_cutpay_agent_config_per_date'),
+        Index('idx_cutpay_agent_config_agent_code', 'agent_code'),
+        Index('idx_cutpay_agent_config_date', 'date'),
+    )
+
