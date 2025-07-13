@@ -21,7 +21,7 @@ import os
 from config import get_db, get_supabase_admin_client
 from ..auth.auth import get_current_user
 from dependencies.rbac import require_admin_cutpay
-from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID, CutPayAgentConfig
+from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID
 from fastapi.concurrency import run_in_threadpool
 from .cutpay_schemas import (
     CutPayCreate,
@@ -36,6 +36,9 @@ from .cutpay_schemas import (
     ExtractionResponse,
     ExportRequest,
     DashboardStats,
+    PostCutPayDetails,
+    BulkPostCutPayRequest,
+    BulkPostCutPayResponse,
     CutPayAgentConfigCreate,
     CutPayAgentConfigUpdate,
     CutPayAgentConfigResponse,
@@ -449,206 +452,314 @@ async def get_dashboard_stats(
         )
 
 # =============================================================================
-# CUTPAY AGENT CONFIG ENDPOINTS
+# POST-CUTPAY DETAILS ENDPOINTS
 # =============================================================================
 
-@router.post("/agent-config", response_model=CutPayAgentConfigResponse)
-async def create_agent_config(
-    config_data: CutPayAgentConfigCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """Create new CutPay agent configuration"""
-    try:
-        # Check if config already exists for this agent and date
-        existing_config = await db.execute(
-            select(CutPayAgentConfig).where(
-                CutPayAgentConfig.agent_code == config_data.agent_code,
-                CutPayAgentConfig.date == config_data.config_date
-            )
-        )
-        if existing_config.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Configuration already exists for agent {config_data.agent_code} on date {config_data.config_date}"
-            )
-        
-        config_dict = config_data.dict()
-        config_dict["date"] = config_dict.pop("config_date")  # Map config_date to date
-        config_dict["created_by"] = current_user["user_id"]
-        
-        agent_config = CutPayAgentConfig(**config_dict)
-        db.add(agent_config)
-        await db.commit()
-        await db.refresh(agent_config)
-        
-        logger.info(f"Created agent config {agent_config.id} for agent {config_data.agent_code}")
-        return CutPayAgentConfigResponse.model_validate(agent_config)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to create agent config: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create agent configuration: {str(e)}"
-        )
-
-@router.get("/agent-config", response_model=List[CutPayAgentConfigResponse])
-async def list_agent_configs(
-    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
-    date_from: Optional[date] = Query(None, description="Filter from date"),
-    date_to: Optional[date] = Query(None, description="Filter to date"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+@router.post("/post-details", response_model=BulkPostCutPayResponse)
+async def add_bulk_post_cutpay_details(
+    request: BulkPostCutPayRequest,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
     _rbac_check = Depends(require_admin_cutpay)
 ):
-    """List CutPay agent configurations with filtering"""
-    try:
-        query = select(CutPayAgentConfig)
-        
-        if agent_code:
-            query = query.where(CutPayAgentConfig.agent_code == agent_code)
-        if date_from:
-            query = query.where(CutPayAgentConfig.date >= date_from)
-        if date_to:
-            query = query.where(CutPayAgentConfig.date <= date_to)
+    """
+    Add post-CutPay details to multiple CutPay transactions in bulk.
+    These fields are filled after the initial CutPay creation for tracking
+    additional payment information, broker details, and invoice status.
+    """
+    successful_ids = []
+    failed_updates = []
+    updated_records = []
+    
+    logger.info(f"Processing bulk post-CutPay details for {len(request.cutpay_ids)} records")
+    
+    for cutpay_id in request.cutpay_ids:
+        try:
+            logger.info(f"Adding post-CutPay details for CutPay ID {cutpay_id}")
             
-        query = query.order_by(desc(CutPayAgentConfig.date)).offset(skip).limit(limit)
-        result = await db.execute(query)
-        configs = result.scalars().all()
-        
-        return [CutPayAgentConfigResponse.model_validate(config) for config in configs]
-        
-    except Exception as e:
-        logger.error(f"Failed to list agent configs: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch agent configurations: {str(e)}"
-        )
+            # Get the existing CutPay record
+            result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
+            cutpay = result.scalar_one_or_none()
+            if not cutpay:
+                failed_updates.append({
+                    "cutpay_id": cutpay_id,
+                    "error": f"CutPay transaction {cutpay_id} not found"
+                })
+                continue
 
-@router.get("/agent-config/agent/{agent_code}/po-paid", response_model=AgentPOResponse)
-async def get_agent_po_paid(
-    agent_code: str,
+            # Update the fields with provided values
+            update_data = request.details.dict(exclude_unset=True)
+            for field, value in update_data.items():
+                if hasattr(cutpay, field):
+                    setattr(cutpay, field, value)
+                    logger.info(f"Set {field} = {value} for CutPay {cutpay_id}")
+
+            # Auto-calculate IZ Total PO% if incoming_grid_percent and extra_grid are available
+            if cutpay.incoming_grid_percent is not None and cutpay.extra_grid is not None:
+                cutpay.iz_total_po_percent = cutpay.incoming_grid_percent + cutpay.extra_grid
+                logger.info(f"Auto-calculated iz_total_po_percent = {cutpay.iz_total_po_percent} for CutPay {cutpay_id}")
+
+            await db.commit()
+            await db.refresh(cutpay)
+
+            # Sync to Google Sheets with detailed error handling
+            sync_success = False
+            try:
+                logger.info(f"Syncing post-CutPay details to Google Sheets for CutPay ID {cutpay_id}")
+                from utils.google_sheets import google_sheets_sync
+                
+                cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
+                for key, value in cutpay_dict.items():
+                    if isinstance(value, (datetime, date)): 
+                        cutpay_dict[key] = value.isoformat()
+                    elif isinstance(value, UUID): 
+                        cutpay_dict[key] = str(value)
+                
+                # Sync to CutPay sheet
+                cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
+                logger.info(f"CutPay sheet sync result for {cutpay_id}: {cutpay_sync_result}")
+                
+                # Sync to Master sheet
+                master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
+                logger.info(f"Master sheet sync result for {cutpay_id}: {master_sync_result}")
+                
+                # Update sync flags if successful
+                if cutpay_sync_result and cutpay_sync_result.get("success"):
+                    cutpay.synced_to_cutpay_sheet = True
+                    if cutpay_sync_result.get("row_id"):
+                        cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
+                
+                if master_sync_result and master_sync_result.get("success"):
+                    cutpay.synced_to_master_sheet = True
+                    if master_sync_result.get("row_id"):
+                        cutpay.master_sheet_row_id = master_sync_result["row_id"]
+                
+                # Commit sync flag updates
+                await db.commit()
+                await db.refresh(cutpay)
+                
+                sync_success = True
+                logger.info(f"Successfully synced post-CutPay details to Google Sheets for CutPay {cutpay_id}")
+                
+            except Exception as sync_error:
+                logger.error(f"Google Sheets sync failed for post-CutPay details CutPay {cutpay_id}: {str(sync_error)}")
+                logger.error(f"Sync error details: {traceback.format_exc()}")
+                # Don't fail the whole operation for sync errors, but log detailed info
+
+            successful_ids.append(cutpay_id)
+            updated_records.append(safe_cutpay_response(cutpay))
+            logger.info(f"Successfully added post-CutPay details for CutPay ID {cutpay_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to add post-CutPay details for CutPay {cutpay_id}: {str(e)}")
+            failed_updates.append({
+                "cutpay_id": cutpay_id,
+                "error": str(e)
+            })
+            continue
+    
+    logger.info(f"Bulk post-CutPay details operation completed. Success: {len(successful_ids)}, Failed: {len(failed_updates)}")
+    
+    return BulkPostCutPayResponse(
+        success_count=len(successful_ids),
+        failed_count=len(failed_updates),
+        successful_ids=successful_ids,
+        failed_updates=failed_updates,
+        updated_records=updated_records
+    )
+
+@router.put("/post-details", response_model=BulkPostCutPayResponse)
+async def update_bulk_post_cutpay_details(
+    request: BulkPostCutPayRequest,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
     _rbac_check = Depends(require_admin_cutpay)
 ):
-    """Get total PO paid amount for a specific agent"""
-    try:
-        # Get all configurations for the agent
-        result = await db.execute(
-            select(CutPayAgentConfig).where(CutPayAgentConfig.agent_code == agent_code)
-        )
-        configs = result.scalars().all()
-        
-        if not configs:
-            return AgentPOResponse(
-                agent_code=agent_code,
-                total_po_paid=0.0,
-                latest_config_date=None,
-                configurations_count=0
-            )
-        
-        total_po_paid = sum(float(config.po_paid_to_agent) for config in configs)
-        latest_config_date = max(config.date for config in configs)
-        
-        return AgentPOResponse(
-            agent_code=agent_code,
-            total_po_paid=total_po_paid,
-            latest_config_date=latest_config_date,
-            configurations_count=len(configs)
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to get PO paid for agent {agent_code}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch agent PO data: {str(e)}"
-        )
+    """
+    Update post-CutPay details for multiple CutPay transactions in bulk.
+    Allows modification of payment tracking fields, broker information, and invoice status.
+    """
+    successful_ids = []
+    failed_updates = []
+    updated_records = []
+    
+    logger.info(f"Processing bulk post-CutPay details update for {len(request.cutpay_ids)} records")
+    
+    for cutpay_id in request.cutpay_ids:
+        try:
+            logger.info(f"Updating post-CutPay details for CutPay ID {cutpay_id}")
+            
+            # Get the existing CutPay record
+            result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
+            cutpay = result.scalar_one_or_none()
+            if not cutpay:
+                failed_updates.append({
+                    "cutpay_id": cutpay_id,
+                    "error": f"CutPay transaction {cutpay_id} not found"
+                })
+                continue
 
-@router.get("/agent-config/{config_id}", response_model=CutPayAgentConfigResponse)
-async def get_agent_config(
-    config_id: int,
+            # Update the fields with provided values
+            update_data = request.details.dict(exclude_unset=True)
+            for field, value in update_data.items():
+                if hasattr(cutpay, field):
+                    old_value = getattr(cutpay, field)
+                    setattr(cutpay, field, value)
+                    logger.info(f"Updated {field}: {old_value} -> {value} for CutPay {cutpay_id}")
+
+            # Auto-calculate IZ Total PO% if incoming_grid_percent and extra_grid are available
+            if cutpay.incoming_grid_percent is not None and cutpay.extra_grid is not None:
+                cutpay.iz_total_po_percent = cutpay.incoming_grid_percent + cutpay.extra_grid
+                logger.info(f"Auto-calculated iz_total_po_percent = {cutpay.iz_total_po_percent} for CutPay {cutpay_id}")
+
+            await db.commit()
+            await db.refresh(cutpay)
+
+            # Sync to Google Sheets with detailed error handling
+            sync_success = False
+            try:
+                logger.info(f"Syncing updated post-CutPay details to Google Sheets for CutPay ID {cutpay_id}")
+                from utils.google_sheets import google_sheets_sync
+                
+                cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
+                for key, value in cutpay_dict.items():
+                    if isinstance(value, (datetime, date)): 
+                        cutpay_dict[key] = value.isoformat()
+                    elif isinstance(value, UUID): 
+                        cutpay_dict[key] = str(value)
+                
+                # Sync to CutPay sheet
+                cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
+                logger.info(f"CutPay sheet sync result for {cutpay_id}: {cutpay_sync_result}")
+                
+                # Sync to Master sheet
+                master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
+                logger.info(f"Master sheet sync result for {cutpay_id}: {master_sync_result}")
+                
+                # Update sync flags if successful
+                if cutpay_sync_result and cutpay_sync_result.get("success"):
+                    cutpay.synced_to_cutpay_sheet = True
+                    if cutpay_sync_result.get("row_id"):
+                        cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
+                
+                if master_sync_result and master_sync_result.get("success"):
+                    cutpay.synced_to_master_sheet = True
+                    if master_sync_result.get("row_id"):
+                        cutpay.master_sheet_row_id = master_sync_result["row_id"]
+                
+                # Commit sync flag updates
+                await db.commit()
+                await db.refresh(cutpay)
+                
+                sync_success = True
+                logger.info(f"Successfully synced updated post-CutPay details to Google Sheets for CutPay {cutpay_id}")
+                
+            except Exception as sync_error:
+                logger.error(f"Google Sheets sync failed for updated post-CutPay details CutPay {cutpay_id}: {str(sync_error)}")
+                logger.error(f"Sync error details: {traceback.format_exc()}")
+                # Don't fail the whole operation for sync errors, but log detailed info
+
+            successful_ids.append(cutpay_id)
+            updated_records.append(safe_cutpay_response(cutpay))
+            logger.info(f"Successfully updated post-CutPay details for CutPay ID {cutpay_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to update post-CutPay details for CutPay {cutpay_id}: {str(e)}")
+            failed_updates.append({
+                "cutpay_id": cutpay_id,
+                "error": str(e)
+            })
+            continue
+    
+    logger.info(f"Bulk post-CutPay details update completed. Success: {len(successful_ids)}, Failed: {len(failed_updates)}")
+    
+    return BulkPostCutPayResponse(
+        success_count=len(successful_ids),
+        failed_count=len(failed_updates),
+        successful_ids=successful_ids,
+        failed_updates=failed_updates,
+        updated_records=updated_records
+    )
+
+# =============================================================================
+# MANUAL SYNC ENDPOINT FOR TROUBLESHOOTING
+# =============================================================================
+
+@router.post("/manual-sync", response_model=Dict[str, Any])
+async def manual_sync_to_google_sheets(
+    cutpay_ids: List[int],
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
     _rbac_check = Depends(require_admin_cutpay)
 ):
-    """Get specific agent configuration by ID"""
-    result = await db.execute(select(CutPayAgentConfig).where(CutPayAgentConfig.id == config_id))
-    config = result.scalar_one_or_none()
+    """
+    Manually trigger Google Sheets sync for specific CutPay records.
+    Useful for troubleshooting sync issues.
+    """
+    sync_results = []
     
-    if not config:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent configuration {config_id} not found"
-        )
+    for cutpay_id in cutpay_ids:
+        try:
+            # Get the CutPay record
+            result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
+            cutpay = result.scalar_one_or_none()
+            if not cutpay:
+                sync_results.append({
+                    "cutpay_id": cutpay_id,
+                    "success": False,
+                    "error": f"CutPay {cutpay_id} not found"
+                })
+                continue
+            
+            # Prepare data for sync
+            cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
+            for key, value in cutpay_dict.items():
+                if isinstance(value, (datetime, date)): 
+                    cutpay_dict[key] = value.isoformat()
+                elif isinstance(value, UUID): 
+                    cutpay_dict[key] = str(value)
+            
+            logger.info(f"Manual sync for CutPay {cutpay_id} with data keys: {list(cutpay_dict.keys())}")
+            
+            # Attempt sync
+            from utils.google_sheets import google_sheets_sync
+            
+            cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
+            master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
+            
+            # Update sync flags
+            if cutpay_sync_result and cutpay_sync_result.get("success"):
+                cutpay.synced_to_cutpay_sheet = True
+                if cutpay_sync_result.get("row_id"):
+                    cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
+            
+            if master_sync_result and master_sync_result.get("success"):
+                cutpay.synced_to_master_sheet = True
+                if master_sync_result.get("row_id"):
+                    cutpay.master_sheet_row_id = master_sync_result["row_id"]
+            
+            await db.commit()
+            
+            sync_results.append({
+                "cutpay_id": cutpay_id,
+                "success": True,
+                "cutpay_sheet_sync": cutpay_sync_result,
+                "master_sheet_sync": master_sync_result
+            })
+            
+        except Exception as e:
+            logger.error(f"Manual sync failed for CutPay {cutpay_id}: {str(e)}")
+            logger.error(f"Error details: {traceback.format_exc()}")
+            sync_results.append({
+                "cutpay_id": cutpay_id,
+                "success": False,
+                "error": str(e)
+            })
     
-    return CutPayAgentConfigResponse.model_validate(config)
-
-@router.put("/agent-config/{config_id}", response_model=CutPayAgentConfigResponse)
-async def update_agent_config(
-    config_id: int,
-    config_data: CutPayAgentConfigUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """Update agent configuration"""
-    try:
-        result = await db.execute(select(CutPayAgentConfig).where(CutPayAgentConfig.id == config_id))
-        config = result.scalar_one_or_none()
-        
-        if not config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Agent configuration {config_id} not found"
-            )
-        
-        update_data = config_data.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(config, field, value)
-        
-        await db.commit()
-        await db.refresh(config)
-        
-        logger.info(f"Updated agent config {config_id}")
-        return CutPayAgentConfigResponse.model_validate(config)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to update agent config {config_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update agent configuration: {str(e)}"
-        )
-
-@router.delete("/agent-config/{config_id}")
-async def delete_agent_config(
-    config_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """Delete agent configuration"""
-    result = await db.execute(select(CutPayAgentConfig).where(CutPayAgentConfig.id == config_id))
-    config = result.scalar_one_or_none()
-    
-    if not config:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Agent configuration {config_id} not found"
-        )
-    
-    await db.delete(config)
-    await db.commit()
-    
-    logger.info(f"Deleted agent config {config_id}")
-    return {"message": f"Agent configuration {config_id} deleted successfully"}
+    return {
+        "message": "Manual sync completed",
+        "results": sync_results
+    }
 
 @router.get("/{cutpay_id}", response_model=CutPayResponse)
 async def get_cutpay_transaction(

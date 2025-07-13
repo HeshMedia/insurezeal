@@ -435,6 +435,19 @@ class CutPay(Base):
     cutpay_received: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 👤 Admin Input: yes, no, partial
     
     # =============================================================================
+    # POST-CUTPAY DETAILS FIELDS
+    # =============================================================================
+    
+    # 👤 Post-CutPay Admin Input Fields
+    already_given_to_agent: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    iz_total_po_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)  # Auto-calculated: incoming_grid_percent + extra_grid
+    broker_po_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    broker_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    invoice_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # GST pending, invoicing pending, paid, payment pending
+    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    
+    # =============================================================================
     # SYSTEM FIELDS
     # =============================================================================
     

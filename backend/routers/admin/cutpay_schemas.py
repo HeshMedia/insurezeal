@@ -232,6 +232,15 @@ class CutPayUpdate(BaseModel):
     running_bal: Optional[float] = Field(None)
     cutpay_received: Optional[str] = Field(None)
     
+    # Post-CutPay details fields
+    already_given_to_agent: Optional[float] = Field(None, ge=0)
+    iz_total_po_percent: Optional[float] = Field(None, ge=0, le=100)
+    broker_po_percent: Optional[float] = Field(None, ge=0, le=100)
+    broker_payout_amount: Optional[float] = Field(None, ge=0)
+    invoice_status: Optional[str] = Field(None)
+    remarks: Optional[str] = Field(None)
+    company: Optional[str] = Field(None)
+    
     # Notes
     notes: Optional[str] = Field(None)
     
@@ -239,6 +248,14 @@ class CutPayUpdate(BaseModel):
     extracted_data: Optional[ExtractedPolicyData] = Field(None)
     admin_input: Optional[AdminInputData] = Field(None)
     calculations: Optional[CalculationResult] = Field(None)
+    
+    @validator('invoice_status')
+    def validate_invoice_status_update(cls, v):
+        if v is not None:
+            allowed_statuses = ["GST pending", "invoicing pending", "paid", "payment pending"]
+            if v not in allowed_statuses:
+                raise ValueError(f"Invoice status must be one of: {', '.join(allowed_statuses)}")
+        return v
 
 class CutPayResponse(BaseModel):
     """Comprehensive schema for cut pay transaction response"""
@@ -344,6 +361,18 @@ class CutPayResponse(BaseModel):
     claimed_by: Optional[str]
     running_bal: Optional[float]
     cutpay_received: Optional[str]
+    
+    # =============================================================================
+    # POST-CUTPAY DETAILS FIELDS
+    # =============================================================================
+    
+    already_given_to_agent: Optional[float]
+    iz_total_po_percent: Optional[float]
+    broker_po_percent: Optional[float]
+    broker_payout_amount: Optional[float]
+    invoice_status: Optional[str]
+    remarks: Optional[str]
+    company: Optional[str]
     
     # =============================================================================
     # SYSTEM FIELDS
@@ -568,6 +597,45 @@ class CutPayStats(BaseModel):
     total_cut_pay_amount: float
     total_amount_received: float
     average_cut_pay_amount: float
+
+# =============================================================================
+# CUTPAY AGENT CONFIG SCHEMAS
+# =============================================================================
+
+# =============================================================================
+# POST-CUTPAY DETAILS SCHEMAS
+# =============================================================================
+
+class PostCutPayDetails(BaseModel):
+    """Schema for post-CutPay actions and details"""
+    already_given_to_agent: Optional[float] = Field(None, ge=0, description="Amount already given to agent")
+    iz_total_po_percent: Optional[float] = Field(None, ge=0, le=100, description="IZ Total PO% (auto-calculated)")
+    broker_po_percent: Optional[float] = Field(None, ge=0, le=100, description="Broker PO percentage")
+    broker_payout_amount: Optional[float] = Field(None, ge=0, description="Broker payout amount")
+    invoice_status: Optional[str] = Field(None, description="Invoice status")
+    remarks: Optional[str] = Field(None, description="Additional remarks")
+    company: Optional[str] = Field(None, description="Company name")
+    
+    @validator('invoice_status')
+    def validate_invoice_status(cls, v):
+        if v is not None:
+            allowed_statuses = ["GST pending", "invoicing pending", "paid", "payment pending"]
+            if v not in allowed_statuses:
+                raise ValueError(f"Invoice status must be one of: {', '.join(allowed_statuses)}")
+        return v
+
+class BulkPostCutPayRequest(BaseModel):
+    """Schema for bulk post-CutPay operations"""
+    cutpay_ids: List[int] = Field(..., min_items=1, description="List of CutPay IDs to update")
+    details: PostCutPayDetails = Field(..., description="Post-CutPay details to apply to all selected records")
+
+class BulkPostCutPayResponse(BaseModel):
+    """Schema for bulk post-CutPay operation response"""
+    success_count: int = Field(..., description="Number of successfully updated records")
+    failed_count: int = Field(..., description="Number of failed updates")
+    successful_ids: List[int] = Field(..., description="List of successfully updated CutPay IDs")
+    failed_updates: List[Dict[str, Any]] = Field(..., description="List of failed updates with error details")
+    updated_records: List[CutPayResponse] = Field(..., description="List of updated CutPay records")
 
 # =============================================================================
 # CUTPAY AGENT CONFIG SCHEMAS

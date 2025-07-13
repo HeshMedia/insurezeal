@@ -410,6 +410,8 @@ class GoogleSheetsSync:
             'receivable_from_broker', 'extra_amount_receivable_from_broker', 'total_receivable_from_broker',
             'total_receivable_from_broker_with_gst', 'cut_pay_amount', 'agent_po_amt', 'agent_extra_amount', 'total_agent_po_amt',
             'claimed_by', 'running_bal', 'cutpay_received',
+            # Post-CutPay fields
+            'already_given_to_agent', 'iz_total_po_percent', 'broker_po_percent', 'broker_payout_amount', 'invoice_status', 'remarks', 'company',
             'synced_to_cutpay_sheet', 'synced_to_master_sheet', 'notes', 'created_at', 'updated_at'
         ]
         
@@ -439,6 +441,8 @@ class GoogleSheetsSync:
             'receivable_from_broker', 'extra_amount_receivable_from_broker', 'total_receivable_from_broker', 'total_receivable_from_broker_with_gst',
             'cut_pay_amount', 'agent_po_amt', 'agent_extra_amount', 'total_agent_po_amt',
             'claimed_by', 'running_bal', 'cutpay_received',
+            # Post-CutPay fields
+            'already_given_to_agent', 'iz_total_po_percent', 'broker_po_percent', 'broker_payout_amount', 'invoice_status', 'remarks', 'company',
             'notes',
             'created_at', 'updated_at'
         ]
@@ -451,8 +455,6 @@ class GoogleSheetsSync:
                 row.append(str(value))
             else:
                 row.append('')
-        return row
-        row = [str(cutpay_data.get(key, '')) if cutpay_data.get(key) is not None else '' for key in keys_in_order]
         return row
 
     def _get_cutpay_sheet_headers(self) -> List[str]:
@@ -488,6 +490,9 @@ class GoogleSheetsSync:
             
             # Tracking Fields
             "Claimed By", "Running Balance", "CutPay Received",
+            
+            # Post-CutPay Fields
+            "Already Given to Agent", "IZ Total PO %", "Broker PO %", "Broker Payout Amount", "Invoice Status", "Remarks", "Company",
             
             # System Fields
             "Synced to CutPay Sheet", "Synced to Master Sheet", "Notes", "Created At", "Updated At"
@@ -526,6 +531,9 @@ class GoogleSheetsSync:
             
             # Transaction Tracking
             "Claimed By", "Running Balance", "CutPay Received",
+            
+            # Post-CutPay Fields
+            "Already Given to Agent", "IZ Total PO %", "Broker PO %", "Broker Payout Amount", "Invoice Status", "Remarks", "Company",
             
             # Notes
             "Notes",
