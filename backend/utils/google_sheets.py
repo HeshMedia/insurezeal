@@ -415,7 +415,7 @@ class GoogleSheetsSync:
             'synced_to_cutpay_sheet', 'synced_to_master_sheet', 'notes', 'created_at', 'updated_at'
         ]
         
-        # Prepare row data - AI already adds semicolon prefix to formatted_policy_number
+        # Prepare row data - AI already adds hash prefix to formatted_policy_number
         row = []
         for key in keys_in_order:
             value = cutpay_data.get(key, '')
@@ -447,7 +447,7 @@ class GoogleSheetsSync:
             'created_at', 'updated_at'
         ]
         
-        # Prepare row data - AI already adds semicolon prefix to formatted_policy_number
+        # Prepare row data - AI already adds hash prefix to formatted_policy_number
         row = []
         for key in keys_in_order:
             value = cutpay_data.get(key, '')

@@ -5,6 +5,7 @@ import logging
 import os
 import io
 import tempfile
+from config import LLMWHISPERER_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,11 @@ class PDFProcessor:
     def __init__(self):
         """Initialize the LLMWhisperer client"""
         try:
-            self.client = LLMWhispererClientV2()
+            if LLMWHISPERER_API_KEY:
+                self.client = LLMWhispererClientV2(api_key=LLMWHISPERER_API_KEY)
+            else:
+                logger.error("LLMWHISPERER_API_KEY not found in environment variables")
+                self.client = None
         except Exception as e:
             logger.error(f"Failed to initialize LLMWhisperer client: {str(e)}")
             self.client = None
@@ -21,7 +26,11 @@ class PDFProcessor:
     def get_client() -> Optional[LLMWhispererClientV2]:
         """Get a LLMWhisperer client instance"""
         try:
-            return LLMWhispererClientV2()
+            if LLMWHISPERER_API_KEY:
+                return LLMWhispererClientV2(api_key=LLMWHISPERER_API_KEY)
+            else:
+                logger.error("LLMWHISPERER_API_KEY not found in environment variables")
+                return None
         except Exception as e:
             logger.error(f"Failed to create LLMWhisperer client: {str(e)}")
             return None

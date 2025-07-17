@@ -96,6 +96,27 @@ async def create_cutpay_transaction(
             if validation_errors:
                 raise HTTPException(status_code=400, detail={"errors": validation_errors})
 
+            # Check for policy number uniqueness
+            policy_number = None
+            if cutpay_data.extracted_data and cutpay_data.extracted_data.policy_number:
+                policy_number = cutpay_data.extracted_data.policy_number
+            elif cutpay_data.admin_input and hasattr(cutpay_data.admin_input, 'policy_number') and cutpay_data.admin_input.policy_number:
+                policy_number = cutpay_data.admin_input.policy_number
+            elif hasattr(cutpay_data, 'policy_number') and cutpay_data.policy_number:
+                policy_number = cutpay_data.policy_number
+
+            if policy_number:
+                # Check if policy number already exists
+                existing_policy = await db.execute(
+                    select(CutPay).where(CutPay.policy_number == policy_number)
+                )
+                if existing_policy.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Policy number '{policy_number}' already exists in the database. Please use a unique policy number."
+                    )
+                logger.info(f"Policy number '{policy_number}' is unique - proceeding with creation")
+
             cutpay_dict = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
             if cutpay_data.extracted_data:
                 cutpay_dict.update(cutpay_data.extracted_data.dict(exclude_unset=True))
@@ -833,6 +854,26 @@ async def update_cutpay_transaction(
             logger.info(f"Raw cutpay_data.dict(): {cutpay_data.dict()}")
             logger.info(f"Final update_data after processing nested fields: {update_data}")
             logger.info(f"Updating {len(update_data)} fields: {list(update_data.keys())}")
+            
+            # Check for policy number uniqueness if policy number is being updated
+            if 'policy_number' in update_data and update_data['policy_number']:
+                new_policy_number = update_data['policy_number']
+                current_policy_number = cutpay.policy_number
+                
+                # Only check uniqueness if policy number is actually changing
+                if new_policy_number != current_policy_number:
+                    existing_policy = await db.execute(
+                        select(CutPay).where(
+                            (CutPay.policy_number == new_policy_number) &
+                            (CutPay.id != cutpay_id)  # Exclude current record
+                        )
+                    )
+                    if existing_policy.scalar_one_or_none():
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Policy number '{new_policy_number}' already exists in the database. Please use a unique policy number."
+                        )
+                    logger.info(f"Policy number change from '{current_policy_number}' to '{new_policy_number}' is valid - proceeding with update")
             
             # Handle broker/insurer code resolution if provided
             if 'broker_code' in update_data or 'insurer_code' in update_data:
