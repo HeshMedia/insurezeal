@@ -4,7 +4,8 @@ import * as React from "react"
 import { User, Settings, BarChart3, Users, FileText, Shield, DollarSign, MessageSquare, Database } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { useAuth } from "@/lib/auth-context-final"
+import { useAtom } from "jotai"
+import { userAtom } from "@/lib/atoms/auth"
 import { useProfile } from "@/hooks/profileQuery"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -60,7 +61,7 @@ const navigationItems = [
 ]
 
 export function AdminSidebar({ ...props }) {
-  const { user } = useAuth()
+  const [user] = useAtom(userAtom)
   const { data: profile } = useProfile()
   const router = useRouter()
   const pathname = usePathname()

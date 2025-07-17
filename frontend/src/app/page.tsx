@@ -1,6 +1,8 @@
 'use client'
 
-import { useAuth } from '@/lib/auth-context-final'
+import { useAtom } from 'jotai'
+import { userAtom } from '@/lib/atoms/auth'
+import { useAuthUser } from '@/hooks/authQuery'
 import { UserResponse } from '@/types/auth.types'
 import { useState } from 'react'
 import Link from 'next/link'
@@ -21,7 +23,9 @@ import {
 } from 'lucide-react'
 
 export default function Home() {
-  const { user, loading } = useAuth()
+  const [user] = useAtom(userAtom)
+  const { isLoading, isFetching } = useAuthUser()
+  const loading = isLoading || isFetching
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   if (loading) {

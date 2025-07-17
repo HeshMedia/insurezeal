@@ -2,11 +2,12 @@
 
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
 import { AgentOverview } from '@/components/agent/agent-overview'
-import { useAuth } from '@/lib/auth-context-final'
+import { useAtom } from 'jotai'
+import { userAtom } from '@/lib/atoms/auth'
 import { Badge } from '@/components/ui/badge'
 
 export default function AgentDashboard() {
-  const { user } = useAuth()
+  const [user] = useAtom(userAtom)
 
   return (
     <DashboardWrapper requiredRole="agent">

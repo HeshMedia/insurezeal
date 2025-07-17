@@ -3,7 +3,9 @@
 import * as React from "react"
 import { useState, useEffect } from "react"
 import { LogIn, Lock, Mail, Eye, EyeOff } from "lucide-react"
-import { useAuth } from "@/lib/auth-context-final"
+import { useLogin } from "@/hooks/authQuery"
+import { useAtom } from 'jotai'
+import { authErrorAtom } from '@/lib/atoms/auth'
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -13,9 +15,9 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [error, setError] = useAtom(authErrorAtom)
+  const loginMutation = useLogin()
+  const { isPending: loading } = loginMutation
   const router = useRouter()// Handle Supabase recovery tokens from URL hash
   useEffect(() => {
     const handleSupabaseRecovery = () => {
@@ -44,20 +46,14 @@ const LoginPage = () => {
     handleSupabaseRecovery()
   }, [router])
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     if (!email || !password) {
-      setError("Please enter both email and password.")
-      return
-    }    setError("")
-    setLoading(true)
-
-    try {
-      await login(email, password, rememberMe)    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+      setError(new Error("Please enter both email and password."));
+      return;
     }
-  }
+    setError(null); // Clear previous errors
+    loginMutation.mutate({ data: { email, password }, rememberMe });
+  };
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-white rounded-xl z-1">
@@ -128,7 +124,7 @@ const LoginPage = () => {
 
           {error && (
             <div className="text-sm text-red-500 text-left bg-red-50 p-2 rounded-lg border border-red-200">
-              {error}
+              {error.message}
             </div>
           )}
         </div>

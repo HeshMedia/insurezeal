@@ -25,7 +25,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context-final"
+import { useAtom } from "jotai"
+import { userAtom } from "@/lib/atoms/auth"
 import { useProfile } from "@/hooks/profileQuery"
 
 const superAdminNavItems = [
@@ -57,7 +58,7 @@ const superAdminNavItems = [
 ]
 
 export function SuperAdminSidebar({ ...props }) {
-  const { user } = useAuth()
+  const [user] = useAtom(userAtom)
   const { data: profile } = useProfile()
   const router = useRouter()
   const pathname = usePathname()
