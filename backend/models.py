@@ -395,8 +395,8 @@ class CutPay(Base):
     payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     payout_on: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # OD, NP, OD+TP
     agent_extra_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    payment_by_office: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # InsureZeal, Agent
-    
+    payment_by_office: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+
     # 👤 Relationship Selection (Foreign Keys)
     insurer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("insurers.id"), nullable=True)
     broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
@@ -432,7 +432,7 @@ class CutPay(Base):
     # Transaction Progress Tracking
     claimed_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     running_bal: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    cutpay_received: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # 👤 Admin Input: yes, no, partial
+    cutpay_received: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # 👤 Admin Input: cutpay amount received
     
     # =============================================================================
     # POST-CUTPAY DETAILS FIELDS

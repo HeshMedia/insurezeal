@@ -69,7 +69,7 @@ class AdminInputData(BaseModel):
     payment_method: Optional[str] = Field(None, description="Payment method if InsureZeal pays")
     payout_on: Optional[str] = Field(None, description="Payout calculation basis")
     agent_extra_percent: Optional[float] = Field(None, ge=0, le=100, description="Additional agent commission percentage")
-    payment_by_office: Optional[str] = Field(None, description="Who pays agent payout")
+    payment_by_office: Optional[float] = Field(None, description="Who pays agent payout")
     
     # Relationship Selection
     insurer_code: Optional[str] = Field(None, description="Selected insurer code")
@@ -94,12 +94,6 @@ class AdminInputData(BaseModel):
             raise ValueError('payout_on must be one of: OD, NP, OD+TP')
         return v
     
-    @validator('payment_by_office')
-    def validate_payment_by_office(cls, v):
-        if v and v not in ['InsureZeal', 'Agent']:
-            raise ValueError('payment_by_office must be either "InsureZeal" or "Agent"')
-        return v
-
 # =============================================================================
 # CALCULATION SCHEMAS
 # =============================================================================
@@ -162,7 +156,7 @@ class CutPayCreate(BaseModel):
     # Admin tracking fields
     claimed_by: Optional[str] = Field(None, description="Who claimed the commission")
     running_bal: Optional[float] = Field(None, description="Remaining balance")
-    cutpay_received: Optional[str] = Field(None, description="CutPay received status: yes, no, partial")
+    cutpay_received: Optional[float] = Field(None, description="CutPay amount received")
     
     # Notes
     notes: Optional[str] = Field(None, description="Additional notes")
@@ -219,7 +213,7 @@ class CutPayUpdate(BaseModel):
     payment_method: Optional[str] = Field(None)
     payout_on: Optional[str] = Field(None)
     agent_extra_percent: Optional[float] = Field(None, ge=0, le=100)
-    payment_by_office: Optional[str] = Field(None)
+    payment_by_office: Optional[float] = Field(None)
     
     # Foreign keys - now using codes instead of IDs
     insurer_code: Optional[str] = Field(None)
@@ -230,7 +224,7 @@ class CutPayUpdate(BaseModel):
     # Tracking fields
     claimed_by: Optional[str] = Field(None)
     running_bal: Optional[float] = Field(None)
-    cutpay_received: Optional[str] = Field(None)
+    cutpay_received: Optional[float] = Field(None)
     
     # Post-CutPay details fields
     already_given_to_agent: Optional[float] = Field(None, ge=0)
@@ -325,7 +319,7 @@ class CutPayResponse(BaseModel):
     payment_method: Optional[str]
     payout_on: Optional[str]
     agent_extra_percent: Optional[float]
-    payment_by_office: Optional[str]
+    payment_by_office: Optional[float]
     
     # Relationships
     insurer_id: Optional[int]
@@ -360,7 +354,7 @@ class CutPayResponse(BaseModel):
     
     claimed_by: Optional[str]
     running_bal: Optional[float]
-    cutpay_received: Optional[str]
+    cutpay_received: Optional[float]
     
     # =============================================================================
     # POST-CUTPAY DETAILS FIELDS
