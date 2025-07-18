@@ -10,7 +10,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth-context-final"
+import { useAtom } from "jotai"
+import { userAtom } from "@/lib/atoms/auth"
 import { useProfile } from "@/hooks/profileQuery"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -61,7 +62,7 @@ const agentNavItems = [
 ]
 
 export function AgentSidebar({ ...props }) {
-  const { user } = useAuth()
+  const [user] = useAtom(userAtom)
   const { data: profile } = useProfile()
   const router = useRouter()
   const pathname = usePathname()

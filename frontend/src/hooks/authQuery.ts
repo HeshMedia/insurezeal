@@ -11,7 +11,9 @@ import {
   JWTPayload
 } from '@/types/auth.types'
 import {
-  authUserAtom,
+  accessTokenAtom,
+  refreshTokenAtom,
+  userAtom,
   authErrorAtom,
   lastTokenRefreshAtom,
   tokenRefreshIntervalAtom
@@ -74,7 +76,7 @@ const clearAuthData = () => {
 
 // User profile query
 export const useAuthUser = () => {
-  const [, setUser] = useAtom(authUserAtom)
+  const [, setUser] = useAtom(userAtom)
   const [, setAuthError] = useAtom(authErrorAtom)
 
   const query = useQuery({
@@ -149,7 +151,9 @@ export const useAuthUser = () => {
 export const useLogin = () => {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [, setUser] = useAtom(authUserAtom)
+  const [, setAccessToken] = useAtom(accessTokenAtom)
+  const [, setRefreshToken] = useAtom(refreshTokenAtom)
+  const [, setUser] = useAtom(userAtom)
   const [, setAuthError] = useAtom(authErrorAtom)
 
   return useMutation({
@@ -158,20 +162,21 @@ export const useLogin = () => {
       return { ...response, rememberMe }
     },
     onSuccess: (response) => {
-      const { access_token, refresh_token, user, rememberMe } = response
-      
-      // Set cookies
+      const { access_token, refresh_token, user } = response
+      const rememberMe = localStorage.getItem('remember_me') === 'true'
+
+      // Set cookies and atoms
       setAuthCookies({ access_token, refresh_token }, rememberMe)
-      
-      // Update user state
+      setAccessToken(access_token)
+      setRefreshToken(refresh_token)
       setUser(user)
       setAuthError(null)
-      
-      // Invalidate and refetch user data
+
+      // Invalidate user query to refetch with new token
       queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEYS.profile })
-      
-      // Redirect based on role
-      const role = user.user_role || decodeJWTRole(access_token)
+
+      // Redirect based on user role
+      const role = user.user_role
       if (role === 'superadmin') {
         router.push('/superadmin')
       } else if (role === 'admin') {
@@ -217,7 +222,9 @@ export const useRegister = () => {
 export const useLogout = () => {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const [, setUser] = useAtom(authUserAtom)
+  const [, setAccessToken] = useAtom(accessTokenAtom)
+  const [, setRefreshToken] = useAtom(refreshTokenAtom)
+  const [, setUser] = useAtom(userAtom)
   const [, setAuthError] = useAtom(authErrorAtom)
   const [, setTokenRefreshInterval] = useAtom(tokenRefreshIntervalAtom)
 
@@ -230,8 +237,10 @@ export const useLogout = () => {
       }
     },
     onSuccess: () => {
-      // Clear auth data
+      // Clear auth data from cookies and atoms
       clearAuthData()
+      setAccessToken(null)
+      setRefreshToken(null)
       setUser(null)
       setAuthError(null)
       
@@ -242,7 +251,7 @@ export const useLogout = () => {
         setTokenRefreshInterval(null)
       }
       
-      // Clear all queries
+      // Clear all queries to remove cached data
       queryClient.clear()
       
       // Redirect to login
@@ -252,7 +261,10 @@ export const useLogout = () => {
       console.error('Logout error:', error)
       // Still clear auth data even if server logout fails
       clearAuthData()
+      setAccessToken(null)
+      setRefreshToken(null)
       setUser(null)
+      setAuthError(null) // Also clear any errors
       router.push('/login')
     }
   })

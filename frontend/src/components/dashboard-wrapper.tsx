@@ -1,6 +1,8 @@
 'use client'
 
-import { useAuth } from '@/lib/auth-context-final'
+import { useAtom } from 'jotai'
+import { userAtom } from '@/lib/atoms/auth'
+import { useAuthUser } from '@/hooks/authQuery'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
@@ -10,7 +12,9 @@ interface DashboardWrapperProps {
 }
 
 export function DashboardWrapper({ children, requiredRole }: DashboardWrapperProps) {
-  const { user, loading } = useAuth()
+  const [user] = useAtom(userAtom)
+  const { isLoading, isFetching } = useAuthUser()
+  const loading = isLoading || isFetching
   const router = useRouter()
 
   useEffect(() => {

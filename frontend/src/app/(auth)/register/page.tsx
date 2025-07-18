@@ -3,8 +3,9 @@
 import * as React from "react"
 import { useState } from "react"
 import { UserPlus, Lock, Mail, User, Users, Eye, EyeOff } from "lucide-react"
-import { useAuth } from "@/lib/auth-context-final"
+import { useRegister } from "@/hooks/authQuery"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -17,69 +18,34 @@ const RegisterPage = () => {
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [error, setError] = useState("")
-  const [loading, setLoading] = useState(false)
-  const { register } = useAuth()
+  const [formError, setFormError] = useState("")
+  const registerMutation = useRegister()
+  const { isPending: loading, error } = registerMutation
+  const router = useRouter()
+
   const handleRegister = async () => {
     if (!formData.email || !formData.password || !formData.username) {
-      setError("Please fill in all required fields.")
+      setFormError("Please fill in all required fields.")
       return
     }
     if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters long.")
+      setFormError("Password must be at least 6 characters long.")
       return
     }
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match.")
-      return    }
-      setError("")
-    setLoading(true)
-
-    try {
-      // Remove confirmPassword from the data sent to register
-      const registerData = {
-        email: formData.email,
-        password: formData.password,
-        username: formData.username,
-        first_name: formData.first_name,
-        last_name: formData.last_name
-      }
-      console.log('Attempting registration with:', { ...registerData, password: '[REDACTED]' })
-      await register(registerData)
-      // Success will be handled by the useRegister hook
-    } catch (err: unknown) {
-      console.error('Registration error in component:', err)
-      
-      // Extract meaningful error message
-      let errorMessage = 'Registration failed. Please try again.'
-      
-      if (err instanceof Error) {
-        errorMessage = err.message
-        
-        // Handle specific error cases for better UX
-        if (err.message.toLowerCase().includes('email')) {
-          if (err.message.toLowerCase().includes('already')) {
-            errorMessage = 'This email is already registered. Please use a different email or try signing in.'
-          } else if (err.message.toLowerCase().includes('invalid')) {
-            errorMessage = 'Please enter a valid email address.'
-          }
-        } else if (err.message.toLowerCase().includes('username')) {
-          if (err.message.toLowerCase().includes('already')) {
-            errorMessage = 'This username is already taken. Please choose a different username.'
-          }
-        } else if (err.message.toLowerCase().includes('password')) {
-          errorMessage = 'Password does not meet requirements. Please check and try again.'
-        } else if (err.message.toLowerCase().includes('network')) {
-          errorMessage = 'Network error. Please check your connection and try again.'
-        } else if (err.message.toLowerCase().includes('server') || err.message.includes('500')) {
-          errorMessage = 'Server error. Please try again later.'
-        }
-      }
-      
-      setError(errorMessage)
-    } finally {
-      setLoading(false)
+      setFormError("Passwords do not match.")
+      return
     }
+    setFormError("")
+    const { email, password, username, first_name, last_name } = formData
+    registerMutation.mutate(
+      { email, password, username, first_name, last_name },
+      {
+        onSuccess: () => {
+          router.push('/login?message=Registration successful. Please check your email to verify your account.')
+        },
+      }
+    )
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,11 +173,19 @@ const RegisterPage = () => {
             </button>
           </div>
 
+          {formError && (
+            <div className="text-sm text-red-600 text-left bg-red-50 p-3 rounded-lg border border-red-200 max-w-full break-words">
+              <div className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5">⚠</span>
+                <span>{formError}</span>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="text-sm text-red-600 text-left bg-red-50 p-3 rounded-lg border border-red-200 max-w-full break-words">
               <div className="flex items-start gap-2">
                 <span className="text-red-500 mt-0.5">⚠</span>
-                <span>{error}</span>
+                <span>{error.message}</span>
               </div>
             </div>
           )}
