@@ -1,8 +1,3 @@
-/**
- * Modern IndexedDB utilities using the idb package
- * Centralized functions for all document storage operations
- */
-
 import { openDB, IDBPDatabase } from 'idb';
 
 export interface StoredDocument {
@@ -17,38 +12,50 @@ const DB_NAME = 'CutPayDB';
 const STORE_NAME = 'documents';
 
 /**
- * Initialize and get IndexedDB connection with auto-version detection
+ * Initialize and get IndexedDB connection with proper upgrade handling
  */
 const getDB = async (): Promise<IDBPDatabase> => {
   try {
-    // First try to open existing database to get current version
+    let needsUpgrade = false;
+    let currentVersion = 1;
+    
+    // Check if database exists and has the required store
     try {
       const existingDb = await openDB(DB_NAME);
-      const currentVersion = existingDb.version;
+      currentVersion = existingDb.version;
+      needsUpgrade = !existingDb.objectStoreNames.contains(STORE_NAME);
       existingDb.close();
       
-      // Open with upgrade if needed
-      const db = await openDB(DB_NAME, currentVersion, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
-            console.log(`🔧 Creating object store: ${STORE_NAME}`);
-            db.createObjectStore(STORE_NAME);
-          }
-        },
-      });
-      return db;
+      console.log(`🔍 Database exists with version ${currentVersion}, needs upgrade: ${needsUpgrade}`);
     } catch {
-      // Database doesn't exist, create new one
-      const db = await openDB(DB_NAME, 1, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
-            console.log(`🔧 Creating object store: ${STORE_NAME}`);
-            db.createObjectStore(STORE_NAME);
-          }
-        },
-      });
-      return db;
+      // Database doesn't exist
+      needsUpgrade = true;
+      console.log(`� Database doesn't exist, will create new one`);
     }
+    
+    // If we need to upgrade, increment version
+    if (needsUpgrade) {
+      currentVersion = Math.max(currentVersion + 1, 2);
+    }
+    
+    // Open database with proper version and upgrade handling
+    const db = await openDB(DB_NAME, currentVersion, {
+      upgrade(db, oldVersion, newVersion) {
+        console.log(`🔧 Upgrading database from v${oldVersion} to v${newVersion}`);
+        
+        // Remove existing store if it exists (clean upgrade)
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          console.log(`🗑️ Removing existing ${STORE_NAME} store`);
+          db.deleteObjectStore(STORE_NAME);
+        }
+        
+        // Create new object store
+        console.log(`🔧 Creating object store: ${STORE_NAME}`);
+        db.createObjectStore(STORE_NAME);
+      },
+    });
+    
+    return db;
   } catch (error) {
     console.error(`❌ Failed to initialize ${DB_NAME}:`, error);
     throw error;
@@ -173,41 +180,6 @@ export const removeFromIndexedDB = async (key: string): Promise<void> => {
   }
 };
 
-/**
- * Get all stored documents from IndexedDB
- */
-export const getAllFromIndexedDB = async (): Promise<Array<{ key: string; document: StoredDocument }>> => {
-  try {
-    console.log(`🔍 Retrieving all documents from IndexedDB...`);
-    
-    const db = await getDB();
-    
-    if (!db.objectStoreNames.contains(STORE_NAME)) {
-      console.error(`❌ ${STORE_NAME} store not found in ${DB_NAME}`);
-      db.close();
-      return [];
-    }
-
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const keys = await store.getAllKeys();
-    const values = await store.getAll();
-    
-    await tx.done;
-    db.close();
-    
-    const documents = keys.map((key, index) => ({
-      key: key as string,
-      document: values[index] as StoredDocument
-    }));
-    
-    console.log(`✅ Retrieved ${documents.length} documents from IndexedDB`);
-    return documents;
-  } catch (error) {
-    console.error(`❌ Failed to retrieve all documents from IndexedDB:`, error);
-    return [];
-  }
-};
 
 /**
  * Clear all documents from IndexedDB
