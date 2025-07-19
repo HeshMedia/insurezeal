@@ -1,1378 +1,1105 @@
-'use client'
-
-import { useState, useEffect } from 'react'
-import { useAtom } from 'jotai'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useAtom } from "jotai";
+import { useMemo, useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { openDB } from "idb";
+import { pdfExtractionDataAtom, createdCutpayTransactionAtom, cutpayCalculationResultAtom } from "@/lib/atoms/cutpay";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/date-picker";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { LoadingDialog } from "@/components/ui/loading-dialog";
+import { useAgentList } from "@/hooks/adminQuery";
+import { useCreateCutPay, useUploadCutPayDocument } from "@/hooks/cutpayQuery";
 import {
-  FileText,
-  Eye,
-  EyeOff,
-  Calculator,
-  User,
-  Car,
-  Building,
-  CreditCard,
-  Save,
-  ArrowLeft,
-  ArrowRight,
-  Info,
-  Database
-} from 'lucide-react'
-
-// Import APIs
-import { useAgentList } from '@/hooks/adminQuery'
-import { useBrokerList, useInsurerList } from '@/hooks/superadminQuery'
-import { useCutPayCalculation, useCreateCutPay, useUploadCutPayDocument } from '@/hooks/cutpayQuery'
-
-// Import atoms
-import {
-  pdfExtractionDataAtom,
-  policyPdfUrlAtom,
-  additionalDocumentsUrlsAtom,
-  cutpayCalculationResultAtom
-} from '@/lib/atoms/cutpay'
-
-// Import IndexedDB utilities
-import { getFileFromIndexedDB, arrayBufferToFile } from '@/lib/utils/indexeddb'
-
-// Import types
-// No additional types needed - using local interfaces
-
-// Import toast for notifications
-import { toast } from 'sonner'
-
-// Define form state structure that matches the API - flattened structure
-interface FormState {
-  // Document URLs
-  policy_pdf_url: string
-  additional_documents: Record<string, unknown>
-  
-  // Extracted Policy Data (flattened)
-  policy_number: string | null
-  formatted_policy_number: string | null
-  major_categorisation: string | null
-  product_insurer_report: string | null
-  product_type: string | null
-  plan_type: string | null
-  customer_name: string | null
-  gross_premium: number | null
-  net_premium: number | null
-  od_premium: number | null
-  tp_premium: number | null
-  gst_amount: number | null
-  registration_no: string | null
-  make_model: string | null
-  model: string | null
-  vehicle_variant: string | null
-  gvw: number | null
-  rto: string | null
-  state: string | null
-  fuel_type: string | null
-  cc: number | null
-  age_year: number | null
-  ncb: string | null
-  discount_percent: number | null
-  business_type: string | null
-  seating_capacity: number | null
-  veh_wheels: number | null
-  
-  // Admin Input Data (flattened)
-  reporting_month: string | null
-  booking_date: string | null
-  agent_code: string | null
-  code_type: string | null
-  incoming_grid_percent: number | null
-  agent_commission_given_percent: number | null
-  extra_grid: number | null
-  commissionable_premium: number | null
-  payment_by: string | null
-  payment_method: string | null
-  payout_on: string | null
-  agent_extra_percent: number | null
-  payment_by_office: string | null
-  insurer_code: string | null
-  broker_code: string | null
-  admin_child_id: string | null
-  
-  // Calculation Results (flattened)
-  receivable_from_broker: number | null
-  extra_amount_receivable_from_broker: number | null
-  total_receivable_from_broker: number | null
-  total_receivable_from_broker_with_gst: number | null
-  cut_pay_amount: number | null
-  agent_po_amt: number | null
-  agent_extra_amount: number | null
-  total_agent_po_amt: number | null
-  
-  // Additional Transaction Fields
-  claimed_by: string | null
-  already_given_to_agent: number | null
-  po_paid_to_agent: number | null
-  running_bal: number | null
-  match_status: string | null
-  invoice_number: string | null
-  notes: string | null
-}
-
-// Define flat request type for API
-interface FlatCreateCutPayRequest {
-  policy_pdf_url: string
-  additional_documents: Record<string, unknown>
-  
-  // All fields flattened at root level
-  policy_number: string | null
-  formatted_policy_number: string | null
-  major_categorisation: string | null
-  product_insurer_report: string | null
-  product_type: string | null
-  plan_type: string | null
-  customer_name: string | null
-  gross_premium: number | null
-  net_premium: number | null
-  od_premium: number | null
-  tp_premium: number | null
-  gst_amount: number | null
-  registration_no: string | null
-  make_model: string | null
-  model: string | null
-  vehicle_variant: string | null
-  gvw: number | null
-  rto: string | null
-  state: string | null
-  fuel_type: string | null
-  cc: number | null
-  age_year: number | null
-  ncb: string | null
-  discount_percent: number | null
-  business_type: string | null
-  seating_capacity: number | null
-  veh_wheels: number | null
-  reporting_month: string | null
-  booking_date: string | null
-  agent_code: string | null
-  code_type: string | null
-  incoming_grid_percent: number | null
-  agent_commission_given_percent: number | null
-  extra_grid: number | null
-  commissionable_premium: number | null
-  payment_by: string | null
-  payment_method: string | null
-  payout_on: string | null
-  agent_extra_percent: number | null
-  payment_by_office: string | null
-  insurer_code: string | null
-  broker_code: string | null
-  admin_child_id: string | null
-  insurer_id: number | null
-  broker_id: number | null
-  child_id_request_id: string | null
-  insurer_name: string | null
-  broker_name: string | null
-  insurer_broker_code: string | null
-  cluster: string | null
-  receivable_from_broker: number | null
-  extra_amount_receivable_from_broker: number | null
-  total_receivable_from_broker: number | null
-  total_receivable_from_broker_with_gst: number | null
-  cut_pay_amount: number | null
-  agent_po_amt: number | null
-  agent_extra_amount: number | null
-  total_agent_po_amt: number | null
-  claimed_by: string | null
-  already_given_to_agent: number | null
-  po_paid_to_agent: number | null
-  running_bal: number | null
-  match_status: string | null
-  invoice_number: string | null
-  notes: string | null
-}
-
-// Define types for form field configurations
-interface FormFieldOption {
-  value: string
-  label: string
-}
-
-interface FormFieldConditional {
-  field: string
-  value: string | number | null
-}
-
-interface FormField {
-  key: string
-  label: string
-  type: string
-  options?: string[] | FormFieldOption[]
-  conditional?: FormFieldConditional
-  conditionalOr?: FormFieldConditional[]
-}
+  useBrokerList,
+  useInsurerList,
+  useAdminChildIdList,
+} from "@/hooks/superadminQuery";
+import { AgentSummary } from "@/types/admin.types";
+import { clearAllFromIndexedDB } from "@/lib/utils/indexeddb";
+import { CreateCutpayTransactionCutpayPostRequest } from "@/types/cutpay.types";
+import { Insurer, Broker, AdminChildId } from "@/types/superadmin.types";
+import { CutPayFormSchema, CutPayFormSchemaType } from "./form-schema";
+import { formFields, FormFieldConfig, FormFieldPath } from "./form-config";
+import Calculations from "./calculations";
 
 interface AdminInputFormProps {
-  onNext?: () => void
-  onPrev?: () => void
+  onPrev: () => void;
+  isViewerOpen: boolean;
+  setIsViewerOpen: (isOpen: boolean) => void;
 }
 
-const AdminInputForm = ({ onNext, onPrev }: AdminInputFormProps) => {
-  const [odPayoutPercent, setOdPayoutPercent] = useState<number | null>(null)
-  const [tpPayoutPercent, setTpPayoutPercent] = useState<number | null>(null)
-  const [odIncomingGridPercent, setOdIncomingGridPercent] = useState<number | null>(null)
-  const [tpIncomingGridPercent, setTpIncomingGridPercent] = useState<number | null>(null)
-  const [incomingPoAmt, setIncomingPoAmt] = useState<number | null>(null)
-  const [extractedData] = useAtom(pdfExtractionDataAtom)
-  const [policyPdfUrl] = useAtom(policyPdfUrlAtom)
-  const [additionalDocUrls, setAdditionalDocUrls] = useAtom(additionalDocumentsUrlsAtom)
-  const [calculationResult] = useAtom(cutpayCalculationResultAtom)
-  
-  const [showDocumentViewer, setShowDocumentViewer] = useState(true)
-  const [activeDocument, setActiveDocument] = useState<'policy' | 'kyc' | 'rc' | 'previous'>('policy')
-  const [availableDocuments, setAvailableDocuments] = useState<Array<{key: string, label: string, available: boolean}>>([])
-  
-  // Loading states for transaction creation and document upload
-  const [isCreatingTransaction, setIsCreatingTransaction] = useState(false)
-  const [isUploadingDocuments, setIsUploadingDocuments] = useState(false)
-  const [creationStep, setCreationStep] = useState('')
-  
-  // Query hooks for dropdown data
-  const { data: agentsData } = useAgentList({ page_size: 1000 })
-  const { data: insurersData } = useInsurerList()
-  const { data: brokersData } = useBrokerList()
-  
-  // Calculation mutation
-  const cutpayCalculation = useCutPayCalculation()
-  
-  // Create and upload mutations
-  const createCutPayMutation = useCreateCutPay()
-  const uploadDocumentMutation = useUploadCutPayDocument()
-  
-  // Remove separate paymentSource state and use formData.payment_method
-  // const [paymentSource, setPaymentSource] = useState<string>('')
+import { PanelLeftClose, PanelRightClose, Loader2 } from "lucide-react";
 
-  // Form state that matches the API structure - flattened
-  const [formData, setFormData] = useState<FormState>({
-    // Document URLs
-    policy_pdf_url: '',
-    additional_documents: {},
-    
-    // Extracted Policy Data (flattened)
-    policy_number: null,
-    formatted_policy_number: null,
-    major_categorisation: null,
-    product_insurer_report: null,
-    product_type: null,
-    plan_type: null,
-    customer_name: null,
-    gross_premium: null,
-    net_premium: null,
-    od_premium: null,
-    tp_premium: null,
-    gst_amount: null,
-    registration_no: null,
-    make_model: null,
-    model: null,
-    vehicle_variant: null,
-    gvw: null,
-    rto: null,
-    state: null,
-    fuel_type: null,
-    cc: null,
-    age_year: null,
-    ncb: null,
-    discount_percent: null,
-    business_type: null,
-    seating_capacity: null,
-    veh_wheels: null,
-    
-    // Admin Input Data (flattened)
-    reporting_month: null,
-    booking_date: null,
-    agent_code: null,
-    code_type: null,
-    incoming_grid_percent: null,
-    agent_commission_given_percent: null,
-    extra_grid: null,
-    commissionable_premium: null,
-    payment_by: null,
-    payment_method: null,
-    payout_on: null,
-    agent_extra_percent: null,
-    payment_by_office: null,
-    insurer_code: null,
-    broker_code: null,
-    admin_child_id: null,
-    
-    // Calculation Results (flattened)
-    receivable_from_broker: null,
-    extra_amount_receivable_from_broker: null,
-    total_receivable_from_broker: null,
-    total_receivable_from_broker_with_gst: null,
-    cut_pay_amount: null,
-    agent_po_amt: null,
-    agent_extra_amount: null,
-    total_agent_po_amt: null,
-    
-    // Additional Transaction Fields
-    claimed_by: null,
-    already_given_to_agent: null,
-    po_paid_to_agent: null,
-    running_bal: null,
-    match_status: null,
-    invoice_number: null,
-    notes: null
-  })
+const AdminInputForm: React.FC<AdminInputFormProps> = ({
+  onPrev,
+  isViewerOpen,
+  setIsViewerOpen,
+}) => {
+  const router = useRouter();
+  const [pdfExtractionData] = useAtom(pdfExtractionDataAtom);
+  const [calculationResult] = useAtom(cutpayCalculationResultAtom);
+  const [, setCreatedTransaction] = useAtom(createdCutpayTransactionAtom);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // State for submission progress
+  const [submissionSteps, setSubmissionSteps] = useState<{
+    id: string;
+    label: string;
+    status: 'pending' | 'active' | 'completed' | 'failed';
+  }[]>([
+    { id: 'create-transaction', label: 'Creating transaction...', status: 'pending' },
+    { id: 'upload-policy', label: 'Uploading policy PDF...', status: 'pending' },
+    { id: 'upload-additional', label: 'Uploading additional documents...', status: 'pending' },
+    { id: 'cleanup-redirect', label: 'Cleaning up and redirecting...', status: 'pending' },
+  ]);
+
+  const createCutPayMutation = useCreateCutPay();
+  const uploadDocumentMutation = useUploadCutPayDocument();
+
+  // Reset states when component mounts or when needed
+  useEffect(() => {
+    setSubmissionSteps([
+      { id: 'create-transaction', label: 'Creating cutpay transaction', status: 'pending' },
+      { id: 'upload-policy', label: 'Uploading policy document', status: 'pending' },
+      { id: 'upload-additional', label: 'Uploading additional documents', status: 'pending' },
+      { id: 'cleanup-redirect', label: 'Cleaning up and redirecting', status: 'pending' },
+    ]);
+    setIsSubmitting(false);
+  }, []);
+
+  const { control, handleSubmit, setValue, watch, reset, formState } = useForm<CutPayFormSchemaType>({
+    resolver: zodResolver(CutPayFormSchema),
+    defaultValues: {
+      policy_pdf_url: "",
+      additional_documents: {},
+      extracted_data: {},
+      admin_input: {},
+      calculations: {},
+      cutpay_received_status: null,
+      cutpay_received: null,
+    },
+  });
+
+  console.log('AdminInputForm rendered'); // Debug log
+  console.log('Form errors:', formState.errors); // Debug form errors
+
+  // Watch for payment_by changes to auto-calculate payment_by_office
+  const paymentBy = watch('admin_input.payment_by');
+  const grossPremium = watch('extracted_data.gross_premium');
 
   useEffect(() => {
-    // Extract values from formData to avoid dependency on entire object
-    const payment_by = formData.payment_by;
-    const payout_on = formData.payout_on;
-    const gross_premium = formData.gross_premium;
-    const net_premium = formData.net_premium;
-    const agent_commission_given_percent = formData.agent_commission_given_percent;
-    const incoming_grid_percent = formData.incoming_grid_percent;
-    const od_premium = formData.od_premium;
-    const tp_premium = formData.tp_premium;
-    const commissionable_premium = formData.commissionable_premium;
-    const extra_grid = formData.extra_grid;
-    const agent_extra_percent = formData.agent_extra_percent;
-
-    let cutPay = 0
-    let agentPo = 0
-    let incomingPo = 0
-    let receivableFromBroker = 0
-    let extraAmountReceivableFromBroker = 0
-    let agentExtraAmount = 0
-
-    // Cut Pay Amount Calculation
-    if (payment_by === 'agent') {
-      cutPay = 0
-    } else if (payment_by === 'insurezeal' && typeof gross_premium === 'number' && typeof net_premium === 'number' && typeof agent_commission_given_percent === 'number') {
-      cutPay = gross_premium - (net_premium * (agent_commission_given_percent / 100))
+    if (paymentBy === 'InsureZeal' && grossPremium) {
+      // If payment by office, set to gross premium
+      setValue('admin_input.payment_by_office', grossPremium, { shouldValidate: true });
+    } else if (paymentBy === 'Agent') {
+      // If payment by agent, set to zero by default
+      setValue('admin_input.payment_by_office', 0, { shouldValidate: true });
     }
+  }, [paymentBy, grossPremium, setValue]);
 
-    // Agent PO and Incoming PO Calculation
-    if (payment_by === 'agent') {
-      if (payout_on === 'od_premium' && typeof od_premium === 'number' && typeof agent_commission_given_percent === 'number') {
-        agentPo = od_premium * (agent_commission_given_percent / 100)
-      } else if (payout_on === 'net_premium' && typeof net_premium === 'number' && typeof agent_commission_given_percent === 'number') {
-        agentPo = net_premium * (agent_commission_given_percent / 100)
-      } else if (payout_on === 'od+tp' && typeof od_premium === 'number' && typeof tp_premium === 'number' && typeof odPayoutPercent === 'number' && typeof tpPayoutPercent === 'number') {
-        agentPo = (od_premium * (odPayoutPercent / 100)) + (tp_premium * (tpPayoutPercent / 100))
-      }
-      incomingPo = 0
-    } else if (payment_by === 'insurezeal') {
-      agentPo = 0
-      if (payout_on === 'od_premium' && typeof od_premium === 'number' && typeof incoming_grid_percent === 'number') {
-        incomingPo = od_premium * (incoming_grid_percent / 100)
-      } else if (payout_on === 'net_premium' && typeof net_premium === 'number' && typeof incoming_grid_percent === 'number') {
-        incomingPo = net_premium * (incoming_grid_percent / 100)
-      } else if (payout_on === 'od+tp' && typeof od_premium === 'number' && typeof tp_premium === 'number' && typeof odIncomingGridPercent === 'number' && typeof tpIncomingGridPercent === 'number') {
-        incomingPo = (od_premium * (odIncomingGridPercent / 100)) + (tp_premium * (tpIncomingGridPercent / 100))
-      }
-    }
-
-    // Commission Calculations
-    if (typeof gross_premium === 'number' && typeof incoming_grid_percent === 'number') {
-      receivableFromBroker = gross_premium * (incoming_grid_percent / 100)
-    }
-    if (typeof commissionable_premium === 'number' && typeof extra_grid === 'number') {
-      extraAmountReceivableFromBroker = commissionable_premium * (extra_grid / 100)
-    }
-    const totalReceivableFromBroker = receivableFromBroker + extraAmountReceivableFromBroker
-    const totalReceivableFromBrokerWithGst = totalReceivableFromBroker * 1.18
-
-    // Agent Extra Amount & Total PO
-    if (typeof commissionable_premium === 'number' && typeof agent_extra_percent === 'number') {
-      agentExtraAmount = commissionable_premium * (agent_extra_percent / 100)
-    }
-    const totalAgentPoAmt = agentPo + agentExtraAmount
-
-    setIncomingPoAmt(incomingPo)
-    setFormData(prev => ({
-      ...prev,
-      cut_pay_amount: cutPay,
-      agent_po_amt: agentPo,
-      receivable_from_broker: receivableFromBroker,
-      extra_amount_receivable_from_broker: extraAmountReceivableFromBroker,
-      total_receivable_from_broker: totalReceivableFromBroker,
-      total_receivable_from_broker_with_gst: totalReceivableFromBrokerWithGst,
-      agent_extra_amount: agentExtraAmount,
-      total_agent_po_amt: totalAgentPoAmt,
-    }))
-
- 
-  }, [
-    formData.payment_by,
-    formData.payout_on,
-    formData.gross_premium,
-    formData.net_premium,
-    formData.agent_commission_given_percent,
-    formData.incoming_grid_percent,
-    formData.od_premium,
-    formData.tp_premium,
-    formData.commissionable_premium,
-    formData.extra_grid,
-    formData.agent_extra_percent,
-    odPayoutPercent,
-    tpPayoutPercent,
-    odIncomingGridPercent,
-    tpIncomingGridPercent
-  ])
-
-  // Auto-fill extracted data when component mounts
   useEffect(() => {
-    if (extractedData?.extracted_data && policyPdfUrl) {
-      const extracted = extractedData.extracted_data
-      setFormData(prev => ({
-        ...prev,
-        policy_pdf_url: policyPdfUrl,
-        // Auto-fill extracted fields
-        policy_number: extracted.policy_number || null,
-        formatted_policy_number: extracted.formatted_policy_number || null,
-        major_categorisation: extracted.major_categorisation || null,
-        product_insurer_report: extracted.product_insurer_report || null,
-        product_type: extracted.product_type || null,
-        plan_type: extracted.plan_type || null,
-        customer_name: extracted.customer_name || null,
-        gross_premium: extracted.gross_premium || null,
-        net_premium: extracted.net_premium || null,
-        od_premium: extracted.od_premium || null,
-        tp_premium: extracted.tp_premium || null,
-        gst_amount: extracted.gst_amount || null,
-        registration_no: extracted.registration_no || null,
-        make_model: extracted.make_model || null,
-        model: extracted.model || null,
-        vehicle_variant: extracted.vehicle_variant || null,
-        gvw: extracted.gvw || null,
-        rto: extracted.rto || null,
-        state: extracted.state || null,
-        fuel_type: extracted.fuel_type || null,
-        cc: extracted.cc || null,
-        age_year: extracted.age_year || null,
-        ncb: extracted.ncb || null,
-        discount_percent: extracted.discount_percent || null,
-        business_type: extracted.business_type || null,
-        seating_capacity: extracted.seating_capacity || null,
-        veh_wheels: extracted.veh_wheels || null
-      }))
+    if (pdfExtractionData?.extracted_data) {
+      Object.entries(pdfExtractionData.extracted_data).forEach(
+        ([key, value]) => {
+          const formKey = `extracted_data.${key}` as FormFieldPath;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setValue(formKey, value as any, { shouldValidate: true });
+        }
+      );
     }
-  }, [extractedData, policyPdfUrl])
+  }, [pdfExtractionData, setValue]);
 
-  // Load additional documents from IndexedDB and create URLs
-  useEffect(() => {
-    const loadDocumentsFromIndexedDB = async () => {
-      try {
-        const [kycDoc, rcDoc, previousDoc] = await Promise.all([
-          getFileFromIndexedDB('kyc_documents'),
-          getFileFromIndexedDB('rc_document'),
-          getFileFromIndexedDB('previous_policy')
-        ])
+  const { data: insurers, isLoading: insurersLoading } = useInsurerList();
+  const { data: brokers, isLoading: brokersLoading } = useBrokerList();
+  const { data: agents, isLoading: agentsLoading } = useAgentList();
+  const { data: adminChildIds, isLoading: adminChildIdsLoading } =
+    useAdminChildIdList();
 
-        const urls = {
-          kyc_documents: null as string | null,
-          rc_document: null as string | null,
-          previous_policy: null as string | null
-        }
-        const docs = []
+  const insurerOptions = useMemo(
+    () =>
+      insurers?.map((i: Insurer) => ({
+        value: i.insurer_code,
+        label: i.name,
+      })).filter(option => option.value && option.value.trim() !== '') || [],
+    [insurers]
+  );
+  const brokerOptions = useMemo(
+    () =>
+      brokers?.map((b: Broker) => ({ value: b.broker_code, label: b.name }))
+        .filter(option => option.value && option.value.trim() !== '') || [],
+    [brokers]
+  );
+  const agentOptions = useMemo(
+    () =>
+      agents?.agents?.map((a: AgentSummary) => ({
+        value: a.agent_code ?? "",
+        label: `${a.first_name} ${a.last_name}`,
+      })).filter(option => option.value && option.value.trim() !== '') || [],
+    [agents]
+  );
+  const adminChildIdOptions = useMemo(
+    () =>
+      adminChildIds?.map((a: AdminChildId) => ({
+        value: a.child_id,
+        label: `${a.child_id} - ${a.manager_name}`,
+      })).filter(option => option.value && option.value.trim() !== '') || [],
+    [adminChildIds]
+  );
 
-        // Create blob URLs for available documents
-        if (kycDoc) {
-          const file = arrayBufferToFile(kycDoc.content, kycDoc.name, kycDoc.type)
-          urls.kyc_documents = URL.createObjectURL(file)
-          docs.push({ key: 'kyc', label: 'KYC Documents', available: true })
-        } else {
-          docs.push({ key: 'kyc', label: 'KYC Documents', available: false })
-        }
+  const codeTypeOptions = useMemo(
+    () => ["Direct", "Broker"].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const paymentByOptions = useMemo(
+    () => ["Agent", "InsureZeal"].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const paymentMethodOptions = useMemo(
+    () => [
+      "cd/float(iz)", 
+      "Credit Card", 
+      "Cash", 
+      "Net Banking", 
+      "UPI", 
+      "Debit Card", 
+      "Cheque"
+    ].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const payoutOnOptions = useMemo(
+    () => ["OD", "NP", "OD+TP"].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const cutpayReceivedOptions = useMemo(
+    () => ["Yes", "No", "Partial"].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const majorCategorisationOptions = useMemo(
+    () => ["Motor", "Life", "Health"].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const planTypeOptions = useMemo(
+    () => ["Comp", "STP", "SAOD"].map((o) => ({ value: o, label: o })),
+    []
+  );
+  const fuelTypeOptions = useMemo(
+    () =>
+      ["Petrol", "Diesel", "CNG", "Electric"].map((o) => ({
+        value: o,
+        label: o,
+      })),
+    []
+  );
+  const businessTypeOptions = useMemo(
+    () => ["Private", "Commercial"].map((o) => ({ value: o, label: o })),
+    []
+  );
 
-        if (rcDoc) {
-          const file = arrayBufferToFile(rcDoc.content, rcDoc.name, rcDoc.type)
-          urls.rc_document = URL.createObjectURL(file)
-          docs.push({ key: 'rc', label: 'RC Document', available: true })
-        } else {
-          docs.push({ key: 'rc', label: 'RC Document', available: false })
-        }
-
-        if (previousDoc) {
-          const file = arrayBufferToFile(previousDoc.content, previousDoc.name, previousDoc.type)
-          urls.previous_policy = URL.createObjectURL(file)
-          docs.push({ key: 'previous', label: 'Previous Policy', available: true })
-        } else {
-          docs.push({ key: 'previous', label: 'Previous Policy', available: false })
-        }
-
-        // Add policy document
-        docs.unshift({ key: 'policy', label: 'Policy PDF', available: !!policyPdfUrl })
-
-        setAdditionalDocUrls(urls)
-        setAvailableDocuments(docs)
-
-      } catch (error) {
-        console.error('Error loading documents from IndexedDB:', error)
-      }
-    }
-
-    loadDocumentsFromIndexedDB()
-  }, [policyPdfUrl, setAdditionalDocUrls])
-
-  // Cleanup blob URLs on unmount
-  useEffect(() => {
-    return () => {
-      // Cleanup function will be called on unmount
-      const currentUrls = additionalDocUrls
-      if (currentUrls.kyc_documents) URL.revokeObjectURL(currentUrls.kyc_documents)
-      if (currentUrls.rc_document) URL.revokeObjectURL(currentUrls.rc_document)
-      if (currentUrls.previous_policy) URL.revokeObjectURL(currentUrls.previous_policy)
-    }
-  }, [additionalDocUrls])
-
-  const handleInputChange = (field: keyof FormState, value: string | number | null) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const handleCreateTransaction = async () => {
+  /**
+   * Initialize IndexedDB with proper schema using idb package
+   * @param dbName - Name of the database
+   * @param storeName - Name of the object store
+   * @returns Database instance or null if failed
+   */
+  const initializeDB = async (dbName: string, storeName: string) => {
     try {
-      setIsCreatingTransaction(true)
-      setCreationStep('Creating new cutpay transaction...')
-
-      // Validate required fields
-      if (!formData.gross_premium || !formData.od_premium || !formData.tp_premium) {
-        throw new Error('Missing required premium fields')
-      }
-
-      if (!formData.payment_by || !formData.payout_on) {
-        throw new Error('Missing required payment configuration')
-      }
-
-      // Ensure date formats are correct
-      const reportingMonth = formData.reporting_month 
-        ? formData.reporting_month.slice(0, 7) // Ensure YYYY-MM format
-        : null;
-      
-      const bookingDate = formData.booking_date 
-        ? formData.booking_date // Should already be in YYYY-MM-DD format from date input
-        : null;
-
-      // Prepare the create request with flattened structure (matching your working payload)
-      const createRequest: FlatCreateCutPayRequest = {
-        policy_pdf_url: policyPdfUrl || 'policy_pdf',
-        additional_documents: {},
-        // Flatten all fields at the root level
-        policy_number: formData.policy_number || null,
-        formatted_policy_number: formData.formatted_policy_number || null,
-        major_categorisation: formData.major_categorisation || null,
-        product_insurer_report: formData.product_insurer_report || null,
-        product_type: formData.product_type || null,
-        plan_type: formData.plan_type || null,
-        customer_name: formData.customer_name || null,
-        gross_premium: formData.gross_premium || null,
-        net_premium: formData.net_premium || null,
-        od_premium: formData.od_premium || null,
-        tp_premium: formData.tp_premium || null,
-        gst_amount: formData.gst_amount || null,
-        registration_no: formData.registration_no || null,
-        make_model: formData.make_model || null,
-        model: formData.model || null,
-        vehicle_variant: formData.vehicle_variant || null,
-        gvw: formData.gvw || null,
-        rto: formData.rto || null,
-        state: formData.state || null,
-        fuel_type: formData.fuel_type || null,
-        cc: formData.cc || null,
-        age_year: formData.age_year || null,
-        ncb: formData.ncb || null,
-        discount_percent: formData.discount_percent || null,
-        business_type: formData.business_type || null,
-        seating_capacity: formData.seating_capacity || null,
-        veh_wheels: formData.veh_wheels || null,
-        reporting_month: reportingMonth,
-        booking_date: bookingDate,
-        agent_code: formData.agent_code || null,
-        code_type: formData.code_type || null,
-        incoming_grid_percent: formData.incoming_grid_percent || null,
-        agent_commission_given_percent: formData.agent_commission_given_percent || null,
-        extra_grid: formData.extra_grid || null,
-        commissionable_premium: formData.commissionable_premium || null,
-        payment_by: formData.payment_by || null,
-        payment_method: formData.payment_method || null,
-        payout_on: formData.payout_on || null,
-        agent_extra_percent: formData.agent_extra_percent || null,
-        payment_by_office: formData.payment_by_office || null,
-        insurer_code: formData.insurer_code || null,
-        broker_code: formData.broker_code || null,
-        admin_child_id: formData.admin_child_id || null,
-        // Additional fields that might be expected by the API
-        insurer_id: null,
-        broker_id: null,
-        child_id_request_id: null,
-        insurer_name: null,
-        broker_name: null,
-        insurer_broker_code: null,
-        cluster: null,
-        // Calculation fields
-        receivable_from_broker: formData.receivable_from_broker || null,
-        extra_amount_receivable_from_broker: formData.extra_amount_receivable_from_broker || null,
-        total_receivable_from_broker: formData.total_receivable_from_broker || null,
-        total_receivable_from_broker_with_gst: formData.total_receivable_from_broker_with_gst || null,
-        cut_pay_amount: formData.cut_pay_amount || null,
-        agent_po_amt: formData.agent_po_amt || null,
-        agent_extra_amount: formData.agent_extra_amount || null,
-        total_agent_po_amt: formData.total_agent_po_amt || null,
-        // Additional transaction fields
-        claimed_by: formData.claimed_by || null,
-        already_given_to_agent: formData.already_given_to_agent || null,
-        po_paid_to_agent: formData.po_paid_to_agent || null,
-        running_bal: formData.running_bal || null,
-        match_status: formData.match_status || null,
-        invoice_number: formData.invoice_number || null,
-        notes: formData.notes || null
-      };
-
-      // Log the request for debugging
-      console.log('Create request payload:', JSON.stringify(createRequest, null, 2));
-
-      // Create the cutpay transaction
-      let createdTransaction
+      // First try to open existing database to get current version
       try {
-        createdTransaction = await createCutPayMutation.mutateAsync(createRequest)
+        const existingDb = await openDB(dbName);
+        const currentVersion = existingDb.version;
+        existingDb.close();
         
-        if (!createdTransaction?.id) {
-          throw new Error('Failed to create transaction - no ID returned')
-        }
+        // Open with upgrade if needed
+        const db = await openDB(dbName, currentVersion, {
+          upgrade(db) {
+            if (!db.objectStoreNames.contains(storeName)) {
+              console.log(`🔧 Creating object store: ${storeName}`);
+              db.createObjectStore(storeName);
+            }
+          },
+        });
+        return db;
+      } catch {
+        // Database doesn't exist, create new one
+        const db = await openDB(dbName, 1, {
+          upgrade(db) {
+            if (!db.objectStoreNames.contains(storeName)) {
+              console.log(`🔧 Creating object store: ${storeName}`);
+              db.createObjectStore(storeName);
+            }
+          },
+        });
+        return db;
+      }
+    } catch (error) {
+      console.error(`❌ Failed to initialize ${dbName}:`, error);
+      return null;
+    }
+  };
 
-        toast.success('Transaction created successfully!')
-      } catch (apiError) {
-        console.error('API Error Details:', apiError)
-        throw apiError
+  /**
+   * Save a file to IndexedDB using idb package
+   * @param documentKey - Key to store the document under
+   * @param file - File to save
+   * @param dbName - Database name (default: 'CutPayDB')
+   * @param storeName - Store name (default: 'documents')
+   * @returns Success status
+   */
+  const saveFileToIndexedDB = async (documentKey: string, file: File, dbName = 'CutPayDB', storeName = 'documents') => {
+    try {
+      const db = await initializeDB(dbName, storeName);
+      if (!db) return false;
+
+      const tx = db.transaction(storeName, 'readwrite');
+      const store = tx.objectStore(storeName);
+      
+      await store.put({
+        name: file.name,
+        type: file.type,
+        content: file
+      }, documentKey);
+      
+      await tx.done;
+      db.close();
+      
+      console.log(`✅ Saved ${documentKey} to ${dbName}/${storeName}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Failed to save ${documentKey}:`, error);
+      return false;
+    }
+  };
+
+  /**
+   * Debug function to inspect all IndexedDB databases and their contents
+   * Uses the idb package for clean, promise-based interactions
+   */
+  const debugIndexedDB = async () => {
+    try {
+      console.log('🔍 Debugging IndexedDB contents with idb...');
+      
+      // List all available databases if supported
+      if ('databases' in indexedDB) {
+        try {
+          const databases = await indexedDB.databases();
+          console.log('📂 Available databases:', databases.map(db => `${db.name} (v${db.version})`));
+        } catch (error) {
+          console.log('⚠️ Could not list databases:', error);
+        }
       }
       
-      // Now upload documents
-      setIsUploadingDocuments(true)
-      setCreationStep('Uploading documents to database...')
+      const possibleDbs = [
+        { name: 'CutPayDB', storeName: 'documents' },
+        { name: 'DocumentsDB', storeName: 'documents' },
+        { name: 'cutpay-documents', storeName: 'files' },
+        { name: 'fileStorage', storeName: 'documents' }
+      ];
 
-      const cutpayId = createdTransaction.id
-      const documentsToUpload = []
-
-      // Get policy PDF from atom
-      if (policyPdfUrl) {
+      for (const { name: dbName, storeName } of possibleDbs) {
         try {
-          const response = await fetch(policyPdfUrl)
-          const blob = await response.blob()
-          const policyFile = new File([blob], 'policy.pdf', { type: 'application/pdf' })
-          documentsToUpload.push({ file: policyFile, type: 'policy_pdf' })
+          console.log(`🔍 Checking database: ${dbName}`);
+          // Open database without version to get current version
+          const db = await openDB(dbName);
+          
+          console.log(`📂 ${dbName} - object stores:`, Array.from(db.objectStoreNames));
+          
+          if (db.objectStoreNames.contains(storeName)) {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const keys = await store.getAllKeys();
+            
+            console.log(`🔑 ${dbName}/${storeName} keys:`, keys);
+            
+            if (keys.length > 0) {
+              const values = await store.getAll();
+              console.log(`📄 ${dbName}/${storeName} contents:`);
+              values.forEach((doc, index) => {
+                console.log(`  ${keys[index]}:`, {
+                  name: doc.name,
+                  type: doc.type,
+                  hasContent: !!doc.content,
+                  size: doc.content?.size || doc.size || 'unknown'
+                });
+              });
+            } else {
+              console.log(`📭 ${dbName}/${storeName} is empty`);
+            }
+          } else {
+            console.log(`⚠️ Store ${storeName} not found in ${dbName}`);
+          }
+          
+          db.close();
         } catch (error) {
-          console.error('Error converting policy PDF URL to file:', error)
+          console.log(`⚠️ Cannot access database ${dbName}:`, error instanceof Error ? error.message : 'Unknown error');
         }
       }
+    } catch (error) {
+      console.error('❌ Debug IndexedDB error:', error);
+    }
+  };
 
-      // Get additional documents from IndexedDB
+  // Call debug function when component mounts
+  useEffect(() => {
+    debugIndexedDB();
+  }, []);
+
+  // Helper function to update step status
+  const updateStepStatus = (stepId: string, status: 'pending' | 'active' | 'completed' | 'failed') => {
+    setSubmissionSteps(prev => prev.map(step => 
+      step.id === stepId ? { ...step, status } : step
+    ));
+  };
+
+  /**
+   * Check if a document exists in IndexedDB
+   * @param documentKey - Key of the document to check
+   * @returns True if document exists, false otherwise
+   */
+  const documentExistsInDB = async (documentKey: string): Promise<boolean> => {
+    const file = await getFileFromIndexedDB(documentKey);
+    return file !== null;
+  };
+
+  /**
+   * Get all available documents from IndexedDB
+   * @returns Object with document keys and their availability
+   */
+  const getAllAvailableDocuments = async (): Promise<Record<string, boolean>> => {
+    const documentKeys = ['policy_pdf', 'kyc_documents', 'rc_document', 'previous_policy'];
+    const availability: Record<string, boolean> = {};
+    
+    for (const key of documentKeys) {
+      availability[key] = await documentExistsInDB(key);
+    }
+    
+    return availability;
+  };
+
+  /**
+   * Validate documents before upload
+   * @returns Validation summary
+   */
+  const validateDocumentsForUpload = async (): Promise<{
+    hasDocuments: boolean;
+    available: string[];
+    missing: string[];
+    summary: Record<string, boolean>;
+  }> => {
+    console.log('🔍 Validating documents for upload...');
+    
+    const summary = await getAllAvailableDocuments();
+    const available = Object.entries(summary)
+      .filter(([, exists]) => exists)
+      .map(([key]) => key);
+    const missing = Object.entries(summary)
+      .filter(([, exists]) => !exists)
+      .map(([key]) => key);
+    
+    const hasDocuments = available.length > 0;
+    
+    console.log('📋 Document validation results:', {
+      hasDocuments,
+      available: available.length,
+      missing: missing.length,
+      details: summary
+    });
+    
+    return { hasDocuments, available, missing, summary };
+  };
+
+  /**
+   * Retrieve a file from IndexedDB using the idb package
+   * Tries multiple possible database/store combinations with auto-version handling
+   * @param documentKey - Key of the document to retrieve
+   * @returns File object or null if not found
+   */
+  const getFileFromIndexedDB = async (documentKey: string): Promise<File | null> => {
+    console.log(`🔍 Retrieving ${documentKey} from IndexedDB using idb...`);
+    
+    const possibleDbs = [
+      { name: 'CutPayDB', storeName: 'documents' },
+      { name: 'DocumentsDB', storeName: 'documents' },
+      { name: 'cutpay-documents', storeName: 'files' },
+      { name: 'fileStorage', storeName: 'documents' }
+    ];
+
+    for (const { name: dbName, storeName } of possibleDbs) {
       try {
-        const [kycDoc, rcDoc, previousDoc] = await Promise.all([
-          getFileFromIndexedDB('kyc_documents'),
-          getFileFromIndexedDB('rc_document'),
-          getFileFromIndexedDB('previous_policy')
-        ])
-
-        if (kycDoc) {
-          const file = arrayBufferToFile(kycDoc.content, kycDoc.name, kycDoc.type)
-          documentsToUpload.push({ file, type: 'kyc_documents' })
+        console.log(`🔍 Trying ${dbName}/${storeName}...`);
+        
+        // Open database without specifying version to get current version
+        const db = await openDB(dbName);
+        
+        if (!db.objectStoreNames.contains(storeName)) {
+          console.log(`⚠️ Store ${storeName} not found in ${dbName}`);
+          db.close();
+          continue;
         }
 
-        if (rcDoc) {
-          const file = arrayBufferToFile(rcDoc.content, rcDoc.name, rcDoc.type)
-          documentsToUpload.push({ file, type: 'rc_document' })
-        }
-
-        if (previousDoc) {
-          const file = arrayBufferToFile(previousDoc.content, previousDoc.name, previousDoc.type)
-          documentsToUpload.push({ file, type: 'previous_policy' })
+        const tx = db.transaction(storeName, 'readonly');
+        const store = tx.objectStore(storeName);
+        const result = await store.get(documentKey);
+        
+        db.close();
+        
+        if (result) {
+          // Handle different data structures
+          let fileData: { name: string; type: string; content: ArrayBuffer | File };
+          
+          if (result.content instanceof ArrayBuffer) {
+            // Old format: content is ArrayBuffer
+            fileData = {
+              name: result.name,
+              type: result.type,
+              content: result.content
+            };
+          } else if (result.content instanceof File) {
+            // New format: content is File
+            fileData = {
+              name: result.name,
+              type: result.type,
+              content: result.content
+            };
+          } else {
+            console.log(`⚠️ Unexpected content type for ${documentKey} in ${dbName}/${storeName}`);
+            continue;
+          }
+          
+          // Create File object
+          let file: File;
+          if (fileData.content instanceof File) {
+            file = fileData.content;
+          } else {
+            file = new File([fileData.content], fileData.name, {
+              type: fileData.type,
+              lastModified: Date.now()
+            });
+          }
+          
+          console.log(`✅ Found ${documentKey} in ${dbName}: ${file.name} (${file.size} bytes)`);
+          return file;
+        } else {
+          console.log(`⚠️ No content for ${documentKey} in ${dbName}/${storeName}`);
         }
       } catch (error) {
-        console.error('Error retrieving documents from IndexedDB:', error)
+        console.log(`⚠️ Cannot access ${dbName}:`, error instanceof Error ? error.message : 'Unknown error');
+      }
+    }
+
+    console.log(`❌ ${documentKey} not found in any database`);
+    return null;
+  };
+
+  /**
+   * Upload policy document to server
+   * @param cutpayId - The cutpay transaction ID
+   * @returns Success status
+   */
+  const uploadPolicyDocument = async (cutpayId: number): Promise<boolean> => {
+    console.log('� Starting policy document upload...');
+    updateStepStatus('upload-policy', 'active');
+    
+    try {
+      const policyFile = await getFileFromIndexedDB('policy_pdf');
+      
+      if (!policyFile) {
+        console.log('⚠️ No policy PDF found in IndexedDB, skipping...');
+        updateStepStatus('upload-policy', 'completed');
+        return true; // Mark as success since it's optional
       }
 
-      // Upload all documents
-      const uploadPromises = documentsToUpload.map(({ file, type }) =>
-        uploadDocumentMutation.mutateAsync({
+      console.log(`⬆️ Uploading policy PDF: ${policyFile.name} (${policyFile.size} bytes)`);
+      const uploadResult = await uploadDocumentMutation.mutateAsync({
+        cutpayId,
+        file: policyFile,
+        documentType: 'policy_pdf'
+      });
+      
+      console.log('✅ Policy PDF uploaded successfully:', uploadResult);
+      updateStepStatus('upload-policy', 'completed');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ Policy PDF upload failed:', error);
+      updateStepStatus('upload-policy', 'failed');
+      return false;
+    }
+  };
+
+  /**
+   * Upload additional documents to server
+   * @param cutpayId - The cutpay transaction ID
+   * @returns Object with upload results
+   */
+  const uploadAdditionalDocuments = async (cutpayId: number): Promise<{
+    uploaded: number;
+    failed: number;
+    success: boolean;
+  }> => {
+    console.log('� Starting additional documents upload...');
+    updateStepStatus('upload-additional', 'active');
+    
+    const documentTypes = [
+      { key: 'kyc_documents', type: 'kyc_documents', name: 'KYC Documents' },
+      { key: 'rc_document', type: 'rc_document', name: 'RC Document' },
+      { key: 'previous_policy', type: 'previous_policy', name: 'Previous Policy' }
+    ];
+    
+    let uploaded = 0;
+    let failed = 0;
+
+    for (const { key, type, name } of documentTypes) {
+      try {
+        console.log(`🔍 Processing ${name}...`);
+        const file = await getFileFromIndexedDB(key);
+        
+        if (!file) {
+          console.log(`⚠️ No ${name} found, skipping...`);
+          continue;
+        }
+
+        console.log(`⬆️ Uploading ${name}: ${file.name} (${file.size} bytes)`);
+        const uploadResult = await uploadDocumentMutation.mutateAsync({
           cutpayId,
           file,
           documentType: type
-        })
-      )
-
-      await Promise.all(uploadPromises)
-      
-      toast.success('Documents uploaded successfully!')
-      
-      // Clear loading states
-      setIsCreatingTransaction(false)
-      setIsUploadingDocuments(false)
-      setCreationStep('')
-
-      // Call onNext if provided
-      if (onNext) {
-        onNext()
+        });
+        
+        console.log(`✅ ${name} uploaded successfully:`, uploadResult);
+        uploaded++;
+        
+      } catch (error) {
+        console.error(`❌ ${name} upload failed:`, error);
+        failed++;
       }
+    }
+
+    const success = uploaded > 0 || failed === 0;
+    updateStepStatus('upload-additional', success ? 'completed' : 'failed');
+    
+    console.log(`📊 Additional documents summary: ${uploaded} uploaded, ${failed} failed`);
+    return { uploaded, failed, success };
+  };
+
+  /**
+   * Main document upload orchestrator with validation
+   * @param cutpayId - The cutpay transaction ID
+   */
+  const uploadDocuments = async (cutpayId: number) => {
+    console.log('🚀 Starting document upload process for cutpayId:', cutpayId);
+
+    try {
+      // Pre-upload validation
+      const validation = await validateDocumentsForUpload();
+      
+      if (!validation.hasDocuments) {
+        console.log('⚠️ No documents found in IndexedDB, completing upload as success');
+        updateStepStatus('upload-policy', 'completed');
+        updateStepStatus('upload-additional', 'completed');
+        return;
+      }
+
+      console.log(`📋 Found ${validation.available.length} documents to upload: ${validation.available.join(', ')}`);
+      
+      // Upload policy document
+      const policySuccess = await uploadPolicyDocument(cutpayId);
+      
+      // Upload additional documents
+      const additionalResults = await uploadAdditionalDocuments(cutpayId);
+      
+      // Determine overall success
+      const overallSuccess = policySuccess && additionalResults.success;
+      
+      if (overallSuccess) {
+        console.log('🎉 All document uploads completed successfully');
+      } else if (policySuccess || additionalResults.uploaded > 0) {
+        console.log('⚠️ Some documents uploaded successfully, but some failed');
+        throw new Error('Some documents failed to upload');
+      } else {
+        console.log('❌ All document uploads failed');
+        throw new Error('All document uploads failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Document upload process failed:', error);
+      throw error;
+    }
+  };
+
+  const onSubmit = async (data: CutPayFormSchemaType) => {
+    console.log('Form submission started', data);
+    setIsSubmitting(true);
+
+    // Reset all steps to pending
+    setSubmissionSteps(prev => prev.map(step => ({ ...step, status: 'pending' as const })));
+
+    try {
+      // Step 1: Create the cutpay transaction
+      updateStepStatus('create-transaction', 'active');
+      
+      // Construct the payload according to CreateCutpayTransactionCutpayPostRequest
+      const payload: CreateCutpayTransactionCutpayPostRequest = {
+        // Follow the exact interface order
+        policy_pdf_url: "hardcoded_policy_pdf_url",
+        additional_documents: {},
+        extracted_data: {
+          // Start with PDF extracted data
+          ...(pdfExtractionData?.extracted_data || {}),
+          // Override with form data (user inputs take priority)
+          ...(data.extracted_data || {}),
+          // Ensure customer_phone_number is handled properly
+          customer_phone_number: data.extracted_data?.customer_phone_number || 
+                                 pdfExtractionData?.extracted_data?.customer_phone_number || 
+                                 null,
+        },
+        admin_input: data.admin_input ? {
+          reporting_month: data.admin_input.reporting_month || null,
+          booking_date: data.admin_input.booking_date || null,
+          agent_code: data.admin_input.agent_code || null,
+          code_type: data.admin_input.code_type || null,
+          incoming_grid_percent: data.admin_input.incoming_grid_percent || null,
+          agent_commission_given_percent: data.admin_input.agent_commission_given_percent || null,
+          extra_grid: data.admin_input.extra_grid || null,
+          commissionable_premium: data.admin_input.commissionable_premium || null,
+          payment_by: data.admin_input.payment_by || null,
+          payment_method: data.admin_input.payment_method || null,
+          payout_on: data.admin_input.payout_on || null,
+          agent_extra_percent: data.admin_input.agent_extra_percent || null,
+          payment_by_office: data.admin_input.payment_by_office?.toString() || null,
+          insurer_code: data.admin_input.insurer_code || null,
+          broker_code: data.admin_input.broker_code || null,
+          admin_child_id: data.admin_input.admin_child_id || null,
+        } : null,
+        calculations: calculationResult || data.calculations || null,
+        claimed_by: data.claimed_by || null,
+        running_bal: data.running_bal || 0,
+        cutpay_received: data.cutpay_received_status === 'No' ? 0 : (Number(data.cutpay_received) || 0),
+        notes: data.notes || null,
+      };
+
+      console.log('Final payload:', payload);
+
+      const createdTransaction = await createCutPayMutation.mutateAsync(payload);
+      updateStepStatus('create-transaction', 'completed');
+      
+      // Store the created transaction
+      setCreatedTransaction(createdTransaction);
+
+      // Step 2 & 3: Upload documents
+      try {
+        await uploadDocuments(createdTransaction.id);
+        toast.success("🎉 Transaction created and documents uploaded successfully!");
+      } catch (uploadError) {
+        console.error('Document upload error:', uploadError);
+        const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown upload error';
+        if (errorMessage.includes('Some documents failed')) {
+          toast.warning("⚠️ Transaction created successfully, but some documents failed to upload.");
+        } else {
+          toast.warning("⚠️ Transaction created successfully, but documents could not be uploaded.");
+        }
+      }
+      
+      // Step 4: Cleanup IndexedDB and redirect
+      updateStepStatus('cleanup-redirect', 'active');
+      try {
+        console.log('🧹 Cleaning up IndexedDB documents...');
+        await clearAllFromIndexedDB();
+        console.log('✅ IndexedDB cleanup completed');
+        updateStepStatus('cleanup-redirect', 'completed');
+        
+        // Small delay to show completion
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Redirect to cutpay list page
+        console.log('🔄 Redirecting to cutpay list...');
+        router.push('/admin/cutpay');
+      } catch (cleanupError) {
+        console.error('❌ Cleanup error:', cleanupError);
+        updateStepStatus('cleanup-redirect', 'failed');
+        // Still redirect even if cleanup fails
+        router.push('/admin/cutpay');
+      }
+      
+      // Reset form and states
+      reset();
+      setSubmissionSteps(prev => prev.map(step => ({ ...step, status: 'pending' as const })));
 
     } catch (error) {
-      console.error('Error creating transaction:', error)
-      
-      // Enhanced error logging for debugging
-      if (error instanceof Error) {
-        console.error('Error details:', error.message)
-        if ('response' in error) {
-          const response = (error as { response?: { data?: unknown; status?: number } }).response
-          console.error('API Response Status:', response?.status)
-          console.error('API Response Data:', JSON.stringify(response?.data, null, 2))
-        }
-      } else {
-        console.error('Error (not Error instance):', JSON.stringify(error, null, 2))
-      }
-      
-      const errorMessage = error instanceof Error 
-        ? error.message
-        : 'Failed to create transaction';
-        
-      toast.error(`Transaction creation failed: ${errorMessage}`)
-      
-      // Clear loading states
-      setIsCreatingTransaction(false)
-      setIsUploadingDocuments(false)
-      setCreationStep('')
+      updateStepStatus('create-transaction', 'failed');
+      console.error('Submission error:', error);
+      toast.error(`Failed to create transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSubmitting(false);
     }
-  }
+  };
 
-  const getDocumentUrl = (docType: string) => {
-    switch (docType) {
-      case 'policy':
-        return policyPdfUrl
-      case 'kyc':
-        return additionalDocUrls.kyc_documents
-      case 'rc':
-        return additionalDocUrls.rc_document
-      case 'previous':
-        return additionalDocUrls.previous_policy
-      default:
-        return null
-    }
-  }
+  const renderField = (field: FormFieldConfig) => {
+    const { key, label, type, options: configOptions, disabled } = field;
 
-  const formSections = [
-    {
-      title: 'Policy Information',
-      icon: FileText,
-      color: 'border-blue-500',
-      bgColor: 'bg-blue-100',
-      textColor: 'text-blue-600',
-      fields: [
-        { key: 'policy_number', label: 'Policy Number', type: 'text' },
-        { key: 'formatted_policy_number', label: 'Formatted Policy Number', type: 'text' },
-        { key: 'major_categorisation', label: 'Major Categorisation', type: 'text' },
-        { key: 'product_insurer_report', label: 'Product Insurer Report', type: 'text' },
-        { key: 'product_type', label: 'Product Type', type: 'text' },
-        { key: 'plan_type', label: 'Plan Type', type: 'text' }
-      ]
-    },
-    {
-      title: 'Customer Information',
-      icon: User,
-      color: 'border-green-500',
-      bgColor: 'bg-green-100',
-      textColor: 'text-green-600',
-      fields: [
-        { key: 'customer_name', label: 'Customer Name', type: 'text' },
-        { key: 'business_type', label: 'Business Type', type: 'text' }
-      ]
-    },
-    {
-      title: 'Premium Details',
-      icon: CreditCard,
-      color: 'border-purple-500',
-      bgColor: 'bg-purple-100',
-      textColor: 'text-purple-600',
-      fields: [
-        { key: 'gross_premium', label: 'Gross Premium', type: 'number' },
-        { key: 'net_premium', label: 'Net Premium', type: 'number' },
-        { key: 'od_premium', label: 'OD Premium', type: 'number' },
-        { key: 'tp_premium', label: 'TP Premium', type: 'number' },
-        { key: 'gst_amount', label: 'GST Amount', type: 'number' },
-        { key: 'commissionable_premium', label: 'Commissionable Premium', type: 'number' },
-        { key: 'discount_percent', label: 'Discount Percent', type: 'number' }
-      ]
-    },
-    {
-      title: 'Vehicle Information',
-      icon: Car,
-      color: 'border-orange-500',
-      bgColor: 'bg-orange-100',
-      textColor: 'text-orange-600',
-      fields: [
-        { key: 'registration_no', label: 'Registration Number', type: 'text' },
-        { key: 'make_model', label: 'Make & Model', type: 'text' },
-        { key: 'model', label: 'Model', type: 'text' },
-        { key: 'vehicle_variant', label: 'Vehicle Variant', type: 'text' },
-        { key: 'gvw', label: 'GVW', type: 'number' },
-        { key: 'rto', label: 'RTO', type: 'text' },
-        { key: 'state', label: 'State', type: 'text' },
-        { key: 'fuel_type', label: 'Fuel Type', type: 'text' },
-        { key: 'cc', label: 'CC', type: 'number' },
-        { key: 'age_year', label: 'Age/Year', type: 'number' },
-        { key: 'ncb', label: 'NCB', type: 'text' },
-        { key: 'seating_capacity', label: 'Seating Capacity', type: 'number' },
-        { key: 'veh_wheels', label: 'Vehicle Wheels', type: 'number' }
-      ]
-    },
-    {
-      title: 'Admin Input',
-      icon: Building,
-      color: 'border-indigo-500',
-      bgColor: 'bg-indigo-100',
-      textColor: 'text-indigo-600',
-      fields: [
-        { key: 'reporting_month', label: 'Reporting Month', type: 'month' },
-        { key: 'booking_date', label: 'Booking Date', type: 'date' },
-        { key: 'agent_code', label: 'Agent Code', type: 'text' },
-        { key: 'code_type', label: 'Code Type', type: 'select', options: ['DIRECT', 'BROKER'] },
-        { key: 'incoming_grid_percent', label: 'Incoming Grid %', type: 'number' },
-        { key: 'agent_commission_given_percent', label: 'Agent Commission Given %', type: 'number' },
-        { key: 'extra_grid', label: 'Extra Grid', type: 'number' },
-        { key: 'payment_by', label: 'Payment By', type: 'select', options: ['agent', 'insurezeal'] },
-        { key: 'payment_method', label: 'Payment Method', type: 'select', options: ['CASH', 'CHEQUE', 'ONLINE', 'UPI', 'NEFT', 'RTGS'], conditional: { field: 'payment_by', value: 'insurezeal' } },
-        { key: 'payout_on', label: 'Payout On', type: 'select', options: ['od_premium', 'net_premium', 'od+tp'] },
-        { key: 'agent_extra_percent', label: 'Agent Extra %', type: 'number' },
-        { key: 'payment_by_office', label: 'Payment By Office', type: 'text' },
-        { key: 'broker_code', label: 'Broker Code', type: 'broker_select', conditional: { field: 'code_type', value: 'BROKER' } },
-        { key: 'insurer_code', label: 'Insurer Code', type: 'insurer_select', conditionalOr: [{ field: 'code_type', value: 'DIRECT' }, { field: 'code_type', value: 'BROKER' }] },
-        { key: 'admin_child_id', label: 'Admin Child ID', type: 'text' }
-      ]
-    },
-    {
-      title: 'Calculations',
-      icon: Calculator,
-      color: 'border-red-500',
-      bgColor: 'bg-red-100',
-      textColor: 'text-red-600',
-      fields: [
-        { key: 'receivable_from_broker', label: 'Receivable from Broker', type: 'number' },
-        { key: 'extra_amount_receivable_from_broker', label: 'Extra Amount Receivable from Broker', type: 'number' },
-        { key: 'total_receivable_from_broker', label: 'Total Receivable from Broker', type: 'number' },
-        { key: 'total_receivable_from_broker_with_gst', label: 'Total Receivable from Broker with GST', type: 'number' },
-        { key: 'cut_pay_amount', label: 'Cut Pay Amount', type: 'number' },
-        { key: 'agent_po_amt', label: 'Agent PO Amount', type: 'number' },
-        { key: 'agent_extra_amount', label: 'Agent Extra Amount', type: 'number' },
-        { key: 'total_agent_po_amt', label: 'Total Agent PO Amount', type: 'number' },
-        { key: 'incoming_po_amt', label: 'Incoming PO Amount', type: 'number' },
-        { key: 'claimed_by', label: 'Claimed By', type: 'text' },
-        { key: 'already_given_to_agent', label: 'Already Given to Agent', type: 'number' },
-        { key: 'po_paid_to_agent', label: 'PO Paid to Agent', type: 'number' },
-        { key: 'running_bal', label: 'Running Balance', type: 'number' },
-        { key: 'match_status', label: 'Match Status', type: 'select', options: ['MATCHED', 'UNMATCHED', 'PARTIAL_MATCH', 'PENDING'] },
-        { key: 'invoice_number', label: 'Invoice Number', type: 'text' }
-      ]
+    if (type === "date") {
+      const isReportingMonth = key === "admin_input.reporting_month";
+      
+      return (
+        <div key={key} className="space-y-1">
+          <Label htmlFor={key}>{label}</Label>
+          <Controller
+            name={key}
+            control={control}
+            render={({ field: controllerField, fieldState }) => (
+              <>
+                {isReportingMonth ? (
+                  <MonthYearPicker
+                    value={controllerField.value as string}
+                    onChange={controllerField.onChange}
+                    placeholder="Pick a month"
+                    disabled={disabled}
+                  />
+                ) : (
+                  <DatePicker
+                    value={controllerField.value as string}
+                    onChange={controllerField.onChange}
+                    placeholder="Pick a date"
+                    disabled={disabled}
+                  />
+                )}
+                {fieldState.error && (
+                  <p className="text-red-500 text-xs">
+                    {fieldState.error.message}
+                  </p>
+                )}
+              </>
+            )}
+          />
+        </div>
+      );
     }
-  ]
+
+    if (type === "select") {
+      let options = configOptions || [];
+      if (key === "admin_input.insurer_code") options = insurerOptions;
+      if (key === "admin_input.broker_code") options = brokerOptions;
+      if (key === "admin_input.agent_code") options = agentOptions;
+      if (key === "admin_input.admin_child_id") options = adminChildIdOptions;
+      if (key === "admin_input.code_type") options = codeTypeOptions;
+      if (key === "admin_input.payment_by") options = paymentByOptions;
+      if (key === "admin_input.payment_method") options = paymentMethodOptions;
+      if (key === "admin_input.payout_on") options = payoutOnOptions;
+      if (key === "claimed_by") options = agentOptions;
+      if (key === "cutpay_received") options = cutpayReceivedOptions;
+      if (key === "extracted_data.major_categorisation")
+        options = majorCategorisationOptions;
+      if (key === "extracted_data.plan_type") options = planTypeOptions;
+      if (key === "extracted_data.fuel_type") options = fuelTypeOptions;
+      if (key === "extracted_data.business_type") options = businessTypeOptions;
+
+      const isLoading =
+        (key === "admin_input.insurer_code" && insurersLoading) ||
+        (key === "admin_input.broker_code" && brokersLoading) ||
+        (key === "admin_input.agent_code" && agentsLoading) ||
+        (key === "admin_input.admin_child_id" && adminChildIdsLoading);
+
+      return (
+        <div key={key} className="space-y-1">
+          <Label htmlFor={key}>{label}</Label>
+          <Controller
+            name={key}
+            control={control}
+            render={({ field: controllerField, fieldState }) => (
+              <>
+                <Select
+                  onValueChange={controllerField.onChange}
+                  defaultValue={controllerField.value as string}
+                  disabled={disabled}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={isLoading ? "Loading..." : `Select ${label}`}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {options.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldState.error && (
+                  <p className="text-red-500 text-xs">
+                    {fieldState.error.message}
+                  </p>
+                )}
+              </>
+            )}
+          />
+        </div>
+      );
+    }
+
+    if (type === "textarea") {
+      return (
+        <div key={key} className="space-y-1">
+          <Label htmlFor={key}>{label}</Label>
+          <Controller
+            name={key}
+            control={control}
+            render={({ field: controllerField, fieldState }) => (
+              <>
+                <Textarea
+                  id={key}
+                  {...controllerField}
+                  value={String(controllerField.value ?? "")}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    controllerField.onChange(value === '' ? null : value);
+                  }}
+                  disabled={disabled}
+                  rows={3}
+                  placeholder={`Enter ${label.toLowerCase()}...`}
+                />
+                {fieldState.error && (
+                  <p className="text-sm text-red-500">
+                    {fieldState.error.message}
+                  </p>
+                )}
+              </>
+            )}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div key={key} className="space-y-1">
+        <Label htmlFor={key}>{label}</Label>
+        <Controller
+          name={key}
+          control={control}
+          render={({ field: controllerField, fieldState }) => (
+            <>
+              <Input
+                id={key}
+                type={type === 'number' ? 'number' : 'text'}
+                {...controllerField}
+                value={String(controllerField.value ?? "")}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (type === 'number') {
+                    // Convert to number or null for number fields
+                    controllerField.onChange(value === '' ? null : Number(value));
+                  } else {
+                    // Keep as string for text fields
+                    controllerField.onChange(value === '' ? null : value);
+                  }
+                }}
+                disabled={disabled}
+              />
+              {fieldState.error && (
+                <p className="text-sm text-red-500">
+                  {fieldState.error.message}
+                </p>
+              )}
+            </>
+          )}
+        />
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Loading Dialog */}
-      <Dialog open={isCreatingTransaction || isUploadingDocuments} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <LoadingSpinner size="sm" />
-              {isCreatingTransaction ? 'Creating Transaction' : 'Uploading Documents'}
-            </DialogTitle>
-            <DialogDescription>
-              {creationStep}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center justify-center py-4">
-            <div className="flex flex-col items-center space-y-3">
-              {isCreatingTransaction && (
-                <div className="flex items-center gap-2">
-                  <Database className="h-5 w-5 text-blue-600 animate-pulse" />
-                  <span className="text-sm text-gray-600">Creating new cutpay transaction...</span>
-                </div>
+    <form onSubmit={handleSubmit(
+      (data) => {
+        console.log('Form submitted with data:', data);
+        onSubmit(data);
+      },
+      (errors) => {
+        console.log('Form validation errors:', errors);
+        toast.error('Please fix the form errors before submitting');
+      }
+    )} className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Admin Input</h1>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            onClick={async () => {
+              await debugIndexedDB();
+              
+              // Run document validation
+              const validation = await validateDocumentsForUpload();
+              console.log('� Document validation complete:', validation);
+              
+              console.log('�🛠️ Development helpers available:');
+              console.log('- saveFileToIndexedDB(key, file) - Save file to IndexedDB');
+              console.log('- getFileFromIndexedDB(key) - Retrieve file from IndexedDB');
+              console.log('- validateDocumentsForUpload() - Check available documents');
+              console.log('- getAllAvailableDocuments() - Get document availability map');
+              console.log('- documentExistsInDB(key) - Check if specific document exists');
+              
+              // Expose functions to window for testing (development only)
+              const w = window as typeof window & Record<string, unknown>;
+              w.saveFileToIndexedDB = saveFileToIndexedDB;
+              w.getFileFromIndexedDB = getFileFromIndexedDB;
+              w.validateDocumentsForUpload = validateDocumentsForUpload;
+              w.getAllAvailableDocuments = getAllAvailableDocuments;
+              w.documentExistsInDB = documentExistsInDB;
+            }}
+            variant="outline"
+            size="sm"
+          >
+            🔍 Debug DB
+          </Button>
+          <Button
+            type="button"
+            onClick={() => setIsViewerOpen(!isViewerOpen)}
+            variant="outline"
+          >
+            {isViewerOpen ? "Hide" : "Show"} Document
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Extracted Data</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {formFields.filter((f) => f.section === "extracted").map(renderField)}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Admin Input</CardTitle>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsViewerOpen(!isViewerOpen)}
+          >
+            {isViewerOpen ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
+            <span className="sr-only">Toggle Document Viewer</span>
+          </Button>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {formFields.filter((f) => f.section === "admin").map(renderField)}
+          
+          {/* Custom Cutpay Received Fields */}
+          <div className="space-y-1">
+            <Label htmlFor="cutpay_received_status">Cutpay Received</Label>
+            <Controller
+              name="cutpay_received_status"
+              control={control}
+              render={({ field: controllerField, fieldState }) => (
+                <>
+                  <Select
+                    onValueChange={controllerField.onChange}
+                    defaultValue={controllerField.value as string}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="No">No</SelectItem>
+                      <SelectItem value="Yes">Yes</SelectItem>
+                      <SelectItem value="Partial">Partial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-xs">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </>
               )}
-              {isUploadingDocuments && (
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-green-600 animate-pulse" />
-                  <span className="text-sm text-gray-600">Uploading documents to database...</span>
-                </div>
-              )}
-            </div>
+            />
           </div>
-        </DialogContent>
-      </Dialog>
-      {/* Header with toggle */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Admin Input & Data Review</h2>
-          <p className="text-gray-600 mt-1">Review extracted data and fill in additional details</p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowDocumentViewer(!showDocumentViewer)}
-          className="flex items-center gap-2"
-        >
-          {showDocumentViewer ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          {showDocumentViewer ? 'Hide Documents' : 'Show Documents'}
-        </Button>
-      </div>
 
-      <div className={`grid gap-6 ${showDocumentViewer ? 'lg:grid-cols-2' : 'lg:grid-cols-1'}`}>
-        {/* Form Section */}
-        <div 
-          className={`space-y-6 ${showDocumentViewer ? 'max-h-[112vh] overflow-y-auto pr-2' : ''}`}
-          style={showDocumentViewer ? {
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#d1d5db #f3f4f6'
-          } : {}}
-        >
-          {formSections.map((section, sectionIndex) => (
-            <motion.div
-              key={section.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: sectionIndex * 0.1 }}
-            >
-              <Card className={`border-l-4 ${section.color}`}>
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2">
-                    <div className={`p-2 rounded-lg ${section.bgColor}`}>
-                      <section.icon className={`h-5 w-5 ${section.textColor}`} />
-                    </div>
-                    {section.title}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {section.fields.map((field) => {
-                      // Check if field should be conditionally rendered
-                      if (field.conditional && formData[field.conditional.field as keyof FormState] !== field.conditional.value) {
-                        return null
-                      }
-                      
-                      // Check conditionalOr (show field if ANY of the conditions match)
-                      if (field.conditionalOr) {
-                        const shouldShow = field.conditionalOr.some(condition => 
-                          formData[condition.field as keyof FormState] === condition.value
-                        )
-                        if (!shouldShow) {
-                          return null
-                        }
-                      }
-                      
-                      const renderField = (field: FormField) => {
-                        if (field.type === 'select') {
-                          if (field.key === 'payout_on') {
-                            return (
-                              <div>
-                                <Select onValueChange={(value) => handleInputChange('payout_on', value)} value={formData.payout_on || ''}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select Payout On" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="od_premium">OD Premium</SelectItem>
-                                    <SelectItem value="net_premium">Net Premium</SelectItem>
-                                    <SelectItem value="od+tp">OD+TP</SelectItem>
-                                  </SelectContent>
-                                </Select>
-    
-                                {formData.payout_on === 'od+tp' && (
-                                  <div className="grid grid-cols-2 gap-4 mt-4">
-                                    {formData.payment_by === 'agent' ? (
-                                      <>
-                                        <div>
-                                          <Label htmlFor="od_payout_percent">OD Payout %</Label>
-                                          <Input id="od_payout_percent" type="number" onChange={(e) => setOdPayoutPercent(Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                          <Label htmlFor="tp_payout_percent">TP Payout %</Label>
-                                          <Input id="tp_payout_percent" type="number" onChange={(e) => setTpPayoutPercent(Number(e.target.value))} />
-                                        </div>
-                                      </>
-                                    ) : formData.payment_by === 'insurezeal' ? (
-                                      <>
-                                        <div>
-                                          <Label htmlFor="od_incoming_grid_percent">OD Incoming Grid %</Label>
-                                          <Input id="od_incoming_grid_percent" type="number" onChange={(e) => setOdIncomingGridPercent(Number(e.target.value))} />
-                                        </div>
-                                        <div>
-                                          <Label htmlFor="tp_incoming_grid_percent">TP Incoming Grid %</Label>
-                                          <Input id="tp_incoming_grid_percent" type="number" onChange={(e) => setTpIncomingGridPercent(Number(e.target.value))} />
-                                        </div>
-                                      </>
-                                    ) : null}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <Select
-                                value={formData[field.key as keyof FormState] as string || ''}
-                                onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder={`Select ${field.label}`} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {field.options?.map((option: string | FormFieldOption) => {
-                                    const value = typeof option === 'string' ? option : option.value;
-                                    const label = typeof option === 'string' ? option : option.label;
-                                    return (
-                                      <SelectItem key={value} value={value}>
-                                        {label}
-                                      </SelectItem>
-                                    );
-                                  })}
-                                </SelectContent>
-                              </Select>
-                            );
-                          }
-                        } else if (field.type === 'agent_select') {
-                          return (
-                            <Select
-                              value={formData[field.key as keyof FormState] as string || ''}
-                              onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Agent" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {agentsData?.agents?.map((agent) => (
-                                  <SelectItem key={agent.id} value={agent.agent_code || ''}>
-                                    {agent.agent_code} - {`${agent.first_name || ''} ${agent.last_name || ''}`.trim() || agent.email}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          );
-                        } else if (field.type === 'insurer_select') {
-                          return (
-                            <Select
-                              value={formData[field.key as keyof FormState] as string || ''}
-                              onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Insurer" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {insurersData?.map((insurer) => (
-                                  <SelectItem key={insurer.insurer_code} value={insurer.insurer_code}>
-                                    {insurer.insurer_code} - {insurer.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          );
-                        } else if (field.type === 'broker_select') {
-                          return (
-                            <Select
-                              value={formData[field.key as keyof FormState] as string || ''}
-                              onValueChange={(value) => handleInputChange(field.key as keyof FormState, value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select Broker" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {brokersData?.map((broker) => (
-                                  <SelectItem key={broker.broker_code} value={broker.broker_code}>
-                                    {broker.broker_code} - {broker.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          );
-                        } else if (field.key === 'incoming_po_amt') {
-                          return (
-                            <Input
-                              id="incoming_po_amt"
-                              type="number"
-                              value={incomingPoAmt ?? ''}
-                              readOnly
-                              className="w-full"
-                              title="Incoming PO Amount is auto-calculated based on Payout On selection when Payment By is Insurezeal"
-                            />
-                          );
-                        } else {
-                          const calculatedFieldsConfig: { [key: string]: string } = {
-                            receivable_from_broker: 'Auto-calculated: Gross Premium × (Incoming Grid % / 100)',
-                            extra_amount_receivable_from_broker: 'Auto-calculated: Commissionable Premium × (Extra Grid / 100)',
-                            total_receivable_from_broker: 'Auto-calculated: Receivable from Broker + Extra Amount Receivable',
-                            total_receivable_from_broker_with_gst: 'Auto-calculated: Total Receivable from Broker × 1.18',
-                            cut_pay_amount: formData.payment_by === 'agent'
-                              ? 'Automatically set to 0 when Payment By is Agent'
-                              : 'Auto-calculated: Gross Premium - (Net Premium * Agent Payout %)',
-                            agent_po_amt: 'Auto-calculated based on Payout On selection',
-                            agent_extra_amount: 'Auto-calculated: Commissionable Premium × (Agent Extra % / 100)',
-                            total_agent_po_amt: 'Auto-calculated: Agent PO Amount + Agent Extra Amount',
-                            incoming_po_amt: 'Auto-calculated based on Payout On selection when Payment By is Insurezeal'
-                          };
-                          const isCalculated = Object.keys(calculatedFieldsConfig).includes(field.key);
-
-                          const rawValue = formData[field.key as keyof FormState];
-                          const value = typeof rawValue === 'object' && rawValue !== null ? '' : (rawValue ?? '');
-
-                          return (
-                            <Input
-                              id={field.key}
-                              type={field.type}
-                              value={value}
-                              onChange={(e) => {
-                                let value: string | number = e.target.value;
-                                
-                                // Handle different input types
-                                if (field.type === 'number') {
-                                  value = parseFloat(value) || 0;
-                                } else if (field.type === 'date') {
-                                  // Ensure date is in YYYY-MM-DD format
-                                  value = value;
-                                } else if (field.type === 'month') {
-                                  // Ensure month is in YYYY-MM format  
-                                  value = value;
-                                }
-                                
-                                handleInputChange(field.key as keyof FormState, value);
-                              }}
-                              placeholder={`Enter ${field.label}`}
-                              className="w-full"
-                              disabled={isCalculated}
-                              title={isCalculated ? calculatedFieldsConfig[field.key] : ''}
-                            />
-                          );
-                        }
-                      };
-
-                      return (
-                        <div key={field.key} className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor={field.key} className="text-sm font-medium">
-                              {field.label}
-                            </Label>
-                            {extractedData?.extracted_data?.[field.key as keyof typeof extractedData.extracted_data] && (
-                              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                                Auto-filled
-                              </Badge>
-                            )}
-                            {field.key === 'cut_pay_amount' && formData.payment_by === 'agent' && (
-                              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
-                                Auto-zero
-                              </Badge>
-                            )}
-                            {[
-                              'receivable_from_broker',
-                              'extra_amount_receivable_from_broker',
-                              'total_receivable_from_broker',
-                              'total_receivable_from_broker_with_gst',
-                              'agent_extra_amount',
-                              'total_agent_po_amt',
-                              'agent_po_amt',
-                              'cut_pay_amount',
-                              'incoming_po_amt'
-                            ].includes(field.key) && !(field.key === 'cut_pay_amount' && formData.payment_by === 'agent') && (
-                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
-                                Auto-calculated
-                              </Badge>
-                            )}
-                          </div>
-                          {renderField(field)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-
-          {/* Notes Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Info className="h-5 w-5" />
-                Additional Notes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Input id="cut_pay_amount" type="number" value={formData.cut_pay_amount || ''} readOnly />
-              <Textarea
-                value={formData.notes as string || ''}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                placeholder="Enter any additional notes or comments..."
-                rows={4}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Calculation Summary */}
-          {(formData.payment_by && formData.payout_on) && (
-            <Card className="border-l-4 border-yellow-500">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-yellow-100">
-                    <Calculator className="h-5 w-5 text-yellow-600" />
-                  </div>
-                  Calculation Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="font-medium text-gray-700">
-                    Payment Mode: <span className="text-blue-600">{formData.payment_by}</span>
-                  </div>
-                  <div className="font-medium text-gray-700">
-                    Payout Basis: <span className="text-blue-600">{formData.payout_on}</span>
-                  </div>
-                  {cutpayCalculation.isPending && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-gray-600 text-sm">Calculating amounts...</div>
-                    </div>
-                  )}
-                  {cutpayCalculation.isError && (
-                    <div className="bg-red-50 p-3 rounded-lg">
-                      <div className="text-red-800 font-medium">Calculation Error:</div>
-                      <div className="text-red-700 text-xs mt-1">
-                        {cutpayCalculation.error?.message || 'Failed to calculate amounts'}
-                      </div>
-                    </div>
-                  )}
-                  {calculationResult && (
-                    <div className="bg-green-50 p-3 rounded-lg">
-                      <div className="text-green-800 font-medium">API Calculation Complete:</div>
-                      <div className="text-green-700 text-xs mt-1 space-y-1">
-                        <div>• Agent PO Amount: ₹{calculationResult.agent_po_amt?.toLocaleString()}</div>
-                        <div>• Cut Pay Amount: ₹{calculationResult.cut_pay_amount?.toLocaleString()}</div>
-                        <div>• Total Agent PO Amount: ₹{calculationResult.total_agent_po_amt?.toLocaleString()}</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Document Viewer Section */}
-        <AnimatePresence>
-          {showDocumentViewer && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              className="space-y-4"
-            >
-              <Card className="sticky top-4">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Document Viewer
-                  </CardTitle>
-                  
-                  {/* Document Selection Dropdown */}
-                  <div className="mt-4">
-                    <Label htmlFor="document-select" className="text-sm font-medium mb-2 block">
-                      Select Document to View
-                    </Label>
-                    <Select 
-                      value={activeDocument} 
-                      onValueChange={(value) => setActiveDocument(value as 'policy' | 'kyc' | 'rc' | 'previous')}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select a document" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableDocuments.map((doc) => (
-                          <SelectItem 
-                            key={doc.key} 
-                            value={doc.key}
-                            disabled={!doc.available}
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              <span>{doc.label}</span>
-                              {!doc.available && (
-                                <Badge variant="secondary" className="ml-2 text-xs">
-                                  N/A
-                                </Badge>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[600px] border rounded-lg overflow-hidden bg-gray-50">
-                    {getDocumentUrl(activeDocument) ? (
-                      <iframe
-                        src={getDocumentUrl(activeDocument)!}
-                        className="w-full h-full"
-                        title={`${activeDocument} document`}
-                      />
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-gray-500">
-                        <div className="text-center">
-                          <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                          <p>No document available</p>
-                          <p className="text-sm mt-1">
-                            {availableDocuments.find(doc => doc.key === activeDocument)?.available === false 
-                              ? 'This document was not uploaded in previous steps' 
-                              : 'Document loading...'}
-                          </p>
-                        </div>
-                      </div>
+          {/* Conditional Amount Field */}
+          {(watch('cutpay_received_status') === 'Yes' || watch('cutpay_received_status') === 'Partial') && (
+            <div className="space-y-1">
+              <Label htmlFor="cutpay_received">Amount</Label>
+              <Controller
+                name="cutpay_received"
+                control={control}
+                render={({ field: controllerField, fieldState }) => (
+                  <>
+                    <Input
+                      id="cutpay_received"
+                      type="number"
+                      step="0.01"
+                      {...controllerField}
+                      value={String(controllerField.value ?? "")}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        controllerField.onChange(value === '' ? null : parseFloat(value));
+                      }}
+                      placeholder="Enter amount"
+                    />
+                    {fieldState.error && (
+                      <p className="text-red-500 text-xs">
+                        {fieldState.error.message}
+                      </p>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
+                  </>
+                )}
+              />
+            </div>
           )}
-        </AnimatePresence>
+        </CardContent>
+      </Card>
+
+      <Calculations control={control} setValue={setValue} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Calculations</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {formFields
+            .filter((f) => f.section === "calculation")
+            .map(renderField)}
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between mt-6">
+        <Button type="button" onClick={onPrev} variant="outline" disabled={isSubmitting}>
+          Previous
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={isSubmitting} 
+          className="min-w-[120px]"
+        >
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSubmitting ? "Processing..." : "Submit & Next"}
+        </Button>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between pt-6 border-t">
-        <Button
-          variant="outline"
-          onClick={onPrev}
-          disabled={!onPrev}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Previous Step
-        </Button>
-        
-        <div className="flex gap-3">
-          <Button variant="outline" className="flex items-center gap-2">
-            <Save className="h-4 w-4" />
-            Save Draft
-          </Button>
-          <Button onClick={handleCreateTransaction} className="flex items-center gap-2">
-            Create Transaction
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
+      {/* Loading Dialog */}
+      <LoadingDialog
+        open={isSubmitting}
+        title="Creating Cutpay Transaction"
+        steps={submissionSteps}
+      />
+    </form>
+  );
+};
 
 export default AdminInputForm;

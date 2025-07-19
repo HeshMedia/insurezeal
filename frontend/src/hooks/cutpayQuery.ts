@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tansta
 import { cutpayApi } from '@/lib/api/cutpay'
 import {
   CutPayTransaction,
-  CreateCutPayRequest,
+  CreateCutpayTransactionCutpayPostRequest,
   UpdateCutPayRequest,
   CutPayListParams,
   CutPayCalculationRequest
@@ -41,7 +41,7 @@ export const useCreateCutPay = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: CreateCutPayRequest) => cutpayApi.create(data),
+    mutationFn: (data: CreateCutpayTransactionCutpayPostRequest) => cutpayApi.create(data),
     onSuccess: (data) => {
       // Invalidate and refetch cutpay lists
       queryClient.invalidateQueries({ queryKey: cutpayKeys.lists() })

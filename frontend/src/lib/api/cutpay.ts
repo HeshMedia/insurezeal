@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios'
 import Cookies from 'js-cookie'
 import {
   CutPayTransaction,
-  CreateCutPayRequest,
+  CreateCutpayTransactionCutpayPostRequest,
   UpdateCutPayRequest,
   CutPayListParams,
   CutPayDocumentUploadResponse,
@@ -63,7 +63,7 @@ apiClient.interceptors.response.use(
 
 export const cutpayApi = {
   // Create cutpay transaction
-  create: async (data: CreateCutPayRequest): Promise<CutPayTransaction> => {
+  create: async (data: CreateCutpayTransactionCutpayPostRequest): Promise<CutPayTransaction> => {
     const response = await apiClient.post('/cutpay/', data)
     return response.data
   },

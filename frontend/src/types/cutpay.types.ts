@@ -9,6 +9,7 @@ export interface ExtractedPolicyData {
   product_type?: string | null
   plan_type?: string | null
   customer_name?: string | null
+  customer_phone_number:string|null,
   gross_premium?: number | null
   net_premium?: number | null
   od_premium?: number | null
@@ -40,109 +41,88 @@ export interface ExtractPdfResponse {
   extraction_time: string
 }
 
-// Admin input data
 export interface AdminInputData {
-  reporting_month?: string | null
-  booking_date?: string | null
-  agent_code?: string | null
-  code_type?: string | null
-  incoming_grid_percent?: number | null
-  agent_commission_given_percent?: number | null
-  extra_grid?: number | null
-  commissionable_premium?: number | null
-  payment_by?: string | null
-  payment_method?: string | null
-  payout_on?: string | null
-  agent_extra_percent?: number | null
-  payment_by_office?: string | null
-  insurer_code?: string | null
-  broker_code?: string | null
-  admin_child_id?: string | null
+  reporting_month?: string | null;
+  booking_date?: string | null;
+  agent_code?: string | null;
+  code_type?: string | null;
+  incoming_grid_percent?: number | null;
+  agent_commission_given_percent?: number | null;
+  extra_grid?: number | null;
+  commissionable_premium?: number | null;
+  payment_by?: string | null;
+  payment_method?: string | null;
+  payout_on?: string | null;
+  agent_extra_percent?: number | null;
+  payment_by_office?: string | null;
+  insurer_code?: string | null;
+  broker_code?: string | null;
+  admin_child_id?: string | null;
 }
 
-// Calculation results
-export interface CalculationData {
-  receivable_from_broker?: number | null
-  extra_amount_receivable_from_broker?: number | null
-  total_receivable_from_broker?: number | null
-  total_receivable_from_broker_with_gst?: number | null
-  cut_pay_amount?: number | null
-  agent_po_amt?: number | null
-  agent_extra_amount?: number | null
-  total_agent_po_amt?: number | null
+
+export interface CreateCutpayTransactionCutpayPostRequest {
+  policy_pdf_url?: null | string;
+  additional_documents?: { [key: string]: unknown } | null;
+  extracted_data?: null | ExtractedPolicyData;
+  admin_input?: null | AdminInputData;
+  calculations?: null | CalculationResult;
+  claimed_by?: null | string;
+  running_bal?: number | 0;
+  cutpay_received?: number | 0;
+  notes?: null | string;
+
+
 }
 
-// Create cutpay transaction request (structured as per API schema)
-export interface CreateCutPayRequest {
-  policy_pdf_url: string
-  additional_documents?: Record<string, unknown>
-  extracted_data?: ExtractedPolicyData
-  admin_input?: AdminInputData
-  calculations?: CalculationData
-  // Additional fields (flattened at root level)
-  claimed_by?: string | null
-  already_given_to_agent?: number | null
-  po_paid_to_agent?: number | null
-  running_bal?: number | null
-  match_status?: string | null
-  invoice_number?: string | null
-  notes?: string | null
+
+
+export interface CalculationResult {
+  receivable_from_broker?: number | null;
+  extra_amount_receivable_from_broker?: number | null;
+  total_receivable_from_broker?: number | null;
+  total_receivable_from_broker_with_gst?: number | null;
+  cut_pay_amount?: number | null;
+  agent_po_amt?: number | null;
+  agent_extra_amount?: number | null;
+  total_agent_po_amt?: number | null;
+}
+
+
+// Update cutpay transaction request
+// Form Field Configuration Types
+export interface FormFieldOption {
+  value: string
+  label: string
+}
+
+export interface FormFieldConditional {
+  field: string
+  value: string | number | null
+}
+
+export interface FormFieldConfig {
+  key: string
+  label: string
+  type: 'text' | 'number' | 'select' | 'date' | 'month'
+  section: 'extracted' | 'admin' | 'calculation'
+  options?: FormFieldOption[]
+  conditional?: FormFieldConditional
+  disabled?: boolean
 }
 
 // Update cutpay transaction request
 export interface UpdateCutPayRequest {
-  policy_pdf_url?: string | null
-  additional_documents?: Record<string, unknown> | null
-  policy_number?: string | null
-  formatted_policy_number?: string | null
-  major_categorisation?: string | null
-  product_insurer_report?: string | null
-  product_type?: string | null
-  plan_type?: string | null
-  customer_name?: string | null
-  gross_premium?: number | null
-  net_premium?: number | null
-  od_premium?: number | null
-  tp_premium?: number | null
-  gst_amount?: number | null
-  registration_no?: string | null
-  make_model?: string | null
-  model?: string | null
-  vehicle_variant?: string | null
-  gvw?: number | null
-  rto?: string | null
-  state?: string | null
-  fuel_type?: string | null
-  cc?: number | null
-  age_year?: number | null
-  ncb?: string | null
-  discount_percent?: number | null
-  business_type?: string | null
-  seating_capacity?: number | null
-  veh_wheels?: number | null
-  reporting_month?: string | null
-  booking_date?: string | null
-  agent_code?: string | null
-  code_type?: string | null
-  incoming_grid_percent?: number | null
-  agent_commission_given_percent?: number | null
-  extra_grid?: number | null
-  commissionable_premium?: number | null
-  payment_by?: string | null
-  payment_method?: string | null
-  payout_on?: string | null
-  agent_extra_percent?: number | null
-  payment_by_office?: string | null
-  insurer_code?: string | null
-  broker_code?: string | null
-  admin_child_id?: string | null
-  claimed_by?: string | null
-  already_given_to_agent?: number | null
-  po_paid_to_agent?: number | null
-  running_bal?: number | null
-  match_status?: string | null
-  invoice_number?: string | null
-  notes?: string | null
+  policypdfurl?: null | string;
+  additionalDocuments?: { [key: string]: unknown } | null;
+  extractedData?: null | ExtractedPolicyData;
+  adminInput?: null | AdminInputData;
+  calculations?: null | CalculationResult;
+  claimedBy?: null | string;
+  runningbal?: number | 0;
+  cutpay_recieved?: string | "0";
+  notes?: null | string;
+
 }
 
 // Complete cutpay transaction response
@@ -272,50 +252,3 @@ export interface CutPayDeleteResponse {
   success?: boolean
 }
 
-// Document types for upload
-export type DocumentType = 
-  | 'policy_pdf'
-  | 'kyc_documents'
-  | 'rc_document'
-  | 'previous_policy'
-
-// Match status options
-export type MatchStatus = 
-  | 'MATCHED'
-  | 'UNMATCHED'
-  | 'PARTIAL_MATCH'
-  | 'PENDING'
-
-// Payment methods
-export type PaymentMethod = 
-  | 'CASH'
-  | 'CHEQUE'
-  | 'ONLINE'
-  | 'UPI'
-  | 'NEFT'
-  | 'RTGS'
-
-// Code types
-export type CodeType = 
-  | 'DIRECT'
-  | 'INDIRECT'
-  | 'BROKER'
-  | 'AGENT'
-
-// Major categorisation types
-export type MajorCategorisation = 
-  | 'MOTOR'
-  | 'HEALTH'
-  | 'LIFE'
-  | 'FIRE'
-  | 'MARINE'
-  | 'OTHER'
-
-// Plan types
-export type PlanType = 
-  | 'COMPREHENSIVE'
-  | 'THIRD_PARTY'
-  | 'STANDALONE_OD'
-  | 'SAOD'
-  | 'STP'
-  | 'COMP'
