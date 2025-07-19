@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios'
+import axios, { AxiosInstance, AxiosError } from 'axios'
 import Cookies from 'js-cookie'
 import { LoginData, RegisterData, AuthResponse, ResetPasswordData, RefreshTokenResponse } from '@/types/auth.types'
 
@@ -9,6 +9,21 @@ const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+let isRefreshing = false
+let failedQueue: { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }[] = []
+
+const processQueue = (error: Error | null, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  
+  failedQueue = []
+}
 
 // Request interceptor to add auth token
 apiClient.interceptors.request.use((config) => {
@@ -22,17 +37,33 @@ apiClient.interceptors.request.use((config) => {
 // Response interceptor for error handling and token refresh
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config
+  async (error: AxiosError) => {
+    const originalRequest = error.config as (typeof error.config & { _retry?: boolean })
 
     // If we get 401 and haven't already tried refreshing
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise(function (resolve, reject) {
+          failedQueue.push({ resolve, reject })
+        })
+          .then(token => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = 'Bearer ' + token
+            }
+            return apiClient(originalRequest)
+          })
+          .catch(err => {
+            return Promise.reject(err)
+          })
+      }
+
       originalRequest._retry = true
+      isRefreshing = true
 
       const refreshToken = Cookies.get('refresh_token')
       if (refreshToken) {
         try {
-          // Use the new refresh endpoint format with query parameter
+          // Use the refresh endpoint format with query parameter
           const response = await axios.post(
             `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
             {}, // Empty body since token is in query param
@@ -45,6 +76,11 @@ apiClient.interceptors.response.use(
           
           const newToken = response.data.access_token
           const newRefreshToken = response.data.refresh_token
+
+          if (!newToken) {
+            throw new Error('Refresh endpoint did not return a new access token.')
+          }
+          
           const rememberMe = localStorage.getItem('remember_me') === 'true'
           
           // Set cookie with appropriate expiry
@@ -64,9 +100,13 @@ apiClient.interceptors.response.use(
           }
           
           // Retry original request with new token
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
+          }
+          processQueue(null, newToken)
           return apiClient(originalRequest)
         } catch (refreshError) {
+          processQueue(refreshError as Error, null)
           // Refresh failed, clear tokens and redirect to login
           Cookies.remove('access_token')
           Cookies.remove('refresh_token')
@@ -80,24 +120,26 @@ apiClient.interceptors.response.use(
             window.location.href = '/login'
           }
           return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
         }
       } else {
         // No refresh token, redirect to login
+        isRefreshing = false
         Cookies.remove('access_token')
         Cookies.remove('refresh_token')
         localStorage.removeItem('remember_me')
-        
         if (typeof window !== 'undefined' && 
             !window.location.pathname.includes('/login') && 
             !window.location.pathname.includes('/register') &&
             !window.location.pathname.includes('/reset-password')) {
           window.location.href = '/login'
         }
+        return Promise.reject(error)
       }
     }
 
-    const message = error.response?.data?.detail || error.response?.data?.message || error.message || 'An error occurred'
-    throw new Error(message)
+    return Promise.reject(error)
   }
 )
 
