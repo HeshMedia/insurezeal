@@ -5,6 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, UserProfile
 from supabase import create_client, Client
+import logging
+
+# Setup detailed logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -48,6 +53,10 @@ def get_supabase_storage():
     return client.storage
 
 if DATABASE_URL:
+    logger.info("Loading configuration from environment variables...")
+    logger.info("DATABASE_URL loaded successfully.")
+    logger.info("Attempting to create SQLAlchemy async engine...")
+    
     sync_engine = create_engine(DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
     
     asyncpg_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
@@ -59,14 +68,19 @@ if DATABASE_URL:
     
     asyncpg_url = f"{base_url}?prepared_statement_cache_size=0"
     
-    async_engine = create_async_engine(
-        asyncpg_url,
-        echo=False,
-        pool_pre_ping=False, 
-        pool_size=5,
-        max_overflow=0
-    )
-
+    try:
+        async_engine = create_async_engine(
+            asyncpg_url,
+            echo=False,
+            pool_pre_ping=False, 
+            pool_size=5,
+            max_overflow=0
+        )
+        logger.info("SQLAlchemy async engine created successfully.")
+    except Exception as e:
+        logger.critical(f"FATAL: Failed to create SQLAlchemy engine: {e}", exc_info=True)
+        raise
+    
     AsyncSessionLocal = sessionmaker(
         bind=async_engine,
         class_=AsyncSession,
@@ -79,6 +93,17 @@ if DATABASE_URL:
         bind=sync_engine,
         expire_on_commit=False
     )
+    logger.info("Attempting to create SQLAlchemy session factory...")
+    try:
+        AsyncSessionFactory = sessionmaker(
+            bind=async_engine,
+            class_=AsyncSession,
+            expire_on_commit=False
+        )
+        logger.info("SQLAlchemy session factory created successfully.")
+    except Exception as e:
+        logger.critical(f"FATAL: Failed to create SQLAlchemy session factory: {e}", exc_info=True)
+        raise
 else:
     sync_engine = None
     async_engine = None

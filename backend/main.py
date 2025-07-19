@@ -4,6 +4,7 @@ from mangum import Mangum
 from fastapi.responses import HTMLResponse
 from fastapi import Request, HTTPException
 import os
+import logging
 
 from routers.auth.auth import router as auth_router
 from routers.users.users import router as users_router
@@ -13,6 +14,10 @@ from routers.policies.policies import router as policies_router
 from routers.superadmin.superadmin import router as superadmin_router
 from routers.admin.cutpay import router as cutpay_router
 from routers.admin.public import router as public_router
+
+# Setup detailed logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 IS_PRODUCTION = ENVIRONMENT == "prod"
@@ -31,7 +36,10 @@ app = FastAPI(
         {"url": "https://your-ngrok-tunnel.ngrok-free.app/", "description": "Ngrok Tunnel"},
     ],
 )
- 
+
+logger.info("--- FastAPI application starting up ---")
+
+logger.info("Configuring CORS middleware...")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -39,15 +47,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info("CORS middleware configured.")
 
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(admin_router)
-app.include_router(superadmin_router)
-app.include_router(child_router)
-app.include_router(policies_router)
-app.include_router(cutpay_router)
-app.include_router(public_router)
+logger.info("Importing and including routers...")
+try:
+    app.include_router(auth_router)
+    logger.info("Included auth_router.")
+    
+    app.include_router(users_router)
+    logger.info("Included users_router.")
+    
+    app.include_router(admin_router)
+    logger.info("Included admin_router.")
+    
+    app.include_router(superadmin_router)
+    logger.info("Included superadmin_router.")
+    
+    app.include_router(child_router)
+    logger.info("Included child_router.")
+    
+    app.include_router(policies_router)
+    logger.info("Included policies_router.")
+    
+    app.include_router(cutpay_router)
+    logger.info("Included cutpay_router.")
+    
+    app.include_router(public_router)
+    logger.info("Included public_router.")
+
+    logger.info("All routers included successfully.")
+
+except Exception as e:
+    logger.critical(f"FATAL: Failed to import or include routers: {e}", exc_info=True)
+    raise
 
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):
@@ -112,5 +144,6 @@ def home():
     </html>
     """
 
-
 handler = Mangum(app)
+
+logger.info("--- FastAPI application startup complete ---")

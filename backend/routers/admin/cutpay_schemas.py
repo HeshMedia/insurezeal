@@ -386,7 +386,7 @@ class CutPayResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        arbitary_types_allowed = True
+        arbitrary_types_allowed = True
 
 # =============================================================================
 # DROPDOWN & UTILITY SCHEMAS
@@ -663,7 +663,7 @@ class CutPayAgentConfigResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 class AgentPOResponse(BaseModel):
     """Schema for agent PO paid amount response"""
