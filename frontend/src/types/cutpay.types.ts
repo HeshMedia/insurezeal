@@ -88,7 +88,6 @@ export interface CalculationResult {
   total_agent_po_amt?: number | null;
 }
 
-
 // Update cutpay transaction request
 // Form Field Configuration Types
 export interface FormFieldOption {
@@ -191,6 +190,12 @@ export interface CutPayTransaction {
   running_bal: number | null
   match_status: string | null
   invoice_number: string | null
+  iz_total_po_percent: number | null
+  broker_po_percent: number | null
+  broker_payout_amount: number | null
+  invoice_status: string | null
+  remarks: string | null
+  company: string | null
   synced_to_cutpay_sheet: boolean
   synced_to_master_sheet: boolean
   cutpay_sheet_row_id: string | null
@@ -250,6 +255,30 @@ export interface CutPayCalculationResponse {
 export interface CutPayDeleteResponse {
   message?: string
   success?: boolean
+}
+
+// Bulk Post-Cutpay Details
+export interface PostCutpayDetails {
+  already_given_to_agent?: number;
+  iz_total_po_percent?: number;
+  broker_po_percent?: number;
+  broker_payout_amount?: number;
+  invoice_status?: string;
+  remarks?: string;
+  company?: string;
+}
+
+export interface BulkPostCutpayRequest {
+  cutpay_ids: number[];
+  details: PostCutpayDetails;
+}
+
+export interface BulkPostCutpayResponse {
+  success_count: number;
+  failed_count: number;
+  successful_ids: number[];
+  failed_updates: Array<Record<string, unknown>>;
+  updated_records: CutPayTransaction[];
 }
 
 // Agent Configuration Types

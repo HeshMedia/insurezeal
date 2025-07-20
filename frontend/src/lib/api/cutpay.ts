@@ -14,6 +14,8 @@ import {
   CreateAgentConfigRequest,
   ListAgentConfigsParams,
   UpdateAgentConfigRequest,
+  BulkPostCutpayRequest,
+  BulkPostCutpayResponse,
 } from '@/types/cutpay.types'
 
 // Create axios instance
@@ -103,6 +105,18 @@ export const cutpayApi = {
   // Delete cutpay transaction
   delete: async (cutpayId: number): Promise<CutPayDeleteResponse> => {
     const response = await apiClient.delete(`/cutpay/${cutpayId}`)
+    return response.data
+  },
+
+  // Add bulk post-cutpay details
+  addBulkPostDetails: async (data: BulkPostCutpayRequest): Promise<BulkPostCutpayResponse> => {
+    const response = await apiClient.post('/cutpay/post-details', data)
+    return response.data
+  },
+
+  // Update bulk post-cutpay details
+  updateBulkPostDetails: async (data: BulkPostCutpayRequest): Promise<BulkPostCutpayResponse> => {
+    const response = await apiClient.put('/cutpay/post-details', data)
     return response.data
   },
 

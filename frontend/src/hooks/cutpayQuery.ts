@@ -10,6 +10,8 @@ import {
   CreateAgentConfigRequest,
   ListAgentConfigsParams,
   UpdateAgentConfigRequest,
+  BulkPostCutpayRequest,
+  BulkPostCutpayResponse,
 } from '@/types/cutpay.types'
 
 // Query keys
@@ -117,6 +119,46 @@ export const useDeleteCutPay = () => {
       console.error('Failed to delete cutpay transaction:', error)
     },
   })
+}
+
+// Common mutation logic for bulk post-details operations
+const useBulkPostDetailsMutation = (
+  mutationFn: (data: BulkPostCutpayRequest) => Promise<BulkPostCutpayResponse>,
+  errorContext: string
+) => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn,
+    onSuccess: (data) => {
+      // Invalidate all list queries to refetch updated data
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.lists() })
+
+      // Update the cache for each individual transaction that was modified
+      data.updated_records.forEach(transaction => {
+        queryClient.setQueryData(cutpayKeys.detail(transaction.id), transaction)
+      })
+    },
+    onError: (error) => {
+      console.error(`Failed to ${errorContext}:`, error)
+    },
+  })
+}
+
+// Add bulk post-cutpay details
+export const useAddBulkPostDetails = () => {
+  return useBulkPostDetailsMutation(
+    cutpayApi.addBulkPostDetails,
+    'add bulk post-cutpay details'
+  )
+}
+
+// Update bulk post-cutpay details
+export const useUpdateBulkPostDetails = () => {
+  return useBulkPostDetailsMutation(
+    cutpayApi.updateBulkPostDetails,
+    'update bulk post-cutpay details'
+  )
 }
 
 // Upload document

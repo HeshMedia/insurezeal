@@ -24,7 +24,10 @@ import {
   ArrowLeft,
   ArrowRight,
   Plus,
-  CreditCard
+  CreditCard,
+  LayoutGrid,
+  List,
+  Table2
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -213,9 +216,32 @@ export function CutPayManagement() {
             <p className="text-gray-600 mt-1">Manage cutpay transactions and monitor payments</p>
           </div>
           <div className="flex gap-3">
-            <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
-              {viewMode === 'grid' ? 'List View' : 'Grid View'}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="w-[120px]">
+                  {viewMode === 'grid' ? (
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                  ) : (
+                    <List className="h-4 w-4 mr-2" />
+                  )}
+                  <span>{viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} View</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setViewMode('grid')}>
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Grid View
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setViewMode('list')}>
+                  <List className="h-4 w-4 mr-2" />
+                  List View
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/admin/cutpay/table')}>
+                  <Table2 className="h-4 w-4 mr-2" />
+                  Table View
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button 
               onClick={handleCreateNew}
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
