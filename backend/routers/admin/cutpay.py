@@ -782,6 +782,42 @@ async def manual_sync_to_google_sheets(
         "results": sync_results
     }
 
+@router.get("/agent-config", response_model=List[CutPayAgentConfigResponse])
+async def list_agent_configs(
+    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
+    date_from: Optional[date] = Query(None, description="Filter from date"),
+    date_to: Optional[date] = Query(None, description="Filter to date"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """List CutPay agent configurations with filtering"""
+    try:
+        query = select(CutPayAgentConfig)
+        
+        if agent_code:
+            query = query.where(CutPayAgentConfig.agent_code == agent_code)
+        if date_from:
+            query = query.where(CutPayAgentConfig.date >= date_from)
+        if date_to:
+            query = query.where(CutPayAgentConfig.date <= date_to)
+            
+        query = query.order_by(desc(CutPayAgentConfig.date)).offset(skip).limit(limit)
+        result = await db.execute(query)
+        configs = result.scalars().all()
+        
+        return [CutPayAgentConfigResponse.model_validate(config) for config in configs]
+        
+    except Exception as e:
+        logger.error(f"Failed to list agent configs: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch agent configurations: {str(e)}"
+        )
+
+
 @router.get("/{cutpay_id}", response_model=CutPayResponse)
 async def get_cutpay_transaction(
     cutpay_id: int,
@@ -1198,41 +1234,6 @@ async def create_agent_config(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create agent configuration: {str(e)}"
-        )
-
-@router.get("/agent-config", response_model=List[CutPayAgentConfigResponse])
-async def list_agent_configs(
-    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
-    date_from: Optional[date] = Query(None, description="Filter from date"),
-    date_to: Optional[date] = Query(None, description="Filter to date"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """List CutPay agent configurations with filtering"""
-    try:
-        query = select(CutPayAgentConfig)
-        
-        if agent_code:
-            query = query.where(CutPayAgentConfig.agent_code == agent_code)
-        if date_from:
-            query = query.where(CutPayAgentConfig.date >= date_from)
-        if date_to:
-            query = query.where(CutPayAgentConfig.date <= date_to)
-            
-        query = query.order_by(desc(CutPayAgentConfig.date)).offset(skip).limit(limit)
-        result = await db.execute(query)
-        configs = result.scalars().all()
-        
-        return [CutPayAgentConfigResponse.model_validate(config) for config in configs]
-        
-    except Exception as e:
-        logger.error(f"Failed to list agent configs: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch agent configurations: {str(e)}"
         )
 
 @router.get("/agent-config/agent/{agent_code}/po-paid", response_model=AgentPOResponse)
