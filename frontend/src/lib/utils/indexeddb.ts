@@ -1,303 +1,241 @@
-// IndexedDB utility functions for CutPay document management
+import { openDB, IDBPDatabase } from 'idb';
 
 export interface StoredDocument {
-  key: string;
   name: string;
-  size: number;
   type: string;
-  content: ArrayBuffer; // Store as ArrayBuffer for better compatibility
+  size: number;
+  content: File;
   timestamp: string;
 }
 
 const DB_NAME = 'CutPayDB';
-const DB_VERSION = 3; // Increment version to force schema update
 const STORE_NAME = 'documents';
 
-// Open IndexedDB connection
-const openDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    
-    request.onerror = () => {
-      console.error('Failed to open IndexedDB:', request.error);
-      reject(new Error('Failed to open IndexedDB'));
-    };
-    
-    request.onupgradeneeded = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      
-      // Clear existing stores if they exist (for clean upgrade)
-      if (db.objectStoreNames.contains(STORE_NAME)) {
-        db.deleteObjectStore(STORE_NAME);
-      }
-      
-      // Create new object store
-      const store = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
-      
-      // Create indexes for better querying
-      store.createIndex('timestamp', 'timestamp', { unique: false });
-      store.createIndex('type', 'type', { unique: false });
-      
-      console.log('✅ IndexedDB schema upgraded to version', DB_VERSION);
-    };
-    
-    request.onsuccess = (event) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      console.log('✅ IndexedDB opened successfully');
-      resolve(db);
-    };
-  });
-};
-
-// Store file in IndexedDB
-export const storeFileInIndexedDB = async (file: File, key: string): Promise<void> => {
-  console.log(`📄 Storing file in IndexedDB:`, { key, name: file.name, size: file.size });
-  
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = async () => {
-      try {
-        const arrayBuffer = reader.result as ArrayBuffer;
-        const db = await openDB();
-        
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        
-        const fileData: StoredDocument = {
-          key,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          content: arrayBuffer,
-          timestamp: new Date().toISOString()
-        };
-        
-        const request = store.put(fileData);
-        
-        request.onsuccess = () => {
-          console.log(`✅ File stored successfully:`, key);
-          resolve();
-        };
-        
-        request.onerror = () => {
-          console.error('❌ Failed to store file:', request.error);
-          reject(new Error('Failed to store file'));
-        };
-        
-        transaction.onerror = () => {
-          console.error('❌ Transaction error:', transaction.error);
-          reject(new Error('Transaction failed'));
-        };
-        
-      } catch (error) {
-        console.error('❌ Error in store operation:', error);
-        reject(error);
-      }
-    };
-    
-    reader.onerror = () => {
-      console.error('❌ Failed to read file');
-      reject(new Error('Failed to read file'));
-    };
-    
-    reader.readAsArrayBuffer(file);
-  });
-};
-
-// Retrieve file from IndexedDB
-export const getFileFromIndexedDB = async (key: string): Promise<StoredDocument | null> => {
-  console.log(`📄 Retrieving file from IndexedDB:`, key);
-  
+/**
+ * Initialize and get IndexedDB connection with proper upgrade handling
+ */
+const getDB = async (): Promise<IDBPDatabase> => {
   try {
-    const db = await openDB();
+    let needsUpgrade = false;
+    let currentVersion = 1;
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
+    // Check if database exists and has the required store
+    try {
+      const existingDb = await openDB(DB_NAME);
+      currentVersion = existingDb.version;
+      needsUpgrade = !existingDb.objectStoreNames.contains(STORE_NAME);
+      existingDb.close();
       
-      const request = store.get(key);
-      
-      request.onsuccess = () => {
-        const result = request.result;
-        if (result) {
-          console.log(`✅ File retrieved successfully:`, key);
-        } else {
-          console.log(`📭 File not found:`, key);
+      console.log(`🔍 Database exists with version ${currentVersion}, needs upgrade: ${needsUpgrade}`);
+    } catch {
+      // Database doesn't exist
+      needsUpgrade = true;
+      console.log(`� Database doesn't exist, will create new one`);
+    }
+    
+    // If we need to upgrade, increment version
+    if (needsUpgrade) {
+      currentVersion = Math.max(currentVersion + 1, 2);
+    }
+    
+    // Open database with proper version and upgrade handling
+    const db = await openDB(DB_NAME, currentVersion, {
+      upgrade(db, oldVersion, newVersion) {
+        console.log(`🔧 Upgrading database from v${oldVersion} to v${newVersion}`);
+        
+        // Remove existing store if it exists (clean upgrade)
+        if (db.objectStoreNames.contains(STORE_NAME)) {
+          console.log(`🗑️ Removing existing ${STORE_NAME} store`);
+          db.deleteObjectStore(STORE_NAME);
         }
-        resolve(result || null);
-      };
-      
-      request.onerror = () => {
-        console.error('❌ Failed to retrieve file:', request.error);
-        reject(new Error('Failed to retrieve file'));
-      };
+        
+        // Create new object store
+        console.log(`🔧 Creating object store: ${STORE_NAME}`);
+        db.createObjectStore(STORE_NAME);
+      },
     });
-  } catch (error) {
-    console.error('❌ Error retrieving file:', error);
-    throw error;
-  }
-};
-
-// Get all stored documents
-export const getAllStoredDocuments = async (): Promise<StoredDocument[]> => {
-  console.log('📂 Retrieving all documents from IndexedDB');
-  
-  try {
-    const db = await openDB();
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      
-      const request = store.getAll();
-      
-      request.onsuccess = () => {
-        const results = request.result || [];
-        console.log(`📂 Retrieved ${results.length} documents from IndexedDB`);
-        resolve(results);
-      };
-      
-      request.onerror = () => {
-        console.error('❌ Failed to retrieve documents:', request.error);
-        reject(new Error('Failed to retrieve documents'));
-      };
-    });
+    return db;
   } catch (error) {
-    console.error('❌ Error retrieving documents:', error);
+    console.error(`❌ Failed to initialize ${DB_NAME}:`, error);
     throw error;
   }
 };
 
-// Remove file from IndexedDB (renamed for consistency)
-export const removeFileFromIndexedDB = async (key: string): Promise<void> => {
-  console.log(`🗑️ Removing file from IndexedDB:`, key);
-  
+/**
+ * Save file to IndexedDB with smart key handling
+ */
+export const saveToIndexedDB = async (file: File, key: string): Promise<void> => {
   try {
-    const db = await openDB();
+    console.log(`📄 Storing ${key} in IndexedDB using idb...`);
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      
-      const request = store.delete(key);
-      
-      request.onsuccess = () => {
-        console.log(`✅ File removed successfully:`, key);
-        resolve();
+    const db = await getDB();
+    console.log(`🔍 Database version: ${db.version}`);
+    console.log(`🔍 Object store names:`, Array.from(db.objectStoreNames));
+    
+    if (!db.objectStoreNames.contains(STORE_NAME)) {
+      console.error(`❌ ${STORE_NAME} store not found in ${DB_NAME}`);
+      db.close();
+      throw new Error('IndexedDB store not found');
+    }
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    
+    // Debug the object store properties
+    console.log(`🔍 Object store keyPath:`, store.keyPath);
+    console.log(`🔍 Object store autoIncrement:`, store.autoIncrement);
+    
+    const documentData: StoredDocument = {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      content: file,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Smart key handling based on object store configuration
+    if (store.keyPath === null) {
+      // Out-of-line keys - key as separate parameter
+      await store.put(documentData, key);
+    } else {
+      // In-line keys - include key as property in the object
+      const dataWithKey = {
+        ...documentData,
+        [store.keyPath as string]: key
       };
-      
-      request.onerror = () => {
-        console.error('❌ Failed to remove file:', request.error);
-        reject(new Error('Failed to remove file'));
-      };
-    });
+      await store.put(dataWithKey);
+    }
+    
+    await tx.done;
+    db.close();
+    
+    console.log(`✅ Successfully stored ${key} in IndexedDB`);
   } catch (error) {
-    console.error('❌ Error removing file:', error);
+    console.error(`❌ Failed to store ${key} in IndexedDB:`, error);
     throw error;
   }
 };
 
-// Delete file from IndexedDB (alias for backward compatibility)
-export const deleteFileFromIndexedDB = removeFileFromIndexedDB;
-
-// Convert ArrayBuffer back to File object
-export const arrayBufferToFile = (arrayBuffer: ArrayBuffer, name: string, type: string): File => {
-  return new File([arrayBuffer], name, { type });
-};
-
-// Clear all documents
-export const clearAllDocuments = async (): Promise<void> => {
-  console.log('🗑️ Clearing all documents from IndexedDB');
-  
+/**
+ * Retrieve file from IndexedDB
+ */
+export const getFromIndexedDB = async (key: string): Promise<StoredDocument | null> => {
   try {
-    const db = await openDB();
+    console.log(`🔍 Retrieving ${key} from IndexedDB...`);
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STORE_NAME], 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      
-      const request = store.clear();
-      
-      request.onsuccess = () => {
-        console.log('✅ All documents cleared from IndexedDB');
-        resolve();
-      };
-      
-      request.onerror = () => {
-        console.error('❌ Failed to clear documents:', request.error);
-        reject(new Error('Failed to clear documents'));
-      };
-    });
+    const db = await getDB();
+    
+    if (!db.objectStoreNames.contains(STORE_NAME)) {
+      console.error(`❌ ${STORE_NAME} store not found in ${DB_NAME}`);
+      db.close();
+      return null;
+    }
+
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const result = await store.get(key);
+    
+    await tx.done;
+    db.close();
+    
+    if (result) {
+      console.log(`✅ Retrieved ${key} from IndexedDB`);
+      return result as StoredDocument;
+    } else {
+      console.log(`⚠️ ${key} not found in IndexedDB`);
+      return null;
+    }
   } catch (error) {
-    console.error('❌ Error clearing documents:', error);
+    console.error(`❌ Failed to retrieve ${key} from IndexedDB:`, error);
+    return null;
+  }
+};
+
+/**
+ * Remove file from IndexedDB
+ */
+export const removeFromIndexedDB = async (key: string): Promise<void> => {
+  try {
+    console.log(`🗑️ Removing ${key} from IndexedDB...`);
+    
+    const db = await getDB();
+    
+    if (!db.objectStoreNames.contains(STORE_NAME)) {
+      console.error(`❌ ${STORE_NAME} store not found in ${DB_NAME}`);
+      db.close();
+      return;
+    }
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    await store.delete(key);
+    await tx.done;
+    db.close();
+    
+    console.log(`✅ Successfully removed ${key} from IndexedDB`);
+  } catch (error) {
+    console.error(`❌ Failed to remove ${key} from IndexedDB:`, error);
     throw error;
   }
 };
 
-// Debug function to log all stored documents
+
+/**
+ * Clear all documents from IndexedDB
+ */
+export const clearAllFromIndexedDB = async (): Promise<void> => {
+  try {
+    console.log(`🗑️ Clearing all documents from IndexedDB...`);
+    
+    const db = await getDB();
+    
+    if (!db.objectStoreNames.contains(STORE_NAME)) {
+      console.error(`❌ ${STORE_NAME} store not found in ${DB_NAME}`);
+      db.close();
+      return;
+    }
+
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    await store.clear();
+    await tx.done;
+    db.close();
+    
+    console.log(`✅ Successfully cleared all documents from IndexedDB`);
+  } catch (error) {
+    console.error(`❌ Failed to clear all documents from IndexedDB:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Debug function to log database structure
+ */
 export const debugIndexedDB = async (): Promise<void> => {
   try {
-    console.log('🔍 Debugging IndexedDB...');
-    const documents = await getAllStoredDocuments();
+    const db = await getDB();
     
-    console.log('📂 IndexedDB Debug Information:');
-    console.log('Database Name:', DB_NAME);
-    console.log('Database Version:', DB_VERSION);
-    console.log('Store Name:', STORE_NAME);
-    console.log('Total Documents:', documents.length);
+    console.log(`🔍 === IndexedDB Debug Info ===`);
+    console.log(`Database name: ${db.name}`);
+    console.log(`Database version: ${db.version}`);
+    console.log(`Object stores:`, Array.from(db.objectStoreNames));
     
-    if (documents.length === 0) {
-      console.log('📭 No documents stored in IndexedDB');
-    } else {
-      documents.forEach((doc, index) => {
-        console.log(`📄 Document ${index + 1}:`, {
-          key: doc.key,
-          name: doc.name,
-          size: `${(doc.size / 1024 / 1024).toFixed(2)}MB`,
-          type: doc.type,
-          timestamp: doc.timestamp,
-          hasContent: !!doc.content
-        });
-      });
-    }
-    
-    // Also check storage quota
-    await checkStorageQuota();
-    
-  } catch (error) {
-    console.error('❌ Error debugging IndexedDB:', error);
-  }
-};
-
-// Check IndexedDB storage quota
-export const checkStorageQuota = async (): Promise<void> => {
-  if ('storage' in navigator && 'estimate' in navigator.storage) {
-    try {
-      const estimate = await navigator.storage.estimate();
-      const used = estimate.usage || 0;
-      const quota = estimate.quota || 0;
+    if (db.objectStoreNames.contains(STORE_NAME)) {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const count = await store.count();
       
-      console.log('💾 Storage Usage:', {
-        used: `${(used / 1024 / 1024).toFixed(2)}MB`,
-        quota: `${(quota / 1024 / 1024).toFixed(2)}MB`,
-        percentage: `${((used / quota) * 100).toFixed(2)}%`
-      });
-    } catch (error) {
-      console.error('❌ Error checking storage quota:', error);
+      console.log(`${STORE_NAME} store details:`);
+      console.log(`  - keyPath: ${store.keyPath}`);
+      console.log(`  - autoIncrement: ${store.autoIncrement}`);
+      console.log(`  - document count: ${count}`);
+      
+      await tx.done;
     }
-  } else {
-    console.log('⚠️ Storage quota API not supported');
-  }
-};
-
-// Initialize IndexedDB (call this once when your app starts)
-export const initializeIndexedDB = async (): Promise<void> => {
-  try {
-    await openDB();
-    console.log('✅ IndexedDB initialized successfully');
+    
+    db.close();
   } catch (error) {
-    console.error('❌ Failed to initialize IndexedDB:', error);
-    throw error;
+    console.error(`❌ Failed to debug IndexedDB:`, error);
   }
 };

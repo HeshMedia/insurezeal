@@ -103,7 +103,7 @@ export interface UpdateProfileRequest {
   education_level?: EducationLevelEnum
   specialization?: string
   previous_insurance_experience?: boolean
-  years_of_experience?: number
+  years_of_experience?: number | null
   previous_company_name?: string
   bank_name?: string
   account_number?: string

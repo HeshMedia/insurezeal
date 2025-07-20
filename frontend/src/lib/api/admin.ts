@@ -89,6 +89,12 @@ export const adminApi = {
     delete: async (agentId: string): Promise<{ message: string }> => {
       const response = await apiClient.delete(`/admin/agents/${agentId}`)
       return response.data
+    },
+
+    // Get PO Paid to Agent
+    getPOPaidToAgent: async (agentCode: string): Promise<{ po_paid_amount: number }> => {
+      const response = await apiClient.get(`/admin/agents/${agentCode}/po-paid`)
+      return response.data
     }
   },
 

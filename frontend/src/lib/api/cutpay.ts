@@ -2,14 +2,18 @@ import axios, { AxiosInstance } from 'axios'
 import Cookies from 'js-cookie'
 import {
   CutPayTransaction,
-  CreateCutPayRequest,
+  CreateCutpayTransactionCutpayPostRequest,
   UpdateCutPayRequest,
   CutPayListParams,
   CutPayDocumentUploadResponse,
   CutPayDeleteResponse,
   ExtractPdfResponse,
   CutPayCalculationRequest,
-  CutPayCalculationResponse
+  CutPayCalculationResponse,
+  AgentConfig,
+  CreateAgentConfigRequest,
+  ListAgentConfigsParams,
+  UpdateAgentConfigRequest,
 } from '@/types/cutpay.types'
 
 // Create axios instance
@@ -63,7 +67,7 @@ apiClient.interceptors.response.use(
 
 export const cutpayApi = {
   // Create cutpay transaction
-  create: async (data: CreateCutPayRequest): Promise<CutPayTransaction> => {
+  create: async (data: CreateCutpayTransactionCutpayPostRequest): Promise<CutPayTransaction> => {
     const response = await apiClient.post('/cutpay/', data)
     return response.data
   },
@@ -137,5 +141,42 @@ export const cutpayApi = {
   calculate: async (data: CutPayCalculationRequest): Promise<CutPayCalculationResponse> => {
     const response = await apiClient.post('/cutpay/calculate', data)
     return response.data
-  }
+  },
+
+  agentConfig: {
+    create: async (data: CreateAgentConfigRequest): Promise<AgentConfig> => {
+      const response = await apiClient.post('/cutpay/agent-config', data)
+      return response.data
+    },
+
+    list: async (params?: ListAgentConfigsParams): Promise<AgentConfig[]> => {
+      const response = await apiClient.get('/cutpay/agent-config', { params })
+      return response.data
+    },
+
+    getById: async (configId: number): Promise<AgentConfig> => {
+      const response = await apiClient.get(`/cutpay/agent-config/${configId}`)
+      return response.data
+    },
+
+    update: async (configId: number, data: UpdateAgentConfigRequest): Promise<AgentConfig> => {
+      const response = await apiClient.put(`/cutpay/agent-config/${configId}`, data)
+      return response.data
+    },
+
+    delete: async (configId: number): Promise<{ message: string }> => {
+      const response = await apiClient.delete(`/cutpay/agent-config/${configId}`)
+      return { message: response.data }
+    },
+
+    getPoPaid: async (agentCode: string): Promise<{
+      agent_code: string
+      total_po_paid: number
+      latest_config_date: string
+      configurations_count: number
+    }> => {
+      const response = await apiClient.get(`/cutpay/agent-config/agent/${agentCode}/po-paid`)
+      return response.data
+    },
+  },
 }

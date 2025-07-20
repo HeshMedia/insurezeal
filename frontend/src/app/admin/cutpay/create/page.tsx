@@ -1,7 +1,7 @@
 'use client'
 
 import { useAtom } from 'jotai'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -28,27 +28,28 @@ import {
 import PolicyPdfUpload from '@/components/admin/cutpay/policy-pdf-upload'
 import AdditionalDocumentsUpload from '@/components/admin/cutpay/additional-documents-upload'
 import AdminInputForm from '@/components/admin/cutpay/admin-input-form'
+import DocumentViewer from '@/components/admin/cutpay/documentviewer'
 
 // Import IndexedDB utilities
-import { initializeIndexedDB, debugIndexedDB } from '@/lib/utils/indexeddb'
+import { debugIndexedDB } from '@/lib/utils/indexeddb'
 
 const CreateCutPayPage = () => {
   const [currentStep, setCurrentStep] = useAtom(cutpayCreationStepAtom)
   const [loadingStates] = useAtom(cutpayLoadingStatesAtom)
   const [error] = useAtom(cutpayErrorAtom)
   const [formCompletion] = useAtom(cutpayFormCompletionAtom)
+  const [isViewerOpen, setIsViewerOpen] = useState(true)
 
-  // Initialize IndexedDB when component mounts
+  // Debug IndexedDB when component mounts
   useEffect(() => {
     const initDB = async () => {
       try {
-        await initializeIndexedDB()
-        console.log('✅ IndexedDB initialized for CutPay workflow')
+        console.log('✅ IndexedDB will be initialized automatically when needed')
         
         // Debug: check current contents
         await debugIndexedDB()
       } catch (error) {
-        console.error('❌ Failed to initialize IndexedDB:', error)
+        console.error('❌ Failed to debug IndexedDB:', error)
       }
     }
     
@@ -109,10 +110,28 @@ const CreateCutPayPage = () => {
         )
       case 3:
         return (
-          <AdminInputForm 
-            onNext={handleNextStep} 
-            onPrev={handlePreviousStep}
-          />
+          <div className="flex flex-wrap md:flex-nowrap gap-6">
+            <div className={`transition-all duration-300 ease-in-out ${isViewerOpen ? 'w-full md:w-1/2' : 'w-full'}`}>
+              <AdminInputForm 
+                onPrev={handlePreviousStep}
+                isViewerOpen={isViewerOpen}
+                setIsViewerOpen={setIsViewerOpen}
+              />
+            </div>
+            <AnimatePresence>
+              {isViewerOpen && (
+                <motion.div 
+                  className="w-full md:w-1/2"
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: '50%' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <DocumentViewer />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         )
       default:
         return null

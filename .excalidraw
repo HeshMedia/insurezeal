@@ -751,10 +751,10 @@
     {
       "id": "jzB7QKpFgVNpvFOw149oQ",
       "type": "arrow",
-      "x": 3002.7888433658977,
-      "y": 1814.1030613775752,
-      "width": 21.97469184222291,
-      "height": 67.85147061780026,
+      "x": 3002.9177936539268,
+      "y": 1814.1030613775754,
+      "width": 20.754307502887514,
+      "height": 67.8514706177998,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -770,11 +770,11 @@
         "type": 2
       },
       "seed": 2135879653,
-      "version": 140,
-      "versionNonce": 1592201995,
+      "version": 141,
+      "versionNonce": 99614244,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704558068,
+      "updated": 1753000730847,
       "link": null,
       "locked": false,
       "points": [
@@ -783,8 +783,8 @@
           0
         ],
         [
-          -21.97469184222291,
-          67.85147061780026
+          -20.754307502887514,
+          67.8514706177998
         ]
       ],
       "lastCommittedPoint": null,
@@ -851,9 +851,9 @@
     {
       "id": "kwRTjsHgZdS7WlSS76mJD",
       "type": "arrow",
-      "x": 2964.708374347948,
+      "x": 2964.7083743479484,
       "y": 1920.906302164853,
-      "width": 1.256508715144264,
+      "width": 1.2565087151438092,
       "height": 79.16004905410023,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -870,11 +870,11 @@
         "type": 2
       },
       "seed": 1076923179,
-      "version": 51,
-      "versionNonce": 1876592997,
+      "version": 52,
+      "versionNonce": 185899428,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750695472001,
+      "updated": 1753000730847,
       "link": null,
       "locked": false,
       "points": [
@@ -883,7 +883,7 @@
           0
         ],
         [
-          1.256508715144264,
+          1.2565087151438092,
           79.16004905410023
         ]
       ],
@@ -901,8 +901,8 @@
     {
       "id": "LrblDc0cpt6_PnlNvfSP2",
       "type": "diamond",
-      "x": 2856.6486248455262,
-      "y": 1997.5533337886623,
+      "x": 2862.1531725879186,
+      "y": 1995.194236756642,
       "width": 218.63251643513442,
       "height": 206.06742928368925,
       "angle": 0,
@@ -920,8 +920,8 @@
         "type": 2
       },
       "seed": 809454763,
-      "version": 276,
-      "versionNonce": 1377251749,
+      "version": 278,
+      "versionNonce": 633085220,
       "isDeleted": false,
       "boundElements": [
         {
@@ -929,15 +929,15 @@
           "id": "DwlTf5qUvvmCyIDZRjTpY"
         }
       ],
-      "updated": 1750695494528,
+      "updated": 1752965294296,
       "link": null,
       "locked": false
     },
     {
       "id": "DwlTf5qUvvmCyIDZRjTpY",
       "type": "text",
-      "x": 2918.006766161341,
-      "y": 2075.5701911095844,
+      "x": 2923.5113139037335,
+      "y": 2073.211094077564,
       "width": 95.5999755859375,
       "height": 50,
       "angle": 0,
@@ -953,11 +953,11 @@
       "index": "aS",
       "roundness": null,
       "seed": 571880331,
-      "version": 119,
-      "versionNonce": 1307292933,
+      "version": 121,
+      "versionNonce": 973396132,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750695494528,
+      "updated": 1752965294296,
       "link": null,
       "locked": false,
       "text": "PAYMENT\nMODE",
@@ -1268,11 +1268,11 @@
         "type": 2
       },
       "seed": 1724314603,
-      "version": 62,
-      "versionNonce": 1824775595,
+      "version": 64,
+      "versionNonce": 1804298780,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750696641369,
+      "updated": 1752965241873,
       "link": null,
       "locked": false,
       "points": [
@@ -1894,8 +1894,8 @@
     {
       "id": "CKgVY0pJpkyym67VeXF1i",
       "type": "line",
-      "x": 2969.8935132414144,
-      "y": 2338.4198709023162,
+      "x": 2936.8891236575996,
+      "y": 2358.589206103341,
       "width": 686.9237313467156,
       "height": 2.8741578717435914,
       "angle": 0,
@@ -1913,11 +1913,11 @@
         "type": 2
       },
       "seed": 529425605,
-      "version": 187,
-      "versionNonce": 166635051,
+      "version": 193,
+      "versionNonce": 1566845084,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750696679850,
+      "updated": 1753000678115,
       "link": null,
       "locked": false,
       "points": [
@@ -4409,7 +4409,7 @@
       "type": "arrow",
       "x": 2614.3702840492015,
       "y": 2092.045031821207,
-      "width": 631.1164376721977,
+      "width": 625.1066097329431,
       "height": 1780.1608449025562,
       "angle": 0,
       "strokeColor": "#1e1e1e",
@@ -4426,11 +4426,11 @@
         "type": 2
       },
       "seed": 128713195,
-      "version": 1351,
-      "versionNonce": 2139019749,
+      "version": 1372,
+      "versionNonce": 2016305316,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704425265,
+      "updated": 1753000756435,
       "link": null,
       "locked": false,
       "points": [
@@ -4443,7 +4443,7 @@
           187.1653888648102
         ],
         [
-          50.78718707466396,
+          44.77735913540937,
           1780.1608449025562
         ]
       ],
@@ -4578,10 +4578,10 @@
     {
       "id": "ceMro1Te895StOvnL6pXs",
       "type": "text",
-      "x": 3528.8202086526385,
+      "x": 3528.8516628589755,
       "y": 2072.2001734598334,
-      "width": 375.2992060200959,
-      "height": 59.685024153777285,
+      "width": 375.2362976074219,
+      "height": 59.685024153777356,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4595,11 +4595,11 @@
       "index": "b0z",
       "roundness": null,
       "seed": 1478109861,
-      "version": 382,
-      "versionNonce": 450920843,
+      "version": 383,
+      "versionNonce": 937818020,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750703868747,
+      "updated": 1753001889206,
       "link": null,
       "locked": false,
       "text": "Cut Pay Amount",
@@ -4615,10 +4615,10 @@
     {
       "id": "rxJWBbAWF10_V58Rc_KqU",
       "type": "text",
-      "x": 2501.358329380108,
+      "x": 2538.344052492226,
       "y": 3885.3192345839448,
-      "width": 298.90458221056406,
-      "height": 31.08151934353711,
+      "width": 224.93313598632812,
+      "height": 31.081519343537117,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4632,8 +4632,8 @@
       "index": "b10",
       "roundness": null,
       "seed": 543216773,
-      "version": 76,
-      "versionNonce": 358260517,
+      "version": 98,
+      "versionNonce": 1368226212,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4645,26 +4645,26 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704425037,
+      "updated": 1753000756434,
       "link": null,
       "locked": false,
-      "text": "Cut Pay WILL BE ZERO",
+      "text": "cutpay will be zero",
       "fontSize": 24.865215474829693,
       "fontFamily": 5,
       "textAlign": "center",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "Cut Pay WILL BE ZERO",
+      "originalText": "cutpay will be zero",
       "autoResize": true,
       "lineHeight": 1.25
     },
     {
       "id": "z-yvTlqefvjmlWPvmZOSK",
       "type": "text",
-      "x": 2910.728493785989,
+      "x": 2910.8191213487753,
       "y": 3884.146410953926,
-      "width": 901.8478200669782,
-      "height": 35.0695470046455,
+      "width": 901.6665649414062,
+      "height": 35.069547004645486,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4678,8 +4678,8 @@
       "index": "b11",
       "roundness": null,
       "seed": 1383538853,
-      "version": 304,
-      "versionNonce": 1707748293,
+      "version": 305,
+      "versionNonce": 874925468,
       "isDeleted": false,
       "boundElements": [
         {
@@ -4687,7 +4687,7 @@
           "type": "arrow"
         }
       ],
-      "updated": 1750704343784,
+      "updated": 1753001891365,
       "link": null,
       "locked": false,
       "text": "Cut Pay amount = gross premium - (net premium * agent payout%)",
@@ -4703,10 +4703,10 @@
     {
       "id": "DD7SlqkavOi-Hvyks0Tsx",
       "type": "arrow",
-      "x": 2688.6999606405275,
-      "y": 3928.5008864945216,
-      "width": 204.3850384805205,
-      "height": 132.02284236114792,
+      "x": 2689.6241618502577,
+      "y": 3928.500886494521,
+      "width": 203.76440594443557,
+      "height": 132.02284236114838,
       "angle": 0,
       "strokeColor": "#1e1e1e",
       "backgroundColor": "transparent",
@@ -4722,11 +4722,11 @@
         "type": 2
       },
       "seed": 2125582725,
-      "version": 206,
-      "versionNonce": 1034717093,
+      "version": 227,
+      "versionNonce": 209102116,
       "isDeleted": false,
       "boundElements": [],
-      "updated": 1750704631008,
+      "updated": 1753000756435,
       "link": null,
       "locked": false,
       "points": [
@@ -4735,8 +4735,8 @@
           0
         ],
         [
-          204.3850384805205,
-          132.02284236114792
+          203.76440594443557,
+          132.02284236114838
         ]
       ],
       "lastCommittedPoint": null,
@@ -6692,7 +6692,7 @@
       "version": 87,
       "versionNonce": 168151852,
       "isDeleted": false,
-      "boundElements": null,
+      "boundElements": [],
       "updated": 1751015423056,
       "link": null,
       "locked": false,
