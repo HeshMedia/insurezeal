@@ -5,17 +5,31 @@ import {
   CreateCutpayTransactionCutpayPostRequest,
   UpdateCutPayRequest,
   CutPayListParams,
-  CutPayCalculationRequest
+  CutPayCalculationRequest,
+  AgentConfig,
+  CreateAgentConfigRequest,
+  ListAgentConfigsParams,
+  UpdateAgentConfigRequest,
 } from '@/types/cutpay.types'
 
 // Query keys
+const cutpayAllKey = ['cutpay'] as const
+const agentConfigsAllKey = [...cutpayAllKey, 'agent-configs'] as const
+
 export const cutpayKeys = {
-  all: ['cutpay'] as const,
-  lists: () => [...cutpayKeys.all, 'list'] as const,
-  list: (params?: CutPayListParams) => [...cutpayKeys.lists(), params] as const,
-  details: () => [...cutpayKeys.all, 'detail'] as const,
-  detail: (id: number) => [...cutpayKeys.details(), id] as const,
-  agentPoPaid: (agentCode: string) => [...cutpayKeys.all, 'agent-po-paid', agentCode] as const,
+  all: cutpayAllKey,
+  lists: () => [...cutpayAllKey, 'list'] as const,
+  list: (params?: CutPayListParams) => [...cutpayAllKey, 'list', params] as const,
+  details: () => [...cutpayAllKey, 'detail'] as const,
+  detail: (id: number) => [...cutpayAllKey, 'detail', id] as const,
+  agentPoPaid: (agentCode: string) => [...cutpayAllKey, 'agent-po-paid', agentCode] as const,
+  agentConfigs: {
+    all: agentConfigsAllKey,
+    lists: () => [...agentConfigsAllKey, 'list'] as const,
+    list: (params?: ListAgentConfigsParams) => [...agentConfigsAllKey, 'list', params] as const,
+    details: () => [...agentConfigsAllKey, 'detail'] as const,
+    detail: (id: number) => [...agentConfigsAllKey, 'detail', id] as const,
+  },
 }
 
 // Get list of cutpay transactions
@@ -33,6 +47,16 @@ export const useCutPayById = (cutpayId: number, enabled = true) => {
     queryKey: cutpayKeys.detail(cutpayId),
     queryFn: () => cutpayApi.getById(cutpayId),
     enabled: enabled && !!cutpayId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Get PO Paid to Agent data
+export const useAgentPoPaid = (agentCode: string, enabled = true) => {
+  return useQuery({
+    queryKey: cutpayKeys.agentPoPaid(agentCode),
+    queryFn: () => cutpayApi.agentConfig.getPoPaid(agentCode),
+    enabled: enabled && !!agentCode,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
@@ -240,12 +264,79 @@ export const useInfiniteCutPay = (params?: Omit<CutPayListParams, 'skip'>) => {
   })
 }
 
-// Get agent PO paid amount
-export const useAgentPoPaid = (agentCode: string, enabled = true) => {
+// Agent Config Queries & Mutations
+
+// Get list of agent configs
+export const useAgentConfigList = (params?: ListAgentConfigsParams) => {
   return useQuery({
-    queryKey: cutpayKeys.agentPoPaid(agentCode),
-    queryFn: () => cutpayApi.getAgentPoPaid(agentCode),
-    enabled: enabled && !!agentCode,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    queryKey: cutpayKeys.agentConfigs.list(params),
+    queryFn: () => cutpayApi.agentConfig.list(params),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// Get single agent config
+export const useAgentConfigById = (configId: number, enabled = true) => {
+  return useQuery({
+    queryKey: cutpayKeys.agentConfigs.detail(configId),
+    queryFn: () => cutpayApi.agentConfig.getById(configId),
+    enabled: enabled && !!configId,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+// Create agent config
+export const useCreateAgentConfig = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateAgentConfigRequest) => cutpayApi.agentConfig.create(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.agentConfigs.lists() })
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.agentPoPaid(data.agent_code) })
+      queryClient.setQueryData(cutpayKeys.agentConfigs.detail(data.id), data)
+    },
+    onError: (error) => {
+      console.error('Failed to create agent config:', error)
+    },
+  })
+}
+
+// Update agent config
+export const useUpdateAgentConfig = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ configId, data }: { configId: number; data: UpdateAgentConfigRequest }) =>
+      cutpayApi.agentConfig.update(configId, data),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.agentConfigs.lists() })
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.agentPoPaid(data.agent_code) })
+      queryClient.setQueryData(cutpayKeys.agentConfigs.detail(variables.configId), data)
+    },
+    onError: (error) => {
+      console.error('Failed to update agent config:', error)
+    },
+  })
+}
+
+// Delete agent config
+export const useDeleteAgentConfig = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (configId: number) => cutpayApi.agentConfig.delete(configId),
+    onSuccess: (_, configId) => {
+      const cachedConfig = queryClient.getQueryData<AgentConfig>(
+        cutpayKeys.agentConfigs.detail(configId)
+      )
+
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.agentConfigs.lists() })
+      queryClient.removeQueries({ queryKey: cutpayKeys.agentConfigs.detail(configId) })
+
+      if (cachedConfig?.agent_code) {
+        queryClient.invalidateQueries({ queryKey: cutpayKeys.agentPoPaid(cachedConfig.agent_code) })
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to delete agent config:', error)
+    },
   })
 }

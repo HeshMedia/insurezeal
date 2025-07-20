@@ -252,3 +252,38 @@ export interface CutPayDeleteResponse {
   success?: boolean
 }
 
+// Agent Configuration Types
+export interface AgentConfig {
+  id: number;
+  agent_code: string;
+  date: string;
+  payment_mode: string;
+  payment_mode_detail: string;
+  po_paid_to_agent: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAgentConfigRequest {
+  agent_code: string;
+  config_date: string;
+  payment_mode: string;
+  payment_mode_detail: string;
+  po_paid_to_agent: number;
+}
+
+export interface UpdateAgentConfigRequest {
+  payment_mode?: string;
+  payment_mode_detail?: string;
+  po_paid_to_agent?: number;
+}
+
+export interface ListAgentConfigsParams {
+  agent_code?: string;
+  date_from?: string;
+  date_to?: string;
+  skip?: number;
+  limit?: number;
+}
+
