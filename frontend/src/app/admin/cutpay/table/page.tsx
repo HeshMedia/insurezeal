@@ -1,10 +1,14 @@
 'use client'
+import { CutPayTable } from '@/components/admin/cutpay/cutpay-table'
 import React from 'react'
 
-function table() {
+function CutPayTablePage() {
   return (
-    <div>table</div>
+    <div >
+      <h1 className="text-2xl font-bold pl-7 ">CutPay Transactions</h1>
+      <CutPayTable />
+    </div>
   )
 }
 
-export default table
+export default CutPayTablePage
