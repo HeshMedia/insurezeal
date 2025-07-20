@@ -137,5 +137,16 @@ export const cutpayApi = {
   calculate: async (data: CutPayCalculationRequest): Promise<CutPayCalculationResponse> => {
     const response = await apiClient.post('/cutpay/calculate', data)
     return response.data
+  },
+
+  // Get agent PO paid amount
+  getAgentPoPaid: async (agentCode: string): Promise<{
+    agent_code: string
+    total_po_paid: number
+    latest_config_date: string
+    configurations_count: number
+  }> => {
+    const response = await apiClient.get(`/cutpay/agent-config/agent/${agentCode}/po-paid`)
+    return response.data
   }
 }

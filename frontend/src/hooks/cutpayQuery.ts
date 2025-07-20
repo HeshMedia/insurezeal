@@ -15,6 +15,7 @@ export const cutpayKeys = {
   list: (params?: CutPayListParams) => [...cutpayKeys.lists(), params] as const,
   details: () => [...cutpayKeys.all, 'detail'] as const,
   detail: (id: number) => [...cutpayKeys.details(), id] as const,
+  agentPoPaid: (agentCode: string) => [...cutpayKeys.all, 'agent-po-paid', agentCode] as const,
 }
 
 // Get list of cutpay transactions
@@ -235,6 +236,16 @@ export const useInfiniteCutPay = (params?: Omit<CutPayListParams, 'skip'>) => {
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     initialPageParam: 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Get agent PO paid amount
+export const useAgentPoPaid = (agentCode: string, enabled = true) => {
+  return useQuery({
+    queryKey: cutpayKeys.agentPoPaid(agentCode),
+    queryFn: () => cutpayApi.getAgentPoPaid(agentCode),
+    enabled: enabled && !!agentCode,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }

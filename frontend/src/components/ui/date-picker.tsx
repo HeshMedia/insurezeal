@@ -3,7 +3,7 @@
 import * as React from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
-
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -26,28 +26,39 @@ export function DatePicker({
   onChange,
   placeholder = "Pick a date",
   disabled = false,
-
+  className,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
   return (
-    <div className="relative">
+    <div className={cn("relative", className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
-            className="data-[empty=true]:text-muted-foreground w-[280px] justify-start text-left font-normal"
+            className={cn(
+              "w-full justify-start text-left font-normal h-10 px-3 py-2",
+              !value && "text-muted-foreground",
+              "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+              disabled && "cursor-not-allowed opacity-50"
+            )}
             disabled={disabled}
           >
             <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
             {value ? (
               <span className="truncate">{format(new Date(value), "PPP")}</span>
             ) : (
-              <span>{placeholder}</span>
+              <span className="text-muted-foreground">{placeholder}</span>
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
+        <PopoverContent 
+          className="w-auto p-0 shadow-lg border" 
+          align="start"
+          sideOffset={4}
+          style={{ zIndex: 9999 }}
+        >
           <Calendar
             mode="single"
             selected={value ? new Date(value) : undefined}
@@ -61,6 +72,7 @@ export function DatePicker({
             }}
             disabled={disabled}
             initialFocus
+            className="rounded-md"
           />
         </PopoverContent>
       </Popover>
