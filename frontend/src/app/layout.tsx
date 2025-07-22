@@ -31,7 +31,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryProvider>
+          <div className="overflow-x-hidden">
           {children}
+          </div>
             <Toaster />
         </QueryProvider>
       </body>

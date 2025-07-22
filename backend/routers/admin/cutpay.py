@@ -36,9 +36,8 @@ from .cutpay_schemas import (
     ExtractionResponse,
     ExportRequest,
     DashboardStats,
-    PostCutPayDetails,
-    BulkPostCutPayRequest,
-    BulkPostCutPayResponse,
+    BulkUpdateRequest,
+    BulkUpdateResponse,
     CutPayAgentConfigCreate,
     CutPayAgentConfigUpdate,
     CutPayAgentConfigResponse,
@@ -472,228 +471,185 @@ async def get_dashboard_stats(
         )
 
 # =============================================================================
-# POST-CUTPAY DETAILS ENDPOINTS
+# BULK UPDATE ENDPOINT
 # =============================================================================
 
-@router.post("/post-details", response_model=BulkPostCutPayResponse)
-async def add_bulk_post_cutpay_details(
-    request: BulkPostCutPayRequest,
+@router.put("/bulk-update", response_model=BulkUpdateResponse)
+async def bulk_update_cutpay_transactions(
+    request: BulkUpdateRequest,
     db: AsyncSession = Depends(get_db),
     current_user = Depends(get_current_user),
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    Add post-CutPay details to multiple CutPay transactions in bulk.
-    These fields are filled after the initial CutPay creation for tracking
-    additional payment information, broker details, and invoice status.
+    Perform bulk updates on multiple CutPay transactions.
+    This is a generic endpoint that can update any fields on any CutPay records.
+    Each update item can specify different fields to update for different records.
     """
     successful_ids = []
     failed_updates = []
     updated_records = []
     
-    logger.info(f"Processing bulk post-CutPay details for {len(request.cutpay_ids)} records")
+    logger.info(f"Processing bulk update for {len(request.updates)} records")
     
-    for cutpay_id in request.cutpay_ids:
+    for update_item in request.updates:
+        cutpay_id = update_item.cutpay_id
+        cutpay = None
+        
         try:
-            logger.info(f"Adding post-CutPay details for CutPay ID {cutpay_id}")
+            logger.info(f"Processing bulk update for CutPay ID {cutpay_id}")
             
-            # Get the existing CutPay record
-            result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
-            cutpay = result.scalar_one_or_none()
-            if not cutpay:
-                failed_updates.append({
-                    "cutpay_id": cutpay_id,
-                    "error": f"CutPay transaction {cutpay_id} not found"
-                })
-                continue
+            async with db.begin():
+                # Get the existing record
+                result = await db.execute(select(CutPay).filter(CutPay.id == cutpay_id))
+                cutpay = result.scalar_one_or_none()
+                
+                if not cutpay:
+                    failed_updates.append({
+                        "cutpay_id": cutpay_id,
+                        "error": f"CutPay transaction with ID {cutpay_id} not found"
+                    })
+                    continue
 
-            # Update the fields with provided values
-            update_data = request.details.dict(exclude_unset=True)
-            for field, value in update_data.items():
-                if hasattr(cutpay, field):
-                    setattr(cutpay, field, value)
-                    logger.info(f"Set {field} = {value} for CutPay {cutpay_id}")
+                # Get update data - handle nested structure like the existing update route
+                cutpay_data = update_item.update_data
+                update_data = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
+                
+                # Add extracted_data fields if present
+                if hasattr(cutpay_data, 'extracted_data') and cutpay_data.extracted_data:
+                    extracted_fields = cutpay_data.extracted_data.dict(exclude_unset=True)
+                    update_data.update(extracted_fields)
+                    logger.info(f"Added {len(extracted_fields)} extracted_data fields for CutPay {cutpay_id}")
+                
+                # Add admin_input fields if present
+                if hasattr(cutpay_data, 'admin_input') and cutpay_data.admin_input:
+                    admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
+                    # Remove broker/insurer codes from admin fields (handle separately)
+                    broker_code = admin_fields.pop('broker_code', None)
+                    insurer_code = admin_fields.pop('insurer_code', None)
+                    update_data.update(admin_fields)
+                    logger.info(f"Added {len(admin_fields)} admin_input fields for CutPay {cutpay_id}")
+                    # Add codes back for processing
+                    if broker_code: update_data['broker_code'] = broker_code
+                    if insurer_code: update_data['insurer_code'] = insurer_code
+                    
+                # Add calculations fields if present
+                if hasattr(cutpay_data, 'calculations') and cutpay_data.calculations:
+                    calc_fields = cutpay_data.calculations.dict(exclude_unset=True)
+                    update_data.update(calc_fields)
+                    logger.info(f"Added {len(calc_fields)} calculations fields for CutPay {cutpay_id}")
+                
+                logger.info(f"Updating {len(update_data)} fields for CutPay {cutpay_id}: {list(update_data.keys())}")
+                
+                # Check for policy number uniqueness if policy number is being updated
+                if 'policy_number' in update_data and update_data['policy_number']:
+                    new_policy_number = update_data['policy_number']
+                    current_policy_number = cutpay.policy_number
+                    
+                    # Only check uniqueness if policy number is actually changing
+                    if new_policy_number != current_policy_number:
+                        existing_policy = await db.execute(
+                            select(CutPay).where(
+                                (CutPay.policy_number == new_policy_number) &
+                                (CutPay.id != cutpay_id)  # Exclude current record
+                            )
+                        )
+                        if existing_policy.scalar_one_or_none():
+                            failed_updates.append({
+                                "cutpay_id": cutpay_id,
+                                "error": f"Policy number '{new_policy_number}' already exists in the database. Please use a unique policy number."
+                            })
+                            continue
+                        logger.info(f"Policy number change from '{current_policy_number}' to '{new_policy_number}' is valid for CutPay {cutpay_id}")
+                
+                # Handle broker/insurer code resolution if provided
+                if 'broker_code' in update_data or 'insurer_code' in update_data:
+                    broker_code = update_data.pop('broker_code', None)
+                    insurer_code = update_data.pop('insurer_code', None)
+                    if broker_code or insurer_code:
+                        broker_id, insurer_id = await validate_and_resolve_codes(db, broker_code, insurer_code)
+                        if broker_id: update_data['broker_id'] = broker_id
+                        if insurer_id: update_data['insurer_id'] = insurer_id
+                
+                # Apply updates
+                for field, value in update_data.items():
+                    if hasattr(cutpay, field):
+                        old_value = getattr(cutpay, field)
+                        setattr(cutpay, field, value)
+                        logger.info(f"Updated {field}: {old_value} -> {value} for CutPay {cutpay_id}")
+                    else:
+                        logger.warning(f"Field '{field}' not found on CutPay model - skipping for CutPay {cutpay_id}")
+                
+                # Auto-populate relationship data
+                auto_populate_relationship_data(cutpay, db)
 
-            # Auto-calculate IZ Total PO% if incoming_grid_percent and extra_grid are available
-            if cutpay.incoming_grid_percent is not None and cutpay.extra_grid is not None:
-                cutpay.iz_total_po_percent = cutpay.incoming_grid_percent + cutpay.extra_grid
-                logger.info(f"Auto-calculated iz_total_po_percent = {cutpay.iz_total_po_percent} for CutPay {cutpay_id}")
-
-            await db.commit()
+                # Recalculate if needed
+                recalculation_fields = [
+                    "gross_premium", "net_premium", "od_premium", "tp_premium", "commissionable_premium",
+                    "incoming_grid_perc", "agent_commission_perc", "extra_grid_perc", "agent_extra_perc"
+                ]
+                if any(field in update_data for field in recalculation_fields):
+                    calc_request = CalculationRequest.model_validate(cutpay, from_attributes=True)
+                    calculations = await calculate_commission_amounts(calc_request.dict())
+                    for field, value in calculations.items():
+                        if hasattr(cutpay, field):
+                            setattr(cutpay, field, value)
+                            
+            # Refresh to get committed data
             await db.refresh(cutpay)
+            logger.info(f"Successfully updated CutPay ID {cutpay.id} in database.")
 
-            # Sync to Google Sheets with detailed error handling
-            sync_success = False
+            # Google Sheets sync
+            sync_results = None
             try:
-                logger.info(f"Syncing post-CutPay details to Google Sheets for CutPay ID {cutpay_id}")
+                logger.info(f"Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
                 from utils.google_sheets import google_sheets_sync
                 
                 cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
                 for key, value in cutpay_dict.items():
-                    if isinstance(value, (datetime, date)): 
-                        cutpay_dict[key] = value.isoformat()
-                    elif isinstance(value, UUID): 
-                        cutpay_dict[key] = str(value)
-                
-                # Sync to CutPay sheet
+                    if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
+                    elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+
                 cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-                logger.info(f"CutPay sheet sync result for {cutpay_id}: {cutpay_sync_result}")
-                
-                # Sync to Master sheet
                 master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-                logger.info(f"Master sheet sync result for {cutpay_id}: {master_sync_result}")
+                sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+                logger.info(f"Google Sheets sync completed for CutPay ID {cutpay.id}.")
                 
-                # Update sync flags if successful
-                if cutpay_sync_result and cutpay_sync_result.get("success"):
+                # Update sync flags
+                if sync_results.get("cutpay", {}).get("success"):
                     cutpay.synced_to_cutpay_sheet = True
-                    if cutpay_sync_result.get("row_id"):
-                        cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
+                    if sync_results["cutpay"].get("row_id"):
+                        cutpay.cutpay_sheet_row_id = sync_results["cutpay"]["row_id"]
                 
-                if master_sync_result and master_sync_result.get("success"):
+                if sync_results.get("master", {}).get("success"):
                     cutpay.synced_to_master_sheet = True
-                    if master_sync_result.get("row_id"):
-                        cutpay.master_sheet_row_id = master_sync_result["row_id"]
+                    if sync_results["master"].get("row_id"):
+                        cutpay.master_sheet_row_id = sync_results["master"]["row_id"]
                 
-                # Commit sync flag updates
                 await db.commit()
                 await db.refresh(cutpay)
                 
-                sync_success = True
-                logger.info(f"Successfully synced post-CutPay details to Google Sheets for CutPay {cutpay_id}")
-                
             except Exception as sync_error:
-                logger.error(f"Google Sheets sync failed for post-CutPay details CutPay {cutpay_id}: {str(sync_error)}")
+                logger.error(f"Google Sheets sync failed for CutPay {cutpay_id}: {str(sync_error)}")
                 logger.error(f"Sync error details: {traceback.format_exc()}")
-                # Don't fail the whole operation for sync errors, but log detailed info
+                # Don't fail the whole operation for sync errors
 
             successful_ids.append(cutpay_id)
             updated_records.append(safe_cutpay_response(cutpay))
-            logger.info(f"Successfully added post-CutPay details for CutPay ID {cutpay_id}")
+            logger.info(f"Successfully processed bulk update for CutPay ID {cutpay_id}")
             
         except Exception as e:
-            logger.error(f"Failed to add post-CutPay details for CutPay {cutpay_id}: {str(e)}")
+            logger.error(f"Failed to update CutPay {cutpay_id}: {str(e)}")
+            logger.error(f"Error details: {traceback.format_exc()}")
             failed_updates.append({
                 "cutpay_id": cutpay_id,
                 "error": str(e)
             })
             continue
     
-    logger.info(f"Bulk post-CutPay details operation completed. Success: {len(successful_ids)}, Failed: {len(failed_updates)}")
+    logger.info(f"Bulk update operation completed. Success: {len(successful_ids)}, Failed: {len(failed_updates)}")
     
-    return BulkPostCutPayResponse(
-        success_count=len(successful_ids),
-        failed_count=len(failed_updates),
-        successful_ids=successful_ids,
-        failed_updates=failed_updates,
-        updated_records=updated_records
-    )
-
-@router.put("/post-details", response_model=BulkPostCutPayResponse)
-async def update_bulk_post_cutpay_details(
-    request: BulkPostCutPayRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """
-    Update post-CutPay details for multiple CutPay transactions in bulk.
-    Allows modification of payment tracking fields, broker information, and invoice status.
-    """
-    successful_ids = []
-    failed_updates = []
-    updated_records = []
-    
-    logger.info(f"Processing bulk post-CutPay details update for {len(request.cutpay_ids)} records")
-    
-    for cutpay_id in request.cutpay_ids:
-        try:
-            logger.info(f"Updating post-CutPay details for CutPay ID {cutpay_id}")
-            
-            # Get the existing CutPay record
-            result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
-            cutpay = result.scalar_one_or_none()
-            if not cutpay:
-                failed_updates.append({
-                    "cutpay_id": cutpay_id,
-                    "error": f"CutPay transaction {cutpay_id} not found"
-                })
-                continue
-
-            # Update the fields with provided values
-            update_data = request.details.dict(exclude_unset=True)
-            for field, value in update_data.items():
-                if hasattr(cutpay, field):
-                    old_value = getattr(cutpay, field)
-                    setattr(cutpay, field, value)
-                    logger.info(f"Updated {field}: {old_value} -> {value} for CutPay {cutpay_id}")
-
-            # Auto-calculate IZ Total PO% if incoming_grid_percent and extra_grid are available
-            if cutpay.incoming_grid_percent is not None and cutpay.extra_grid is not None:
-                cutpay.iz_total_po_percent = cutpay.incoming_grid_percent + cutpay.extra_grid
-                logger.info(f"Auto-calculated iz_total_po_percent = {cutpay.iz_total_po_percent} for CutPay {cutpay_id}")
-
-            await db.commit()
-            await db.refresh(cutpay)
-
-            # Sync to Google Sheets with detailed error handling
-            sync_success = False
-            try:
-                logger.info(f"Syncing updated post-CutPay details to Google Sheets for CutPay ID {cutpay_id}")
-                from utils.google_sheets import google_sheets_sync
-                
-                cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
-                for key, value in cutpay_dict.items():
-                    if isinstance(value, (datetime, date)): 
-                        cutpay_dict[key] = value.isoformat()
-                    elif isinstance(value, UUID): 
-                        cutpay_dict[key] = str(value)
-                
-                # Sync to CutPay sheet
-                cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-                logger.info(f"CutPay sheet sync result for {cutpay_id}: {cutpay_sync_result}")
-                
-                # Sync to Master sheet
-                master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-                logger.info(f"Master sheet sync result for {cutpay_id}: {master_sync_result}")
-                
-                # Update sync flags if successful
-                if cutpay_sync_result and cutpay_sync_result.get("success"):
-                    cutpay.synced_to_cutpay_sheet = True
-                    if cutpay_sync_result.get("row_id"):
-                        cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
-                
-                if master_sync_result and master_sync_result.get("success"):
-                    cutpay.synced_to_master_sheet = True
-                    if master_sync_result.get("row_id"):
-                        cutpay.master_sheet_row_id = master_sync_result["row_id"]
-                
-                # Commit sync flag updates
-                await db.commit()
-                await db.refresh(cutpay)
-                
-                sync_success = True
-                logger.info(f"Successfully synced updated post-CutPay details to Google Sheets for CutPay {cutpay_id}")
-                
-            except Exception as sync_error:
-                logger.error(f"Google Sheets sync failed for updated post-CutPay details CutPay {cutpay_id}: {str(sync_error)}")
-                logger.error(f"Sync error details: {traceback.format_exc()}")
-                # Don't fail the whole operation for sync errors, but log detailed info
-
-            successful_ids.append(cutpay_id)
-            updated_records.append(safe_cutpay_response(cutpay))
-            logger.info(f"Successfully updated post-CutPay details for CutPay ID {cutpay_id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to update post-CutPay details for CutPay {cutpay_id}: {str(e)}")
-            failed_updates.append({
-                "cutpay_id": cutpay_id,
-                "error": str(e)
-            })
-            continue
-    
-    logger.info(f"Bulk post-CutPay details update completed. Success: {len(successful_ids)}, Failed: {len(failed_updates)}")
-    
-    return BulkPostCutPayResponse(
+    return BulkUpdateResponse(
         success_count=len(successful_ids),
         failed_count=len(failed_updates),
         successful_ids=successful_ids,

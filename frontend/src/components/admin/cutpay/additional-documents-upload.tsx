@@ -1,5 +1,3 @@
-'use client'
-
 import { useRef, useState } from 'react'
 import { useAtom } from 'jotai'
 import { motion } from 'framer-motion'
@@ -31,46 +29,8 @@ import {
   cutpayFormCompletionAtom
 } from '@/lib/atoms/cutpay'
 
-// Import unified IndexedDB utilities
-import {
-  storeFileInIndexedDB,
-  removeFileFromIndexedDB
-} from '@/lib/utils/indexeddb'
-
-// // Utility function to retrieve file from IndexedDB (simplified approach)
-// // eslint-disable-next-line @typescript-eslint/no-unused-vars
-// const getFileFromIndexedDB = async (key: string): Promise<{ name: string; size: number; type: string; content: ArrayBuffer } | null> => {
-//   return new Promise((resolve, reject) => {
-//     const request = indexedDB.open('CutPayDB', 1)
-    
-//     request.onerror = () => reject(new Error('Failed to open IndexedDB'))
-    
-//     request.onsuccess = (event) => {
-//       const db = (event.target as IDBOpenDBRequest).result
-//       const transaction = db.transaction(['documents'], 'readonly')
-//       const store = transaction.objectStore('documents')
-      
-//       const getRequest = store.get(key)
-//       getRequest.onsuccess = () => {
-//         const result = getRequest.result
-//         if (result) {
-//           resolve({
-//             name: result.name,
-//             size: result.size,
-//             type: result.type,
-//             content: result.content
-//           })
-//         } else {
-//           resolve(null)
-//         }
-//       }
-//       getRequest.onerror = () => reject(new Error('Failed to retrieve file'))
-//     }
-//   })
-// }
-
-// Utility function to delete file from IndexedDB
-
+// Import centralized IndexedDB utilities
+import { saveToIndexedDB, removeFromIndexedDB } from '@/lib/utils/indexeddb'
 
 interface AdditionalDocumentsUploadProps {
   onNext: () => void
@@ -134,7 +94,7 @@ const AdditionalDocumentsUpload = ({ onNext, onPrev }: AdditionalDocumentsUpload
       
       // Store in IndexedDB
       setLoadingStates(prev => ({ ...prev, uploadingDocuments: true }))
-      await storeFileInIndexedDB(file, documentType)
+      await saveToIndexedDB(file, documentType)
       
       // Update local state
       setDocuments(prev => ({ ...prev, [documentType]: file }))
@@ -170,7 +130,7 @@ const AdditionalDocumentsUpload = ({ onNext, onPrev }: AdditionalDocumentsUpload
   const removeFile = async (documentType: keyof typeof documents) => {
     try {
       // Delete from IndexedDB
-      await removeFileFromIndexedDB(documentType)
+      await removeFromIndexedDB(documentType)
       
       // Update local state
       setDocuments(prev => ({ ...prev, [documentType]: null }))

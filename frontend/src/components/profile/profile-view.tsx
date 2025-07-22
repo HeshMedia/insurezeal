@@ -7,14 +7,13 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ProfileHeader } from './profile-header'
 import { ProfileTabs } from './profile-tabs'
 import { ProfileDetails } from './profile-details'
-
 import { ProfileEditForm } from './profile-edit-form'
 import { DocumentManagement } from './document-management'
 import { useProfile, useUpdateProfile, useUploadProfileImage, useDeleteProfileImage } from '@/hooks/profileQuery'
 import { isEditingProfileAtom, activeProfileTabAtom } from '@/lib/atoms/profile'
 import type { UpdateProfileRequest } from '@/types/profile.types'
 
-export function SuperAdminProfileView() {
+export function ProfileView() {
   const { data: profile, isLoading, error } = useProfile()
   const updateProfileMutation = useUpdateProfile()
   const uploadImageMutation = useUploadProfileImage()

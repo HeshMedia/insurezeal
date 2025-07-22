@@ -30,8 +30,8 @@ import {
   cutpayFormCompletionAtom
 } from '@/lib/atoms/cutpay'
 
-import { storeFileInIndexedDB } from '@/lib/utils/indexeddb'
 import { useExtractPdf } from '@/hooks/cutpayQuery'
+import { saveToIndexedDB } from '@/lib/utils/indexeddb'
 
 interface PolicyPdfUploadProps {
   onNext: () => void
@@ -67,7 +67,7 @@ const PolicyPdfUpload = ({ onNext }: PolicyPdfUploadProps) => {
 
       // Store in IndexedDB
       console.log('📄 Storing PDF in IndexedDB:', selectedFile.name)
-      await storeFileInIndexedDB(selectedFile, 'policy_pdf')
+      await saveToIndexedDB(selectedFile, 'policy_pdf')
       
       // Create object URL for preview
       const url = URL.createObjectURL(selectedFile)

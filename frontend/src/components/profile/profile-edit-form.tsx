@@ -131,21 +131,25 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
       toast.error('Last name is required')
       return
     }
-    
-    // Clean the data - remove empty strings and convert them to undefined
-    const cleanData = Object.fromEntries(
-      Object.entries(data).map(([key, value]) => [
-        key,
-        typeof value === 'string' && value.trim() === '' ? undefined : value
-      ])
-    ) as ProfileFormData
-    
-    // Prepare update data with proper type conversion
+
+    // Process form data to create the payload.
+    // Convert empty strings or undefined values to null to ensure all fields are sent.
+    const payload = Object.fromEntries(
+      Object.entries(data).map(([key, value]) => {
+        if (value === undefined || (typeof value === 'string' && value.trim() === '')) {
+          return [key, null]
+        }
+        return [key, value]
+      })
+    )
+
+    // Prepare update data with proper type conversion for numeric fields.
     const updateData: UpdateProfileRequest = {
-      ...cleanData,
-      years_of_experience: cleanData.years_of_experience ? Number(cleanData.years_of_experience) : undefined,
+      ...payload,
+      years_of_experience:
+        payload.years_of_experience !== null ? Number(payload.years_of_experience) : null,
     }
-    
+
     console.log('Form data being submitted:', updateData)
     await onSubmit(updateData)
   }

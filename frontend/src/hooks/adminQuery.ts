@@ -47,6 +47,16 @@ export const useAgentById = (agentId: string) => {
   })
 }
 
+// Get PO Paid to Agent by agent code
+export const usePOPaidToAgent = (agentCode: string, enabled = true) => {
+  return useQuery({
+    queryKey: ['admin', 'po-paid', agentCode],
+    queryFn: () => adminApi.agents.getPOPaidToAgent(agentCode),
+    enabled: enabled && !!agentCode,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
 // Admin Stats Query
 export const useAdminStats = () => {
   return useQuery({
