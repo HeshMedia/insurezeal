@@ -44,6 +44,7 @@ class ChildIdAssignment(BaseModel):
     manager_name: Optional[str] = Field(None, max_length=100, description="Manager name")
     manager_email: Optional[EmailStr] = Field(None, description="Manager email")
     admin_notes: Optional[str] = Field(None, max_length=1000, description="Admin notes")
+    password: Optional[str] = Field(None, min_length=8, max_length=100, description="Password for child ID assignment")
 
 class ChildIdResponse(BaseModel):
     """Response schema for child ID requests - Clean new structure"""
@@ -62,6 +63,7 @@ class ChildIdResponse(BaseModel):
     # Status and assignment
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
+    password: Optional[str] = None
     branch_code: Optional[str] = None
     region: Optional[str] = None
     manager_name: Optional[str] = None

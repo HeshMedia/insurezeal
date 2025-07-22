@@ -286,6 +286,7 @@ class ChildIdRequest(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
 
     child_id: Mapped[Optional[str]] = mapped_column(String(50), unique=True, index=True)
+    password: Mapped[Optional[str]] = mapped_column(String(255))
     branch_code: Mapped[Optional[str]] = mapped_column(String(20))
     region: Mapped[Optional[str]] = mapped_column(String(50))
     manager_name: Mapped[Optional[str]] = mapped_column(String(100))
@@ -618,6 +619,7 @@ class AdminChildID(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     child_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    password: Mapped[Optional[str]] = mapped_column(String(255))
     branch_code: Mapped[str] = mapped_column(String(20), nullable=False)
     region: Mapped[str] = mapped_column(String(50), nullable=False)
     manager_name: Mapped[str] = mapped_column(String(100), nullable=False)

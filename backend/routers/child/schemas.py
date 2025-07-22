@@ -58,6 +58,7 @@ class ChildIdResponse(BaseModel):
     preferred_rm_name: Optional[str] = None
     status: ChildIdStatusEnum
     child_id: Optional[str] = None
+    password: Optional[str] = None
     branch_code: Optional[str] = None
     region: Optional[str] = None
     manager_name: Optional[str] = None

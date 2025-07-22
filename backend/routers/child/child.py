@@ -163,6 +163,7 @@ async def create_child_id_request(
             'preferred_rm_name': child_request.preferred_rm_name,
             'status': child_request.status,
             'child_id': child_request.child_id,
+            'password': child_request.password,
             'branch_code': child_request.branch_code,
             'region': child_request.region,
             'manager_name': child_request.manager_name,

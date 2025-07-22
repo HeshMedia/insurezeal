@@ -83,6 +83,7 @@ class InsurerUpdate(BaseModel):
 
 class AdminChildIDCreate(BaseModel):
     child_id: str
+    password: Optional[str] = None
     branch_code: str
     region: str
     manager_name: str
@@ -96,6 +97,7 @@ class AdminChildIDCreate(BaseModel):
 class AdminChildIDResponse(BaseModel):
     id: int
     child_id: str
+    password: Optional[str] = None
     branch_code: str
     region: str
     manager_name: str
@@ -119,6 +121,7 @@ class AdminChildIDResponse(BaseModel):
 
 class AdminChildIDUpdate(BaseModel):
     child_id: Optional[str] = None
+    password: Optional[str] = None
     branch_code: Optional[str] = None
     region: Optional[str] = None
     manager_name: Optional[str] = None
