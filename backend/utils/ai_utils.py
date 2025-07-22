@@ -32,11 +32,16 @@ class GeminiPolicyExtractor:
         PREMIUM CALCULATION RULES:
         - gross_premium = Final Premium (the total amount customer pays)
         - If you see "Final premium ₹4,030.88", then gross_premium should be 4030.88
-        - tp_premium should be the TOTAL third party amount including all liability components
-        - For tp_premium, look for "Total Act Premium" or sum all third-party components (Basic TP + Legal Liability + PA cover, etc.)
-        - Do NOT use only "Basic Third-Party Liability" for tp_premium - include ALL TP-related amounts
+        
+        PREMIUM IDENTIFICATION (COMPANY-SPECIFIC HANDLING):
+        - net_premium (NP): Look for "Net Premium", "Total Package Premium", "Sec 1+2+3", "Sec I+II", "Section A+B", or sum of package sections
+        - tp_premium (TP): Look for "Total Liability Premium", "Total Act Premium", "Third Party Premium", or liability-specific amounts or sum up all third party components (Basic TP + Legal Liability + PA cover)
+        - IMPORTANT: 
+          * If "Total Package Premium" or sectional premiums (Sec 1+2+3) appear → it's NP
+          * For comprehensive policies: NP should be higher than TP
+          * For liability-only policies: TP and NP will mostly be same
+        - od_premium: Own Damage Premium, Section 1 Premium, Property Damage Premium
         - gst_amount should be total GST/tax amount
-        - net_premium is usually the base premium before any additions
 
         COMPREHENSIVE FIELD MAPPING:
         
@@ -46,7 +51,11 @@ class GeminiPolicyExtractor:
         - major_categorisation: Motor, Life, Health, Travel, General Insurance
         - product_insurer_report: Product name from insurer report
         - product_type: Private Car, Two Wheeler, Commercial Vehicle, etc. Include vehicle category like (GCV), (SCV), (PCV) in brackets
-        - plan_type: Comprehensive, Third Party, Package Policy, Liability Only
+        - plan_type: Determine based on coverage type:
+          * "Comprehensive" - if policy covers both OD (Own Damage) and TP (Third Party)
+          * "STP" (Stand-alone TP) - if policy covers only Third Party/Liability
+          * "SAOD" (Stand-alone OD) - if policy covers only Own Damage
+          * Look for keywords: "Comprehensive", "Package Policy", "Liability Only", "Act Only", "TP Only"
         - customer_name: Policy holder name, insured name
         - customer_phone_number: Customer phone number or mobile number if available
 
@@ -74,7 +83,12 @@ class GeminiPolicyExtractor:
         - state: State of registration
         - fuel_type: Petrol, Diesel, CNG, Electric
         - cc: Engine capacity in CC
-        - age_year: Vehicle age in years
+        - age_year: Calculate vehicle age based on manufacturing year:
+          * Find "Manufacturing Year", "Model Year", "Year of Manufacture" in the policy
+          * Calculate: current_year - manufacturing_year
+          * for the following examples assume current year is 2025 but do check the current year
+          * If manufacturing year is 2025, then age = 0
+          * If manufacturing year is 2020, then age = 5
         - ncb: No Claim Bonus (YES/NO or percentage)
         - discount_percent: Discount percentage applied
         - business_type: Private, Commercial, Taxi, etc.
@@ -105,6 +119,7 @@ class GeminiPolicyExtractor:
             "state": "string or null",
             "fuel_type": "string or null",
             "cc": number or null,
+            "manufacturing_year": number or null,
             "age_year": number or null,
             "ncb": "string or null",
             "discount_percent": number or null,
@@ -121,8 +136,8 @@ class GeminiPolicyExtractor:
     def extract_policy_data(self, pdf_text: str) -> Optional[Dict[str, Any]]:
         """Extract structured policy data using Gemini"""
         try:
-            if len(pdf_text) > 8000:
-                pdf_text = pdf_text[:8000] + "..."
+            if len(pdf_text) > 16000:
+                pdf_text = pdf_text[:16000] + "..."
                 logger.info("Truncated PDF text to avoid safety filter issues")
             
             prompt = self.create_extraction_prompt(pdf_text)
@@ -332,6 +347,7 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "state": extracted_data.get("state"),
                 "fuel_type": extracted_data.get("fuel_type"),
                 "cc": extracted_data.get("cc"),
+                "manufacturing_year": extracted_data.get("manufacturing_year"),
                 "age_year": extracted_data.get("age_year"),
                 "ncb": extracted_data.get("ncb"),
                 "discount_percent": extracted_data.get("discount_percent"),
@@ -396,6 +412,7 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "state": extracted_data.get("state"),
                 "fuel_type": extracted_data.get("fuel_type"),
                 "cc": extracted_data.get("cc"),
+                "manufacturing_year": extracted_data.get("manufacturing_year"),
                 "age_year": extracted_data.get("age_year"),
                 "ncb": extracted_data.get("ncb"),
                 "discount_percent": extracted_data.get("discount_percent"),

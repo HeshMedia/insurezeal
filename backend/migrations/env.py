@@ -4,7 +4,6 @@ from alembic import context
 from dotenv import load_dotenv
 import os
 
-
 load_dotenv()
 
 from config import get_sync_engine

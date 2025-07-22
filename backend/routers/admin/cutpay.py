@@ -106,7 +106,6 @@ async def create_cutpay_transaction(
                 policy_number = cutpay_data.policy_number
 
             if policy_number:
-                # Check if policy number already exists
                 existing_policy = await db.execute(
                     select(CutPay).where(CutPay.policy_number == policy_number)
                 )
