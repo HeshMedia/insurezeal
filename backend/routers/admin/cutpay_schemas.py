@@ -114,6 +114,11 @@ class CalculationResult(BaseModel):
     agent_extra_amount: Optional[float] = Field(None, description="Additional payout")
     total_agent_po_amt: Optional[float] = Field(None, description="Total agent payout")
 
+    # Frontend Calculated Fields
+    iz_total_po_percent: Optional[float] = Field(None, ge=0, le=100, description="InsureZeal total payout percentage")
+    already_given_to_agent: Optional[float] = Field(None, ge=0, description="Amount already paid to agent")
+    broker_payout_amount: Optional[float] = Field(None, ge=0, description="Payout amount for the broker")
+
 class CalculationRequest(BaseModel):
     """Schema for calculation API requests"""
     
@@ -658,5 +663,12 @@ class AgentPOResponse(BaseModel):
     total_po_paid: float
     latest_config_date: Optional[date]
     configurations_count: int
+
+class AgentFinancialSummary(BaseModel):
+    """Schema for agent financial summary"""
+    agent_code: str
+    running_balance: float
+    total_net_premium: float
+    last_updated: Optional[datetime]
 
 

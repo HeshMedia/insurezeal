@@ -238,6 +238,10 @@ class UserProfileResponse(BaseModel):
     agent_code: Optional[str] = None
     user_role: Optional[str] = None
     
+    # Agent financial fields
+    running_balance: Optional[float] = None
+    total_net_premium: Optional[float] = None
+    
     # Document URLs
     document_urls: Optional[Dict[str, str]] = None
     

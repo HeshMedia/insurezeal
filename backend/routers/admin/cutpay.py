@@ -41,14 +41,16 @@ from .cutpay_schemas import (
     CutPayAgentConfigCreate,
     CutPayAgentConfigUpdate,
     CutPayAgentConfigResponse,
-    AgentPOResponse
+    AgentPOResponse,
+    AgentFinancialSummary
 )
 from .cutpay_helpers import (
     calculate_commission_amounts,
     get_dropdown_options,
     get_filtered_dropdowns,
     auto_populate_relationship_data,
-
+    update_agent_financials,
+    get_agent_financial_summary,
     validate_cutpay_data,
     validate_and_resolve_codes,
     resolve_broker_code_to_id,
@@ -140,13 +142,15 @@ async def create_cutpay_transaction(
 
             cutpay = CutPay(**cutpay_dict)
             auto_populate_relationship_data(cutpay, db)
-
-            calc_request = CalculationRequest.model_validate(cutpay, from_attributes=True)
-            calculations = await calculate_commission_amounts(calc_request.dict())
-            for field, value in calculations.items():
-                if hasattr(cutpay, field):
-                    setattr(cutpay, field, value)
             
+            # Update agent financials if agent_code is present
+            if cutpay.agent_code:
+                await update_agent_financials(
+                    db=db,
+                    agent_code=cutpay.agent_code,
+                    net_premium=cutpay.net_premium or 0.0,
+                    running_balance=cutpay.running_bal or 0.0
+                )
             db.add(cutpay)
 
         await db.refresh(cutpay)
@@ -582,18 +586,15 @@ async def bulk_update_cutpay_transactions(
                 
                 # Auto-populate relationship data
                 auto_populate_relationship_data(cutpay, db)
-
-                # Recalculate if needed
-                recalculation_fields = [
-                    "gross_premium", "net_premium", "od_premium", "tp_premium", "commissionable_premium",
-                    "incoming_grid_perc", "agent_commission_perc", "extra_grid_perc", "agent_extra_perc"
-                ]
-                if any(field in update_data for field in recalculation_fields):
-                    calc_request = CalculationRequest.model_validate(cutpay, from_attributes=True)
-                    calculations = await calculate_commission_amounts(calc_request.dict())
-                    for field, value in calculations.items():
-                        if hasattr(cutpay, field):
-                            setattr(cutpay, field, value)
+                
+                # Update agent financials if agent_code is present and relevant fields changed
+                if cutpay.agent_code and ('net_premium' in update_data or 'running_bal' in update_data):
+                    await update_agent_financials(
+                        db=db,
+                        agent_code=cutpay.agent_code,
+                        net_premium=update_data.get('net_premium', 0.0) if 'net_premium' in update_data else 0.0,
+                        running_balance=update_data.get('running_bal', 0.0) if 'running_bal' in update_data else 0.0
+                    )
                             
             # Refresh to get committed data
             await db.refresh(cutpay)
@@ -892,18 +893,15 @@ async def update_cutpay_transaction(
             
             # Auto-populate relationship data
             auto_populate_relationship_data(cutpay, db)
-
-            # Recalculate if needed
-            recalculation_fields = [
-                "gross_premium", "net_premium", "od_premium", "tp_premium", "commissionable_premium",
-                "incoming_grid_perc", "agent_commission_perc", "extra_grid_perc", "agent_extra_perc"
-            ]
-            if any(field in update_data for field in recalculation_fields):
-                calc_request = CalculationRequest.model_validate(cutpay, from_attributes=True)
-                calculations = await calculate_commission_amounts(calc_request.dict())
-                for field, value in calculations.items():
-                    if hasattr(cutpay, field):
-                        setattr(cutpay, field, value)
+            
+            # Update agent financials if agent_code is present and relevant fields changed
+            if cutpay.agent_code and ('net_premium' in update_data or 'running_bal' in update_data):
+                await update_agent_financials(
+                    db=db,
+                    agent_code=cutpay.agent_code,
+                    net_premium=update_data.get('net_premium', 0.0) if 'net_premium' in update_data else 0.0,
+                    running_balance=update_data.get('running_bal', 0.0) if 'running_bal' in update_data else 0.0
+                )
                         
         # Refresh to get committed data
         await db.refresh(cutpay)
@@ -1142,6 +1140,29 @@ async def extract_pdf_data_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF extraction failed: {str(e)}"
+        )
+
+# =============================================================================
+# AGENT FINANCIAL TRACKING ENDPOINTS
+# =============================================================================
+
+@router.get("/agent/{agent_code}/financial-summary", response_model=AgentFinancialSummary)
+async def get_agent_financial_summary_endpoint(
+    agent_code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """Get financial summary for a specific agent"""
+    try:
+        summary = await get_agent_financial_summary(db, agent_code)
+        return AgentFinancialSummary(**summary)
+        
+    except Exception as e:
+        logger.error(f"Failed to get financial summary for agent {agent_code}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch agent financial summary: {str(e)}"
         )
 
 # =============================================================================

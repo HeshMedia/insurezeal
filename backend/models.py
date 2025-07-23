@@ -202,6 +202,10 @@ class UserProfile(Base):
     agent_code: Mapped[Optional[str]] = mapped_column(String(8), unique=True, index=True)
     user_role: Mapped[str] = mapped_column(String(20), default="agent", nullable=False)
     
+    # Agent Financial Tracking
+    running_balance: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
+    total_net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
+    
     preferences: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     
     created_at: Mapped[DateTime] = mapped_column(
