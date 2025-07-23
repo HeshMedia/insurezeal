@@ -27,6 +27,62 @@ require_policy_read = require_permission("policies", "read")
 require_policy_write = require_permission("policies", "write")
 require_policy_manage = require_permission("policies", "manage")
 
+@router.post("/extract-pdf-data", response_model=AIExtractionResponse)
+async def extract_pdf_data_endpoint(
+    file: UploadFile = File(..., description="Policy PDF file for extraction"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_write)
+):
+    """
+    Extract policy data from PDF using AI
+    
+    **Requires policy write permission**
+    
+    - **file**: Policy PDF file to extract data from
+    Returns extracted policy data for review
+    """
+    try:
+        if not file.filename or not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please upload a valid PDF file"
+            )
+        
+        pdf_bytes = await file.read()
+        
+        if len(pdf_bytes) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded file is empty"
+            )
+
+        from utils.ai_utils import extract_policy_data_from_pdf_bytes
+        extracted_data_dict = await extract_policy_data_from_pdf_bytes(pdf_bytes)
+        
+        if not extracted_data_dict:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to extract data from PDF. Please ensure the PDF contains readable policy information."
+            )
+
+        confidence_score = extracted_data_dict.pop("confidence_score", 0.5)
+        
+        return AIExtractionResponse(
+            extracted_data=extracted_data_dict,
+            confidence_score=confidence_score,
+            message="Policy data extracted successfully from PDF"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error extracting PDF data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to extract data from PDF"
+        )
+
 @router.post("/upload", response_model=PolicyUploadResponse)
 async def upload_policy_pdf(
     file: UploadFile = File(..., description="Policy PDF file"),
@@ -35,12 +91,12 @@ async def upload_policy_pdf(
     _rbac_check = Depends(require_policy_write)
 ):
     """
-    Upload policy PDF and extract data using AI
+    Upload policy PDF file only (no data extraction)
     
     **Requires policy write permission**
     
     - **file**: Policy PDF file to upload
-      Returns extracted policy data for review before saving
+    Returns file upload information
     """
     try:
         if not file.filename.lower().endswith('.pdf'):
@@ -55,24 +111,14 @@ async def upload_policy_pdf(
         file_path, original_filename = await policy_helpers.save_uploaded_file_from_bytes(
             file_content, file.filename, user_id
         )
-        extracted_data = await policy_helpers.process_policy_pdf(file_content)
-        
-        user_role = current_user.get("role", "agent")
-        if user_role == "agent":
-            agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
-            if agent_profile:
-                extracted_data["agent_id"] = str(agent_profile.user_id)
-                extracted_data["agent_code"] = agent_profile.agent_code
-        
-        confidence_score = extracted_data.pop("confidence_score", 0.5)
         
         return PolicyUploadResponse(
             policy_id=None, 
-            extracted_data=extracted_data,
-            confidence_score=confidence_score,
+            extracted_data={},
+            confidence_score=None,
             pdf_file_path=file_path,
             pdf_file_name=original_filename,
-            message="Policy PDF processed successfully. Please review the extracted data before submitting."
+            message="Policy PDF uploaded successfully. Use /extract-pdf-data to extract data."
         )
         
     except HTTPException:
@@ -81,7 +127,7 @@ async def upload_policy_pdf(
         logger.error(f"Error uploading policy PDF: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
-            detail="Failed to upload and process policy PDF"        )
+            detail="Failed to upload policy PDF"        )
 
 @router.post("/submit", response_model=PolicyResponse)
 async def submit_policy(
@@ -171,6 +217,15 @@ async def submit_policy(
             file_name=pdf_file_name,
             uploaded_by=user_id
         )
+
+        if policy.agent_code:
+            await policy_helpers.update_agent_financials(
+                db, 
+                policy.agent_code, 
+                policy.payment_by_office or 0.0, 
+                policy.total_agent_payout_amount or 0.0
+            )
+            await db.commit()
         
         policy_dict_for_sheets = {
             'id': policy.id,
@@ -191,6 +246,8 @@ async def submit_policy(
             'net_premium': policy.net_premium,
             'od_premium': policy.od_premium,
             'tp_premium': policy.tp_premium,
+            'payment_by_office': policy.payment_by_office,
+            'total_agent_payout_amount': policy.total_agent_payout_amount,
             'start_date': policy.start_date,
             'end_date': policy.end_date,
             'uploaded_by': policy.uploaded_by,

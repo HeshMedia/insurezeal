@@ -4,6 +4,7 @@ from sqlalchemy import (
     Text, 
     DateTime, 
     SmallInteger,
+    Integer,
     CheckConstraint,
     PrimaryKeyConstraint,
     UniqueConstraint,
@@ -205,6 +206,7 @@ class UserProfile(Base):
     # Agent Financial Tracking
     running_balance: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
     total_net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
+    number_of_policies: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
     
     preferences: Mapped[Optional[dict]] = mapped_column(JSONB, default=dict)
     
@@ -527,6 +529,10 @@ class Policy(Base):
     net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
     od_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Own Damage
     tp_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Third Party
+    
+    # Agent Financial Tracking
+    payment_by_office: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
+    total_agent_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
     
     # Dates
     start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)

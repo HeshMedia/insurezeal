@@ -525,3 +525,76 @@ class PolicyHelpers:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to export policies to CSV"
             )
+
+    @staticmethod
+    async def update_agent_financials(db: AsyncSession, agent_code: str, payment_by_office: float, total_agent_payout_amount: float):
+        """Update agent's running balance, total net premium, and number of policies when a policy is created/updated"""
+        if not agent_code:
+            return
+        
+        try:
+            # Get agent profile by agent_code
+            result = await db.execute(
+                select(UserProfile).where(UserProfile.agent_code == agent_code)
+            )
+            agent_profile = result.scalar_one_or_none()
+            
+            if not agent_profile:
+                logger.warning(f"Agent profile not found for agent_code: {agent_code}")
+                return
+            
+            # Update running balance (add payment_by_office)
+            current_running_balance = agent_profile.running_balance or 0.0
+            agent_profile.running_balance = current_running_balance + (payment_by_office or 0.0)
+            
+            # Update total net premium (add total_agent_payout_amount)
+            current_total_net_premium = agent_profile.total_net_premium or 0.0
+            agent_profile.total_net_premium = current_total_net_premium + (total_agent_payout_amount or 0.0)
+            
+            # Increment number of policies
+            current_number_of_policies = agent_profile.number_of_policies or 0
+            agent_profile.number_of_policies = current_number_of_policies + 1
+            
+            logger.info(f"Updated agent {agent_code} financials: running_balance={agent_profile.running_balance}, total_net_premium={agent_profile.total_net_premium}, number_of_policies={agent_profile.number_of_policies}")
+            
+        except Exception as e:
+            logger.error(f"Error updating agent financials for {agent_code}: {str(e)}")
+            # Don't raise the exception to prevent policy creation failure
+    
+    @staticmethod
+    async def get_agent_financial_summary(db: AsyncSession, agent_code: str) -> Dict[str, Any]:
+        """Get agent's financial summary"""
+        try:
+            result = await db.execute(
+                select(UserProfile).where(UserProfile.agent_code == agent_code)
+            )
+            agent_profile = result.scalar_one_or_none()
+            
+            if not agent_profile:
+                return {
+                    "agent_code": agent_code,
+                    "running_balance": 0.0,
+                    "total_net_premium": 0.0,
+                    "number_of_policies": 0,
+                    "agent_found": False
+                }
+            
+            return {
+                "agent_code": agent_code,
+                "agent_name": f"{agent_profile.first_name or ''} {agent_profile.last_name or ''}".strip(),
+                "running_balance": float(agent_profile.running_balance or 0.0),
+                "total_net_premium": float(agent_profile.total_net_premium or 0.0),
+                "number_of_policies": int(agent_profile.number_of_policies or 0),
+                "agent_found": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting agent financial summary for {agent_code}: {str(e)}")
+            return {
+                "agent_code": agent_code,
+                "running_balance": 0.0,
+                "total_net_premium": 0.0,
+                "number_of_policies": 0,
+                "agent_found": False,
+                "error": str(e)
+            }

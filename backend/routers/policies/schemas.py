@@ -29,6 +29,10 @@ class PolicyBase(BaseModel):
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
     
+    # Agent Financial Tracking Fields
+    payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
+    total_agent_payout_amount: Optional[float] = Field(None, description="Total amount to be paid out to agent")
+    
     # Dates
     start_date: Optional[date] = None
     end_date: Optional[date] = None
@@ -100,6 +104,8 @@ class PolicyUpdate(BaseModel):
     net_premium: Optional[float] = None
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
+    payment_by_office: Optional[float] = None
+    total_agent_payout_amount: Optional[float] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     manual_override: Optional[bool] = None

@@ -272,13 +272,15 @@ class GoogleSheetsSync:
             return {"success": False, "error": str(e)}
 
     def sync_policy(self, policy_data: Dict[str, Any], action: str = "CREATE"):
-        """Sync policy to Google Sheets"""
+        """Sync policy to Google Sheets and Master sheet"""
         def _sync():
+            # Sync to Policies sheet
             headers = [
                 'id', 'policy_number', 'policy_type', 'insurance_type',
                 'agent_id', 'agent_code', 'child_id', 'broker_name', 'insurance_company',
                 'vehicle_type', 'registration_number', 'vehicle_class', 'vehicle_segment',
                 'gross_premium', 'gst', 'net_premium', 'od_premium', 'tp_premium',
+                'payment_by_office', 'total_agent_payout_amount',
                 'start_date', 'end_date', 'uploaded_by', 'pdf_file_name',
                 'ai_confidence_score', 'manual_override', 'created_at', 'updated_at', 
                 'action', 'synced_at'
@@ -307,6 +309,8 @@ class GoogleSheetsSync:
                 str(policy_data.get('net_premium', '')),
                 str(policy_data.get('od_premium', '')),
                 str(policy_data.get('tp_premium', '')),
+                str(policy_data.get('payment_by_office', '')),
+                str(policy_data.get('total_agent_payout_amount', '')),
                 str(policy_data.get('start_date', '')),
                 str(policy_data.get('end_date', '')),
                 str(policy_data.get('uploaded_by', '')),
@@ -328,9 +332,58 @@ class GoogleSheetsSync:
             cell_range = f"A{next_row}:{self._col_to_a1(len(row_values))}{next_row}"
             worksheet.update(cell_range, [row_values], value_input_option='RAW')
             
-            logger.info(f"Synced policy {policy_data.get('policy_number')} to Google Sheets at row {next_row}")
+            logger.info(f"Synced policy {policy_data.get('policy_number')} to Policies sheet at row {next_row}")
+            
+            # Also sync to Master sheet if it has relevant fields
+            try:
+                self._sync_policy_to_master_sheet(policy_data)
+            except Exception as e:
+                logger.error(f"Failed to sync policy to Master sheet: {str(e)}")
         
         self._safe_sync(_sync)
+    
+    def _sync_policy_to_master_sheet(self, policy_data: Dict[str, Any]):
+        """Sync policy data to Master sheet with relevant fields"""
+        master_headers = self._get_master_sheet_headers()
+        master_sheet = self._get_or_create_worksheet("Master", master_headers)
+        
+        if not master_sheet:
+            return
+        
+        # Map policy data to master sheet format
+        master_row_data = [""] * len(master_headers)
+        
+        # Map fields that exist in both policy and master sheet
+        field_mappings = {
+            "ID": policy_data.get('id', ''),
+            "Agent Code": policy_data.get('agent_code', ''),
+            "Insurer Name": policy_data.get('insurance_company', ''),
+            "Broker Name": policy_data.get('broker_name', ''),
+            "Policy Number": policy_data.get('policy_number', ''),
+            "Gross Premium": policy_data.get('gross_premium', ''),
+            "Net Premium": policy_data.get('net_premium', ''),
+            "OD Premium": policy_data.get('od_premium', ''),
+            "TP Premium": policy_data.get('tp_premium', ''),
+            "GST Amount": policy_data.get('gst', ''),
+            "Registration No": policy_data.get('registration_number', ''),
+            "Payment By Office": policy_data.get('payment_by_office', ''),
+            "Total Agent PO": policy_data.get('total_agent_payout_amount', ''),
+            "Created At": policy_data.get('created_at', ''),
+            "Updated At": policy_data.get('updated_at', '')
+        }
+        
+        # Fill the row data based on header mappings
+        for i, header in enumerate(master_headers):
+            if header in field_mappings:
+                master_row_data[i] = str(field_mappings[header]) if field_mappings[header] is not None else ''
+        
+        # Find next empty row and insert
+        next_row = self._find_next_empty_row(master_sheet)
+        last_col = self._col_to_a1(len(master_headers))
+        cell_range = f"A{next_row}:{last_col}{next_row}"
+        master_sheet.update(cell_range, [master_row_data], value_input_option='USER_ENTERED')
+        
+        logger.info(f"Synced policy {policy_data.get('policy_number')} to Master sheet at row {next_row}")
     
     def test_connection(self) -> bool:
         """Test Google Sheets connection"""
