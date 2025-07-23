@@ -1,7 +1,7 @@
 'use client'
 
 import { useAtom } from 'jotai'
-import { useEffect, useState } from 'react'
+import { useEffect,  } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -28,7 +28,6 @@ import {
 import PolicyPdfUpload from '@/components/admin/cutpay/policy-pdf-upload'
 import AdditionalDocumentsUpload from '@/components/admin/cutpay/additional-documents-upload'
 import AdminInputForm from '@/components/admin/cutpay/admin-input-form'
-import DocumentViewer from '@/components/admin/cutpay/documentviewer'
 
 // Import IndexedDB utilities
 import { debugIndexedDB } from '@/lib/utils/indexeddb'
@@ -38,7 +37,6 @@ const CreateCutPayPage = () => {
   const [loadingStates] = useAtom(cutpayLoadingStatesAtom)
   const [error] = useAtom(cutpayErrorAtom)
   const [formCompletion] = useAtom(cutpayFormCompletionAtom)
-  const [isViewerOpen, setIsViewerOpen] = useState(true)
 
   // Debug IndexedDB when component mounts
   useEffect(() => {
@@ -110,28 +108,9 @@ const CreateCutPayPage = () => {
         )
       case 3:
         return (
-          <div className="flex flex-wrap md:flex-nowrap gap-6">
-            <div className={`transition-all duration-300 ease-in-out ${isViewerOpen ? 'w-full md:w-1/2' : 'w-full'}`}>
-              <AdminInputForm 
-                onPrev={handlePreviousStep}
-                isViewerOpen={isViewerOpen}
-                setIsViewerOpen={setIsViewerOpen}
-              />
-            </div>
-            <AnimatePresence>
-              {isViewerOpen && (
-                <motion.div 
-                  className="w-full md:w-1/2"
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: '50%' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <DocumentViewer />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <AdminInputForm 
+            onPrev={handlePreviousStep}
+          />
         )
       default:
         return null
@@ -139,8 +118,8 @@ const CreateCutPayPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen ">
+      <div className=" mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New CutPay Transaction</h1>
@@ -148,7 +127,7 @@ const CreateCutPayPage = () => {
         </div>
 
         {/* Progress Section */}
-        <Card className="mb-8 border-none shadow-lg bg-white/80 backdrop-blur-sm">
+        <Card className="mb-8 border-gray-200 shadow-l bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between mb-4">
               <CardTitle className="text-xl">Progress</CardTitle>
@@ -239,7 +218,7 @@ const CreateCutPayPage = () => {
             </CardTitle>
             <CardDescription>{steps[currentStep - 1]?.description}</CardDescription>
           </CardHeader>
-          <CardContent className="p-8">
+          <CardContent className="p-4">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentStep}

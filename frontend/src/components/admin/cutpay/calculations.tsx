@@ -11,6 +11,8 @@ interface CalculationProps {
   setValue: UseFormSetValue<CutPayFormSchemaType>;
 }
 
+const roundToTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
 const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
 
   // Watch all necessary fields for calculations
@@ -51,20 +53,21 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
       calculatedCommissionablePremium = net_premium;
     }
 
-    if (calculatedCommissionablePremium !== commissionable_premium) {
-      setValue('admin_input.commissionable_premium', calculatedCommissionablePremium, { shouldValidate: true });
+    const roundedCalculatedCommissionablePremium = roundToTwo(calculatedCommissionablePremium);
+    if (roundedCalculatedCommissionablePremium !== commissionable_premium) {
+      setValue('admin_input.commissionable_premium', roundedCalculatedCommissionablePremium, { shouldValidate: true });
     }
   }, [product_type, plan_type, od_premium, net_premium, commissionable_premium, setValue]);
 
   // Main calculations
   useEffect(() => {
-    const receivable_from_broker = commissionable_premium * (incoming_grid_percent / 100);
-    const extra_amount_receivable_from_broker = commissionable_premium * (extra_grid / 100);
-    const total_receivable_from_broker = receivable_from_broker + extra_amount_receivable_from_broker;
-    const total_receivable_from_broker_with_gst = total_receivable_from_broker * 1.18;
-    const agent_po_amt = commissionable_premium * (agent_commission_given_percent / 100);
-    const agent_extra_amount = commissionable_premium * (agent_extra_percent / 100);
-    const total_agent_po_amt = agent_po_amt + agent_extra_amount;
+    const receivable_from_broker = roundToTwo(commissionable_premium * (incoming_grid_percent / 100));
+    const extra_amount_receivable_from_broker = roundToTwo(commissionable_premium * (extra_grid / 100));
+    const total_receivable_from_broker = roundToTwo(receivable_from_broker + extra_amount_receivable_from_broker);
+    const total_receivable_from_broker_with_gst = roundToTwo(total_receivable_from_broker * 1.18);
+    const agent_po_amt = roundToTwo(commissionable_premium * (agent_commission_given_percent / 100));
+    const agent_extra_amount = roundToTwo(commissionable_premium * (agent_extra_percent / 100));
+    const total_agent_po_amt = roundToTwo(agent_po_amt + agent_extra_amount);
 
     // Calculate cut pay amount based on payment mode
     let cut_pay_amount = 0;
@@ -73,14 +76,20 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
     } else if (payment_by === 'InsureZeal') {
       // Cut Pay amount = gross premium - (net premium * agent payout%)
       const agent_payout_percentage = agent_commission_given_percent / 100;
-      cut_pay_amount = gross_premium - (net_premium * agent_payout_percentage);
+      cut_pay_amount = roundToTwo(gross_premium - (net_premium * agent_payout_percentage));
     } else {
       // Default calculation for other payment modes
-      cut_pay_amount = od_premium - total_agent_po_amt;
+      cut_pay_amount = roundToTwo(od_premium - total_agent_po_amt);
     }
 
+    // New calculations for backend payload
+    const iz_total_po_percent = roundToTwo(incoming_grid_percent + extra_grid);
+    const already_given_to_agent = 0; // Defaulted to 0 for new transactions
+    // broker_payout_amount is set to 0 as broker_po_percent is not available in the form
+    const broker_payout_amount = 0;
+
     // Calculate running balance: Payment by Office - Total Agent Payout Amount - Cutpay Amount Received + PO Paid to Agent
-    const running_balance = payment_by_office - total_agent_po_amt - cutpay_received + poPaidAmount;
+    const running_balance = roundToTwo(payment_by_office - total_agent_po_amt - cutpay_received + poPaidAmount);
 
     setValue('calculations.receivable_from_broker', receivable_from_broker, { shouldValidate: true });
     setValue('calculations.extra_amount_receivable_from_broker', extra_amount_receivable_from_broker, { shouldValidate: true });
@@ -90,6 +99,9 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
     setValue('calculations.agent_po_amt', agent_po_amt, { shouldValidate: true });
     setValue('calculations.agent_extra_amount', agent_extra_amount, { shouldValidate: true });
     setValue('calculations.total_agent_po_amt', total_agent_po_amt, { shouldValidate: true });
+    setValue('calculations.iz_total_po_percent', iz_total_po_percent, { shouldValidate: true });
+    setValue('calculations.already_given_to_agent', already_given_to_agent, { shouldValidate: true });
+    setValue('calculations.broker_payout_amount', broker_payout_amount, { shouldValidate: true });
     setValue('running_bal', running_balance, { shouldValidate: true });
   }, [
     od_premium, 

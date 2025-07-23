@@ -59,10 +59,13 @@ export const CalculationResultSchema = z.object({
   agent_po_amt: z.number().optional().nullable(),
   agent_extra_amount: z.number().optional().nullable(),
   total_agent_po_amt: z.number().optional().nullable(),
+  iz_total_po_percent: z.number().optional().nullable(),
+  already_given_to_agent: z.number().optional().nullable(),
+  broker_payout_amount: z.number().optional().nullable(),
 });
 
 export const CutPayFormSchema = z.object({
-  policy_pdf_url: z.string().optional(),
+  policy_pdf_url: z.string().optional().nullable(),
   additional_documents: z.record(z.any()).optional(),
   extracted_data: ExtractedPolicyDataSchema.optional(),
   admin_input: AdminInputDataSchema.optional(),

@@ -40,7 +40,6 @@ export function DatePicker({
               "w-full justify-start text-left font-normal h-10 px-3 py-2",
               !value && "text-muted-foreground",
               "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-              "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
               disabled && "cursor-not-allowed opacity-50"
             )}
             disabled={disabled}
@@ -54,7 +53,7 @@ export function DatePicker({
           </Button>
         </PopoverTrigger>
         <PopoverContent 
-          className="w-auto p-0 shadow-lg border" 
+          className="w-auto p-0 shadow-lg border rounded-md" 
           align="start"
           sideOffset={4}
           style={{ zIndex: 9999 }}
@@ -73,6 +72,16 @@ export function DatePicker({
             disabled={disabled}
             initialFocus
             className="rounded-md"
+            classNames={{
+              head_cell: "text-muted-foreground rounded-md w-8 h-8 font-normal text-[0.8rem]",
+              cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md",
+              day: "h-8 w-8 p-0 font-normal aria-selected:opacity-100",
+              day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+              day_today: "bg-accent text-accent-foreground",
+              day_outside: "text-muted-foreground opacity-50",
+              nav_button: "h-6 w-6 bg-transparent border-0",
+              table: "w-full border-collapse space-y-1",
+            }}
           />
         </PopoverContent>
       </Popover>

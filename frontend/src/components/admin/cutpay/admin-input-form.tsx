@@ -5,6 +5,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { openDB } from "idb";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   pdfExtractionDataAtom,
   createdCutpayTransactionAtom,
@@ -15,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DatePicker } from "@/components/ui/date-picker";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -40,21 +40,20 @@ import { Insurer, Broker, AdminChildId } from "@/types/superadmin.types";
 import { CutPayFormSchema, CutPayFormSchemaType } from "./form-schema";
 import { formFields, FormFieldConfig, FormFieldPath } from "./form-config";
 import Calculations from "./calculations";
-import { PanelLeftClose, PanelRightClose, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import DocumentViewer from "./documentviewer";
 
 // Props interface for the AdminInputForm component
 interface AdminInputFormProps {
   onPrev: () => void; // Function to go to the previous step
-  isViewerOpen: boolean; // State for PDF viewer visibility
-  setIsViewerOpen: (isOpen: boolean) => void; // Function to toggle PDF viewer
 }
 
 const AdminInputForm: React.FC<AdminInputFormProps> = ({
   onPrev,
-  isViewerOpen,
-  setIsViewerOpen,
 }) => {
   const router = useRouter();
+  // State for document viewer visibility is now managed locally
+  const [isViewerOpen, setIsViewerOpen] = useState(true);
   // Global state management using Jotai atoms
   const [pdfExtractionData] = useAtom(pdfExtractionDataAtom); // Data extracted from PDF
   const [calculationResult] = useAtom(cutpayCalculationResultAtom); // Results from calculation step
@@ -112,6 +111,9 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   // Watch for changes in specific form fields to trigger side effects
   const paymentBy = watch("admin_input.payment_by");
   const grossPremium = watch("extracted_data.gross_premium");
+  const registrationNo = watch("extracted_data.registration_no");
+  const majorCategorisation = watch("extracted_data.major_categorisation");
+  const runningBalValue = watch("running_bal");
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
@@ -154,7 +156,8 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     }
   }, [paymentBy, grossPremium, setValue]);
 
-  // Effect to populate the form with data extracted from the PDF
+  // Effect to populate the form with data extracted from the PDF.
+  // This effect ONLY populates data; it does not contain business logic.
   useEffect(() => {
     if (pdfExtractionData?.extracted_data) {
       Object.entries(pdfExtractionData.extracted_data).forEach(
@@ -166,6 +169,30 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
       );
     }
   }, [pdfExtractionData, setValue]);
+
+  // This is the single source of truth for the relationship between
+  // registration number and major categorisation. It runs whenever
+  // registrationNo changes, from any source (PDF load or manual input).
+  useEffect(() => {
+    const hasRegNo = registrationNo && String(registrationNo).trim() !== "";
+
+    if (hasRegNo) {
+      // If a registration number exists and the category isn't 'Vehicle', set it.
+      if (majorCategorisation !== "Vehicle") {
+        setValue("extracted_data.major_categorisation", "Vehicle", {
+          shouldValidate: true,
+        });
+      }
+    } else {
+      // If no registration number exists and the category was 'Vehicle', clear it.
+      // This avoids clearing a user's manual selection of 'Health' or 'Life'.
+      if (majorCategorisation === "Vehicle") {
+        setValue("extracted_data.major_categorisation", null, {
+          shouldValidate: true,
+        });
+      }
+    }
+  }, [registrationNo, majorCategorisation, setValue]);
 
   // Fetching data for select dropdowns using custom React Query hooks
   const { data: insurers, isLoading: insurersLoading } = useInsurerList();
@@ -244,7 +271,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     []
   );
   const majorCategorisationOptions = useMemo(
-    () => ["Motor", "Life", "Health"].map((o) => ({ value: o, label: o })),
+    () => ["Vehicle", "Life", "Health"].map((o) => ({ value: o, label: o })),
     []
   );
   const planTypeOptions = useMemo(
@@ -260,7 +287,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     []
   );
   const businessTypeOptions = useMemo(
-    () => ["Private", "Commercial"].map((o) => ({ value: o, label: o })),
+    () => ["Brand New", "Roll Over" , "Renewable"].map((o) => ({ value: o, label: o })),
     []
   );
 
@@ -735,14 +762,9 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     }
   };
 
-  /**
-   * Renders a form field based on its configuration.
-   * This function dynamically creates different input types (text, number, select, date).
-   * @param field - The configuration object for the field.
-   * @returns A JSX element representing the form field.
-   */
   const renderField = (field: FormFieldConfig) => {
     const { key, label, type, options: configOptions, disabled, tag } = field;
+    
 
     // Skip payment method field if payment is by Agent
     if (key === "admin_input.payment_method" && paymentBy === "Agent") {
@@ -752,16 +774,43 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     // Helper function to render tags
     const renderTag = () => {
       if (!tag) return null;
-      
+
+      if (tag === "autofill") {
+        // For 'autofill', the tag should only appear if the data came from the initial PDF extraction.
+        // It should not appear just because a user manually filled an empty field.
+        const fieldKey = key.substring("extracted_data.".length);
+        const originalValue =
+          pdfExtractionData?.extracted_data?.[
+            fieldKey as keyof typeof pdfExtractionData.extracted_data
+          ];
+
+        if (
+          originalValue === null ||
+          originalValue === undefined ||
+          String(originalValue).trim() === ""
+        ) {
+          return null; // Don't show tag if it wasn't in the original data or was empty.
+        }
+      }
+
       const tagConfig = {
-        'autofill': { label: 'Auto-fill', className: 'bg-blue-100 text-blue-800' },
-        'autocalculated': { label: 'Auto-calculated', className: 'bg-green-100 text-green-800' },
-        'payment-method-dependent': { label: 'Payment Dependent', className: 'bg-orange-100 text-orange-800' }
+        autofill: {
+          label: "Auto-fill",
+          className: "bg-blue-100 text-blue-800",
+        },
+        autocalculated: {
+          label: "Auto-calculated",
+          className: "bg-green-100 text-green-800",
+        },
+        "payment-method-dependent": {
+          label: "Payment Dependent",
+          className: "bg-orange-100 text-orange-800",
+        },
       };
-      
+
       const config = tagConfig[tag];
       if (!config) return null;
-      
+
       return (
         <Badge variant="outline" className={`text-xs ${config.className}`}>
           {config.label}
@@ -784,7 +833,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
             control={control}
             render={({ field: controllerField, fieldState }) => (
               <>
-                <div className="relative">
+                <div className="relative ">
                   {isReportingMonth ? (
                     <MonthYearPicker
                       value={controllerField.value as string}
@@ -793,10 +842,15 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
                       disabled={disabled}
                     />
                   ) : (
-                    <DatePicker
-                      value={controllerField.value as string}
-                      onChange={controllerField.onChange}
-                      placeholder="Pick a date"
+                    <Input
+                      type="date"
+                      className="h-10"
+                      {...controllerField}
+                      value={String(controllerField.value ?? "").split("T")[0]}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        controllerField.onChange(value === "" ? null : value);
+                      }}
                       disabled={disabled}
                     />
                   )}
@@ -853,8 +907,9 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
               <>
                 <Select
                   onValueChange={controllerField.onChange}
-                  defaultValue={controllerField.value as string}
-                  disabled={disabled}
+                  value={
+                    controllerField.value as string
+                  }
                 >
                   <SelectTrigger className="h-10">
                     <SelectValue
@@ -994,149 +1049,215 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
         </div>
       </div>
 
-      {/* Card for displaying data extracted from the PDF */}
-      <Card className="shadow-sm border border-gray-200">
-        <CardHeader className="bg-gray-50 border-b">
-          <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-            <span className="h-2 w-2 bg-blue-500 rounded-full"></span>
-            Extracted Data
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {formFields.filter((f) => f.section === "extracted").map(renderField)}
-        </CardContent>
-      </Card>
-
-      {/* Card for admin-specific inputs */}
-      <Card className="shadow-sm border border-gray-200">
-        <CardHeader className="bg-gray-50 border-b flex flex-row items-center justify-between">
-          <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-            <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-            Admin Input
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setIsViewerOpen(!isViewerOpen)}
-            className="shrink-0"
+      {/* Main layout container */}
+      <div className="space-y-6">
+        {/* Row 1: Extracted Data and Document Viewer */}
+        <div className="flex flex-wrap md:flex-nowrap gap-6">
+          <div
+            className={`transition-all duration-300 ease-in-out ${
+              isViewerOpen ? "w-full md:w-1/2" : "w-full"
+            }`}
           >
-            {isViewerOpen ? (
-              <PanelRightClose className="h-4 w-4" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4" />
-            )}
-            <span className="sr-only">Toggle Document Viewer</span>
-          </Button>
-        </CardHeader>
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {formFields.filter((f) => f.section === "admin").map(renderField)}
-
-          {/* Custom fields for handling 'cutpay received' status and amount */}
-          <div className="space-y-2">
-            <Label htmlFor="cutpay_received_status" className="text-sm font-medium text-gray-700">Cutpay Received Status</Label>
-            <Controller
-              name="cutpay_received_status"
-              control={control}
-              render={({ field: controllerField, fieldState }) => (
-                <>
-                  <Select
-                    onValueChange={controllerField.onChange}
-                    defaultValue={controllerField.value as string}
-                  >
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="No">No</SelectItem>
-                      <SelectItem value="Yes">Yes</SelectItem>
-                      <SelectItem value="Partial">Partial</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {fieldState.error && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {fieldState.error.message}
-                    </p>
-                  )}
-                </>
-              )}
-            />
+            <Card className="shadow-sm border border-l-6 border-blue-500 h-full">
+              <CardHeader className="bg-gray-50 border-b">
+                <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                  <span className="h-2 w-2 bg-blue-500 rounded-full"></span>
+                  Extracted Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {formFields
+                  .filter((f) => f.section === "extracted")
+                  .map(renderField)}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Conditional Amount Field */}
-          {(watch("cutpay_received_status") === "Yes" ||
-            watch("cutpay_received_status") === "Partial") && (
-            <div className="space-y-2">
-              <Label htmlFor="cutpay_received" className="text-sm font-medium text-gray-700">Cutpay Amount</Label>
-              <Controller
-                name="cutpay_received"
-                control={control}
-                render={({ field: controllerField, fieldState }) => (
-                  <>
-                    <Input
-                      id="cutpay_received"
-                      type="number"
-                      step="0.01"
-                      {...controllerField}
-                      value={String(controllerField.value ?? "")}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        controllerField.onChange(
-                          value === "" ? null : parseFloat(value)
-                        );
-                      }}
-                      placeholder="Enter amount"
-                      className="h-10"
-                    />
-                    {fieldState.error && (
-                      <p className="text-red-500 text-xs mt-1">
-                        {fieldState.error.message}
-                      </p>
-                    )}
-                  </>
-                )}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <AnimatePresence>
+            {isViewerOpen && (
+              <motion.div
+                className="w-full md:w-1/2"
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "50%" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <DocumentViewer />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-      {/* Component for displaying and handling calculations */}
-      <Calculations control={control} setValue={setValue} />
+        {/* Logic-only component for calculations */}
+        <Calculations control={control} setValue={setValue} />
 
-      {/* Card for displaying calculation results */}
-      <Card className="shadow-sm border border-gray-200">
-        <CardHeader className="bg-gray-50 border-b">
-          <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-            <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
-            Calculations
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {formFields
-            .filter((f) => f.section === "calculation")
-            .map((field) => {
-              const runningBalValue = watch('running_bal');
-              if (field.key === 'running_bal' && typeof runningBalValue === 'number') {
-                return (
-                  <div key={field.key} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium text-gray-700">{field.label}</Label>
-                      <Badge variant="outline" className="text-xs bg-green-100 text-green-800">
-                        Auto-calculated
-                      </Badge>
-                    </div>
-                    <div className={`p-3 rounded-md border-2 ${runningBalValue < 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                      <span className={`text-lg font-semibold ${runningBalValue < 0 ? 'text-red-700' : 'text-green-700'}`}>
+        {/* Row 2: Admin Input and Calculations */}
+        <div className="flex flex-wrap md:flex-nowrap gap-6">
+          <div className="w-full md:w-1/2">
+            <Card className="shadow-sm border border-l-6 border-green-500 h-full">
+              <CardHeader className="bg-gray-50 border-b flex flex-row items-center justify-between px-4 py-0">
+                <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                  <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                  Admin Input
+                </CardTitle>
+                {typeof runningBalValue === "number" && (
+                  <div className="text-right">
+                    <Label className="text-sm font-medium text-gray-500">
+                      Running Balance
+                    </Label>
+                    <div
+                      className={`px-4 py-2 mt-1 rounded-lg border-2 font-bold ${
+                        runningBalValue < 0
+                          ? "bg-red-50 border-red-300 text-red-700"
+                          : "bg-green-50 border-green-300 text-green-700"
+                      }`}
+                    >
+                      <span className="text-xl">
                         ₹{runningBalValue.toFixed(2)}
                       </span>
                     </div>
                   </div>
-                );
-              }
-              return renderField(field);
-            })}
-        </CardContent>
-      </Card>
+                )}
+              </CardHeader>
+              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {formFields
+                  .filter(
+                    (f) => f.section === "admin" && f.key !== "running_bal"
+                  )
+                  .reduce((acc, field) => {
+                    const renderedField = renderField(field);
+                    if (renderedField) {
+                      acc.push(renderedField);
+                    }
+
+                    if (
+                      field.key === "admin_input.payment_by" &&
+                      paymentBy === "InsureZeal"
+                    ) {
+                      acc.push(
+                        <div
+                          className="space-y-2"
+                          key="cutpay_received_status_wrapper"
+                        >
+                          <Label
+                            htmlFor="cutpay_received_status"
+                            className="text-sm font-medium text-gray-700"
+                          >
+                            Cutpay Received Status
+                          </Label>
+                          <Controller
+                            name="cutpay_received_status"
+                            control={control}
+                            render={({
+                              field: controllerField,
+                              fieldState,
+                            }) => (
+                              <>
+                                <Select
+                                  onValueChange={controllerField.onChange}
+                                  value={
+                                    controllerField.value as string
+                                  }
+                                >
+                                  <SelectTrigger className="h-10">
+                                    <SelectValue placeholder="Select status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="No">No</SelectItem>
+                                    <SelectItem value="Yes">Yes</SelectItem>
+                                    <SelectItem value="Partial">
+                                      Partial
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {fieldState.error && (
+                                  <p className="text-red-500 text-xs mt-1">
+                                    {fieldState.error.message}
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          />
+                        </div>
+                      );
+
+                      if (
+                        watch("cutpay_received_status") === "Yes" ||
+                        watch("cutpay_received_status") === "Partial"
+                      ) {
+                        acc.push(
+                          <div
+                            className="space-y-2"
+                            key="cutpay_received_wrapper"
+                          >
+                            <Label
+                              htmlFor="cutpay_received"
+                              className="text-sm font-medium text-gray-700"
+                            >
+                              Cutpay Amount
+                            </Label>
+                            <Controller
+                              name="cutpay_received"
+                              control={control}
+                              render={({
+                                field: controllerField,
+                                fieldState,
+                              }) => (
+                                <>
+                                  <Input
+                                    id="cutpay_received"
+                                    type="number"
+                                    step="0.01"
+                                    {...controllerField}
+                                    value={String(
+                                      controllerField.value ?? ""
+                                    )}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      controllerField.onChange(
+                                        value === ""
+                                          ? null
+                                          : parseFloat(value)
+                                      );
+                                    }}
+                                    placeholder="Enter amount"
+                                    className="h-10"
+                                  />
+                                  {fieldState.error && (
+                                    <p className="text-red-500 text-xs mt-1">
+                                      {fieldState.error.message}
+                                    </p>
+                                  )}
+                                </>
+                              )}
+                            />
+                          </div>
+                        );
+                      }
+                    }
+                    return acc;
+                  }, [] as React.ReactNode[])}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="w-full md:w-1/2">
+            <Card className="shadow-sm border border-l-6 border-purple-500 ">
+              <CardHeader className="bg-gray-50 border-b">
+                <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                  <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
+                  Calculations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {formFields
+                  .filter((f) => f.section === "calculation")
+                  .map(renderField)}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
 
       {/* Navigation buttons */}
       <div className="flex justify-between mt-6">

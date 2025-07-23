@@ -81,7 +81,7 @@ const DocumentViewer: React.FC = () => {
   };
 
   return (
-    <Card className="sticky top-4">
+    <Card className="h-full flex flex-col border-l-6 border-orange-500">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FileText className="h-5 w-5" />
@@ -120,8 +120,8 @@ const DocumentViewer: React.FC = () => {
           </Select>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="h-[600px] border rounded-lg overflow-hidden bg-gray-50">
+      <CardContent className="flex-grow">
+        <div className="h-full border rounded-lg overflow-hidden bg-gray-50">
           {(() => {
             const activeDocInfo = availableDocuments.find(doc => doc.key === activeDocument);
             const docUrl = getDocumentUrl(activeDocument);
