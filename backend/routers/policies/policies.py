@@ -86,16 +86,18 @@ async def extract_pdf_data_endpoint(
 @router.post("/upload", response_model=PolicyUploadResponse)
 async def upload_policy_pdf(
     file: UploadFile = File(..., description="Policy PDF file"),
+    policy_id: str = Form(..., description="Policy ID to associate with the uploaded PDF"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_write)
 ):
     """
-    Upload policy PDF file only (no data extraction)
+    Upload policy PDF file and associate it with a specific policy
     
     **Requires policy write permission**
     
     - **file**: Policy PDF file to upload
+    - **policy_id**: Policy ID to associate the PDF with
     Returns file upload information
     """
     try:
@@ -106,19 +108,42 @@ async def upload_policy_pdf(
             )
         
         user_id = current_user["user_id"]
+        user_role = current_user.get("role", "agent")
+        
+        # Verify the policy exists and user has access to it
+        filter_user_id = user_id if user_role != "admin" else None
+        existing_policy = await policy_helpers.get_policy_by_id(db, policy_id, filter_user_id)
+        
+        if not existing_policy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Policy not found or you don't have access to it"
+            )
+        
         file_content = await file.read()
 
         file_path, original_filename = await policy_helpers.save_uploaded_file_from_bytes(
             file_content, file.filename, user_id
         )
         
+        # Update the policy record with the new PDF file information
+        await policy_helpers.update_policy(
+            db, 
+            policy_id, 
+            {
+                "pdf_file_path": file_path,
+                "pdf_file_name": original_filename
+            }, 
+            filter_user_id
+        )
+        
         return PolicyUploadResponse(
-            policy_id=None, 
+            policy_id=policy_id, 
             extracted_data={},
             confidence_score=None,
             pdf_file_path=file_path,
             pdf_file_name=original_filename,
-            message="Policy PDF uploaded successfully. Use /extract-pdf-data to extract data."
+            message=f"Policy PDF uploaded successfully and associated with policy {policy_id}. Use /extract-pdf-data to extract data."
         )
         
     except HTTPException:
