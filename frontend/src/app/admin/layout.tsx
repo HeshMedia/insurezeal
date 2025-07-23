@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <AdminHeader />
         
         {/* Main Content */}
-        <div className="flex flex-1 flex-col gap-3 p-3 bg-gray-50/30 ">
+        <div className="flex flex-1 flex-col gap-3 bg-gray-50/30 ">
           {children}
         </div>
       </SidebarInset>

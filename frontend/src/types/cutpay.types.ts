@@ -86,6 +86,9 @@ export interface CalculationResult {
   agent_po_amt?: number | null;
   agent_extra_amount?: number | null;
   total_agent_po_amt?: number | null;
+  iz_total_po_percent?: number | null;
+  already_given_to_agent?: number | null;
+  broker_payout_amount?: number | null;
 }
 
 // Update cutpay transaction request

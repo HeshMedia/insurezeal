@@ -154,14 +154,11 @@ const AdditionalDocumentsUpload = ({ onNext, onPrev }: AdditionalDocumentsUpload
   const allDocumentsUploaded = uploadedCount === documentTypes.length
 
   const handleCompleteStep = () => {
-    if (uploadedCount > 0) {
       setSuccessStates(prev => ({ ...prev, documentsUploaded: true }))
       setFormCompletion(prev => ({ ...prev, step2Complete: true }))
       console.log(`🎉 Step 2 completed! Uploaded ${uploadedCount}/${documentTypes.length} documents`)
       onNext()
-    } else {
-      setError('Please upload at least one document to continue')
-    }
+    
   }
 
 
@@ -318,7 +315,6 @@ const AdditionalDocumentsUpload = ({ onNext, onPrev }: AdditionalDocumentsUpload
         
         <Button
           onClick={handleCompleteStep}
-          disabled={uploadedCount === 0 || loadingStates.uploadingDocuments}
           className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
         >
           {loadingStates.uploadingDocuments ? (
@@ -344,9 +340,7 @@ const AdditionalDocumentsUpload = ({ onNext, onPrev }: AdditionalDocumentsUpload
               <h4 className="font-medium text-amber-900">Upload Tips</h4>
               <ul className="text-sm text-amber-700 space-y-1">
                 <li>• All documents are optional but recommended for complete records</li>
-                <li>• Upload at least one document to proceed to the next step</li>
                 <li>• Documents are stored locally in your browser for privacy</li>
-                <li>• You can always add more documents later</li>
               </ul>
             </div>
           </div>
