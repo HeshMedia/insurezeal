@@ -58,6 +58,12 @@ export interface AdminInputData {
   insurer_code?: string | null;
   broker_code?: string | null;
   admin_child_id?: string | null;
+  
+  // OD+TP specific percentage fields
+  od_agent_payout_percent?: number | null;
+  tp_agent_payout_percent?: number | null;
+  od_incoming_grid_percent?: number | null;
+  tp_incoming_grid_percent?: number | null;
 }
 
 
@@ -74,8 +80,6 @@ export interface CreateCutpayTransactionCutpayPostRequest {
 
 
 }
-
-
 
 export interface CalculationResult {
   receivable_from_broker?: number | null;

@@ -101,7 +101,12 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
         policy_pdf_url: "",
         additional_documents: {},
         extracted_data: {},
-        admin_input: {},
+        admin_input: {
+          od_agent_payout_percent: null,
+          tp_agent_payout_percent: null,
+          od_incoming_grid_percent: null,
+          tp_incoming_grid_percent: null,
+        },
         calculations: {},
         cutpay_received_status: null,
         cutpay_received: null,
@@ -115,7 +120,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   const majorCategorisation = watch("extracted_data.major_categorisation");
   const planType = watch("extracted_data.plan_type");
   const runningBalValue = watch("running_bal");
-  // const payoutOn = watch("admin_input.payout_on");
+  const payoutOn = watch("admin_input.payout_on");
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
@@ -1279,6 +1284,154 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
                             );
                           }
                         }
+
+                        // Add OD+TP specific percentage fields when payout_on is "OD+TP"
+                        if (field.key === "admin_input.payout_on" && payoutOn === "OD+TP") {
+                          // OD Agent Payout Percent
+                          acc.push(
+                            <div key="od_agent_payout_percent" className="space-y-2">
+                              <Label className="text-sm font-medium text-gray-700">
+                                OD Agent Payout %
+                              </Label>
+                              <Controller
+                                name="admin_input.od_agent_payout_percent"
+                                control={control}
+                                render={({ field: controllerField, fieldState }) => (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      {...controllerField}
+                                      value={String(controllerField.value ?? "")}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        controllerField.onChange(
+                                          value === "" ? null : parseFloat(value)
+                                        );
+                                      }}
+                                      placeholder="Enter OD agent payout %"
+                                      className="h-10"
+                                    />
+                                    {fieldState.error && (
+                                      <p className="text-red-500 text-xs mt-1">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              />
+                            </div>
+                          );
+
+                          // TP Agent Payout Percent
+                          acc.push(
+                            <div key="tp_agent_payout_percent" className="space-y-2">
+                              <Label className="text-sm font-medium text-gray-700">
+                                TP Agent Payout %
+                              </Label>
+                              <Controller
+                                name="admin_input.tp_agent_payout_percent"
+                                control={control}
+                                render={({ field: controllerField, fieldState }) => (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      {...controllerField}
+                                      value={String(controllerField.value ?? "")}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        controllerField.onChange(
+                                          value === "" ? null : parseFloat(value)
+                                        );
+                                      }}
+                                      placeholder="Enter TP agent payout %"
+                                      className="h-10"
+                                    />
+                                    {fieldState.error && (
+                                      <p className="text-red-500 text-xs mt-1">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              />
+                            </div>
+                          );
+
+                          // OD Incoming Grid Percent
+                          acc.push(
+                            <div key="od_incoming_grid_percent" className="space-y-2">
+                              <Label className="text-sm font-medium text-gray-700">
+                                OD Incoming Grid %
+                              </Label>
+                              <Controller
+                                name="admin_input.od_incoming_grid_percent"
+                                control={control}
+                                render={({ field: controllerField, fieldState }) => (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      {...controllerField}
+                                      value={String(controllerField.value ?? "")}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        controllerField.onChange(
+                                          value === "" ? null : parseFloat(value)
+                                        );
+                                      }}
+                                      placeholder="Enter OD incoming grid %"
+                                      className="h-10"
+                                    />
+                                    {fieldState.error && (
+                                      <p className="text-red-500 text-xs mt-1">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              />
+                            </div>
+                          );
+
+                          // TP Incoming Grid Percent
+                          acc.push(
+                            <div key="tp_incoming_grid_percent" className="space-y-2">
+                              <Label className="text-sm font-medium text-gray-700">
+                                TP Incoming Grid %
+                              </Label>
+                              <Controller
+                                name="admin_input.tp_incoming_grid_percent"
+                                control={control}
+                                render={({ field: controllerField, fieldState }) => (
+                                  <>
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      {...controllerField}
+                                      value={String(controllerField.value ?? "")}
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        controllerField.onChange(
+                                          value === "" ? null : parseFloat(value)
+                                        );
+                                      }}
+                                      placeholder="Enter TP incoming grid %"
+                                      className="h-10"
+                                    />
+                                    {fieldState.error && (
+                                      <p className="text-red-500 text-xs mt-1">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              />
+                            </div>
+                          );
+                        }
+                        
                         return acc;
                       }, [] as React.ReactNode[])}
                   </CardContent>
