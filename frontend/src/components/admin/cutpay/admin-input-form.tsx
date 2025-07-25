@@ -113,7 +113,9 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   const grossPremium = watch("extracted_data.gross_premium");
   const registrationNo = watch("extracted_data.registration_no");
   const majorCategorisation = watch("extracted_data.major_categorisation");
+  const planType = watch("extracted_data.plan_type");
   const runningBalValue = watch("running_bal");
+  // const payoutOn = watch("admin_input.payout_on");
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
@@ -163,12 +165,44 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
       Object.entries(pdfExtractionData.extracted_data).forEach(
         ([key, value]) => {
           const formKey = `extracted_data.${key}` as FormFieldPath;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setValue(formKey, value as any, { shouldValidate: true });
+          
+          // Special handling for plan_type to map backend values to frontend options
+          if (key === 'plan_type' && value) {
+            let mappedValue = value as string;
+            // Map backend "Comprehensive" to frontend "Comp" for display consistency
+            if (mappedValue === 'Comprehensive') {
+              mappedValue = 'Comp';
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            setValue(formKey, mappedValue as any, { shouldValidate: true });
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            setValue(formKey, value as any, { shouldValidate: true });
+          }
         }
       );
     }
   }, [pdfExtractionData, setValue]);
+
+  // Auto-fill plan type based on PDF extraction data
+  useEffect(() => {
+    if (pdfExtractionData?.extracted_data?.plan_type) {
+      const extractedPlanType = pdfExtractionData.extracted_data.plan_type;
+      
+      // Only auto-fill if the current value is empty or different from extracted value
+      if (!planType || planType !== extractedPlanType) {
+        // Map backend values to frontend values
+        let mappedPlanType = extractedPlanType;
+        if (extractedPlanType === 'Comprehensive') {
+          mappedPlanType = 'Comp';
+        }
+        
+        setValue("extracted_data.plan_type", mappedPlanType, {
+          shouldValidate: true,
+        });
+      }
+    }
+  }, [pdfExtractionData?.extracted_data?.plan_type, planType, setValue]);
 
   // This is the single source of truth for the relationship between
   // registration number and major categorisation. It runs whenever
@@ -275,7 +309,16 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     []
   );
   const planTypeOptions = useMemo(
-    () => ["Comp", "STP", "SAOD"].map((o) => ({ value: o, label: o })),
+    () => [
+      { value: "Comprehensive", label: "Comp" },
+      { value: "STP", label: "STP" },
+      { value: "SAOD", label: "SAOD" },
+      // Keep original values for backward compatibility
+      { value: "Comp", label: "Comp" },
+    ].filter((option, index, self) => 
+      // Remove duplicates based on label
+      index === self.findIndex(o => o.label === option.label)
+    ),
     []
   );
   const fuelTypeOptions = useMemo(
@@ -366,13 +409,6 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     return { hasDocuments, available, missing, summary };
   };
 
-  /**
-   * Retrieves a file from IndexedDB.
-   * This function is robust, trying multiple common database and object store names.
-   * It handles different stored data formats (ArrayBuffer or File object).
-   * @param documentKey - The key of the document to retrieve.
-   * @returns A promise that resolves to a File object or null if not found.
-   */
   const getFileFromIndexedDB = async (
     documentKey: string
   ): Promise<File | null> => {
@@ -1021,267 +1057,277 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
 
   // The main component render method
   return (
-    <form
-      onSubmit={handleSubmit(
-        (data) => {
-          console.log("Form submitted with data:", data);
-          onSubmit(data);
-        },
-        (errors) => {
-          // Handle form validation errors
-          console.log("Form validation errors:", errors);
-          toast.error("Please fix the form errors before submitting");
-        }
-      )}
-      className="space-y-6"
-    >
-      {/* Header section with title and document viewer toggle */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Admin Input</h1>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            onClick={() => setIsViewerOpen(!isViewerOpen)}
-            variant="outline"
-          >
-            {isViewerOpen ? "Hide" : "Show"} Document
-          </Button>
-        </div>
-      </div>
-
-      {/* Main layout container */}
-      <div className="space-y-6">
-        {/* Row 1: Extracted Data and Document Viewer */}
-        <div className="flex flex-wrap md:flex-nowrap gap-6">
-          <div
-            className={`transition-all duration-300 ease-in-out ${
-              isViewerOpen ? "w-full md:w-1/2" : "w-full"
-            }`}
-          >
-            <Card className="shadow-sm border border-l-6 border-blue-500 h-full">
-              <CardHeader className="bg-gray-50 border-b">
-                <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                  <span className="h-2 w-2 bg-blue-500 rounded-full"></span>
-                  Extracted Data
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {formFields
-                  .filter((f) => f.section === "extracted")
-                  .map(renderField)}
-              </CardContent>
-            </Card>
-          </div>
-
-          <AnimatePresence>
-            {isViewerOpen && (
-              <motion.div
-                className="w-full md:w-1/2"
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "50%" }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                <DocumentViewer />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Logic-only component for calculations */}
-        <Calculations control={control} setValue={setValue} />
-
-        {/* Row 2: Admin Input and Calculations */}
-        <div className="flex flex-wrap md:flex-nowrap gap-6">
-          <div className="w-full md:w-1/2">
-            <Card className="shadow-sm border border-l-6 border-green-500 h-full">
-              <CardHeader className="bg-gray-50 border-b flex flex-row items-center justify-between px-4 py-0">
-                <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                  <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                  Admin Input
-                </CardTitle>
-                {typeof runningBalValue === "number" && (
-                  <div className="text-right">
-                    <Label className="text-sm font-medium text-gray-500">
-                      Running Balance
-                    </Label>
-                    <div
-                      className={`px-4 py-2 mt-1 rounded-lg border-2 font-bold ${
-                        runningBalValue < 0
-                          ? "bg-red-50 border-red-300 text-red-700"
-                          : "bg-green-50 border-green-300 text-green-700"
-                      }`}
-                    >
-                      <span className="text-xl">
-                        ₹{runningBalValue.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </CardHeader>
-              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {formFields
-                  .filter(
-                    (f) => f.section === "admin" && f.key !== "running_bal"
-                  )
-                  .reduce((acc, field) => {
-                    const renderedField = renderField(field);
-                    if (renderedField) {
-                      acc.push(renderedField);
-                    }
-
-                    if (
-                      field.key === "admin_input.payment_by" &&
-                      paymentBy === "InsureZeal"
-                    ) {
-                      acc.push(
-                        <div
-                          className="space-y-2"
-                          key="cutpay_received_status_wrapper"
-                        >
-                          <Label
-                            htmlFor="cutpay_received_status"
-                            className="text-sm font-medium text-gray-700"
-                          >
-                            Cutpay Received Status
-                          </Label>
-                          <Controller
-                            name="cutpay_received_status"
-                            control={control}
-                            render={({
-                              field: controllerField,
-                              fieldState,
-                            }) => (
-                              <>
-                                <Select
-                                  onValueChange={controllerField.onChange}
-                                  value={
-                                    controllerField.value as string
-                                  }
-                                >
-                                  <SelectTrigger className="h-10">
-                                    <SelectValue placeholder="Select status" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="No">No</SelectItem>
-                                    <SelectItem value="Yes">Yes</SelectItem>
-                                    <SelectItem value="Partial">
-                                      Partial
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                {fieldState.error && (
-                                  <p className="text-red-500 text-xs mt-1">
-                                    {fieldState.error.message}
-                                  </p>
-                                )}
-                              </>
-                            )}
-                          />
-                        </div>
-                      );
-
-                      if (
-                        watch("cutpay_received_status") === "Yes" ||
-                        watch("cutpay_received_status") === "Partial"
-                      ) {
-                        acc.push(
-                          <div
-                            className="space-y-2"
-                            key="cutpay_received_wrapper"
-                          >
-                            <Label
-                              htmlFor="cutpay_received"
-                              className="text-sm font-medium text-gray-700"
-                            >
-                              Cutpay Amount
-                            </Label>
-                            <Controller
-                              name="cutpay_received"
-                              control={control}
-                              render={({
-                                field: controllerField,
-                                fieldState,
-                              }) => (
-                                <>
-                                  <Input
-                                    id="cutpay_received"
-                                    type="number"
-                                    step="0.01"
-                                    {...controllerField}
-                                    value={String(
-                                      controllerField.value ?? ""
-                                    )}
-                                    onChange={(e) => {
-                                      const value = e.target.value;
-                                      controllerField.onChange(
-                                        value === ""
-                                          ? null
-                                          : parseFloat(value)
-                                      );
-                                    }}
-                                    placeholder="Enter amount"
-                                    className="h-10"
-                                  />
-                                  {fieldState.error && (
-                                    <p className="text-red-500 text-xs mt-1">
-                                      {fieldState.error.message}
-                                    </p>
-                                  )}
-                                </>
-                              )}
-                            />
-                          </div>
-                        );
-                      }
-                    }
-                    return acc;
-                  }, [] as React.ReactNode[])}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="w-full md:w-1/2">
-            <Card className="shadow-sm border border-l-6 border-purple-500 ">
-              <CardHeader className="bg-gray-50 border-b">
-                <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                  <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
-                  Calculations
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                {formFields
-                  .filter((f) => f.section === "calculation")
-                  .map(renderField)}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation buttons */}
-      <div className="flex justify-between mt-6">
-        <Button
-          type="button"
-          onClick={onPrev}
-          variant="outline"
-          disabled={isSubmitting}
+    <div className="flex h-full">
+      <div className="w-full">
+        <form
+          onSubmit={handleSubmit(
+            (data) => {
+              console.log("Form submitted with data:", data);
+              onSubmit(data);
+            },
+            (errors) => {
+              // Handle form validation errors
+              console.log("Form validation errors:", errors);
+              toast.error("Please fix the form errors before submitting");
+            }
+          )}
+          className="space-y-6"
         >
-          Previous
-        </Button>
-        <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting ? "Processing..." : "Submit & Next"}
-        </Button>
-      </div>
+          {/* Header section with title and document viewer toggle */}
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-bold">Admin Input</h1>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={() => setIsViewerOpen(!isViewerOpen)}
+                variant="outline"
+              >
+                {isViewerOpen ? "Hide" : "Show"} Document
+              </Button>
+            </div>
+          </div>
 
-      {/* Loading dialog shown during submission */}
-      <LoadingDialog
-        open={isSubmitting}
-        title="Creating Cutpay Transaction"
-        steps={submissionSteps}
-      />
-    </form>
+          {/* Main layout container */}
+          <div className="space-y-6">
+            {/* Row 1: Extracted Data and Document Viewer */}
+            <div className="flex flex-wrap md:flex-nowrap gap-6">
+              <div
+                className={`transition-all duration-300 ease-in-out ${
+                  isViewerOpen ? "w-full md:w-1/2" : "w-full"
+                }`}
+              >
+                <Card className="shadow-sm border border-l-6 border-blue-500 h-full">
+                  <CardHeader className="bg-gray-50 border-b">
+                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                      <span className="h-2 w-2 bg-blue-500 rounded-full"></span>
+                      Extracted Data
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {formFields
+                      .filter((f) => f.section === "extracted")
+                      .map(renderField)}
+                    {renderField({
+                      key: 'extracted_data.tp_premium',
+                      label: 'TP Premium',
+                      type: 'number',
+                      section: 'extracted',
+                      tag: 'autofill'
+                    })}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <AnimatePresence>
+                {isViewerOpen && (
+                  <motion.div
+                    className="w-full md:w-1/2"
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: "50%" }}
+                    exit={{ opacity: 0, width: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <DocumentViewer />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Logic-only component for calculations */}
+            <Calculations control={control} setValue={setValue} />
+
+            {/* Row 2: Admin Input and Calculations */}
+            <div className="flex flex-wrap md:flex-nowrap gap-6">
+              <div className="w-full md:w-1/2">
+                <Card className="shadow-sm border border-l-6 border-green-500 h-full">
+                  <CardHeader className="bg-gray-50 border-b flex flex-row items-center justify-between px-4 py-0">
+                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                      <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                      Admin Input
+                    </CardTitle>
+                    {typeof runningBalValue === "number" && (
+                      <div className="text-right">
+                        <Label className="text-sm font-medium text-gray-500">
+                          Running Balance
+                        </Label>
+                        <div
+                          className={`px-4 py-2 mt-1 rounded-lg border-2 font-bold ${
+                            runningBalValue < 0
+                              ? "bg-red-50 border-red-300 text-red-700"
+                              : "bg-green-50 border-green-300 text-green-700"
+                          }`}
+                        >
+                          <span className="text-xl">
+                            ₹{runningBalValue.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </CardHeader>
+                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {formFields
+                      .filter(
+                        (f) => f.section === "admin" && f.key !== "running_bal"
+                      )
+                      .reduce((acc, field) => {
+                        const renderedField = renderField(field);
+                        if (renderedField) {
+                          acc.push(renderedField);
+                        }
+
+                        if (
+                          field.key === "admin_input.payment_by" &&
+                          paymentBy === "InsureZeal"
+                        ) {
+                          acc.push(
+                            <div
+                              className="space-y-2"
+                              key="cutpay_received_status_wrapper"
+                            >
+                              <Label
+                                className="text-sm font-medium text-gray-700"
+                              >
+                                Cutpay Received Status
+                              </Label>
+                              <Controller
+                                name="cutpay_received_status"
+                                control={control}
+                                render={({
+                                  field: controllerField,
+                                  fieldState,
+                                }) => (
+                                  <>
+                                    <Select
+                                      onValueChange={controllerField.onChange}
+                                      value={
+                                        controllerField.value as string
+                                      }
+                                    >
+                                      <SelectTrigger className="h-10">
+                                        <SelectValue placeholder="Select status" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="No">No</SelectItem>
+                                        <SelectItem value="Yes">Yes</SelectItem>
+                                        <SelectItem value="Partial">
+                                          Partial
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    {fieldState.error && (
+                                      <p className="text-red-500 text-xs mt-1">
+                                        {fieldState.error.message}
+                                      </p>
+                                    )}
+                                  </>
+                                )}
+                              />
+                            </div>
+                          );
+
+                          if (
+                            watch("cutpay_received_status") === "Yes" ||
+                            watch("cutpay_received_status") === "Partial"
+                          ) {
+                            acc.push(
+                              <div
+                                className="space-y-2"
+                                key="cutpay_received_wrapper"
+                              >
+                                <Label
+                                  htmlFor="cutpay_received"
+                                  className="text-sm font-medium text-gray-700"
+                                >
+                                  Cutpay Amount
+                                </Label>
+                                <Controller
+                                  name="cutpay_received"
+                                  control={control}
+                                  render={({
+                                    field: controllerField,
+                                    fieldState,
+                                  }) => (
+                                    <>
+                                      <Input
+                                        id="cutpay_received"
+                                        type="number"
+                                        step="0.01"
+                                        {...controllerField}
+                                        value={String(
+                                          controllerField.value ?? ""
+                                        )}
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          controllerField.onChange(
+                                            value === ""
+                                              ? null
+                                              : parseFloat(value)
+                                          );
+                                        }}
+                                        placeholder="Enter amount"
+                                        className="h-10"
+                                      />
+                                      {fieldState.error && (
+                                        <p className="text-red-500 text-xs mt-1">
+                                          {fieldState.error.message}
+                                        </p>
+                                      )}
+                                    </>
+                                  )}
+                                />
+                              </div>
+                            );
+                          }
+                        }
+                        return acc;
+                      }, [] as React.ReactNode[])}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="w-full md:w-1/2">
+                <Card className="shadow-sm border border-l-6 border-purple-500 ">
+                  <CardHeader className="bg-gray-50 border-b">
+                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                      <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
+                      Calculations
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {formFields
+                      .filter((f) => f.section === "calculation")
+                      .map(renderField)}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation buttons */}
+          <div className="flex justify-between mt-6">
+            <Button
+              type="button"
+              onClick={onPrev}
+              variant="outline"
+              disabled={isSubmitting}
+            >
+              Previous
+            </Button>
+            <Button type="submit" disabled={isSubmitting} className="min-w-[120px]">
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting ? "Processing..." : "Submit & Next"}
+            </Button>
+          </div>
+
+          {/* Loading dialog shown during submission */}
+          <LoadingDialog
+            open={isSubmitting}
+            title="Creating Cutpay Transaction"
+            steps={submissionSteps}
+          />
+        </form>
+      </div>
+    </div>
   );
 };
 
