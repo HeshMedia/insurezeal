@@ -29,6 +29,7 @@ export interface CreateChildIdRequest {
   insurer_code: string
   broker_code?: string
   preferred_rm_name?: string
+  password: string
 }
 
 // Child ID Request Response Types
@@ -42,6 +43,7 @@ export interface ChildIdRequest {
   insurer_id: number
   broker_code?: number
   preferred_rm_name?: string
+  password: string
   status: ChildIdStatus
   child_id?: string
   branch_code?: string

@@ -137,7 +137,7 @@ export interface ChildRequest {
   updated_at: string
   insurer?: InsurerInfo | null
   broker_relation?: BrokerInfo | null
-   password?: string
+  password: string
 }
 
 export interface AssignChildIdRequest {
@@ -147,6 +147,7 @@ export interface AssignChildIdRequest {
   manager_name?: string
   manager_email?: string
   admin_notes?: string
+  password: string
 }
 
 export interface ChildRequestListResponse {

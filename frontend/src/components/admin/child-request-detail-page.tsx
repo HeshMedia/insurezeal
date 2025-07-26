@@ -1,11 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Building, Phone, Mail, MapPin, User, Calendar, FileText, AlertCircle } from "lucide-react"
+import { ArrowLeft, Building, Phone, Mail, MapPin, User, Calendar, FileText, AlertCircle, Eye, EyeOff, Lock } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { adminApi } from "@/lib/api/admin"
 import { cn } from "@/lib/utils"
@@ -28,6 +29,7 @@ export function ChildRequestDetailPage() {
   const router = useRouter()
   const params = useParams()
   const requestId = params.id as string
+  const [showPassword, setShowPassword] = useState(false)
 
   // Fetch request details using the specific API endpoint
   const { data: request, isLoading, error } = useQuery({
@@ -182,6 +184,31 @@ export function ChildRequestDetailPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-700">Preferred RM Name</p>
                   <p className="text-sm text-gray-900">{request.preferred_rm_name || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-gray-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-700">Password</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-gray-900 font-mono">
+                      {showPassword ? (request.password || 'N/A') : '•'.repeat((request.password || '').length || 3)}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-3 w-3" />
+                      ) : (
+                        <Eye className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
 

@@ -1,9 +1,11 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Clock, CheckCircle, XCircle, AlertCircle, Phone, Mail, MapPin, Building, User, FileText } from "lucide-react"
+import { Clock, CheckCircle, XCircle, AlertCircle, Phone, Mail, MapPin, Building, User, FileText, Eye, EyeOff } from "lucide-react"
 import { useChildIdRequest } from "@/hooks/agentQuery"
 import { ChildIdStatus } from "@/types/agent.types"
 
@@ -13,6 +15,7 @@ interface ChildIdRequestDetailsProps {
 
 export function ChildIdRequestDetails({ requestId }: ChildIdRequestDetailsProps) {
   const { data: request, isLoading, error } = useChildIdRequest(requestId)
+  const [showPassword, setShowPassword] = useState(false)
 
   const getStatusIcon = (status: ChildIdStatus) => {
     switch (status) {
@@ -152,6 +155,27 @@ export function ChildIdRequestDetails({ requestId }: ChildIdRequestDetailsProps)
                 <p className="text-sm">{request.preferred_rm_name}</p>
               </div>
             )}
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Password</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-mono">
+                  {showPassword ? (request.password || 'N/A') : '•'.repeat((request.password || '').length || 3)}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-3 w-3" />
+                  ) : (
+                    <Eye className="h-3 w-3" />
+                  )}
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -195,6 +219,29 @@ export function ChildIdRequestDetails({ requestId }: ChildIdRequestDetailsProps)
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Manager Email</p>
                   <p className="text-sm">{request.manager_email}</p>
+                </div>
+              )}
+              {request.status === 'accepted' && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Assigned Password</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono bg-green-50 p-2 rounded">
+                      {showPassword ? (request.password || 'N/A') : '•'.repeat((request.password || '').length || 3)}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-3 w-3" />
+                      ) : (
+                        <Eye className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Database, Plus, Search, Edit, Trash2, AlertTriangle } from "lucide-react"
 import { 
   useAdminChildIdList, 
@@ -75,6 +76,7 @@ const adminChildIdFormSchema = z.object({
   code_type: z.string().min(1, "Code type is required"),
   insurer_code: z.string().min(1, "Insurer is required"),
   broker_code: z.string().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
   is_active: z.boolean().optional(),
   is_suspended: z.boolean().optional(),
 })
@@ -107,6 +109,7 @@ export function AdminChildIdManagement() {
       code_type: "",
       insurer_code: "",
       broker_code: "no-broker",
+      password: "",
       is_active: true,
       is_suspended: false,
     },
@@ -134,6 +137,7 @@ export function AdminChildIdManagement() {
       code_type: "",
       insurer_code: "",
       broker_code: "no-broker",
+      password: "",
       is_active: true,
       is_suspended: false,
     })
@@ -153,6 +157,7 @@ export function AdminChildIdManagement() {
       code_type: childId.code_type,
       insurer_code: childId.insurer.insurer_code,
       broker_code: childId.broker?.broker_code || "no-broker",
+      password: "", // Don't populate existing password for security
       is_active: childId.is_active,
       is_suspended: childId.is_suspended,
     })
@@ -190,6 +195,7 @@ export function AdminChildIdManagement() {
           code_type: data.code_type,
           insurer_code: data.insurer_code,
           broker_code: data.broker_code && data.broker_code !== "no-broker" ? data.broker_code : undefined,
+          password: data.password,
         }
         await createMutation.mutateAsync(createData)
         toast.success('Admin Child ID created successfully')
@@ -204,6 +210,7 @@ export function AdminChildIdManagement() {
           code_type: data.code_type,
           insurer_code: data.insurer_code,
           broker_code: data.broker_code && data.broker_code !== "no-broker" ? data.broker_code : undefined,
+          password: data.password,
           is_active: data.is_active,
           is_suspended: data.is_suspended,
         }
@@ -408,6 +415,19 @@ export function AdminChildIdManagement() {
                       <FormLabel>Admin Notes</FormLabel>
                       <FormControl>
                         <Textarea placeholder="Enter admin notes (optional)" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password {dialogType === 'edit' ? '(Leave empty to keep existing)' : ''}</FormLabel>
+                      <FormControl>
+                        <PasswordInput placeholder="Enter password" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

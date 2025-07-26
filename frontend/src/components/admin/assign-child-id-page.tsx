@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText } from "lucide-react"
+import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText, Lock, Eye, EyeOff } from "lucide-react"
 import { useAssignChildId } from "@/hooks/adminQuery"
 import { AssignChildIdRequest } from "@/types/admin.types"
 import { adminApi } from "@/lib/api/admin"
@@ -38,6 +38,7 @@ export function AssignChildIdPage() {
 
   const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
   const [notes, setNotes] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   // Fetch request details
   const { data: request, isLoading: requestLoading, error: requestError } = useQuery({
@@ -68,6 +69,7 @@ export function AssignChildIdPage() {
           manager_name: formData.manager_name || '',
           manager_email: formData.manager_email || '',
           admin_notes: notes,
+          password: ""
         }
       })
       
@@ -225,6 +227,31 @@ export function AssignChildIdPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-700">Email</p>
                     <p className="text-sm text-gray-900">{request.email || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-gray-400" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-700">Password</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-gray-900 font-mono">
+                        {showPassword ? (request.password || 'N/A') : '•'.repeat((request.password || '').length || 3)}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-3 w-3" />
+                        ) : (
+                          <Eye className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

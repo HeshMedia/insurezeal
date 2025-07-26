@@ -83,6 +83,7 @@ export interface CreateAdminChildIdRequest {
   code_type: string
   insurer_code: string
   broker_code?: string
+  password?: string
 }
 
 export interface UpdateAdminChildIdRequest {
@@ -97,6 +98,7 @@ export interface UpdateAdminChildIdRequest {
   broker_code?: string
   is_active?: boolean
   is_suspended?: boolean
+  password?: string
 }
 
 // Query Parameters
