@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -28,6 +29,7 @@ const childIdRequestSchema = z.object({
   insurer_code: z.string().min(1, "Please select an insurer"),
   broker_code: z.string().optional(),
   preferred_rm_name: z.string().optional(),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 })
 
 type ChildIdRequestFormValues = z.infer<typeof childIdRequestSchema>
@@ -50,6 +52,7 @@ export function ChildIdRequestForm() {
       insurer_code: "",
       broker_code: "",
       preferred_rm_name: "",
+      password: "",
     },
   })
 
@@ -72,6 +75,7 @@ export function ChildIdRequestForm() {
         location: data.location,
         code_type: data.code_type,
         insurer_code: data.insurer_code,
+        password: data.password,
         ...(data.code_type === "Broker Code" && data.broker_code && { broker_code: data.broker_code }),
         ...(data.preferred_rm_name && { preferred_rm_name: data.preferred_rm_name }),
       }
@@ -286,6 +290,24 @@ export function ChildIdRequestForm() {
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="Relationship Manager name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Password Field */}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Password
+                    </FormLabel>
+                    <FormControl>
+                      <PasswordInput placeholder="Enter password for child ID" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

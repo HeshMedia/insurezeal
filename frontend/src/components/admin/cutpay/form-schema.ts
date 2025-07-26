@@ -48,6 +48,11 @@ export const AdminInputDataSchema = z.object({
   insurer_code: z.string().optional().nullable(),
   broker_code: z.string().optional().nullable(),
   admin_child_id: z.string().optional().nullable(),
+  // New fields for OD+TP calculation - for frontend use only
+  od_agent_payout_percent: z.number().nullable().optional(),
+  tp_agent_payout_percent: z.number().nullable().optional(),
+  od_incoming_grid_percent: z.number().nullable().optional(),
+  tp_incoming_grid_percent: z.number().nullable().optional(),
 });
 
 export const CalculationResultSchema = z.object({
@@ -59,14 +64,51 @@ export const CalculationResultSchema = z.object({
   agent_po_amt: z.number().optional().nullable(),
   agent_extra_amount: z.number().optional().nullable(),
   total_agent_po_amt: z.number().optional().nullable(),
+  iz_total_po_percent: z.number().optional().nullable(),
+  already_given_to_agent: z.number().optional().nullable(),
+  broker_payout_amount: z.number().optional().nullable(),
 });
 
 export const CutPayFormSchema = z.object({
-  policy_pdf_url: z.string().optional(),
+  policy_pdf_url: z.string().optional().nullable(),
   additional_documents: z.record(z.any()).optional(),
   extracted_data: ExtractedPolicyDataSchema.optional(),
-  admin_input: AdminInputDataSchema.optional(),
-  calculations: CalculationResultSchema.optional(),
+  admin_input: z.object({
+    reporting_month: z.string().optional().nullable(),
+    booking_date: z.string().optional().nullable(), // Keep as string for API (YYYY-MM-DD format)
+    agent_code: z.string().optional().nullable(),
+    code_type: z.string().optional().nullable(),
+    incoming_grid_percent: z.number().optional().nullable(),
+    agent_commission_given_percent: z.number().optional().nullable(),
+    extra_grid: z.number().optional().nullable(),
+    commissionable_premium: z.number().optional().nullable(),
+    payment_by: z.string().optional().nullable(),
+    payment_method: z.string().optional().nullable(),
+    payout_on: z.string().optional().nullable(),
+    agent_extra_percent: z.number().optional().nullable(),
+    payment_by_office: z.number().optional().nullable(),
+    insurer_code: z.string().optional().nullable(),
+    broker_code: z.string().optional().nullable(),
+    admin_child_id: z.string().optional().nullable(),
+    // New fields for OD+TP calculation - for frontend use only
+    od_agent_payout_percent: z.number().nullable().optional(),
+    tp_agent_payout_percent: z.number().nullable().optional(),
+    od_incoming_grid_percent: z.number().nullable().optional(),
+    tp_incoming_grid_percent: z.number().nullable().optional(),
+  }),
+  calculations: z.object({
+    receivable_from_broker: z.number().optional().nullable(),
+    extra_amount_receivable_from_broker: z.number().optional().nullable(),
+    total_receivable_from_broker: z.number().optional().nullable(),
+    total_receivable_from_broker_with_gst: z.number().optional().nullable(),
+    cut_pay_amount: z.number().optional().nullable(),
+    agent_po_amt: z.number().optional().nullable(),
+    agent_extra_amount: z.number().optional().nullable(),
+    total_agent_po_amt: z.number().optional().nullable(),
+    iz_total_po_percent: z.number().optional().nullable(),
+    already_given_to_agent: z.number().optional().nullable(),
+    broker_payout_amount: z.number().optional().nullable(),
+  }),
   claimed_by: z.string().optional().nullable(),
   running_bal: z.number().optional().nullable(),
   cutpay_received_status: z.enum(['Yes', 'No', 'Partial']).optional().nullable(), // Frontend only
