@@ -39,6 +39,11 @@ const navigationItems = [
     icon: MessageSquare,
   },
   {
+    title: "Admin Child IDs",
+    url: "/admin/admin-child-id",
+    icon: Shield,
+  },
+  {
     title: "CutPay",
     url: "/admin/cutpay",
     icon: DollarSign,
