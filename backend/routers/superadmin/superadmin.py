@@ -241,6 +241,11 @@ async def create_admin_child_id(
     _rbac_check = Depends(require_superadmin_admin_child_ids_write)
 ):
     """Create a new admin child ID (SuperAdmin only)"""
+    # Log the incoming data for debugging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Creating admin child ID with data: {child_id_data.model_dump()}")
+    
     existing_result = await db.execute(
         select(AdminChildID).where(AdminChildID.child_id == child_id_data.child_id)
     )
@@ -272,6 +277,7 @@ async def create_admin_child_id(
         
     db_child_id = AdminChildID(
         child_id=child_id_data.child_id,
+        password=child_id_data.password,  # Add password field
         branch_code=child_id_data.branch_code,
         region=child_id_data.region,
         manager_name=child_id_data.manager_name,
@@ -390,7 +396,7 @@ async def update_admin_child_id(
             detail="Admin child ID not found"
         )
     
-    update_data = child_id_update.dict(exclude_unset=True)
+    update_data = child_id_update.model_dump(exclude_unset=True)
 
     if "insurer_code" in update_data:
         insurer_code = update_data.pop("insurer_code")

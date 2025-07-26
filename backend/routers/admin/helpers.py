@@ -484,9 +484,22 @@ class AdminHelpers:
                         detail="Child ID already exists. Please choose a different child ID."
                     )
                 
+            # Log the assignment data for debugging
+            logger.info(f"Assignment data being processed: {assignment_data}")
+            
+            # Set all fields from assignment data
             for field, value in assignment_data.items():
                 if hasattr(child_request, field):
+                    logger.info(f"Setting field '{field}' to value: {value}")
                     setattr(child_request, field, value)
+                else:
+                    logger.warning(f"Field '{field}' not found in ChildIdRequest model")
+            
+            # Explicitly log password field handling
+            if "password" in assignment_data:
+                logger.info(f"Password field found in assignment data: {assignment_data['password']}")
+            else:
+                logger.warning("Password field not found in assignment data")
 
             child_request.status = "accepted"
             child_request.approved_by = uuid.UUID(admin_user_id)

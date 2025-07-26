@@ -83,7 +83,7 @@ class GeminiPolicyExtractor:
         - state: State of registration
         - fuel_type: Petrol, Diesel, CNG, Electric
         - cc: Engine capacity in CC
-        - age_year: Calculate vehicle age based on manufacturing year:
+        - age_year: Vehicle age in years (if available in policy)
           * Find "Manufacturing Year", "Model Year", "Year of Manufacture" in the policy
           * Calculate: current_year - manufacturing_year
           * for the following examples assume current year is 2025 but do check the current year
@@ -119,7 +119,6 @@ class GeminiPolicyExtractor:
             "state": "string or null",
             "fuel_type": "string or null",
             "cc": number or null,
-            "manufacturing_year": number or null,
             "age_year": number or null,
             "ncb": "string or null",
             "discount_percent": number or null,
@@ -347,7 +346,6 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "state": extracted_data.get("state"),
                 "fuel_type": extracted_data.get("fuel_type"),
                 "cc": extracted_data.get("cc"),
-                "manufacturing_year": extracted_data.get("manufacturing_year"),
                 "age_year": extracted_data.get("age_year"),
                 "ncb": extracted_data.get("ncb"),
                 "discount_percent": extracted_data.get("discount_percent"),
@@ -412,7 +410,6 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "state": extracted_data.get("state"),
                 "fuel_type": extracted_data.get("fuel_type"),
                 "cc": extracted_data.get("cc"),
-                "manufacturing_year": extracted_data.get("manufacturing_year"),
                 "age_year": extracted_data.get("age_year"),
                 "ncb": extracted_data.get("ncb"),
                 "discount_percent": extracted_data.get("discount_percent"),

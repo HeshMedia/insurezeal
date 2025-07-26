@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from routers.users.schemas import GenderEnum, EducationLevelEnum
@@ -44,7 +44,7 @@ class ChildIdAssignment(BaseModel):
     manager_name: Optional[str] = Field(None, max_length=100, description="Manager name")
     manager_email: Optional[EmailStr] = Field(None, description="Manager email")
     admin_notes: Optional[str] = Field(None, max_length=1000, description="Admin notes")
-    password: Optional[str] = Field(None, min_length=8, max_length=100, description="Password for child ID assignment")
+    password: Optional[str] = Field(None, description="Password for child ID assignment")
 
 class ChildIdResponse(BaseModel):
     """Response schema for child ID requests - Clean new structure"""

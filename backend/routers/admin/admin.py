@@ -397,10 +397,15 @@ async def assign_child_id(
             )
         
         admin_user_id = current_user["user_id"]
+        
+        # Use model_dump() for Pydantic V2 compatibility and exclude None values
+        assignment_dict = assignment_data.model_dump(exclude_none=False)
+        logger.info(f"Assignment data received: {assignment_dict}")
+        
         child_request = await admin_helpers.approve_child_request(
             db=db,
             request_id=request_id,
-            assignment_data=assignment_data.dict(),
+            assignment_data=assignment_dict,
             admin_user_id=admin_user_id
         )
         

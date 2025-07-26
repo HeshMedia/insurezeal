@@ -38,7 +38,6 @@ class ExtractedPolicyData(BaseModel):
     state: Optional[str] = Field(None, description="State of registration")
     fuel_type: Optional[str] = Field(None, description="Fuel type")
     cc: Optional[int] = Field(None, description="Engine capacity")
-    manufacturing_year: Optional[int] = Field(None, description="Year of manufacture")
     age_year: Optional[int] = Field(None, description="Vehicle age in years")
     ncb: Optional[str] = Field(None, description="No Claim Bonus (YES/NO)")
     discount_percent: Optional[float] = Field(None, description="Discount percentage")
