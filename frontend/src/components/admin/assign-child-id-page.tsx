@@ -2,20 +2,20 @@
 
 import { useState } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useQuery } from "@tanstack/react-query"
+import { adminApi } from "@/lib/api/admin"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText, Lock, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText, Badge, } from "lucide-react"
 import { useAssignChildId } from "@/hooks/adminQuery"
 import { AssignChildIdRequest } from "@/types/admin.types"
-import { adminApi } from "@/lib/api/admin"
-import { toast } from "sonner"
+import { PasswordInput } from "@/components/ui/password-input"
 import { cn } from "@/lib/utils"
-import { useQuery } from "@tanstack/react-query"
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -37,8 +37,6 @@ export function AssignChildIdPage() {
   const requestId = params.id as string
 
   const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
-  const [notes, setNotes] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
 
   // Fetch request details
   const { data: request, isLoading: requestLoading, error: requestError } = useQuery({
@@ -49,6 +47,11 @@ export function AssignChildIdPage() {
 
   const assignMutation = useAssignChildId()
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!request) return
@@ -58,25 +61,20 @@ export function AssignChildIdPage() {
       toast.error('Please enter a Child ID')
       return
     }
+    if (!formData.password || formData.password.length < 6) {
+      toast.error('Password is required and must be at least 6 characters.')
+      return
+    }
 
     try {
       await assignMutation.mutateAsync({
         requestId: request.id,
-        data: {
-          child_id: formData.child_id,
-          branch_code: formData.branch_code || '',
-          region: formData.region || '',
-          manager_name: formData.manager_name || '',
-          manager_email: formData.manager_email || '',
-          admin_notes: notes,
-          password: ""
-        }
+        data: formData as AssignChildIdRequest,
       })
-      
-      toast.success('Child ID assigned successfully')
+      toast.success('Child ID assigned successfully!')
       router.push('/admin/child-requests')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'An error occurred')
+      toast.error(error instanceof Error ? error.message : 'Failed to assign Child ID')
     }
   }
 
@@ -229,31 +227,6 @@ export function AssignChildIdPage() {
                     <p className="text-sm text-gray-900">{request.email || 'N/A'}</p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-gray-400" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-700">Password</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-gray-900 font-mono">
-                        {showPassword ? (request.password || 'N/A') : '•'.repeat((request.password || '').length || 3)}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-3 w-3" />
-                        ) : (
-                          <Eye className="h-3 w-3" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {request.admin_notes && (
@@ -285,18 +258,29 @@ export function AssignChildIdPage() {
                   <Label htmlFor="child_id">Child ID *</Label>
                   <Input
                     id="child_id"
+                    name="child_id"
                     value={formData.child_id || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, child_id: e.target.value }))}
-                    placeholder="Enter Child ID"
-                    disabled={isLoading}
+                    onChange={handleChange}
+                    placeholder="Enter the Child ID to assign to this request"
                   />
-                  <p className="text-xs text-gray-600">
-                    Enter the Child ID to assign to this request
-                  </p>
+                  <p className="text-xs text-gray-500">Enter the Child ID to assign to this request.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password *</Label>
+                  <PasswordInput
+                    id="password"
+                    name="password"
+                    value={formData.password || ''}
+                    onChange={handleChange}
+                    placeholder="Enter password for the agent"
+                    autoComplete="new-password"
+                  />
+                  <p className="text-xs text-gray-500">The agent will be able to view this password.</p>
                 </div>
               </div>
 
-              {/* Optional Fields */}
+              {/* Additional Fields */}
               <div className="space-y-4">
                 <h3 className="font-medium text-gray-900">Additional Information</h3>
                 
@@ -305,8 +289,9 @@ export function AssignChildIdPage() {
                     <Label htmlFor="branch_code">Branch Code</Label>
                     <Input
                       id="branch_code"
+                      name="branch_code"
                       value={formData.branch_code || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, branch_code: e.target.value }))}
+                      onChange={handleChange}
                       placeholder="Enter branch code"
                       disabled={isLoading}
                     />
@@ -316,8 +301,9 @@ export function AssignChildIdPage() {
                     <Label htmlFor="region">Region</Label>
                     <Input
                       id="region"
+                      name="region"
                       value={formData.region || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, region: e.target.value }))}
+                      onChange={handleChange}
                       placeholder="Enter region"
                       disabled={isLoading}
                     />
@@ -327,8 +313,9 @@ export function AssignChildIdPage() {
                     <Label htmlFor="manager_name">Manager Name</Label>
                     <Input
                       id="manager_name"
+                      name="manager_name"
                       value={formData.manager_name || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, manager_name: e.target.value }))}
+                      onChange={handleChange}
                       placeholder="Enter manager name"
                       disabled={isLoading}
                     />
@@ -338,9 +325,10 @@ export function AssignChildIdPage() {
                     <Label htmlFor="manager_email">Manager Email</Label>
                     <Input
                       id="manager_email"
+                      name="manager_email"
                       type="email"
                       value={formData.manager_email || ''}
-                      onChange={(e) => setFormData(prev => ({ ...prev, manager_email: e.target.value }))}
+                      onChange={handleChange}
                       placeholder="Enter manager email"
                       disabled={isLoading}
                     />
@@ -348,11 +336,12 @@ export function AssignChildIdPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Admin Notes</Label>
+                  <Label htmlFor="admin_notes">Admin Notes</Label>
                   <Textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    id="admin_notes"
+                    name="admin_notes"
+                    value={formData.admin_notes || ''}
+                    onChange={handleChange}
                     placeholder="Enter any admin notes or comments..."
                     rows={3}
                     disabled={isLoading}
@@ -375,7 +364,8 @@ export function AssignChildIdPage() {
                   type="submit"
                   disabled={
                     isLoading || 
-                    !formData.child_id
+                    !formData.child_id ||
+                    !formData.password
                   }
                   className="sm:order-2 bg-green-600 hover:bg-green-700"
                 >

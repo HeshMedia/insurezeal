@@ -155,27 +155,6 @@ export function ChildIdRequestDetails({ requestId }: ChildIdRequestDetailsProps)
                 <p className="text-sm">{request.preferred_rm_name}</p>
               </div>
             )}
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Password</p>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-mono">
-                  {showPassword ? (request.password || 'N/A') : '•'.repeat((request.password || '').length || 3)}
-                </p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-3 w-3" />
-                  ) : (
-                    <Eye className="h-3 w-3" />
-                  )}
-                </Button>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -195,6 +174,25 @@ export function ChildIdRequestDetails({ requestId }: ChildIdRequestDetailsProps)
                 <div>
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Child ID</p>
                   <p className="text-sm font-mono bg-green-50 p-2 rounded">{request.child_id}</p>
+                </div>
+              )}
+              {request.password && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Password</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono">
+                      {showPassword ? (request.password) : '•'.repeat(request.password.length)}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </Button>
+                  </div>
                 </div>
               )}
               {request.branch_code && (

@@ -185,6 +185,10 @@ export function AdminChildIdManagement() {
   const onSubmit = async (data: AdminChildIdFormValues) => {
     try {
       if (dialogType === 'create') {
+        if (!data.password || data.password.length < 6) {
+          form.setError("password", { message: "Password is required and must be at least 6 characters." });
+          return;
+        }
         const createData: CreateAdminChildIdRequest = {
           child_id: data.child_id,
           branch_code: data.branch_code,
@@ -194,12 +198,12 @@ export function AdminChildIdManagement() {
           admin_notes: data.admin_notes,
           code_type: data.code_type,
           insurer_code: data.insurer_code,
-          broker_code: data.broker_code && data.broker_code !== "no-broker" ? data.broker_code : undefined,
+          broker_code: data.broker_code === 'no-broker' ? undefined : data.broker_code,
           password: data.password,
         }
         await createMutation.mutateAsync(createData)
         toast.success('Admin Child ID created successfully')
-      } else if (selectedChildId) {
+      } else if (dialogType === 'edit' && selectedChildId) {
         const updateData: UpdateAdminChildIdRequest = {
           child_id: data.child_id,
           branch_code: data.branch_code,

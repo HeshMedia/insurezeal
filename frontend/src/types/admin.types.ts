@@ -1,4 +1,3 @@
-
 // Agent Types
 export type GenderEnum = 'male' | 'female' | 'other' | null
 export type EducationLevelEnum = 

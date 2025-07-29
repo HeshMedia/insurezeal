@@ -21,18 +21,18 @@ export interface BrokerInsurerDropdownResponse {
 }
 
 // Create Child ID Request Types
+// import { InsurerInfo, BrokerInfo } from "./admin.types"
+
 export interface CreateChildIdRequest {
   phone_number: string
   email: string
   location: string
-  code_type: CodeType
+  code_type: string
   insurer_code: string
   broker_code?: string
   preferred_rm_name?: string
-  password: string
 }
 
-// Child ID Request Response Types
 export interface ChildIdRequest {
   id: string
   user_id: string
