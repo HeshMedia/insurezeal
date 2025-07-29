@@ -603,3 +603,52 @@ async def export_policies_csv(
             detail="Failed to export policies to CSV"
         )
 
+
+@router.get("/agent/{agent_code}", response_model=PolicyListResponse)
+async def get_agent_policies(
+    agent_code: str,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search by policy number, customer name, or vehicle registration"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_read)
+):
+    """
+    Get policies for a specific agent (excluding cutpay/incoming grid/calculation fields)
+    
+    **Requires policy read permission**
+    
+    - **agent_code**: Agent code to filter policies by
+    - **page**: Page number (default: 1)
+    - **page_size**: Number of items per page (default: 20, max: 100)
+    - **search**: Optional search term for filtering policies
+    
+    Returns paginated list of policies for the specified agent with only relevant fields.
+    """
+    try:
+        result = await policy_helpers.get_agent_policies(
+            db=db,
+            agent_code=agent_code,
+            page=page,
+            page_size=page_size,
+            search=search
+        )
+        
+        return PolicyListResponse(
+            policies=result["policies"],
+            total_count=result["total_count"],
+            page=page,
+            page_size=page_size,
+            total_pages=result["total_pages"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_agent_policies for agent {agent_code}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch agent policies"
+        )
+

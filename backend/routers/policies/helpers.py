@@ -598,3 +598,145 @@ class PolicyHelpers:
                 "agent_found": False,
                 "error": str(e)
             }
+
+    @staticmethod
+    async def get_agent_policies(
+        db: AsyncSession,
+        agent_code: str,
+        page: int = 1,
+        page_size: int = 20,
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get paginated policies for a specific agent
+        Returns only relevant policy fields (excluding cutpay/incoming grid/calculation fields)
+        """
+        try:
+            # Build base query
+            query = select(Policy).where(Policy.agent_code == agent_code)
+            
+            # Add search filter if provided
+            if search:
+                search_filter = or_(
+                    Policy.policy_number.ilike(f"%{search}%"),
+                    Policy.customer_name.ilike(f"%{search}%"),
+                    Policy.registration_number.ilike(f"%{search}%"),
+                    Policy.registration_no.ilike(f"%{search}%")
+                )
+                query = query.where(search_filter)
+            
+            # Count total records
+            count_query = select(func.count()).select_from(query.subquery())
+            count_result = await db.execute(count_query)
+            total_count = count_result.scalar()
+            
+            # Apply pagination and ordering
+            query = query.order_by(desc(Policy.created_at))
+            query = query.offset((page - 1) * page_size).limit(page_size)
+            
+            # Execute query
+            result = await db.execute(query)
+            policies = result.scalars().all()
+            
+            # Convert to response format (excluding cutpay/incoming grid/calculation fields)
+            policy_list = []
+            for policy in policies:
+                policy_data = model_data_from_orm(policy)
+                
+                # Only include relevant policy fields (exclude cutpay/incoming grid/calculation fields)
+                filtered_policy_data = {
+                    # Basic identifiers
+                    "id": policy_data.get("id"),
+                    "policy_number": policy_data.get("policy_number"),
+                    "formatted_policy_number": policy_data.get("formatted_policy_number"),
+                    
+                    # Agent & Child Info
+                    "agent_id": policy_data.get("agent_id"),
+                    "agent_code": policy_data.get("agent_code"),
+                    "child_id": policy_data.get("child_id"),
+                    "broker_name": policy_data.get("broker_name"),
+                    "insurance_company": policy_data.get("insurance_company"),
+                    
+                    # Policy Details
+                    "major_categorisation": policy_data.get("major_categorisation"),
+                    "product_insurer_report": policy_data.get("product_insurer_report"),
+                    "product_type": policy_data.get("product_type"),
+                    "plan_type": policy_data.get("plan_type"),
+                    "customer_name": policy_data.get("customer_name"),
+                    "customer_phone_number": policy_data.get("customer_phone_number"),
+                    "policy_type": policy_data.get("policy_type"),
+                    "insurance_type": policy_data.get("insurance_type"),
+                    
+                    # Vehicle Details
+                    "vehicle_type": policy_data.get("vehicle_type"),
+                    "registration_number": policy_data.get("registration_number"),
+                    "registration_no": policy_data.get("registration_no"),
+                    "vehicle_class": policy_data.get("vehicle_class"),
+                    "vehicle_segment": policy_data.get("vehicle_segment"),
+                    "make_model": policy_data.get("make_model"),
+                    "model": policy_data.get("model"),
+                    "vehicle_variant": policy_data.get("vehicle_variant"),
+                    "gvw": policy_data.get("gvw"),
+                    "rto": policy_data.get("rto"),
+                    "state": policy_data.get("state"),
+                    "fuel_type": policy_data.get("fuel_type"),
+                    "cc": policy_data.get("cc"),
+                    "age_year": policy_data.get("age_year"),
+                    "ncb": policy_data.get("ncb"),
+                    "discount_percent": policy_data.get("discount_percent"),
+                    "business_type": policy_data.get("business_type"),
+                    "seating_capacity": policy_data.get("seating_capacity"),
+                    "veh_wheels": policy_data.get("veh_wheels"),
+                    "is_private_car": policy_data.get("is_private_car"),
+                    
+                    # Premium Details
+                    "gross_premium": policy_data.get("gross_premium"),
+                    "gst": policy_data.get("gst"),
+                    "gst_amount": policy_data.get("gst_amount"),
+                    "net_premium": policy_data.get("net_premium"),
+                    "od_premium": policy_data.get("od_premium"),
+                    "tp_premium": policy_data.get("tp_premium"),
+                    
+                    # Agent Commission Fields (only these two for policies)
+                    "agent_commission_given_percent": policy_data.get("agent_commission_given_percent"),
+                    "agent_extra_percent": policy_data.get("agent_extra_percent"),
+                    
+                    # Agent Financial Tracking
+                    "payment_by_office": policy_data.get("payment_by_office"),
+                    "total_agent_payout_amount": policy_data.get("total_agent_payout_amount"),
+                    
+                    # Additional Configuration
+                    "code_type": policy_data.get("code_type"),
+                    "payment_by": policy_data.get("payment_by"),
+                    "payment_method": policy_data.get("payment_method"),
+                    "cluster": policy_data.get("cluster"),
+                    
+                    # Dates and other fields
+                    "start_date": policy_data.get("start_date"),
+                    "end_date": policy_data.get("end_date"),
+                    "notes": policy_data.get("notes"),
+                    "ai_confidence_score": policy_data.get("ai_confidence_score"),
+                    "manual_override": policy_data.get("manual_override"),
+                    "created_at": policy_data.get("created_at"),
+                    "updated_at": policy_data.get("updated_at")
+                }
+                
+                policy_list.append(filtered_policy_data)
+            
+            # Calculate pagination
+            total_pages = (total_count + page_size - 1) // page_size
+            
+            return {
+                "policies": policy_list,
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "current_page": page,
+                "page_size": page_size
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting agent policies for {agent_code}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to fetch policies for agent {agent_code}"
+            )

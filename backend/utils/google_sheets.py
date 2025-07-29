@@ -369,7 +369,8 @@ class GoogleSheetsSync:
             "Payment By Office": policy_data.get('payment_by_office', ''),
             "Total Agent PO": policy_data.get('total_agent_payout_amount', ''),
             "Created At": policy_data.get('created_at', ''),
-            "Updated At": policy_data.get('updated_at', '')
+            "Updated At": policy_data.get('updated_at', ''),
+            "MATCH STATUS": 'False'  # Always set to False for policies
         }
         
         # Fill the row data based on header mappings
@@ -508,6 +509,9 @@ class GoogleSheetsSync:
                 row.append(str(value))
             else:
                 row.append('')
+        
+        # Always add MATCH STATUS as False at the end
+        row.append('False')
         return row
 
     def _get_cutpay_sheet_headers(self) -> List[str]:
@@ -592,7 +596,10 @@ class GoogleSheetsSync:
             "Notes",
             
             # Timestamps
-            "Created At", "Updated At"
+            "Created At", "Updated At",
+            
+            # Match Status (always last)
+            "MATCH STATUS"
         ]
 
 # =============================================================================

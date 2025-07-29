@@ -52,7 +52,7 @@ class GeminiPolicyExtractor:
         - product_insurer_report: Product name from insurer report
         - product_type: Private Car, Two Wheeler, Commercial Vehicle, etc. Include vehicle category like (GCV), (SCV), (PCV) in brackets
         - plan_type: Determine based on coverage type:
-          * "Comprehensive" - if policy covers both OD (Own Damage) and TP (Third Party)
+          * "Comprehensive" - if policy covers both OD (Own Damage) and TP (Third Party) or if it is a package policy
           * "STP" (Stand-alone TP) - if policy covers only Third Party/Liability
           * "SAOD" (Stand-alone OD) - if policy covers only Own Damage
           * Look for keywords: "Comprehensive", "Package Policy", "Liability Only", "Act Only", "TP Only"

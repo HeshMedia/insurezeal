@@ -512,27 +512,70 @@ class Policy(Base):
     # Auto-populated from Child ID
     broker_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     insurance_company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-      # Policy Details
+    
+    # =============================================================================
+    # POLICY DETAILS (from CutPay fields)
+    # =============================================================================
+    
+    # Basic Policy Information (from PDF extraction)
     policy_number: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    formatted_policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    major_categorisation: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Motor, Life, Health
+    product_insurer_report: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    product_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Private Car, etc.
+    plan_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comp, STP, SAOD
+    customer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    customer_phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    
+    # Legacy field names for backward compatibility
     policy_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Motor, Health, etc.
     insurance_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comprehensive, Third Party
     
-    # Vehicle Details
+    # Vehicle Details (from PDF extraction)
     vehicle_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    registration_no: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Alternative field name
     vehicle_class: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     vehicle_segment: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    vehicle_variant: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    gvw: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Gross Vehicle Weight
+    rto: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    fuel_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    cc: Mapped[Optional[int]] = mapped_column(nullable=True)  # Engine capacity
+    age_year: Mapped[Optional[int]] = mapped_column(nullable=True)
+    ncb: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YES/NO
+    discount_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    business_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    seating_capacity: Mapped[Optional[int]] = mapped_column(nullable=True)
+    veh_wheels: Mapped[Optional[int]] = mapped_column(nullable=True)
     
-    # Premium Details
+    # Premium Details (from PDF extraction)
     gross_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
     gst: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    gst_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Alternative field name
     net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
     od_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Own Damage
     tp_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Third Party
     
+    # Agent Commission Fields (only these two for policies)
+    agent_commission_given_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    agent_extra_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    
     # Agent Financial Tracking
     payment_by_office: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
     total_agent_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
+    
+    # Additional Policy Configuration
+    code_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Direct, Broker, Child ID
+    payment_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Agent, InsureZeal
+    payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    cluster: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    
+    # Private Car Detection
+    is_private_car: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
     
     # Dates
     start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
@@ -546,6 +589,9 @@ class Policy(Base):
     ai_extracted_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Store raw AI response
     ai_confidence_score: Mapped[Optional[float]] = mapped_column(Numeric(3, 2), nullable=True)
     manual_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Additional fields
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

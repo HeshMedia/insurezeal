@@ -11,27 +11,67 @@ class PolicyBase(BaseModel):
     child_id: Optional[str] = None
     broker_name: Optional[str] = None
     insurance_company: Optional[str] = None
-      # Policy Details
+    
+    # Basic Policy Information
     policy_number: str
+    formatted_policy_number: Optional[str] = None
+    major_categorisation: Optional[str] = None  # Motor, Life, Health
+    product_insurer_report: Optional[str] = None
+    product_type: Optional[str] = None  # Private Car, etc.
+    plan_type: Optional[str] = None  # Comp, STP, SAOD
+    customer_name: Optional[str] = None
+    customer_phone_number: Optional[str] = None
+    
+    # Legacy field names for backward compatibility
     policy_type: str
     insurance_type: Optional[str] = None
     
     # Vehicle Details
     vehicle_type: Optional[str] = None
     registration_number: Optional[str] = None
+    registration_no: Optional[str] = None  # Alternative field name
     vehicle_class: Optional[str] = None
     vehicle_segment: Optional[str] = None
+    make_model: Optional[str] = None
+    model: Optional[str] = None
+    vehicle_variant: Optional[str] = None
+    gvw: Optional[float] = None  # Gross Vehicle Weight
+    rto: Optional[str] = None
+    state: Optional[str] = None
+    fuel_type: Optional[str] = None
+    cc: Optional[int] = None  # Engine capacity
+    age_year: Optional[int] = None
+    ncb: Optional[str] = None  # YES/NO
+    discount_percent: Optional[float] = None
+    business_type: Optional[str] = None
+    seating_capacity: Optional[int] = None
+    veh_wheels: Optional[int] = None
+    is_private_car: Optional[bool] = Field(None, description="Whether this is a private car")
     
     # Premium Details
     gross_premium: Optional[float] = None
     gst: Optional[float] = None
+    gst_amount: Optional[float] = None  # Alternative field name
     net_premium: Optional[float] = None
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
     
+    # Agent Commission Fields (only these two for policies)
+    agent_commission_given_percent: Optional[float] = None
+    agent_extra_percent: Optional[float] = None
+    
     # Agent Financial Tracking Fields
     payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
     total_agent_payout_amount: Optional[float] = Field(None, description="Total amount to be paid out to agent")
+    
+    # Additional Policy Configuration
+    code_type: Optional[str] = None  # Direct, Broker, Child ID
+    payment_by: Optional[str] = None  # Agent, InsureZeal
+    payment_method: Optional[str] = None
+    cluster: Optional[str] = None
+    
+    # Additional fields
+    notes: Optional[str] = None
     
     # Dates
     start_date: Optional[date] = None
