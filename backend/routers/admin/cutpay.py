@@ -163,12 +163,15 @@ async def create_cutpay_transaction(
     sync_results = None
     try:
         logger.info(f"Step 2: Starting Google Sheets sync for new CutPay ID {cutpay.id}.")
-        from utils.google_sheets import google_sheets_sync
+        from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
         
         cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
         for key, value in cutpay_dict.items():
             if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
             elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+
+        # Resolve insurer and broker names before syncing
+        cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
 
         cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
         master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
@@ -604,12 +607,15 @@ async def bulk_update_cutpay_transactions(
             sync_results = None
             try:
                 logger.info(f"Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
-                from utils.google_sheets import google_sheets_sync
+                from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
                 
                 cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
                 for key, value in cutpay_dict.items():
                     if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
                     elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+
+                # Resolve insurer and broker names before syncing
+                cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
 
                 cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
                 master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
@@ -915,12 +921,15 @@ async def update_cutpay_transaction(
     sync_results = None
     try:
         logger.info(f"Step 2: Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
-        from utils.google_sheets import google_sheets_sync
+        from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
         
         cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
         for key, value in cutpay_dict.items():
             if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
             elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+
+        # Resolve insurer and broker names before syncing
+        cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
 
         cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
         master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)

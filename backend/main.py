@@ -15,6 +15,7 @@ from routers.superadmin.superadmin import router as superadmin_router
 from routers.admin.cutpay import router as cutpay_router
 from routers.admin.public import router as public_router
 from routers.mis.mis import router as mis_router
+from routers.universal_records.universal_records import router as universal_records_router
 
 # Setup detailed logging
 logging.basicConfig(level=logging.INFO)
@@ -78,6 +79,9 @@ try:
     
     app.include_router(mis_router)
     logger.info("Included mis_router.")
+    
+    app.include_router(universal_records_router)
+    logger.info("Included universal_records_router.")
 
     logger.info("All routers included successfully.")
 

@@ -606,3 +606,168 @@ class GoogleSheetsSync:
 # GLOBAL INSTANCE
 # =============================================================================
 google_sheets_sync = GoogleSheetsSync()
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS FOR UNIVERSAL RECORDS
+# =============================================================================
+
+async def resolve_insurer_broker_names(cutpay_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve insurer_id and broker_id to their respective names"""
+    try:
+        from config import AsyncSessionLocal
+        from models import Insurer, Broker
+        from sqlalchemy import select
+        
+        async with AsyncSessionLocal() as db:
+            # Resolve insurer name
+            if cutpay_data.get('insurer_id'):
+                insurer_result = await db.execute(
+                    select(Insurer.name).where(Insurer.id == cutpay_data['insurer_id'])
+                )
+                insurer_name = insurer_result.scalar_one_or_none()
+                if insurer_name:
+                    cutpay_data['insurer_name'] = insurer_name
+                    logger.info(f"Resolved insurer_id {cutpay_data['insurer_id']} to name: {insurer_name}")
+            
+            # Resolve broker name  
+            if cutpay_data.get('broker_id'):
+                broker_result = await db.execute(
+                    select(Broker.name).where(Broker.id == cutpay_data['broker_id'])
+                )
+                broker_name = broker_result.scalar_one_or_none()
+                if broker_name:
+                    cutpay_data['broker_name'] = broker_name
+                    logger.info(f"Resolved broker_id {cutpay_data['broker_id']} to name: {broker_name}")
+                    
+    except Exception as e:
+        logger.error(f"Error resolving insurer/broker names: {str(e)}")
+    
+    return cutpay_data
+
+
+async def get_master_sheet_data(insurer_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get all records from master sheet, optionally filtered by insurer name"""
+    try:
+        if not google_sheets_sync.client:
+            logger.warning("Google Sheets client not initialized")
+            return []
+        
+        master_sheet = google_sheets_sync._get_or_create_worksheet("Master Sheet", google_sheets_sync._get_master_sheet_headers())
+        if not master_sheet:
+            return []
+        
+        # Get all records
+        records = master_sheet.get_all_records()
+        
+        # Filter by insurer name if provided
+        if insurer_name:
+            filtered_records = []
+            for record in records:
+                if record.get('Insurer Name', '').strip().lower() == insurer_name.lower():
+                    filtered_records.append(record)
+            return filtered_records
+        
+        return records
+        
+    except Exception as e:
+        logger.error(f"Error getting master sheet data: {str(e)}")
+        return []
+
+
+async def update_master_sheet_record(policy_number: str, updated_data: Dict[str, Any]) -> bool:
+    """Update existing record in master sheet by policy number"""
+    try:
+        if not google_sheets_sync.client:
+            logger.warning("Google Sheets client not initialized")
+            return False
+        
+        master_sheet = google_sheets_sync._get_or_create_worksheet("Master Sheet", google_sheets_sync._get_master_sheet_headers())
+        if not master_sheet:
+            return False
+        
+        # Find the row with matching policy number
+        policy_numbers = master_sheet.col_values(9)  # Policy Number is column 9
+        
+        for i, existing_policy_number in enumerate(policy_numbers):
+            if existing_policy_number == policy_number:
+                row_index = i + 1
+                
+                # Prepare row data
+                headers = google_sheets_sync._get_master_sheet_headers()
+                row_data = []
+                
+                for header in headers:
+                    if header in updated_data:
+                        row_data.append(updated_data[header])
+                    else:
+                        # Keep existing value or empty
+                        try:
+                            existing_row = master_sheet.row_values(row_index)
+                            header_index = headers.index(header)
+                            if header_index < len(existing_row):
+                                row_data.append(existing_row[header_index])
+                            else:
+                                row_data.append("")
+                        except:
+                            row_data.append("")
+                
+                # Update the row
+                master_sheet.update(f"A{row_index}:{google_sheets_sync._col_to_a1(len(headers))}{row_index}", [row_data])
+                logger.info(f"Updated master sheet record for policy {policy_number}")
+                return True
+        
+        logger.warning(f"Policy number {policy_number} not found in master sheet")
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error updating master sheet record: {str(e)}")
+        return False
+
+
+async def add_master_sheet_record(record_data: Dict[str, Any]) -> bool:
+    """Add new record to master sheet"""
+    try:
+        if not google_sheets_sync.client:
+            logger.warning("Google Sheets client not initialized")
+            return False
+        
+        master_sheet = google_sheets_sync._get_or_create_worksheet("Master Sheet", google_sheets_sync._get_master_sheet_headers())
+        if not master_sheet:
+            return False
+        
+        # Prepare row data
+        headers = google_sheets_sync._get_master_sheet_headers()
+        row_data = []
+        
+        for header in headers:
+            if header in record_data:
+                row_data.append(record_data[header])
+            elif header == "Created At":
+                row_data.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            elif header == "Updated At":
+                row_data.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            else:
+                row_data.append("")
+        
+        # Add the row
+        master_sheet.append_row(row_data)
+        logger.info(f"Added new master sheet record for policy {record_data.get('Policy Number', 'unknown')}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error adding master sheet record: {str(e)}")
+        return False
+
+
+# =============================================================================
+# CONVENIENCE FUNCTIONS FOR POLICY/CUTPAY SYNC
+# =============================================================================
+
+def sync_policy_to_master_sheet(policy_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Sync policy data to master sheet with insurer/broker name resolution"""
+    return google_sheets_sync._safe_sync(google_sheets_sync._sync_policy_to_master_sheet, policy_data)
+
+
+def sync_cutpay_to_master_sheet(cutpay_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Sync cutpay data to master sheet with insurer/broker name resolution"""
+    return google_sheets_sync._safe_sync(google_sheets_sync.sync_to_master_sheet, cutpay_data)
