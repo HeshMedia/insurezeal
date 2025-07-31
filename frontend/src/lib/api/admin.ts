@@ -10,7 +10,6 @@ import {
   ChildRequestListParams,
   AssignChildIdRequest,
   ChildRequestStatusUpdate,
-  UniversalRecordUploadResponse
 } from '@/types/admin.types'
 
 // Create axios instance
@@ -155,28 +154,4 @@ export const adminApi = {
       return response.data
     }
   },
-
-  // Universal Record Management APIs
-  universalRecords: {
-    // Upload universal record CSV
-    upload: async (file: File): Promise<UniversalRecordUploadResponse> => {
-      const formData = new FormData()
-      formData.append('file', file)
-      
-      const response = await apiClient.post('/admin/universal-records/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
-      return response.data
-    },
-
-    // Download CSV template
-    downloadTemplate: async (): Promise<Blob> => {
-      const response = await apiClient.get('/admin/universal-records/template', {
-        responseType: 'blob'
-      })
-      return response.data
-    }
-  }
 }

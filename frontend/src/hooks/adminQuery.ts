@@ -7,11 +7,11 @@ import {
   ChildRequestStatusUpdate
 } from '@/types/admin.types'
 import { useBrokersInsurersList, useAvailableAdminChildIds } from './superadminQuery'
-// Note: Cutpay operations moved to cutpayQuery.ts
+
 
 // Query keys
 const ADMIN_QUERY_KEYS = {
-  // NOTE: Cutpay operations moved to cutpayQuery.ts - use that instead
+
   agents: {
     all: ['admin', 'agents'] as const,
     lists: () => [...ADMIN_QUERY_KEYS.agents.all, 'list'] as const,
@@ -155,36 +155,6 @@ export const useDeleteAgent = () => {
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.lists() })
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.stats })
     },
-  })
-}
-
-// CutPay Export - DEPRECATED: Use cutpayQuery.ts instead
-/*
-export const useExportCutPayCsv = () => {
-  return useMutation({
-    mutationFn: ({ startDate, endDate }: { startDate?: string; endDate?: string }) => 
-      adminApi.cutpay.exportCsv(startDate, endDate),
-  })
-}
-*/
-
-// Universal Record Management
-export const useUploadUniversalRecord = () => {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: adminApi.universalRecords.upload,
-    onSuccess: () => {
-      // Invalidate all data that might have been updated
-      // NOTE: Cutpay invalidation removed - use cutpayQuery.ts for cutpay operations
-      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.stats })
-    },
-  })
-}
-
-export const useDownloadUniversalRecordTemplate = () => {
-  return useMutation({
-    mutationFn: adminApi.universalRecords.downloadTemplate,
   })
 }
 
