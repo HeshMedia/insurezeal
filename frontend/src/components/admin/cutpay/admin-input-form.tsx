@@ -170,20 +170,10 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
       Object.entries(pdfExtractionData.extracted_data).forEach(
         ([key, value]) => {
           const formKey = `extracted_data.${key}` as FormFieldPath;
-          
-          // Special handling for plan_type to map backend values to frontend options
-          if (key === 'plan_type' && value) {
-            let mappedValue = value as string;
-            // Map backend "Comprehensive" to frontend "Comp" for display consistency
-            if (mappedValue === 'Comprehensive') {
-              mappedValue = 'Comp';
-            }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            setValue(formKey, mappedValue as any, { shouldValidate: true });
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            setValue(formKey, value as any, { shouldValidate: true });
-          }
+          // The `any` cast is used here because `setValue` is strictly typed,
+          // but we are dynamically setting values from an object.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setValue(formKey, value as any, { shouldValidate: true });
         }
       );
     }
@@ -194,15 +184,11 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     if (pdfExtractionData?.extracted_data?.plan_type) {
       const extractedPlanType = pdfExtractionData.extracted_data.plan_type;
       
-      // Only auto-fill if the current value is empty or different from extracted value
-      if (!planType || planType !== extractedPlanType) {
-        // Map backend values to frontend values
-        let mappedPlanType = extractedPlanType;
-        if (extractedPlanType === 'Comprehensive') {
-          mappedPlanType = 'Comp';
-        }
+      // Only auto-fill if the current value is empty
+      if (!planType) {
+
         
-        setValue("extracted_data.plan_type", mappedPlanType, {
+        setValue("extracted_data.plan_type", extractedPlanType, {
           shouldValidate: true,
         });
       }
@@ -216,16 +202,16 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     const hasRegNo = registrationNo && String(registrationNo).trim() !== "";
 
     if (hasRegNo) {
-      // If a registration number exists and the category isn't 'Vehicle', set it.
-      if (majorCategorisation !== "Vehicle") {
-        setValue("extracted_data.major_categorisation", "Vehicle", {
+      // If a registration number exists and the category isn't 'Motor', set it.
+      if (majorCategorisation !== "Motor") {
+        setValue("extracted_data.major_categorisation", "Motor", {
           shouldValidate: true,
         });
       }
     } else {
-      // If no registration number exists and the category was 'Vehicle', clear it.
+      // If no registration number exists and the category was 'Motor', clear it.
       // This avoids clearing a user's manual selection of 'Health' or 'Life'.
-      if (majorCategorisation === "Vehicle") {
+      if (majorCategorisation === "Motor") {
         setValue("extracted_data.major_categorisation", null, {
           shouldValidate: true,
         });
@@ -310,22 +296,18 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     []
   );
   const majorCategorisationOptions = useMemo(
-    () => ["Vehicle", "Life", "Health"].map((o) => ({ value: o, label: o })),
+    () => ["Motor", "Life", "Health"].map((o) => ({ value: o, label: o })),
     []
   );
-  const planTypeOptions = useMemo(
-    () => [
-      { value: "Comprehensive", label: "Comp" },
-      { value: "STP", label: "STP" },
-      { value: "SAOD", label: "SAOD" },
-      // Keep original values for backward compatibility
-      { value: "Comp", label: "Comp" },
-    ].filter((option, index, self) => 
-      // Remove duplicates based on label
-      index === self.findIndex(o => o.label === option.label)
-    ),
-    []
-  );
+const planTypeOptions = useMemo(
+  () => [
+    { value: "Comprehensive", label: "Comprehensive" },
+    { value: "STP", label: "STP" },
+    { value: "SAOD", label: "SAOD" }
+  ],
+  []
+);
+
   const fuelTypeOptions = useMemo(
     () =>
       ["Petrol", "Diesel", "CNG", "Electric"].map((o) => ({
@@ -949,7 +931,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
                 <Select
                   onValueChange={controllerField.onChange}
                   value={
-                    controllerField.value as string
+                    (controllerField.value as string) ?? undefined
                   }
                 >
                   <SelectTrigger className="h-10">
@@ -1205,7 +1187,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
                                     <Select
                                       onValueChange={controllerField.onChange}
                                       value={
-                                        controllerField.value as string
+                                        (controllerField.value as string) ?? undefined
                                       }
                                     >
                                       <SelectTrigger className="h-10">
