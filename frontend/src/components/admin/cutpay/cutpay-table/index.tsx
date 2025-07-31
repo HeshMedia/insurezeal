@@ -5,7 +5,6 @@ import {
   useReactTable,
   getCoreRowModel,
   flexRender,
-  RowData,
 } from '@tanstack/react-table'
 import { useCutPayList, useUpdateBulkPostDetails } from '@/hooks/cutpayQuery'
 import { CutPayTransaction, PostCutpayDetails } from '@/types/cutpay.types'
@@ -20,18 +19,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card, CardContent, CardHeader, } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
-// The TData generic is part of the required signature for module augmentation
-// by @tanstack/react-table. It's expected to be there even if not directly used in the meta interface.
-declare module '@tanstack/react-table' {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface TableMeta<TData extends RowData> {
-    updateData: (rowIndex: number, columnId: string, value: unknown) => void
-    editingCell: { rowIndex: number; columnId: string } | null
-    setEditingCell: (cell: { rowIndex: number; columnId: string } | null) => void
-  }
-}
+// The 'declare module' block has been REMOVED from this file.
+// The global type definition is now in 'src/types/tanstack-table.d.ts'.
 
 export function CutPayTable() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -85,7 +76,7 @@ export function CutPayTable() {
     columns,
     getCoreRowModel: getCoreRowModel(),
     meta: {
-      updateData,
+      updateDataByIndex: updateData,
       editingCell,
       setEditingCell,
     },

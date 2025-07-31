@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { User, Settings, BarChart3, Users, FileText, Shield, DollarSign, MessageSquare, Database } from "lucide-react"
+import { User, Settings, BarChart3, Users, FileText, Shield, DollarSign, MessageSquare, Database , FileSpreadsheet } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useAtom } from "jotai"
@@ -27,6 +27,11 @@ const navigationItems = [
     title: "Dashboard",
     url: "/admin",
     icon: BarChart3,
+  },
+    {
+    title: "Master-Sheet",
+    url: "/admin/master-sheet",
+    icon: FileSpreadsheet,
   },
   {
     title: "Agents",

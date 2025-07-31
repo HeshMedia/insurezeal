@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client"
 
+"use client"
 import React, { useState, useEffect, useRef } from 'react'
 import { CellContext } from '@tanstack/react-table'
 import { CutPayTransaction } from '@/types/cutpay.types'
@@ -19,26 +18,28 @@ export const EditableCell = ({
   row,
   column,
   table,
-}: CellContext<CutPayTransaction, any>) => {
+}: CellContext<CutPayTransaction, unknown>) => {
   const initialValue = getValue()
   const [value, setValue] = useState(initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const { updateData, editingCell, setEditingCell } = table.options.meta as any
+  // Correctly destructure the function with its new name: updateDataByIndex
+  const { updateDataByIndex, editingCell, setEditingCell } = table.options.meta!
 
   const isEditing = editingCell?.rowIndex === row.index && editingCell?.columnId === column.id
 
   const onSave = () => {
-    setEditingCell(null)
+    setEditingCell!(null)
     // Only trigger update if value has changed
     if (value !== initialValue) {
-      updateData(row.index, column.id, value)
+      // Call the correctly named function
+      updateDataByIndex!(row.index, column.id, value)
     }
   }
 
   const onCancel = () => {
     setValue(initialValue)
-    setEditingCell(null)
+    setEditingCell!(null)
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -69,14 +70,18 @@ export const EditableCell = ({
     if (columnMeta?.type === 'select') {
       return (
         <div className="p-1">
-          <Select value={value || ''} onValueChange={(val) => {
-            setValue(val)
-            updateData(row.index, column.id, val)
-            setEditingCell(null)
-          }}>
+          <Select
+            value={(value as string) || ''}
+            onValueChange={(val) => {
+              setValue(val)
+              // Call the correctly named function
+              updateDataByIndex!(row.index, column.id, val)
+              setEditingCell!(null)
+            }}
+          >
             <SelectTrigger
               className="h-9 w-full focus:ring-2 focus:ring-blue-400 transition-transform duration-200 scale-105 bg-white"
-              onBlur={() => setEditingCell(null)}
+              onBlur={() => setEditingCell!(null)}
             >
               <SelectValue placeholder="Select status" />
             </SelectTrigger>
@@ -97,7 +102,7 @@ export const EditableCell = ({
         <Input
           ref={inputRef}
           type={columnMeta?.type || 'text'}
-          value={value || ''}
+          value={(value as string) || ''}
           onChange={(e) => setValue(e.target.value)}
           onBlur={onSave}
           onKeyDown={onKeyDown}
@@ -112,14 +117,14 @@ export const EditableCell = ({
 
   return (
     <div
-      onDoubleClick={() => setEditingCell({ rowIndex: row.index, columnId: column.id })}
+      onDoubleClick={() => setEditingCell!({ rowIndex: row.index, columnId: column.id })}
       className={cn(
         "w-full h-full min-h-[53px] flex items-center px-4 py-2",
         "hover:bg-blue-100/50 cursor-pointer",
         isNumber ? 'justify-end' : 'justify-start'
       )}
     >
-      {value ?? <span className="text-gray-400">N/A</span>}
+      {value !== undefined && value !== null && value !== "" ? String(value) : <span className="text-gray-400">N/A</span>}
     </div>
   )
 }
