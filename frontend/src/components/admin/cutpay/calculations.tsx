@@ -59,8 +59,8 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
         // Fallback to original logic if payout_on is not set
         if (product_type?.toLowerCase().includes('private') && product_type?.toLowerCase().includes('car')) {
           if (
-            plan_type?.toLowerCase().includes('comp') || 
-            plan_type?.toLowerCase().includes('comprehensive')
+            plan_type?.toLowerCase().includes('comprehensive') ||
+            plan_type?.toLowerCase().includes('saod')
           ) {
             calculatedCommissionablePremium = od_premium;
           } else {

@@ -69,10 +69,7 @@ export const formFields: FormFieldConfig[] = [
   { key: 'admin_input.agent_extra_percent', label: 'Agent Extra Grid %', type: 'number', section: 'admin' },
   
   // OD+TP specific percentage fields - only shown when payout_on = "OD+TP"
-  { key: 'admin_input.od_agent_payout_percent', label: 'OD Agent Payout %', type: 'number', section: 'admin' },
-  { key: 'admin_input.tp_agent_payout_percent', label: 'TP Agent Payout %', type: 'number', section: 'admin' },
-  { key: 'admin_input.od_incoming_grid_percent', label: 'OD Incoming Grid %', type: 'number', section: 'admin' },
-  { key: 'admin_input.tp_incoming_grid_percent', label: 'TP Incoming Grid %', type: 'number', section: 'admin' },
+  
   { key: 'admin_input.commissionable_premium', label: 'Commissionable Premium', type: 'number', section: 'calculation', tag: 'autocalculated' },
   { key: 'admin_input.payment_by', label: 'Payment By', type: 'select', section: 'admin' },
   { key: 'admin_input.payment_method', label: 'Payment Method', type: 'select', section: 'admin', tag: 'payment-method-dependent' },
