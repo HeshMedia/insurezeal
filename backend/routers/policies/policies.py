@@ -71,6 +71,7 @@ async def extract_pdf_data_endpoint(
         return AIExtractionResponse(
             extracted_data=extracted_data_dict,
             confidence_score=confidence_score,
+            success=True,
             message="Policy data extracted successfully from PDF"
         )
         

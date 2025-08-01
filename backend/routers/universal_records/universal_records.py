@@ -237,11 +237,11 @@ async def download_universal_record_template(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Download CSV template for universal record upload
+    Download XLSX template for universal record upload
     
     **Admin only endpoint**
     
-    Returns a CSV template file showing the expected format for universal record uploads.
+    Returns an Excel template file showing the expected format for universal record uploads.
     If an insurer name is provided, the template will use that insurer's specific headers.
     Otherwise, it returns a generic template with master sheet headers.
     
@@ -249,7 +249,7 @@ async def download_universal_record_template(
     - `insurer_name`: Optional insurer name to get insurer-specific template
     
     **Returns:**
-    - CSV file with appropriate headers and sample data
+    - XLSX file with appropriate headers and sample data
     """
     
     try:
@@ -264,7 +264,7 @@ async def download_universal_record_template(
             
             # Use insurer's original headers
             headers = list(insurer_mapping.keys())
-            filename = f"universal_record_template_{insurer_name.replace(' ', '_').lower()}.csv"
+            filename = f"universal_record_template_{insurer_name.replace(' ', '_').lower()}.xlsx"
             
             # Sample data matching insurer headers
             sample_data = []
@@ -313,7 +313,7 @@ async def download_universal_record_template(
                 'payment_date',
                 'notes'
             ]
-            filename = "universal_record_template_generic.csv"
+            filename = "universal_record_template_generic.xlsx"
             
             sample_data = [
                 'POL-2024-001',  # policy_number
@@ -345,21 +345,55 @@ async def download_universal_record_template(
                 'Sample transaction'  # notes
             ]
         
-        # Create CSV content
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(headers)
-        writer.writerow(sample_data)
-        
-        csv_content = output.getvalue()
-        output.close()
-        
-        # Return as downloadable file
-        return StreamingResponse(
-            io.BytesIO(csv_content.encode('utf-8')),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+        # Create XLSX template using openpyxl
+        try:
+            from openpyxl import Workbook
+            from openpyxl.utils import get_column_letter
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Template"
+            
+            # Add headers
+            for col_num, header in enumerate(headers, 1):
+                col_letter = get_column_letter(col_num)
+                ws[f'{col_letter}1'] = header
+                ws[f'{col_letter}1'].font = ws[f'{col_letter}1'].font.copy(bold=True)
+            
+            # Add sample data
+            for col_num, value in enumerate(sample_data, 1):
+                col_letter = get_column_letter(col_num)
+                ws[f'{col_letter}2'] = value
+            
+            # Auto-adjust column widths
+            for column in ws.columns:
+                max_length = 0
+                column_letter = get_column_letter(column[0].column)
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # Save to BytesIO
+            excel_output = io.BytesIO()
+            wb.save(excel_output)
+            excel_output.seek(0)
+            
+            return StreamingResponse(
+                excel_output,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+            
+        except ImportError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="XLSX format not supported. openpyxl package not installed."
+            )
         
     except HTTPException:
         raise

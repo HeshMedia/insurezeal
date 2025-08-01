@@ -652,7 +652,7 @@ async def get_master_sheet_data(insurer_name: Optional[str] = None) -> List[Dict
             logger.warning("Google Sheets client not initialized")
             return []
         
-        master_sheet = google_sheets_sync._get_or_create_worksheet("Master Sheet", google_sheets_sync._get_master_sheet_headers())
+        master_sheet = google_sheets_sync._get_or_create_worksheet("Master", google_sheets_sync._get_master_sheet_headers())
         if not master_sheet:
             return []
         
@@ -681,7 +681,7 @@ async def update_master_sheet_record(policy_number: str, updated_data: Dict[str,
             logger.warning("Google Sheets client not initialized")
             return False
         
-        master_sheet = google_sheets_sync._get_or_create_worksheet("Master Sheet", google_sheets_sync._get_master_sheet_headers())
+        master_sheet = google_sheets_sync._get_or_create_worksheet("Master", google_sheets_sync._get_master_sheet_headers())
         if not master_sheet:
             return False
         
@@ -731,7 +731,7 @@ async def add_master_sheet_record(record_data: Dict[str, Any]) -> bool:
             logger.warning("Google Sheets client not initialized")
             return False
         
-        master_sheet = google_sheets_sync._get_or_create_worksheet("Master Sheet", google_sheets_sync._get_master_sheet_headers())
+        master_sheet = google_sheets_sync._get_or_create_worksheet("Master", google_sheets_sync._get_master_sheet_headers())
         if not master_sheet:
             return False
         
