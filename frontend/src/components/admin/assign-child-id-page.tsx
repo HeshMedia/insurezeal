@@ -61,10 +61,7 @@ export function AssignChildIdPage() {
       toast.error('Please enter a Child ID')
       return
     }
-    if (!formData.password || formData.password.length < 6) {
-      toast.error('Password is required and must be at least 6 characters.')
-      return
-    }
+  
 
     try {
       await assignMutation.mutateAsync({

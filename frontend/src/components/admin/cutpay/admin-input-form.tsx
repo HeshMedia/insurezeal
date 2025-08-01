@@ -41,15 +41,17 @@ import { CutPayFormSchema, CutPayFormSchemaType } from "./form-schema";
 import { formFields, FormFieldConfig, FormFieldPath } from "./form-config";
 import Calculations from "./calculations";
 import { Loader2 } from "lucide-react";
-import DocumentViewer from "./documentviewer";
+import DocumentViewer from "../../forms/documentviewer";
 
 // Props interface for the AdminInputForm component
 interface AdminInputFormProps {
   onPrev: () => void; // Function to go to the previous step
+  showCalculations?: boolean; // Whether to show calculation fields
 }
 
 const AdminInputForm: React.FC<AdminInputFormProps> = ({
   onPrev,
+  showCalculations = true, // Default to true for backward compatibility
 }) => {
   const router = useRouter();
   // State for document viewer visibility is now managed locally
@@ -119,8 +121,6 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   const registrationNo = watch("extracted_data.registration_no");
   const majorCategorisation = watch("extracted_data.major_categorisation");
   const planType = watch("extracted_data.plan_type");
-  const runningBalValue = watch("running_bal");
-  const payoutOn = watch("admin_input.payout_on");
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
@@ -170,20 +170,10 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
       Object.entries(pdfExtractionData.extracted_data).forEach(
         ([key, value]) => {
           const formKey = `extracted_data.${key}` as FormFieldPath;
-          
-          // Special handling for plan_type to map backend values to frontend options
-          if (key === 'plan_type' && value) {
-            let mappedValue = value as string;
-            // Map backend "Comprehensive" to frontend "Comp" for display consistency
-            if (mappedValue === 'Comprehensive') {
-              mappedValue = 'Comp';
-            }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            setValue(formKey, mappedValue as any, { shouldValidate: true });
-          } else {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            setValue(formKey, value as any, { shouldValidate: true });
-          }
+          // The `any` cast is used here because `setValue` is strictly typed,
+          // but we are dynamically setting values from an object.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setValue(formKey, value as any, { shouldValidate: true });
         }
       );
     }
@@ -194,15 +184,11 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     if (pdfExtractionData?.extracted_data?.plan_type) {
       const extractedPlanType = pdfExtractionData.extracted_data.plan_type;
       
-      // Only auto-fill if the current value is empty or different from extracted value
-      if (!planType || planType !== extractedPlanType) {
-        // Map backend values to frontend values
-        let mappedPlanType = extractedPlanType;
-        if (extractedPlanType === 'Comprehensive') {
-          mappedPlanType = 'Comp';
-        }
+      // Only auto-fill if the current value is empty
+      if (!planType) {
+
         
-        setValue("extracted_data.plan_type", mappedPlanType, {
+        setValue("extracted_data.plan_type", extractedPlanType, {
           shouldValidate: true,
         });
       }
@@ -216,16 +202,16 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     const hasRegNo = registrationNo && String(registrationNo).trim() !== "";
 
     if (hasRegNo) {
-      // If a registration number exists and the category isn't 'Vehicle', set it.
-      if (majorCategorisation !== "Vehicle") {
-        setValue("extracted_data.major_categorisation", "Vehicle", {
+      // If a registration number exists and the category isn't 'Motor', set it.
+      if (majorCategorisation !== "Motor") {
+        setValue("extracted_data.major_categorisation", "Motor", {
           shouldValidate: true,
         });
       }
     } else {
-      // If no registration number exists and the category was 'Vehicle', clear it.
+      // If no registration number exists and the category was 'Motor', clear it.
       // This avoids clearing a user's manual selection of 'Health' or 'Life'.
-      if (majorCategorisation === "Vehicle") {
+      if (majorCategorisation === "Motor") {
         setValue("extracted_data.major_categorisation", null, {
           shouldValidate: true,
         });
@@ -310,22 +296,18 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
     []
   );
   const majorCategorisationOptions = useMemo(
-    () => ["Vehicle", "Life", "Health"].map((o) => ({ value: o, label: o })),
+    () => ["Motor", "Life", "Health"].map((o) => ({ value: o, label: o })),
     []
   );
-  const planTypeOptions = useMemo(
-    () => [
-      { value: "Comprehensive", label: "Comp" },
-      { value: "STP", label: "STP" },
-      { value: "SAOD", label: "SAOD" },
-      // Keep original values for backward compatibility
-      { value: "Comp", label: "Comp" },
-    ].filter((option, index, self) => 
-      // Remove duplicates based on label
-      index === self.findIndex(o => o.label === option.label)
-    ),
-    []
-  );
+const planTypeOptions = useMemo(
+  () => [
+    { value: "Comprehensive", label: "Comprehensive" },
+    { value: "STP", label: "STP" },
+    { value: "SAOD", label: "SAOD" }
+  ],
+  []
+);
+
   const fuelTypeOptions = useMemo(
     () =>
       ["Petrol", "Diesel", "CNG", "Electric"].map((o) => ({
@@ -949,7 +931,7 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
                 <Select
                   onValueChange={controllerField.onChange}
                   value={
-                    controllerField.value as string
+                    (controllerField.value as string) ?? undefined
                   }
                 >
                   <SelectTrigger className="h-10">
@@ -1139,320 +1121,44 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
             </div>
 
             {/* Logic-only component for calculations */}
-            <Calculations control={control} setValue={setValue} />
+            {showCalculations && (
+              <Calculations control={control} setValue={setValue} />
+            )}
 
             {/* Row 2: Admin Input and Calculations */}
             <div className="flex flex-wrap md:flex-nowrap gap-6">
-              <div className="w-full md:w-1/2">
-                <Card className="shadow-sm border border-l-6 border-green-500 h-full">
-                  <CardHeader className="bg-gray-50 border-b flex flex-row items-center justify-between px-4 py-0">
-                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                      <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                      Admin Input
-                    </CardTitle>
-                    {typeof runningBalValue === "number" && (
-                      <div className="text-right">
-                        <Label className="text-sm font-medium text-gray-500">
-                          Running Balance
-                        </Label>
-                        <div
-                          className={`px-4 py-2 mt-1 rounded-lg border-2 font-bold ${
-                            runningBalValue < 0
-                              ? "bg-red-50 border-red-300 text-red-700"
-                              : "bg-green-50 border-green-300 text-green-700"
-                          }`}
-                        >
-                          <span className="text-xl">
-                            ₹{runningBalValue.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </CardHeader>
-                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {formFields
-                      .filter(
-                        (f) => f.section === "admin" && f.key !== "running_bal"
-                      )
-                      .reduce((acc, field) => {
-                        const renderedField = renderField(field);
-                        if (renderedField) {
-                          acc.push(renderedField);
-                        }
-
-                        if (
-                          field.key === "admin_input.payment_by" &&
-                          paymentBy === "InsureZeal"
-                        ) {
-                          acc.push(
-                            <div
-                              className="space-y-2"
-                              key="cutpay_received_status_wrapper"
-                            >
-                              <Label
-                                className="text-sm font-medium text-gray-700"
-                              >
-                                Cutpay Received Status
-                              </Label>
-                              <Controller
-                                name="cutpay_received_status"
-                                control={control}
-                                render={({
-                                  field: controllerField,
-                                  fieldState,
-                                }) => (
-                                  <>
-                                    <Select
-                                      onValueChange={controllerField.onChange}
-                                      value={
-                                        controllerField.value as string
-                                      }
-                                    >
-                                      <SelectTrigger className="h-10">
-                                        <SelectValue placeholder="Select status" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="No">No</SelectItem>
-                                        <SelectItem value="Yes">Yes</SelectItem>
-                                        <SelectItem value="Partial">
-                                          Partial
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          if (
-                            watch("cutpay_received_status") === "Yes" ||
-                            watch("cutpay_received_status") === "Partial"
-                          ) {
-                            acc.push(
-                              <div
-                                className="space-y-2"
-                                key="cutpay_received_wrapper"
-                              >
-                                <Label
-                                  htmlFor="cutpay_received"
-                                  className="text-sm font-medium text-gray-700"
-                                >
-                                  Cutpay Amount
-                                </Label>
-                                <Controller
-                                  name="cutpay_received"
-                                  control={control}
-                                  render={({
-                                    field: controllerField,
-                                    fieldState,
-                                  }) => (
-                                    <>
-                                      <Input
-                                        id="cutpay_received"
-                                        type="number"
-                                        step="0.01"
-                                        {...controllerField}
-                                        value={String(
-                                          controllerField.value ?? ""
-                                        )}
-                                        onChange={(e) => {
-                                          const value = e.target.value;
-                                          controllerField.onChange(
-                                            value === ""
-                                              ? null
-                                              : parseFloat(value)
-                                          );
-                                        }}
-                                        placeholder="Enter amount"
-                                        className="h-10"
-                                      />
-                                      {fieldState.error && (
-                                        <p className="text-red-500 text-xs mt-1">
-                                          {fieldState.error.message}
-                                        </p>
-                                      )}
-                                    </>
-                                  )}
-                                />
-                              </div>
-                            );
-                          }
-                        }
-
-                        // Add OD+TP specific percentage fields when payout_on is "OD+TP"
-                        if (field.key === "admin_input.payout_on" && payoutOn === "OD+TP") {
-                          // OD Agent Payout Percent
-                          acc.push(
-                            <div key="od_agent_payout_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                OD Agent Payout %
-                              </Label>
-                              <Controller
-                                name="admin_input.od_agent_payout_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter OD agent payout %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // TP Agent Payout Percent
-                          acc.push(
-                            <div key="tp_agent_payout_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                TP Agent Payout %
-                              </Label>
-                              <Controller
-                                name="admin_input.tp_agent_payout_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter TP agent payout %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // OD Incoming Grid Percent
-                          acc.push(
-                            <div key="od_incoming_grid_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                OD Incoming Grid %
-                              </Label>
-                              <Controller
-                                name="admin_input.od_incoming_grid_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter OD incoming grid %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // TP Incoming Grid Percent
-                          acc.push(
-                            <div key="tp_incoming_grid_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                TP Incoming Grid %
-                              </Label>
-                              <Controller
-                                name="admin_input.tp_incoming_grid_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter TP incoming grid %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-                        }
-                        
-                        return acc;
-                      }, [] as React.ReactNode[])}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="w-full md:w-1/2">
-                <Card className="shadow-sm border border-l-6 border-purple-500 ">
+              <div className={`w-full ${showCalculations ? 'md:w-1/2' : ''}`}>
+                <Card className="shadow-sm border border-l-6 border-gray-500 ">
                   <CardHeader className="bg-gray-50 border-b">
                     <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                      <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
-                      Calculations
+                      <span className="h-2 w-2 bg-gray-500 rounded-full"></span>
+                      Admin Input
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {formFields
-                      .filter((f) => f.section === "calculation")
+                      .filter((f) => f.section === "admin")
                       .map(renderField)}
                   </CardContent>
                 </Card>
               </div>
+              {showCalculations && (
+                <div className="w-full md:w-1/2">
+                  <Card className="shadow-sm border border-l-6 border-purple-500 ">
+                    <CardHeader className="bg-gray-50 border-b">
+                      <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                        <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
+                        Calculations
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {formFields
+                        .filter((f) => f.section === "calculation")
+                        .map(renderField)}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           </div>
 

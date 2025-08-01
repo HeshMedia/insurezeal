@@ -169,14 +169,6 @@ export interface ChildRequestStatusUpdate {
 }
 
 export type UpdateChildRequestStatusRequest = ChildRequestStatusUpdate
-
-// Universal Record Management Types
-export interface UniversalRecordUploadResponse {
-  message: string
-  report: ReconciliationReport
-  processing_time_seconds: number
-}
-
 export interface ReconciliationReport {
   total_records_processed: number
   policies_updated: number

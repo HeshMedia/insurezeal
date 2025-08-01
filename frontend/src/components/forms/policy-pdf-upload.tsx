@@ -30,14 +30,15 @@ import {
   cutpayFormCompletionAtom
 } from '@/lib/atoms/cutpay'
 
-import { useExtractPdf } from '@/hooks/cutpayQuery'
 import { saveToIndexedDB } from '@/lib/utils/indexeddb'
 
 interface PolicyPdfUploadProps {
   onNext: () => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useExtractionHook: () => { mutateAsync: (file: File) => Promise<any> }
 }
 
-const PolicyPdfUpload = ({ onNext }: PolicyPdfUploadProps) => {
+const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) => {
   const [file, setFile] = useAtom(policyPdfFileAtom)
   const [pdfUrl, setPdfUrl] = useAtom(policyPdfUrlAtom)
   const [extractionData, setExtractionData] = useAtom(pdfExtractionDataAtom)
@@ -49,8 +50,9 @@ const PolicyPdfUpload = ({ onNext }: PolicyPdfUploadProps) => {
   const [uploadProgress, ] = useState(0)
   const [isDragActive, setIsDragActive] = useState(false)
 
-  const extractPdfMutation = useExtractPdf()
+  const extractPdfMutation = useExtractionHook()
 
+  // ... rest of the component remains exactly the same as your original code
   const handleFileUpload = useCallback(async (selectedFile: File) => {
     try {
       setError(null)

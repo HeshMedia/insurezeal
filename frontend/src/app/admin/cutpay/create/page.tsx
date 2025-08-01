@@ -1,7 +1,7 @@
 'use client'
 
 import { useAtom } from 'jotai'
-import { useEffect,  } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -13,7 +13,10 @@ import {
   Loader2,
   AlertCircle,
   FileCheck,
-  Database
+  Database,
+  User,
+  Car,
+  Shield
 } from 'lucide-react'
 
 // Import atoms
@@ -25,18 +28,66 @@ import {
 } from '@/lib/atoms/cutpay'
 
 // Import components
-import PolicyPdfUpload from '@/components/admin/cutpay/policy-pdf-upload'
-import AdditionalDocumentsUpload from '@/components/admin/cutpay/additional-documents-upload'
+import PolicyPdfUpload from '@/components/forms/policy-pdf-upload'
+import AdditionalDocumentsUpload, { DocumentTypeConfig } from '@/components/forms/additional-documents-upload'
 import AdminInputForm from '@/components/admin/cutpay/admin-input-form'
 
 // Import IndexedDB utilities
 import { debugIndexedDB } from '@/lib/utils/indexeddb'
+
+// Import hooks
+import { useExtractPdf } from '@/hooks/cutpayQuery'
+
+// Define document types for additional documents
+const ADDITIONAL_DOCUMENT_TYPES: DocumentTypeConfig[] = [
+  {
+    key: 'kyc',
+    title: 'KYC Document',
+    description: 'Upload KYC verification document (Aadhar, PAN, etc.)',
+    icon: User,
+    color: 'bg-blue-100 text-blue-600',
+    borderColor: 'border-blue-300',
+    bgColor: 'bg-blue-50'
+  },
+  {
+    key: 'rc',
+    title: 'RC Document',
+    description: 'Upload Registration Certificate document',
+    icon: Car,
+    color: 'bg-green-100 text-green-600',
+    borderColor: 'border-green-300',
+    bgColor: 'bg-green-50'
+  },
+  {
+    key: 'previousPolicy',
+    title: 'Previous Policy',
+    description: 'Upload previous insurance policy document',
+    icon: Shield,
+    color: 'bg-purple-100 text-purple-600',
+    borderColor: 'border-purple-300',
+    bgColor: 'bg-purple-50'
+  }
+]
+
+// Define the documents type
+type AdditionalDocuments = {
+  kyc: File | null;
+  rc: File | null;
+  previousPolicy: File | null;
+}
 
 const CreateCutPayPage = () => {
   const [currentStep, setCurrentStep] = useAtom(cutpayCreationStepAtom)
   const [loadingStates] = useAtom(cutpayLoadingStatesAtom)
   const [error] = useAtom(cutpayErrorAtom)
   const [formCompletion] = useAtom(cutpayFormCompletionAtom)
+
+  // State for additional documents
+  const [additionalDocuments, setAdditionalDocuments] = useState<AdditionalDocuments>({
+    kyc: null,
+    rc: null,
+    previousPolicy: null
+  })
 
   // Debug IndexedDB when component mounts
   useEffect(() => {
@@ -98,10 +149,13 @@ const CreateCutPayPage = () => {
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return <PolicyPdfUpload onNext={handleNextStep} />
+        return <PolicyPdfUpload onNext={handleNextStep} useExtractionHook={useExtractPdf} />
       case 2:
         return (
-          <AdditionalDocumentsUpload 
+          <AdditionalDocumentsUpload
+            documentTypes={ADDITIONAL_DOCUMENT_TYPES}
+            documents={additionalDocuments}
+            setDocuments={setAdditionalDocuments}
             onNext={handleNextStep} 
             onPrev={handlePreviousStep}
           />

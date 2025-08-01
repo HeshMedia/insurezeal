@@ -1,268 +1,937 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Progress } from '@/components/ui/progress'
-import { Separator } from '@/components/ui/separator'
-import { 
-  Upload, 
-  Download, 
-  FileText, 
-  CheckCircle, 
+import { useState, useRef } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Upload,
+  Download,
+  CheckCircle,
   AlertCircle,
-  Clock
-} from 'lucide-react'
-import { useUploadUniversalRecord, useDownloadUniversalRecordTemplate } from '@/hooks/adminQuery'
-import { UniversalRecordUploadResponse } from '@/types/admin.types'
-import { toast } from 'sonner'
+  Clock,
+  Eye,
+  Loader2,
+  LayoutDashboard,
+  TableProperties,
+  Info,
+  FileUp,
+  FileSearch,
+} from "lucide-react";
+import {
+  useUniversalInsurersList,
+  useUploadUniversalRecord,
+  useDownloadUniversalTemplate,
+  usePreviewUniversalRecord,
+  useReconciliationSummary,
+} from "@/hooks/universalQuery";
+import {
+  UniversalUploadResponse,
+  UniversalPreviewResponse,
+} from "@/types/universalrecords.types";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { InsurerMappingDisplay } from "./insurer-mapping-display";
 
-interface UniversalRecordManagementProps {
-  className?: string
+// Main Component
+export function UniversalRecordManagement({
+  className,
+}: {
+  className?: string;
+}) {
+  const [selectedInsurer, setSelectedInsurer] = useState<string>("");
+  const { data: insurersData, isLoading: isLoadingInsurers } =
+    useUniversalInsurersList();
+
+  return (
+    <div
+      className={cn(
+        "min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-6",
+        className
+      )}
+    >
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header Section */}
+        <div className="text-center space-y-3">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+            Universal Record Management
+          </h1>
+          <p className="text-base md:text-lg text-slate-600 max-w-2xl mx-auto">
+            Upload, reconcile, and manage data from various insurers with our
+            streamlined platform.
+          </p>
+        </div>
+
+        {/* Insurer Selection Card */}
+        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-xl text-slate-800">
+              Select Insurer
+            </CardTitle>
+            <CardDescription className="text-slate-600">
+              Choose an insurer to begin managing records and data
+              reconciliation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              onValueChange={setSelectedInsurer}
+              value={selectedInsurer}
+              disabled={isLoadingInsurers}
+            >
+              <SelectTrigger className="w-full max-w-md h-12 text-base border-slate-200 focus:border-slate-400 focus:ring-slate-400">
+                <SelectValue
+                  placeholder={
+                    isLoadingInsurers
+                      ? "Loading insurers..."
+                      : "Select an insurer to begin"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {insurersData?.insurers.map((insurer) => (
+                  <SelectItem
+                    key={insurer}
+                    value={insurer}
+                    className="text-base py-3"
+                  >
+                    {insurer}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {/* Main Tabs */}
+        <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+          <CardContent className="p-0">
+            <Tabs defaultValue="upload" className="w-full">
+              <div className="border-b bg-slate-50/50 px-6 py-2">
+                <TabsList className="grid w-full max-w-2xl grid-cols-1 md:grid-cols-3 h-auto bg-slate-100 p-1">
+                  <TabsTrigger
+                    value="upload"
+                    className="py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <FileUp className="w-4 h-4 mr-2" />
+                    File Upload
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="dashboard"
+                    disabled={!selectedInsurer}
+                    className="py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="mappings"
+                    disabled={!selectedInsurer}
+                    className="py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                  >
+                    <TableProperties className="w-4 h-4 mr-2" />
+                    Mappings
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <div className="p-6">
+                <TabsContent value="upload" className="mt-0">
+                  <FileUploadTab selectedInsurer={selectedInsurer} />
+                </TabsContent>
+                <TabsContent value="dashboard" className="mt-0">
+                  <ReconciliationDashboardTab
+                    selectedInsurer={selectedInsurer}
+                  />
+                </TabsContent>
+                <TabsContent value="mappings" className="mt-0">
+                  <InsurerMappingsTab selectedInsurer={selectedInsurer} />
+                </TabsContent>
+              </div>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
-export function UniversalRecordManagement({ className }: UniversalRecordManagementProps) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [uploadResult, setUploadResult] = useState<UniversalRecordUploadResponse | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+function EmptyState({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="text-center py-20 px-6">
+      <div className="max-w-md mx-auto">
+        <div className="w-20 h-20 mx-auto mb-6 bg-slate-100 rounded-full flex items-center justify-center">
+          <Icon className="h-10 w-10 text-slate-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-slate-900 mb-3">{title}</h3>
+        <p className="text-slate-600 leading-relaxed">{description}</p>
+      </div>
+    </div>
+  );
+}
 
-  const uploadMutation = useUploadUniversalRecord()
-  const downloadTemplateMutation = useDownloadUniversalRecordTemplate()
+function FileUploadTab({ selectedInsurer }: { selectedInsurer: string }) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadResult, setUploadResult] =
+    useState<UniversalUploadResponse | null>(null);
+  const [previewResult, setPreviewResult] =
+    useState<UniversalPreviewResponse | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadMutation = useUploadUniversalRecord();
+  const downloadTemplateMutation = useDownloadUniversalTemplate();
+  const previewMutation = usePreviewUniversalRecord();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const file = event.target.files?.[0];
     if (file) {
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        toast.error('Please select a CSV file')
-        return
+      if (
+        !file.name.toLowerCase().endsWith(".csv") &&
+        !file.name.toLowerCase().endsWith(".xlsx")
+      ) {
+        toast.error("Please select a CSV or XLSX file");
+        return;
       }
-      setSelectedFile(file)
-      setUploadResult(null)
+      setSelectedFile(file);
+      setUploadResult(null);
+      setPreviewResult(null);
     }
-  }
+  };
+
+  const handlePreview = async () => {
+    if (!selectedFile || !selectedInsurer) return;
+    try {
+      const result = await previewMutation.mutateAsync({
+        file: selectedFile,
+        insurer_name: selectedInsurer,
+        preview_rows: 10,
+      });
+      setPreviewResult(result);
+      setShowPreview(true);
+      toast.success("Preview generated successfully!");
+    } catch (error: unknown) {
+      toast.error(
+        `Preview failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  };
 
   const handleUpload = async () => {
-    if (!selectedFile) {
-      toast.error('Please select a file first')
-      return
-    }
-
-    setIsUploading(true)
+    if (!selectedFile || !selectedInsurer) return;
     try {
-      const result = await uploadMutation.mutateAsync(selectedFile)
-      setUploadResult(result)
-      toast.success('Universal record processed successfully!')    } catch (error: unknown) {
-      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    } finally {
-      setIsUploading(false)
+      const result = await uploadMutation.mutateAsync({
+        file: selectedFile,
+        insurer_name: selectedInsurer,
+      });
+      setUploadResult(result);
+      toast.success(result.message || "File processed successfully!");
+    } catch (error: unknown) {
+      toast.error(
+        `Upload failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
-  }
+  };
 
   const handleDownloadTemplate = async () => {
     try {
-      const blob = await downloadTemplateMutation.mutateAsync()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'universal_record_template.csv'
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      toast.success('Template downloaded successfully!')    } catch (error: unknown) {
-      toast.error(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      const blob = await downloadTemplateMutation.mutateAsync({
+        insurer_name: selectedInsurer,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${selectedInsurer}_template.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("Template downloaded successfully!");
+    } catch (error: unknown) {
+      toast.error(
+        `Download failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
-  }
+  };
 
-  const renderUploadResult = () => {
-    if (!uploadResult) return null
-
-    const { report, processing_time_seconds } = uploadResult
-
+  if (!selectedInsurer) {
     return (
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-            Processing Complete
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Summary Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{report.total_records_processed}</div>
-              <div className="text-sm text-gray-600">Total Records</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{report.policies_updated}</div>
-              <div className="text-sm text-gray-600">Policies Updated</div>
-            </div>
-            <div className="text-center p-4 bg-emerald-50 rounded-lg">
-              <div className="text-2xl font-bold text-emerald-600">{report.policies_added}</div>
-              <div className="text-sm text-gray-600">Policies Added</div>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">{report.cutpay_updated}</div>
-              <div className="text-sm text-gray-600">CutPay Updated</div>
-            </div>
-            <div className="text-center p-4 bg-indigo-50 rounded-lg">
-              <div className="text-2xl font-bold text-indigo-600">{report.cutpay_added}</div>
-              <div className="text-sm text-gray-600">CutPay Added</div>
-            </div>
-            <div className="text-center p-4 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold text-gray-600">{report.no_changes}</div>
-              <div className="text-sm text-gray-600">No Changes</div>
-            </div>
-          </div>
-
-          {/* Processing Time */}
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Clock className="h-4 w-4" />
-            Processing completed in {processing_time_seconds.toFixed(2)} seconds
-          </div>
-
-          {/* Errors */}
-          {report.errors.length > 0 && (
-            <div>
-              <h4 className="font-semibold text-red-600 mb-2 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                Errors ({report.errors.length})
-              </h4>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-h-40 overflow-y-auto">
-                {report.errors.map((error, index) => (
-                  <div key={index} className="text-sm text-red-700 py-1">
-                    {error}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Processing Summary */}
-          {report.processing_summary.length > 0 && (
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">
-                Processing Summary ({report.processing_summary.length} records)
-              </h4>
-              <div className="bg-gray-50 border rounded-lg p-4 max-h-60 overflow-y-auto">
-                {report.processing_summary.slice(0, 10).map((summary, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-200 last:border-0">
-                    <div className="flex items-center gap-3">
-                      <Badge variant={summary.action === 'updated' ? 'default' : summary.action === 'added' ? 'secondary' : 'outline'}>
-                        {summary.action}
-                      </Badge>
-                      <span className="font-medium text-sm">{summary.policy_number}</span>
-                      <span className="text-xs text-gray-500">{summary.record_type}</span>
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {summary.updated_fields.length} fields
-                    </div>
-                  </div>
-                ))}
-                {report.processing_summary.length > 10 && (
-                  <div className="text-center py-2 text-sm text-gray-500">
-                    ... and {report.processing_summary.length - 10} more records
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    )
+      <EmptyState
+        title="No Insurer Selected"
+        description="Please select an insurer from the dropdown above to upload a file."
+        icon={Info}
+      />
+    );
   }
 
   return (
-    <div className={className}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">Universal Record Management</h1>
-          <p className="text-sm text-gray-600">Upload CSV files to reconcile policy and cut pay data from external systems</p>
-        </div>
-      </div>
-
-      <Card className="border border-gray-200 shadow-sm">
-        <CardContent className="p-4 space-y-4">
-          {/* Template Download */}
-          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center gap-3">
-              <FileText className="h-6 w-6 text-blue-600" />
-              <div>
-                <h3 className="text-sm font-semibold text-blue-900">CSV Template</h3>
-                <p className="text-xs text-blue-700">Download the template to see required format</p>
-              </div>
+    <div className="space-y-8 max-w-4xl mx-auto">
+      {/* Step 1: Download Template */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-slate-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+              1
             </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleDownloadTemplate}
-              disabled={downloadTemplateMutation.isPending}
-            >
-              <Download className="h-3 w-3 mr-1.5" />
-              {downloadTemplateMutation.isPending ? 'Downloading...' : 'Download Template'}
-            </Button>
-          </div>
-
-          <Separator />
-
-          {/* File Upload */}
-          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Universal Record CSV File
-              </label>
-              <div className="flex items-center gap-4">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-                {selectedFile && (
-                  <Badge variant="outline" className="shrink-0">
-                    {selectedFile.name}
-                  </Badge>
-                )}
-              </div>
+              <CardTitle className="text-lg">
+                Download Template (Optional)
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Download the standard template for {selectedInsurer} to ensure
+                correct formatting.
+              </CardDescription>
             </div>
-
-            {selectedFile && (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Important:</strong> Universal record processing will update existing policies and cut pay transactions 
-                  where differences are found. This operation cannot be undone. Please ensure your CSV data is accurate.
-                </AlertDescription>
-              </Alert>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full sm:w-auto h-12 text-base border-slate-300 hover:bg-slate-50"
+            onClick={handleDownloadTemplate}
+            disabled={downloadTemplateMutation.isPending}
+          >
+            {downloadTemplateMutation.isPending ? (
+              <Loader2 className="h-5 w-5 mr-3 animate-spin" />
+            ) : (
+              <Download className="h-5 w-5 mr-3" />
             )}
+            {downloadTemplateMutation.isPending
+              ? "Downloading..."
+              : `Download ${selectedInsurer} Template`}
+          </Button>
+        </CardContent>
+      </Card>
 
-            <Button 
-              onClick={handleUpload}
-              disabled={!selectedFile || isUploading}
-              className="w-full"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {isUploading ? 'Processing...' : 'Upload & Process Records'}
-            </Button>
-
-            {isUploading && (
-              <div className="space-y-2">
-                <Progress value={undefined} className="w-full" />
-                <p className="text-sm text-center text-gray-600">
-                  Processing universal records... This may take a few moments.
+      {/* Step 2: Upload File */}
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-slate-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+              2
+            </div>
+            <div>
+              <CardTitle className="text-lg">Upload File</CardTitle>
+              <CardDescription className="mt-1">
+                Select the CSV or XLSX file you want to process for{" "}
+                {selectedInsurer}.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div
+            className="group relative flex flex-col justify-center items-center w-full px-8 py-12 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer transition-all duration-200 hover:border-slate-400 hover:bg-slate-50/50"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 mx-auto bg-slate-100 rounded-full flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                <Upload className="h-8 w-8 text-slate-500" />
+              </div>
+              <div>
+                <p className="text-lg font-medium text-slate-700">
+                  Click to upload or drag and drop
+                </p>
+                <p className="text-sm text-slate-500 mt-1">
+                  CSV or XLSX files only
                 </p>
               </div>
-            )}
+              {selectedFile && (
+                <Badge
+                  variant="secondary"
+                  className="mt-4 px-4 py-2 text-sm font-medium bg-slate-100 text-slate-700"
+                >
+                  {selectedFile.name}
+                </Badge>
+              )}
+            </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Upload Result */}
-          {renderUploadResult()}
+      {/* Step 3: Preview & Process */}
+      {selectedFile && (
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="bg-slate-50/50">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-slate-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                3
+              </div>
+              <div>
+                <CardTitle className="text-lg">Preview & Process</CardTitle>
+                <CardDescription className="mt-1">
+                  Preview the file to check mappings or proceed directly to
+                  upload and process.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-6">
+            <Alert className="border-amber-200 bg-amber-50">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                <strong>Important:</strong> This operation will update existing
+                records and cannot be undone. Please ensure your data is
+                accurate.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Dialog open={showPreview} onOpenChange={setShowPreview}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={handlePreview}
+                    disabled={previewMutation.isPending}
+                    className="flex-1 h-12 text-base border-slate-300 hover:bg-slate-50"
+                  >
+                    {previewMutation.isPending ? (
+                      <Loader2 className="h-5 w-5 mr-3 animate-spin" />
+                    ) : (
+                      <Eye className="h-5 w-5 mr-3" />
+                    )}
+                    {previewMutation.isPending
+                      ? "Generating Preview..."
+                      : "Preview Data"}
+                  </Button>
+                </DialogTrigger>
+                <PreviewDialogContent result={previewResult} />
+              </Dialog>
+
+              <Button
+                size="lg"
+                onClick={handleUpload}
+                disabled={uploadMutation.isPending}
+                className="flex-1 h-12 text-base bg-slate-900 hover:bg-slate-800"
+              >
+                {uploadMutation.isPending ? (
+                  <Loader2 className="h-5 w-5 mr-3 animate-spin" />
+                ) : (
+                  <FileUp className="h-5 w-5 mr-3" />
+                )}
+                {uploadMutation.isPending
+                  ? "Processing..."
+                  : "Upload & Process"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {uploadMutation.isSuccess && uploadResult && (
+        <UploadResultDisplay result={uploadResult} />
+      )}
+    </div>
+  );
+}
+
+function UploadResultDisplay({ result }: { result: UniversalUploadResponse }) {
+  const { report, processing_time_seconds } = result;
+  const { stats, change_details } = report;
+
+  return (
+    <Card className="border-green-200 shadow-lg">
+      <CardHeader className="bg-green-50">
+        <CardTitle className="flex items-center gap-3 text-green-900">
+          <CheckCircle className="h-6 w-6 text-green-600" />
+          Processing Complete
+        </CardTitle>
+        <CardDescription className="text-green-700">
+          Report for {report.insurer_name} from file{" "}
+          {report.file_info.filename as string}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6 space-y-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Records"
+            value={stats.total_records_processed}
+            variant="default"
+          />
+          <StatCard
+            title="Records Added"
+            value={stats.total_records_added}
+            variant="success"
+          />
+          <StatCard
+            title="Records Updated"
+            value={stats.total_records_updated}
+            variant="info"
+          />
+          <StatCard
+            title="Records Skipped"
+            value={stats.total_records_skipped}
+            variant="warning"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
+          <Clock className="h-5 w-5 text-slate-600" />
+          <span className="text-slate-700 font-medium">
+            Processing completed in {processing_time_seconds.toFixed(2)} seconds
+          </span>
+        </div>
+
+        {stats.error_details.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="font-semibold text-red-600 flex items-center gap-2 text-lg">
+              <AlertCircle className="h-5 w-5" />
+              Errors ({stats.total_errors})
+            </h4>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 max-h-48 overflow-y-auto">
+              {stats.error_details.map((error, index) => (
+                <div
+                  key={index}
+                  className="text-sm text-red-700 py-2 border-b border-red-200 last:border-0"
+                >
+                  {error}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {change_details.length > 0 && (
+          <div className="space-y-4">
+            <h4 className="font-semibold text-slate-900 text-lg">
+              Change Details ({change_details.length} records)
+            </h4>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+              <div className="max-h-80 overflow-y-auto">
+                {change_details.slice(0, 20).map((detail, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-4 border-b border-slate-200 last:border-0 hover:bg-white transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <Badge
+                        variant={
+                          detail.action === "updated"
+                            ? "default"
+                            : detail.action === "added"
+                            ? "secondary"
+                            : "outline"
+                        }
+                        className="min-w-fit"
+                      >
+                        {detail.action}
+                      </Badge>
+                      <div className="min-w-0">
+                        <div
+                          className="font-medium text-slate-900 truncate"
+                          title={detail.policy_number}
+                        >
+                          {detail.policy_number}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          {detail.record_type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-600 font-medium">
+                      {Object.keys(detail.changed_fields).length} fields changed
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {change_details.length > 20 && (
+                <div className="text-center py-4 text-sm text-slate-500 bg-slate-100 border-t">
+                  ... and {change_details.length - 20} more records
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PreviewDialogContent({
+  result,
+}: {
+  result: UniversalPreviewResponse | null;
+}) {
+  if (!result) {
+    return (
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Data Preview</DialogTitle>
+        </DialogHeader>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </DialogContent>
+    );
+  }
+
+  return (
+    <DialogContent className="sm:max-w-6xl max-h-[90vh]">
+      <DialogHeader>
+        <DialogTitle className="text-xl">
+          Data Preview for {result.insurer_name}
+        </DialogTitle>
+        <CardDescription className="text-base">
+          Showing first {result.preview_data.length} of {result.total_rows}{" "}
+          total rows.
+        </CardDescription>
+      </DialogHeader>
+
+      {result.unmapped_headers.length > 0 && (
+        <Alert variant="destructive" className="my-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Unmapped Headers Found</AlertTitle>
+          <AlertDescription>
+            {result.unmapped_headers.join(", ")}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex-1 overflow-hidden rounded-lg border border-slate-200">
+        <div className="max-h-[60vh] overflow-auto">
+          <Table>
+            <TableHeader className="sticky top-0 bg-slate-50 z-10">
+              <TableRow>
+                {result.mapped_headers.map((h) => (
+                  <TableHead
+                    key={h}
+                    className="font-semibold text-slate-700 py-3 px-4"
+                  >
+                    {h}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.preview_data.map((row, rowIndex) => (
+                <TableRow key={rowIndex} className="hover:bg-slate-50">
+                  {result.mapped_headers.map((h) => (
+                    <TableCell
+                      key={`${rowIndex}-${h}`}
+                      className="py-3 px-4 text-sm"
+                    >
+                      {String(row[h] ?? "")}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </DialogContent>
+  );
+}
+
+function ReconciliationDashboardTab({
+  selectedInsurer,
+}: {
+  selectedInsurer: string;
+}) {
+  const { data, isLoading, error } = useReconciliationSummary({
+    insurer_name: selectedInsurer,
+  });
+
+  if (!selectedInsurer) {
+    return (
+      <EmptyState
+        title="No Insurer Selected"
+        description="Please select an insurer to view its reconciliation dashboard."
+        icon={Info}
+      />
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-24">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-slate-600 mx-auto" />
+          <p className="text-slate-600">Loading reconciliation data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="max-w-2xl mx-auto">
+        <AlertCircle className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{error.message}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!data) {
+    return (
+      <EmptyState
+        title="No Summary Data"
+        description={`No reconciliation summary is available for ${selectedInsurer}.`}
+        icon={FileSearch}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-8 max-w-6xl mx-auto">
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="bg-slate-50/50">
+          <CardTitle className="text-xl text-slate-800">
+            Overall Data Health
+          </CardTitle>
+          <CardDescription>
+            Key metrics for data quality and coverage.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid gap-8 md:grid-cols-2">
+            <ProgressCard
+              title="System Data Coverage"
+              description="Percentage of policies in the uploaded file that are also in our system."
+              value={data.coverage_percentage}
+            />
+            <ProgressCard
+              title="Data Variance"
+              description="Percentage of data fields that do not match for overlapping policies."
+              value={data.data_variance_percentage}
+              isVariance
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Matches"
+          value={data.total_matches}
+          variant="success"
+        />
+        <StatCard
+          title="Total Mismatches"
+          value={data.total_mismatches}
+          variant="error"
+        />
+        <StatCard
+          title="Missing in System"
+          value={data.total_missing_in_system}
+          variant="warning"
+        />
+        <StatCard
+          title="Missing in File"
+          value={data.total_missing_in_universal}
+          variant="info"
+        />
+      </div>
+
+      <Card className="border-slate-200 shadow-sm">
+        <CardHeader className="bg-slate-50/50">
+          <CardTitle className="text-xl text-slate-800">
+            Top Mismatched Fields
+          </CardTitle>
+          <CardDescription>
+            Fields with the highest number of discrepancies.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="overflow-hidden rounded-lg border border-slate-200">
+            <Table>
+              <TableHeader className="bg-slate-50">
+                <TableRow>
+                  <TableHead className="font-semibold text-slate-700 py-4">
+                    Field Name
+                  </TableHead>
+                  <TableHead className="text-right font-semibold text-slate-700 py-4">
+                    Mismatch Count
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.top_mismatched_fields.map((field) => (
+                  <TableRow
+                    key={field.field_name}
+                    className="hover:bg-slate-50"
+                  >
+                    <TableCell className="font-medium py-4">
+                      {field.field_name}
+                    </TableCell>
+                    <TableCell className="text-right py-4 font-medium text-red-600">
+                      {field.mismatch_count}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
+// #endregion
+
+// #region Insurer Mappings Tab
+function InsurerMappingsTab({ selectedInsurer }: { selectedInsurer: string }) {
+  if (!selectedInsurer) {
+    return (
+      <EmptyState
+        title="No Insurer Selected"
+        description="Please select an insurer to view its header mappings."
+        icon={Info}
+      />
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <InsurerMappingDisplay insurerName={selectedInsurer} />
+    </div>
+  );
+}
+// #endregion
+
+// #region Helper Components
+function StatCard({
+  title,
+  value,
+  variant = "default",
+}: {
+  title: string;
+  value: number | string;
+  variant?: "default" | "success" | "error" | "warning" | "info";
+}) {
+  const variantStyles = {
+    default: "border-slate-200 bg-white",
+    success: "border-green-200 bg-green-50",
+    error: "border-red-200 bg-red-50",
+    warning: "border-amber-200 bg-amber-50",
+    info: "border-blue-200 bg-blue-50",
+  };
+
+  const valueStyles = {
+    default: "text-slate-900",
+    success: "text-green-700",
+    error: "text-red-700",
+    warning: "text-amber-700",
+    info: "text-blue-700",
+  };
+
+  return (
+    <Card className={cn("shadow-sm", variantStyles[variant])}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-medium text-slate-600">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className={cn("text-3xl font-bold", valueStyles[variant])}>
+          {value.toLocaleString()}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProgressCard({
+  title,
+  description,
+  value,
+  isVariance = false,
+}: {
+  title: string;
+  description: string;
+  value: number;
+  isVariance?: boolean;
+}) {
+  const getColor = () => {
+    if (isVariance) {
+      if (value > 20) return "bg-red-500";
+      if (value > 5) return "bg-amber-500";
+      return "bg-green-500";
+    }
+    return "bg-slate-900";
+  };
+
+  const getTextColor = () => {
+    if (isVariance) {
+      if (value > 20) return "text-red-700";
+      if (value > 5) return "text-amber-700";
+      return "text-green-700";
+    }
+    return "text-slate-900";
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-baseline">
+        <h4 className="text-lg font-semibold text-slate-900">{title}</h4>
+        <span className={cn("text-2xl font-bold", getTextColor())}>
+          {value.toFixed(1)}%
+        </span>
+      </div>
+      <div className="space-y-2">
+        <Progress value={value} className="h-3" />
+        <div
+          className={cn("w-full h-3 rounded-full", getColor())}
+          style={{ width: `${value}%` }}
+        />
+      </div>
+      <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+// #endregion
