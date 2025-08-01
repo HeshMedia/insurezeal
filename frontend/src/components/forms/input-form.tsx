@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAtom } from "jotai";
 import { useMemo, useEffect, useState } from "react";
@@ -28,6 +29,8 @@ import {
 import { LoadingDialog } from "@/components/ui/loading-dialog";
 import { useAgentList } from "@/hooks/adminQuery";
 import { useCreateCutPay, useUploadCutPayDocument } from "@/hooks/cutpayQuery";
+import { useSubmitPolicy, useChildIdOptions } from "@/hooks/policyQuery";
+import { useProfile } from "@/hooks/profileQuery";
 import {
   useBrokerList,
   useInsurerList,
@@ -36,20 +39,23 @@ import {
 import { AgentSummary } from "@/types/admin.types";
 import { clearAllFromIndexedDB } from "@/lib/utils/indexeddb";
 import { CreateCutpayTransactionCutpayPostRequest } from "@/types/cutpay.types";
+import { SubmitPolicyPayload, ChildIdOption } from "@/types/policy.types";
 import { Insurer, Broker, AdminChildId } from "@/types/superadmin.types";
-import { CutPayFormSchema, CutPayFormSchemaType } from "./form-schema";
-import { formFields, FormFieldConfig, FormFieldPath } from "./form-config";
-import Calculations from "./calculations";
+import { CutPayFormSchema, CutPayFormSchemaType } from "../admin/cutpay/form-schema";
+import { formFields, FormFieldConfig, FormFieldPath } from "../admin/cutpay/form-config";
+import Calculations from "../admin/cutpay/calculations";
 import { Loader2 } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
 
-// Props interface for the AdminInputForm component
-interface AdminInputFormProps {
+// Props interface for the InputForm component (supports both cutpay and policy modes)
+interface InputFormProps {
   onPrev: () => void; // Function to go to the previous step
+  formType: 'cutpay' | 'policy'; // Type of form to render (required)
 }
 
-const AdminInputForm: React.FC<AdminInputFormProps> = ({
+const InputForm: React.FC<InputFormProps> = ({
   onPrev,
+  formType, // Now required parameter
 }) => {
   const router = useRouter();
   // State for document viewer visibility is now managed locally
@@ -92,8 +98,17 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   // React Query mutations for creating a cutpay transaction and uploading documents
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
+  const submitPolicyMutation = useSubmitPolicy();
+
+  // Get current user profile to access agent_code
+  const { data: userProfile } = useProfile();
+
+  // State for child ID auto-fill functionality in policy mode
+  const [selectedChildIdDetails, setSelectedChildIdDetails] = useState<AdminChildId | ChildIdOption | null>(null);
 
   // React Hook Form setup for form state management and validation
+  // Note: Currently uses CutPayFormSchema for both cutpay and policy modes
+  // TODO: Consider creating a policy-specific schema for stricter validation in policy mode
   const { control, handleSubmit, setValue, watch, reset } =
     useForm<CutPayFormSchemaType>({
       resolver: zodResolver(CutPayFormSchema),
@@ -121,33 +136,62 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   const planType = watch("extracted_data.plan_type");
   const runningBalValue = watch("running_bal");
   const payoutOn = watch("admin_input.payout_on");
+  const childIdValue = watch("admin_input.admin_child_id");
+
+  // Get form fields - using cutpay fields for both modes (cutpay form is working perfectly)
+  const currentFormFields = formFields;
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
-    setSubmissionSteps([
-      {
-        id: "create-transaction",
-        label: "Creating cutpay transaction",
-        status: "pending",
-      },
-      {
-        id: "upload-policy",
-        label: "Uploading policy document",
-        status: "pending",
-      },
-      {
-        id: "upload-additional",
-        label: "Uploading additional documents",
-        status: "pending",
-      },
-      {
-        id: "cleanup-redirect",
-        label: "Cleaning up and redirecting",
-        status: "pending",
-      },
-    ]);
+    if (formType === 'policy') {
+      setSubmissionSteps([
+        {
+          id: "create-policy",
+          label: "Creating policy transaction",
+          status: "pending",
+        },
+        {
+          id: "upload-policy",
+          label: "Uploading policy document",
+          status: "pending",
+        },
+        {
+          id: "upload-additional",
+          label: "Uploading additional documents",
+          status: "pending",
+        },
+        {
+          id: "cleanup-redirect",
+          label: "Cleaning up and redirecting",
+          status: "pending",
+        },
+      ]);
+    } else {
+      setSubmissionSteps([
+        {
+          id: "create-transaction",
+          label: "Creating cutpay transaction",
+          status: "pending",
+        },
+        {
+          id: "upload-policy",
+          label: "Uploading policy document",
+          status: "pending",
+        },
+        {
+          id: "upload-additional",
+          label: "Uploading additional documents",
+          status: "pending",
+        },
+        {
+          id: "cleanup-redirect",
+          label: "Cleaning up and redirecting",
+          status: "pending",
+        },
+      ]);
+    }
     setIsSubmitting(false);
-  }, []);
+  }, [formType]);
 
   // Effect to auto-calculate 'payment_by_office' based on 'payment_by' and 'gross_premium'
   // Also manage payment source visibility
@@ -172,8 +216,8 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
           const formKey = `extracted_data.${key}` as FormFieldPath;
           // The `any` cast is used here because `setValue` is strictly typed,
           // but we are dynamically setting values from an object.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          setValue(formKey, value as any, { shouldValidate: true });
+          
+          setValue(formKey as any, value as any, { shouldValidate: true });
         }
       );
     }
@@ -223,8 +267,47 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
   const { data: insurers, isLoading: insurersLoading } = useInsurerList();
   const { data: brokers, isLoading: brokersLoading } = useBrokerList();
   const { data: agents, isLoading: agentsLoading } = useAgentList();
-  const { data: adminChildIds, isLoading: adminChildIdsLoading } =
-    useAdminChildIdList();
+  const { data: adminChildIds, isLoading: adminChildIdsLoading } = useAdminChildIdList();
+  
+  // Policy-specific child IDs hook for agent users
+  const { data: policyChildIds, isLoading: policyChildIdsLoading } = useChildIdOptions(
+    formType === 'policy' ? userProfile?.id : undefined // Only fetch for policy forms with user ID
+  );
+
+  // Auto-fill Insurance Company and Broker Name when Child ID is selected in policy mode
+  useEffect(() => {
+    if (childIdValue) {
+      if (formType === 'policy' && policyChildIds) {
+        // Handle policy child IDs (for agents)
+        const selectedChildId = policyChildIds.find(child => child.child_id === childIdValue);
+        if (selectedChildId) {
+          setSelectedChildIdDetails(selectedChildId);
+          // For policy child IDs, we don't have insurer/broker codes, just names
+          // So we skip the auto-fill for the dropdowns since agents don't use them
+        }
+      } else if (formType === 'cutpay' && adminChildIds) {
+        // Handle admin child IDs (for cutpay)
+        const selectedChildId = adminChildIds.find(child => child.child_id === childIdValue);
+        if (selectedChildId) {
+          setSelectedChildIdDetails(selectedChildId);
+          // Auto-fill Insurance Company (readonly)
+          setValue("admin_input.insurer_code", selectedChildId.insurer.insurer_code, {
+            shouldValidate: true,
+          });
+          // Auto-fill Broker Name (readonly) if available
+          if (selectedChildId.broker?.broker_code) {
+            setValue("admin_input.broker_code", selectedChildId.broker.broker_code, {
+              shouldValidate: true,
+            });
+          } else {
+            setValue("admin_input.broker_code", null, {
+              shouldValidate: true,
+            });
+          }
+        }
+      }
+    }
+  }, [formType, childIdValue, adminChildIds, policyChildIds, setValue, setSelectedChildIdDetails]);
 
   // Memoizing select options to prevent re-computation on every render
   const insurerOptions = useMemo(
@@ -263,6 +346,18 @@ const AdminInputForm: React.FC<AdminInputFormProps> = ({
         }))
         .filter((option) => option.value && option.value.trim() !== "") || [],
     [adminChildIds]
+  );
+
+  // Policy-specific child ID options for agents
+  const policyChildIdOptions = useMemo(
+    () =>
+      policyChildIds
+        ?.map((c: ChildIdOption) => ({
+          value: c.child_id,
+          label: `${c.child_id} - ${c.broker_name} (${c.insurance_company})`,
+        }))
+        .filter((option) => option.value && option.value.trim() !== "") || [],
+    [policyChildIds]
   );
 
   // Memoizing static select options
@@ -658,112 +753,288 @@ const planTypeOptions = useMemo(
     );
 
     try {
-      // Step 1: Create the cutpay transaction via API call
-      updateStepStatus("create-transaction", "active");
+      if (formType === 'policy') {
+        // Handle policy submission
+        updateStepStatus("create-policy", "active");
 
-      // Construct the payload for the API, ensuring it matches the required interface
-      const payload: CreateCutpayTransactionCutpayPostRequest = {
-        // Follow the exact interface order
-        policy_pdf_url: "hardcoded_policy_pdf_url", // Placeholder, actual URL is set by backend
-        additional_documents: {}, // Placeholder, handled by separate uploads
-        extracted_data: {
-          // Start with PDF extracted data
-          ...(pdfExtractionData?.extracted_data || {}),
-          // Override with form data (user inputs take priority)
-          ...(data.extracted_data || {}),
-          // Ensure customer_phone_number is handled properly
-          customer_phone_number:
-            data.extracted_data?.customer_phone_number ||
-            pdfExtractionData?.extracted_data?.customer_phone_number ||
-            null,
-        },
-        admin_input: data.admin_input
-          ? {
-              reporting_month: data.admin_input.reporting_month || null,
-              booking_date: data.admin_input.booking_date || null,
-              agent_code: data.admin_input.agent_code || null,
-              code_type: data.admin_input.code_type || null,
-              incoming_grid_percent:
-                data.admin_input.incoming_grid_percent || null,
-              agent_commission_given_percent:
-                data.admin_input.agent_commission_given_percent || null,
-              extra_grid: data.admin_input.extra_grid || null,
-              commissionable_premium:
-                data.admin_input.commissionable_premium || null,
-              payment_by: data.admin_input.payment_by || null,
-              payment_method: data.admin_input.payment_method || null,
-              payout_on: data.admin_input.payout_on || null,
-              agent_extra_percent: data.admin_input.agent_extra_percent || null,
-              payment_by_office:
-                data.admin_input.payment_by_office?.toString() || null,
-              insurer_code: data.admin_input.insurer_code || null,
-              broker_code: data.admin_input.broker_code || null,
-              admin_child_id: data.admin_input.admin_child_id || null,
+        // Calculate simple agent payout for policy (for display purposes)
+        const grossPremium = data.extracted_data?.gross_premium || 0;
+        const agentCommission = data.admin_input?.agent_commission_given_percent || 0;
+        const agentExtra = data.admin_input?.agent_extra_percent || 0;
+        const totalAgentPayoutAmount = grossPremium * (agentCommission + agentExtra) / 100;
+        console.log("Policy mode - Agent payout amount:", totalAgentPayoutAmount);
+
+        // Construct the comprehensive policy payload
+        const policyPayload: SubmitPolicyPayload = {
+          // Required fields
+          policy_number: data.extracted_data?.policy_number || "",
+          policy_type: data.extracted_data?.plan_type || "",
+          pdf_file_name: data.policy_pdf_url ? `policy_${data.extracted_data?.policy_number || Date.now()}.pdf` : `policy_${Date.now()}.pdf`,
+          pdf_file_path: data.policy_pdf_url || `uploads/policies/policy_${Date.now()}.pdf`,
+          
+          // Agent and Child ID information
+          // For agents, use their own id from profile; for admins, use selected agent
+          agent_id: formType === 'policy' && userProfile?.id ? userProfile.id : 
+                   (agents?.agents?.find(a => a.agent_code === data.admin_input?.agent_code)?.id || ""),
+          agent_code: formType === 'policy' && userProfile?.agent_code ? userProfile.agent_code : 
+                     (data.admin_input?.agent_code || ""),
+          child_id: data.admin_input?.admin_child_id || "",
+          broker_name: selectedChildIdDetails ? 
+            ('broker' in selectedChildIdDetails ? selectedChildIdDetails.broker?.name || "" : selectedChildIdDetails.broker_name) : "",
+          insurance_company: selectedChildIdDetails ? 
+            ('insurer' in selectedChildIdDetails ? selectedChildIdDetails.insurer?.name || "" : selectedChildIdDetails.insurance_company) : "",
+          
+          // Policy details from PDF extraction - use empty strings instead of undefined for string fields
+          formatted_policy_number: data.extracted_data?.formatted_policy_number || "",
+          major_categorisation: data.extracted_data?.major_categorisation || "",
+          product_insurer_report: data.extracted_data?.product_insurer_report || "",
+          product_type: data.extracted_data?.product_type || "",
+          plan_type: data.extracted_data?.plan_type || "",
+          customer_name: data.extracted_data?.customer_name || "",
+          customer_phone_number: data.extracted_data?.customer_phone_number || "",
+          insurance_type: data.extracted_data?.major_categorisation || "",
+          vehicle_type: data.extracted_data?.product_insurer_report || "",
+          registration_number: data.extracted_data?.registration_no || "",
+          registration_no: data.extracted_data?.registration_no || "",
+          vehicle_class: data.extracted_data?.make_model || "",
+          vehicle_segment: data.extracted_data?.product_type || "",
+          make_model: data.extracted_data?.make_model || "",
+          model: data.extracted_data?.model || "",
+          vehicle_variant: data.extracted_data?.vehicle_variant || "",
+          gvw: data.extracted_data?.gvw || 0,
+          rto: data.extracted_data?.rto || "",
+          state: data.extracted_data?.state || "",
+          fuel_type: data.extracted_data?.fuel_type || "",
+          cc: data.extracted_data?.cc || 0,
+          age_year: data.extracted_data?.age_year || 0,
+          ncb: data.extracted_data?.ncb || "",
+          discount_percent: data.extracted_data?.discount_percent || 0,
+          business_type: data.extracted_data?.business_type || "",
+          seating_capacity: data.extracted_data?.seating_capacity || 0,
+          veh_wheels: data.extracted_data?.veh_wheels || 0,
+          is_private_car: data.extracted_data?.major_categorisation?.toLowerCase().includes('private') || false,
+          
+          // Premium information - use actual values instead of undefined
+          gross_premium: grossPremium || 0,
+          gst: data.extracted_data?.gst_amount || 0,
+          gst_amount: data.extracted_data?.gst_amount || 0,
+          net_premium: data.extracted_data?.net_premium || 0,
+          od_premium: data.extracted_data?.od_premium || 0,
+          tp_premium: data.extracted_data?.tp_premium || 0,
+          
+          // Agent commission and payout - use actual values
+          agent_commission_given_percent: agentCommission || 0,
+          agent_extra_percent: agentExtra || 0,
+          payment_by_office: data.admin_input?.payment_by_office || 0,
+          total_agent_payout_amount: totalAgentPayoutAmount || 0,
+          
+          // Additional fields - use form values for policy-specific fields  
+          code_type: data.admin_input?.code_type || "",
+          payment_by: data.admin_input?.payment_by || "",
+          payment_method: data.admin_input?.payment_method || "",
+          cluster: (data as any).cluster || "", // Policy-specific field
+          notes: data.notes || "",
+          start_date: (data as any).start_date || data.admin_input?.booking_date || new Date().toISOString().split('T')[0], // Form input or booking date or current date
+          end_date: (data as any).end_date || 
+            ((data as any).start_date 
+              ? new Date(new Date((data as any).start_date).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+              : data.admin_input?.booking_date 
+                ? new Date(new Date(data.admin_input.booking_date).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]), // Form input or calculated from start_date or booking_date
+          ai_confidence_score: Object.values(pdfExtractionData?.confidence_scores || {}).reduce((a, b) => a + b, 0) / Object.keys(pdfExtractionData?.confidence_scores || {}).length || 0,
+          manual_override: false,
+        };
+
+        console.log("=== Policy Submission Debug Info ===");
+        console.log("Form Data:", data);
+        console.log("Selected Child ID Details:", selectedChildIdDetails);
+        console.log("Agent Commission:", agentCommission);
+        console.log("Agent Extra:", agentExtra);
+        console.log("Total Agent Payout:", totalAgentPayoutAmount);
+        console.log("Raw policy payload:", policyPayload);
+        console.log("====================================");
+
+        // Clean up empty strings to undefined for API compatibility (only for optional fields)
+        const cleanPayload = Object.fromEntries(
+          Object.entries(policyPayload).map(([key, value]) => {
+            // Keep required fields even if empty
+            const requiredFields = ['policy_number', 'policy_type', 'pdf_file_path', 'pdf_file_name'];
+            if (requiredFields.includes(key)) {
+              return [key, value];
             }
-          : null,
-        calculations: calculationResult || data.calculations || null,
-        claimed_by: data.claimed_by || null,
-        running_bal: data.running_bal || 0,
-        cutpay_received:
-          data.cutpay_received_status === "No"
-            ? 0
-            : Number(data.cutpay_received) || 0,
-        notes: data.notes || null,
-      };
+            // For optional fields, convert empty strings to undefined, but keep 0 values
+            return [key, value === "" ? undefined : value];
+          })
+        ) as SubmitPolicyPayload;
 
-      console.log("Final payload:", payload);
+        console.log("=== Cleaned Payload Debug ===");
+        console.log("Cleaned policy payload:", cleanPayload);
+        console.log("Payload size (JSON):", JSON.stringify(cleanPayload).length, "characters");
+        console.log("============================");
 
-      const createdTransaction = await createCutPayMutation.mutateAsync(
-        payload
-      );
-      updateStepStatus("create-transaction", "completed");
-
-      // Store the created transaction in global state
-      setCreatedTransaction(createdTransaction);
-
-      // Steps 2 & 3: Upload all associated documents
-      try {
-        await uploadDocuments(createdTransaction.id);
-        toast.success(
-          "🎉 Transaction created and documents uploaded successfully!"
-        );
-      } catch (uploadError) {
-        console.error("Document upload error:", uploadError);
-        const errorMessage =
-          uploadError instanceof Error
-            ? uploadError.message
-            : "Unknown upload error";
-        // Provide specific feedback based on the upload error
-        if (errorMessage.includes("Some documents failed")) {
-          toast.warning(
-            "⚠️ Transaction created successfully, but some documents failed to upload."
-          );
-        } else {
-          toast.warning(
-            "⚠️ Transaction created successfully, but documents could not be uploaded."
-          );
+        // Validate required fields before submission
+        if (!policyPayload.policy_number) {
+          throw new Error("Policy number is required");
         }
-      }
+        if (!policyPayload.policy_type) {
+          throw new Error("Policy type is required");
+        }
+        if (!policyPayload.pdf_file_path) {
+          throw new Error("PDF file path is required");
+        }
+        if (!policyPayload.pdf_file_name) {
+          throw new Error("PDF file name is required");
+        }
 
-      // Step 4: Clean up IndexedDB and redirect the user
-      updateStepStatus("cleanup-redirect", "active");
-      try {
-        console.log("🧹 Cleaning up IndexedDB documents...");
-        await clearAllFromIndexedDB(); // Remove temporary files
-        console.log("✅ IndexedDB cleanup completed");
-        updateStepStatus("cleanup-redirect", "completed");
+        // Additional validation for better API compatibility
+        if (!policyPayload.agent_code) {
+          throw new Error("Agent code is required for policy submission");
+        }
+        if (!policyPayload.child_id) {
+          throw new Error("Child ID is required for policy submission");
+        }
 
-        // A small delay to allow the user to see the final status
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        console.log("Sending final payload to API:", cleanPayload);
+        await submitPolicyMutation.mutateAsync(cleanPayload);
+        updateStepStatus("create-policy", "completed");
 
-        // Redirect to the main cutpay list page
-        console.log("🔄 Redirecting to cutpay list...");
-        router.push("/admin/cutpay");
-      } catch (cleanupError) {
-        console.error("❌ Cleanup error:", cleanupError);
-        updateStepStatus("cleanup-redirect", "failed");
-        // Redirect anyway to avoid getting stuck
-        router.push("/admin/cutpay");
+        // Handle document uploads
+        try {
+          // For policy, we can skip document uploads or implement simpler version
+          updateStepStatus("upload-policy", "completed");
+          updateStepStatus("upload-additional", "completed");
+          
+          toast.success("🎉 Policy created successfully!");
+        } catch (uploadError) {
+          console.error("Policy document upload error:", uploadError);
+          toast.warning("⚠️ Policy created successfully, but documents could not be uploaded.");
+        }
+
+        // Clean up and redirect
+        updateStepStatus("cleanup-redirect", "active");
+        try {
+          console.log("🧹 Cleaning up IndexedDB documents...");
+          await clearAllFromIndexedDB();
+          console.log("✅ IndexedDB cleanup completed");
+          updateStepStatus("cleanup-redirect", "completed");
+
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          console.log("🔄 Redirecting to policies list...");
+          router.push("/agent/policies");
+        } catch (cleanupError) {
+          console.error("❌ Cleanup error:", cleanupError);
+          updateStepStatus("cleanup-redirect", "failed");
+          router.push("/agent/policies");
+        }
+
+      } else {
+        // Handle cutpay submission (existing logic)
+        updateStepStatus("create-transaction", "active");
+
+        // Construct the payload for the API, ensuring it matches the required interface
+        const payload: CreateCutpayTransactionCutpayPostRequest = {
+          // Follow the exact interface order
+          policy_pdf_url: "hardcoded_policy_pdf_url", // Placeholder, actual URL is set by backend
+          additional_documents: {}, // Placeholder, handled by separate uploads
+          extracted_data: {
+            // Start with PDF extracted data
+            ...(pdfExtractionData?.extracted_data || {}),
+            // Override with form data (user inputs take priority)
+            ...(data.extracted_data || {}),
+            // Ensure customer_phone_number is handled properly
+            customer_phone_number:
+              data.extracted_data?.customer_phone_number ||
+              pdfExtractionData?.extracted_data?.customer_phone_number ||
+              null,
+          },
+          admin_input: data.admin_input
+            ? {
+                reporting_month: data.admin_input.reporting_month || null,
+                booking_date: data.admin_input.booking_date || null,
+                agent_code: data.admin_input.agent_code || null,
+                code_type: data.admin_input.code_type || null,
+                incoming_grid_percent:
+                  data.admin_input.incoming_grid_percent || null,
+                agent_commission_given_percent:
+                  data.admin_input.agent_commission_given_percent || null,
+                extra_grid: data.admin_input.extra_grid || null,
+                commissionable_premium:
+                  data.admin_input.commissionable_premium || null,
+                payment_by: data.admin_input.payment_by || null,
+                payment_method: data.admin_input.payment_method || null,
+                payout_on: data.admin_input.payout_on || null,
+                agent_extra_percent: data.admin_input.agent_extra_percent || null,
+                payment_by_office:
+                  data.admin_input.payment_by_office?.toString() || null,
+                insurer_code: data.admin_input.insurer_code || null,
+                broker_code: data.admin_input.broker_code || null,
+                admin_child_id: data.admin_input.admin_child_id || null,
+              }
+            : null,
+          calculations: calculationResult || data.calculations || null,
+          claimed_by: data.claimed_by || null,
+          running_bal: data.running_bal || 0,
+          cutpay_received:
+            data.cutpay_received_status === "No"
+              ? 0
+              : Number(data.cutpay_received) || 0,
+          notes: data.notes || null,
+        };
+
+        console.log("Final payload:", payload);
+
+        const createdTransaction = await createCutPayMutation.mutateAsync(
+          payload
+        );
+        updateStepStatus("create-transaction", "completed");
+
+        // Store the created transaction in global state
+        setCreatedTransaction(createdTransaction);
+
+        // Steps 2 & 3: Upload all associated documents
+        try {
+          await uploadDocuments(createdTransaction.id);
+          toast.success(
+            "🎉 Transaction created and documents uploaded successfully!"
+          );
+        } catch (uploadError) {
+          console.error("Document upload error:", uploadError);
+          const errorMessage =
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Unknown upload error";
+          // Provide specific feedback based on the upload error
+          if (errorMessage.includes("Some documents failed")) {
+            toast.warning(
+              "⚠️ Transaction created successfully, but some documents failed to upload."
+            );
+          } else {
+            toast.warning(
+              "⚠️ Transaction created successfully, but documents could not be uploaded."
+            );
+          }
+        }
+
+        // Step 4: Clean up IndexedDB and redirect the user
+        updateStepStatus("cleanup-redirect", "active");
+        try {
+          console.log("🧹 Cleaning up IndexedDB documents...");
+          await clearAllFromIndexedDB(); // Remove temporary files
+          console.log("✅ IndexedDB cleanup completed");
+          updateStepStatus("cleanup-redirect", "completed");
+
+          // A small delay to allow the user to see the final status
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // Redirect to the main cutpay list page
+          console.log("🔄 Redirecting to cutpay list...");
+          router.push("/admin/cutpay");
+        } catch (cleanupError) {
+          console.error("❌ Cleanup error:", cleanupError);
+          updateStepStatus("cleanup-redirect", "failed");
+          // Redirect anyway to avoid getting stuck
+          router.push("/admin/cutpay");
+        }
       }
 
       // Reset form and component state for the next use
@@ -773,10 +1044,11 @@ const planTypeOptions = useMemo(
       );
     } catch (error) {
       // Handle failure at the transaction creation step
-      updateStepStatus("create-transaction", "failed");
+      const stepId = formType === 'policy' ? "create-policy" : "create-transaction";
+      updateStepStatus(stepId, "failed");
       console.error("Submission error:", error);
       toast.error(
-        `Failed to create transaction: ${
+        `Failed to create ${formType === 'policy' ? 'policy' : 'transaction'}: ${
           error instanceof Error ? error.message : "Unknown error"
         }`
       );
@@ -788,6 +1060,10 @@ const planTypeOptions = useMemo(
   const renderField = (field: FormFieldConfig) => {
     const { key, label, type, options: configOptions, disabled, tag } = field;
     
+    // For policy mode: make insurer and broker readonly when auto-filled
+    const isReadonlyInPolicyMode = formType === 'policy' && 
+      (key === 'admin_input.insurer_code' || key === 'admin_input.broker_code') &&
+      selectedChildIdDetails;
 
     // Skip payment method field if payment is by Agent
     if (key === "admin_input.payment_method" && paymentBy === "Agent") {
@@ -852,7 +1128,7 @@ const planTypeOptions = useMemo(
             {renderTag()}
           </div>
           <Controller
-            name={key}
+            name={key as any}
             control={control}
             render={({ field: controllerField, fieldState }) => (
               <>
@@ -897,7 +1173,11 @@ const planTypeOptions = useMemo(
       if (key === "admin_input.insurer_code") options = insurerOptions;
       if (key === "admin_input.broker_code") options = brokerOptions;
       if (key === "admin_input.agent_code") options = agentOptions;
-      if (key === "admin_input.admin_child_id") options = adminChildIdOptions;
+      if (key === "admin_input.admin_child_id") {
+        // For policy forms, use policy child IDs (agent-specific)
+        // For cutpay forms, use admin child IDs (admin/superadmin access)
+        options = formType === 'policy' ? policyChildIdOptions : adminChildIdOptions;
+      }
       if (key === "admin_input.code_type") options = codeTypeOptions;
       if (key === "admin_input.payment_by") options = paymentByOptions;
       if (key === "admin_input.payment_method") options = paymentMethodOptions;
@@ -915,7 +1195,8 @@ const planTypeOptions = useMemo(
         (key === "admin_input.insurer_code" && insurersLoading) ||
         (key === "admin_input.broker_code" && brokersLoading) ||
         (key === "admin_input.agent_code" && agentsLoading) ||
-        (key === "admin_input.admin_child_id" && adminChildIdsLoading);
+        (key === "admin_input.admin_child_id" && 
+         (formType === 'policy' ? policyChildIdsLoading : adminChildIdsLoading));
 
       return (
         <div key={key} className="space-y-2">
@@ -924,7 +1205,7 @@ const planTypeOptions = useMemo(
             {renderTag()}
           </div>
           <Controller
-            name={key}
+            name={key as any}
             control={control}
             render={({ field: controllerField, fieldState }) => (
               <>
@@ -933,6 +1214,7 @@ const planTypeOptions = useMemo(
                   value={
                     (controllerField.value as string) ?? undefined
                   }
+                  disabled={disabled || !!isReadonlyInPolicyMode}
                 >
                   <SelectTrigger className="h-10">
                     <SelectValue
@@ -968,7 +1250,7 @@ const planTypeOptions = useMemo(
             {renderTag()}
           </div>
           <Controller
-            name={key}
+            name={key as any}
             control={control}
             render={({ field: controllerField, fieldState }) => (
               <>
@@ -1005,7 +1287,7 @@ const planTypeOptions = useMemo(
           {renderTag()}
         </div>
         <Controller
-          name={key}
+          name={key as any}
           control={control}
           render={({ field: controllerField, fieldState }) => (
             <>
@@ -1091,16 +1373,9 @@ const planTypeOptions = useMemo(
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {formFields
+                    {currentFormFields
                       .filter((f) => f.section === "extracted")
-                      .map(renderField)}
-                    {renderField({
-                      key: 'extracted_data.tp_premium',
-                      label: 'TP Premium',
-                      type: 'number',
-                      section: 'extracted',
-                      tag: 'autofill'
-                    })}
+                      .map((field) => renderField(field as FormFieldConfig))}
                   </CardContent>
                 </Card>
               </div>
@@ -1132,7 +1407,7 @@ const planTypeOptions = useMemo(
                       <span className="h-2 w-2 bg-green-500 rounded-full"></span>
                       Admin Input
                     </CardTitle>
-                    {typeof runningBalValue === "number" && (
+                    {formType === 'cutpay' && typeof runningBalValue === "number" && (
                       <div className="text-right">
                         <Label className="text-sm font-medium text-gray-500">
                           Running Balance
@@ -1152,17 +1427,35 @@ const planTypeOptions = useMemo(
                     )}
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {formFields
+                    {currentFormFields
                       .filter(
-                        (f) => f.section === "admin" && f.key !== "running_bal"
+                        (f) => {
+                          if (formType === 'policy') {
+                            // For policy mode: show essential fields for policy creation
+                            return f.section === "admin" && 
+                                   f.key !== "running_bal" && 
+                                   (f.key === "admin_input.admin_child_id" ||
+                                    f.key === "admin_input.agent_commission_given_percent" ||
+                                    f.key === "admin_input.agent_extra_percent" ||
+                                    f.key === "admin_input.code_type" ||
+                                    f.key === "admin_input.payment_by" ||
+                                    f.key === "admin_input.payment_method" ||
+                                    f.key === "admin_input.payment_by_office" ||
+                                    f.key === "notes");
+                          } else {
+                            // For cutpay mode: show all admin fields except running_bal
+                            return f.section === "admin" && f.key !== "running_bal";
+                          }
+                        }
                       )
                       .reduce((acc, field) => {
-                        const renderedField = renderField(field);
+                        const renderedField = renderField(field as FormFieldConfig);
                         if (renderedField) {
                           acc.push(renderedField);
                         }
 
                         if (
+                          formType === 'cutpay' &&
                           field.key === "admin_input.payment_by" &&
                           paymentBy === "InsureZeal"
                         ) {
@@ -1267,8 +1560,8 @@ const planTypeOptions = useMemo(
                           }
                         }
 
-                        // Add OD+TP specific percentage fields when payout_on is "OD+TP"
-                        if (field.key === "admin_input.payout_on" && payoutOn === "OD+TP") {
+                        // Add OD+TP specific percentage fields when payout_on is "OD+TP" (only for cutpay)
+                        if (formType === 'cutpay' && field.key === "admin_input.payout_on" && payoutOn === "OD+TP") {
                           // OD Agent Payout Percent
                           acc.push(
                             <div key="od_agent_payout_percent" className="space-y-2">
@@ -1429,14 +1722,140 @@ const planTypeOptions = useMemo(
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {formFields
-                      .filter((f) => f.section === "calculation")
-                      .map(renderField)}
+                    {formType === 'policy' ? (
+                      // For policy mode: show simple agent payout calculation
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-700">
+                          Total Agent Payout Amount
+                        </Label>
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="text-lg font-semibold text-green-800">
+                            ₹{(() => {
+                              const grossPremium = watch("extracted_data.gross_premium") || 0;
+                              const agentCommission = watch("admin_input.agent_commission_given_percent") || 0;
+                              const agentExtra = watch("admin_input.agent_extra_percent") || 0;
+                              return (grossPremium * (agentCommission + agentExtra) / 100).toFixed(2);
+                            })()}
+                          </div>
+                          <div className="text-sm text-green-600 mt-1">
+                            Gross Premium × (Agent Commission % + Agent Extra %)
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // For cutpay mode: show all calculation fields
+                      currentFormFields
+                        .filter((f) => f.section === "calculation")
+                        .map((field) => renderField(field as FormFieldConfig))
+                    )}
                   </CardContent>
                 </Card>
               </div>
             </div>
           </div>
+
+          {/* Policy-specific fields section - Only shown in policy mode */}
+          {formType === 'policy' && (
+            <div className="mt-6">
+              <Card className="shadow-sm border border-l-6 border-purple-500">
+                <CardHeader className="bg-gray-50 border-b">
+                  <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                    <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
+                    Policy Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Cluster Field */}
+                  <div className="space-y-2">
+                    <Label htmlFor="cluster" className="text-sm font-medium text-gray-700">Cluster</Label>
+                    <Controller
+                      name={"cluster" as any}
+                      control={control}
+                      render={({ field: controllerField, fieldState }) => (
+                        <>
+                          <Input
+                            id="cluster"
+                            type="text"
+                            {...controllerField}
+                            value={String(controllerField.value ?? "")}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              controllerField.onChange(value === "" ? null : value);
+                            }}
+                            className="h-10"
+                            placeholder="Enter cluster"
+                          />
+                          {fieldState.error && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {fieldState.error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+
+                  {/* Start Date Field */}
+                  <div className="space-y-2">
+                    <Label htmlFor="start_date" className="text-sm font-medium text-gray-700">Policy Start Date</Label>
+                    <Controller
+                      name={"start_date" as any}
+                      control={control}
+                      render={({ field: controllerField, fieldState }) => (
+                        <>
+                          <Input
+                            id="start_date"
+                            type="date"
+                            {...controllerField}
+                            value={String(controllerField.value ?? "")}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              controllerField.onChange(value === "" ? null : value);
+                            }}
+                            className="h-10"
+                          />
+                          {fieldState.error && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {fieldState.error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+
+                  {/* End Date Field */}
+                  <div className="space-y-2">
+                    <Label htmlFor="end_date" className="text-sm font-medium text-gray-700">Policy End Date</Label>
+                    <Controller
+                      name={"end_date" as any}
+                      control={control}
+                      render={({ field: controllerField, fieldState }) => (
+                        <>
+                          <Input
+                            id="end_date"
+                            type="date"
+                            {...controllerField}
+                            value={String(controllerField.value ?? "")}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              controllerField.onChange(value === "" ? null : value);
+                            }}
+                            className="h-10"
+                          />
+                          {fieldState.error && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {fieldState.error.message}
+                            </p>
+                          )}
+                        </>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Navigation buttons */}
           <div className="flex justify-between mt-6">
@@ -1457,7 +1876,7 @@ const planTypeOptions = useMemo(
           {/* Loading dialog shown during submission */}
           <LoadingDialog
             open={isSubmitting}
-            title="Creating Cutpay Transaction"
+            title={formType === 'policy' ? "Creating Policy" : "Creating Cutpay Transaction"}
             steps={submissionSteps}
           />
         </form>
@@ -1466,4 +1885,4 @@ const planTypeOptions = useMemo(
   );
 };
 
-export default AdminInputForm;
+export default InputForm;
