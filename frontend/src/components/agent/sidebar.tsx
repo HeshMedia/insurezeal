@@ -1,9 +1,7 @@
 "use client"
 
 import { 
-  BarChart3, 
-  Users, 
-  TrendingUp, 
+  BarChart3,  
   Shield, 
   User, 
   CheckCircle
@@ -39,20 +37,11 @@ const agentNavItems = [
     url: "/agent/child-id",
     icon: CheckCircle,
   },
-  {
-    title: "Clients",
-    url: "/agent/clients",
-    icon: Users,
-  },
+
   {
     title: "Policies",
     url: "/agent/policies",
     icon: Shield,
-  },
-  {
-    title: "Commissions",
-    url: "/agent/commissions",
-    icon: TrendingUp,
   },
   {
     title: "Profile",
