@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Building, MapPin, Phone, Mail, User, Copy, Download } from "lucide-react"
+import { CheckCircle, Building, MapPin, Phone, Mail, User, Copy, Download, Key } from "lucide-react"
 import { useActiveChildIds } from "@/hooks/agentQuery"
 import { toast } from "sonner"
 
@@ -149,6 +149,24 @@ export function ActiveChildIds() {
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-gray-500" />
                     <span className="text-sm">{childId.email}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Password</p>
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-mono bg-gray-50 px-2 py-1 rounded">
+                      {childId.password}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(childId.password || '', 'Password')}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               </div>
