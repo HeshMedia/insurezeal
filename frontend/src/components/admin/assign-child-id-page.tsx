@@ -180,16 +180,20 @@ export function AssignChildIdPage() {
                 <div className="flex items-center gap-2">
                   <Building className="h-4 w-4 text-gray-400" />
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Insurer ID</p>
-                    <p className="text-sm text-gray-900">{request.insurer_id || 'N/A'}</p>
+                    <p className="text-sm font-medium text-gray-700">Insurer</p>
+                    <p className="text-sm text-gray-900">
+                      {request.insurer?.name || request.insurer_id || 'N/A'}
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Building className="h-4 w-4 text-gray-400" />
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Broker ID</p>
-                    <p className="text-sm text-gray-900">{request.broker_id || 'N/A'}</p>
+                    <p className="text-sm font-medium text-gray-700">Broker</p>
+                    <p className="text-sm text-gray-900">
+                      {request.broker_relation?.name || request.broker_id || 'N/A'}
+                    </p>
                   </div>
                 </div>
 
