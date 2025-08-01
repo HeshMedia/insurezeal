@@ -33,11 +33,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('Admin API Error:', {
-      response: error.response?.data,
-      status: error.response?.status,
-      message: error.message
-    })
+    // Only log errors that are not permission-related for agents
+    if (error.response?.status !== 401 && error.response?.status !== 403) {
+      console.error('Admin API Error:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        message: error.message
+      })
+    }
     
     let message = 'An unexpected error occurred'
     

@@ -9,16 +9,25 @@ export interface ExtractedPolicyData {
   product_type?: string | null
   plan_type?: string | null
   customer_name?: string | null
-  customer_phone_number:string|null,
+  customer_phone_number?: string | null
+  // Policy type and insurance details
+  insurance_type?: string | null
+  vehicle_type?: string | null
+  // Premium details
   gross_premium?: number | null
   net_premium?: number | null
   od_premium?: number | null
   tp_premium?: number | null
   gst_amount?: number | null
+  // Vehicle registration details
   registration_no?: string | null
+  registration_number?: string | null // Alternative field name
+  // Vehicle details
   make_model?: string | null
   model?: string | null
   vehicle_variant?: string | null
+  vehicle_class?: string | null
+  vehicle_segment?: string | null
   gvw?: number | null
   rto?: string | null
   state?: string | null
@@ -30,6 +39,7 @@ export interface ExtractedPolicyData {
   business_type?: string | null
   seating_capacity?: number | null
   veh_wheels?: number | null
+  is_private_car?: boolean | null
 }
 
 // PDF extraction response
@@ -58,6 +68,13 @@ export interface AdminInputData {
   insurer_code?: string | null;
   broker_code?: string | null;
   admin_child_id?: string | null;
+  
+  // Date fields for policy periods
+  start_date?: string | null;
+  end_date?: string | null;
+  
+  // Additional administrative fields
+  cluster?: string | null;
   
   // OD+TP specific percentage fields
   od_agent_payout_percent?: number | null;

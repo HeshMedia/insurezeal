@@ -108,29 +108,77 @@ export interface UploadPolicyPdfResponse {
 }
 
 export interface SubmitPolicyPayload {
-  agent_code: string;
-  agent_id: string;
-  ai_confidence_score: number;
-  broker_name: string;
-  child_id: string;
-  end_date: string;
-  gross_premium: number;
-  gst: number;
-  insurance_company: string;
-  insurance_type: string;
-  manual_override: boolean;
-  net_premium: number;
-  od_premium: number;
-  pdf_file_name: string;
-  pdf_file_path: string;
+  // Required fields according to API
   policy_number: string;
   policy_type: string;
-  registration_number: string;
-  start_date: string;
-  tp_premium: number;
-  vehicle_class: string;
-  vehicle_segment: string;
-  vehicle_type: string;
+  pdf_file_path: string;
+  pdf_file_name: string;
+  
+  // Agent and Child ID information
+  agent_id?: string;
+  agent_code?: string;
+  child_id?: string;
+  broker_name?: string;
+  insurance_company?: string;
+  
+  // Complete policy details from PDF extraction (all fields from API spec)
+  formatted_policy_number?: string;
+  major_categorisation?: string;
+  product_insurer_report?: string;
+  product_type?: string;
+  plan_type?: string;
+  customer_name?: string;
+  customer_phone_number?: string;
+  insurance_type?: string;
+  vehicle_type?: string;
+  registration_number?: string;
+  registration_no?: string;
+  vehicle_class?: string;
+  vehicle_segment?: string;
+  make_model?: string;
+  model?: string;
+  vehicle_variant?: string;
+  gvw?: number;
+  rto?: string;
+  state?: string;
+  fuel_type?: string;
+  cc?: number;
+  age_year?: number;
+  ncb?: string;
+  discount_percent?: number;
+  business_type?: string;
+  seating_capacity?: number;
+  veh_wheels?: number;
+  is_private_car?: boolean;
+  
+  // Premium and financial details
+  gross_premium?: number;
+  gst?: number;
+  gst_amount?: number;
+  net_premium?: number;
+  od_premium?: number;
+  tp_premium?: number;
+  
+  // Agent commission and payout details
+  agent_commission_given_percent?: number;
+  agent_extra_percent?: number;
+  payment_by_office?: number;
+  total_agent_payout_amount?: number;
+  
+  // Administrative details
+  code_type?: string;
+  payment_by?: string;
+  payment_method?: string;
+  cluster?: string;
+  notes?: string;
+  
+  // Date fields
+  start_date?: string;
+  end_date?: string;
+  
+  // AI and manual override
+  ai_confidence_score?: number;
+  manual_override?: boolean;
 }
 
 export interface UpdatePolicyPayload {
