@@ -79,6 +79,9 @@ export interface AgentDetails {
   territory_preference: string | null
   agent_code: string | null
   user_role: string
+  running_balance: number | null
+  total_net_premium: number | null
+  number_of_policies: number | null
   avatar_url: string | null
   preferences: Record<string, unknown> | null
   created_at: string

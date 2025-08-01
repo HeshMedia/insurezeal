@@ -13,14 +13,14 @@ import {
   ArrowLeft, 
   Edit, 
   Mail, 
-  Calendar, 
   User, 
   Phone,
   MapPin,
   FileText,
-  UserCheck,
   Briefcase,
-  TrendingUp
+  DollarSign,
+  Shield,
+  BarChart3
 } from 'lucide-react'
 
 export default function AgentDetailPage() {
@@ -178,16 +178,18 @@ export default function AgentDetailPage() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="border border-gray-200 shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <User className="h-5 w-5 text-blue-600" />
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <DollarSign className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Agent Code</p>
-                  <p className="text-xl font-bold text-gray-900">{agent.agent_code || 'N/A'}</p>
+                  <p className="text-sm font-medium text-gray-500">Running Balance</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    ₹{agent.running_balance ? agent.running_balance.toLocaleString('en-IN') : '0'}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -196,16 +198,13 @@ export default function AgentDetailPage() {
           <Card className="border border-gray-200 shadow-sm">
             <CardContent className="p-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Calendar className="h-5 w-5 text-green-600" />
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Shield className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Joined</p>
+                  <p className="text-sm font-medium text-gray-500">Total Net Premium</p>
                   <p className="text-xl font-bold text-gray-900">
-                    {agent.created_at ? new Date(agent.created_at).toLocaleDateString('en-IN', {
-                      month: 'short',
-                      year: 'numeric'
-                    }) : 'N/A'}
+                    ₹{agent.total_net_premium ? agent.total_net_premium.toLocaleString('en-IN') : '0'}
                   </p>
                 </div>
               </div>
@@ -216,27 +215,13 @@ export default function AgentDetailPage() {
             <CardContent className="p-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-purple-600" />
+                  <BarChart3 className="h-5 w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Experience</p>
+                  <p className="text-sm font-medium text-gray-500">Number Of Policies</p>
                   <p className="text-xl font-bold text-gray-900">
-                    {agent.years_of_experience ? `${agent.years_of_experience} yrs` : 'N/A'}
+                    {agent.number_of_policies ? agent.number_of_policies.toLocaleString('en-IN') : '0'}
                   </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <UserCheck className="h-5 w-5 text-orange-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Status</p>
-                  <p className="text-xl font-bold text-gray-900">Active</p>
                 </div>
               </div>
             </CardContent>

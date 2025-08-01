@@ -271,7 +271,7 @@ const InputForm: React.FC<InputFormProps> = ({
   
   // Policy-specific child IDs hook for agent users
   const { data: policyChildIds, isLoading: policyChildIdsLoading } = useChildIdOptions(
-    formType === 'policy' ? userProfile?.id : undefined // Only fetch for policy forms with user ID
+    formType === 'policy' ? userProfile?.user_id : undefined // Only fetch for policy forms with user ID
   );
 
   // Auto-fill Insurance Company and Broker Name when Child ID is selected in policy mode
