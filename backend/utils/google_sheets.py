@@ -663,8 +663,14 @@ async def get_master_sheet_data(insurer_name: Optional[str] = None) -> List[Dict
         if insurer_name:
             filtered_records = []
             for record in records:
-                if record.get('Insurer Name', '').strip().lower() == insurer_name.lower():
-                    filtered_records.append(record)
+                # Handle both string and non-string values in insurer name comparison
+                record_insurer = record.get('Insurer Name', '')
+                try:
+                    if str(record_insurer).strip().lower() == insurer_name.lower():
+                        filtered_records.append(record)
+                except Exception as e:
+                    logger.warning(f"Error comparing insurer name '{record_insurer}' with '{insurer_name}': {str(e)}")
+                    continue
             return filtered_records
         
         return records
@@ -680,50 +686,56 @@ async def update_master_sheet_record(policy_number: str, updated_data: Dict[str,
         if not google_sheets_sync.client:
             logger.warning("Google Sheets client not initialized")
             return False
-        
+
         master_sheet = google_sheets_sync._get_or_create_worksheet("Master", google_sheets_sync._get_master_sheet_headers())
         if not master_sheet:
             return False
+
+        # Get all records to find the matching policy number
+        all_records = master_sheet.get_all_records()
+        headers = google_sheets_sync._get_master_sheet_headers()
         
-        # Find the row with matching policy number
-        policy_numbers = master_sheet.col_values(9)  # Policy Number is column 9
+        # Find the row with matching policy number (case-insensitive and trimmed)
+        target_policy = str(policy_number).strip().lower()
+        row_to_update = None
+        row_index = None
         
-        for i, existing_policy_number in enumerate(policy_numbers):
-            if existing_policy_number == policy_number:
-                row_index = i + 1
-                
-                # Prepare row data
-                headers = google_sheets_sync._get_master_sheet_headers()
-                row_data = []
-                
-                for header in headers:
-                    if header in updated_data:
-                        row_data.append(updated_data[header])
-                    else:
-                        # Keep existing value or empty
-                        try:
-                            existing_row = master_sheet.row_values(row_index)
-                            header_index = headers.index(header)
-                            if header_index < len(existing_row):
-                                row_data.append(existing_row[header_index])
-                            else:
-                                row_data.append("")
-                        except:
-                            row_data.append("")
-                
-                # Update the row
-                master_sheet.update(f"A{row_index}:{google_sheets_sync._col_to_a1(len(headers))}{row_index}", [row_data])
-                logger.info(f"Updated master sheet record for policy {policy_number}")
-                return True
+        for i, record in enumerate(all_records):
+            existing_policy = str(record.get('Policy Number', '')).strip().lower()
+            if existing_policy == target_policy:
+                row_to_update = record
+                row_index = i + 2  # +2 because of header row and 1-based indexing
+                break
         
-        logger.warning(f"Policy number {policy_number} not found in master sheet")
-        return False
+        if row_to_update is None:
+            logger.warning(f"Policy number '{policy_number}' not found in master sheet")
+            return False
+        
+        # Prepare row data by merging existing data with updates
+        row_data = []
+        for header in headers:
+            if header in updated_data and updated_data[header] is not None:
+                # Use updated value
+                row_data.append(updated_data[header])
+            elif header in row_to_update:
+                # Keep existing value
+                row_data.append(row_to_update[header])
+            elif header == "Updated At":
+                # Set updated timestamp
+                row_data.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            else:
+                # Empty value
+                row_data.append("")
+        
+        # Update the row
+        range_to_update = f"A{row_index}:{google_sheets_sync._col_to_a1(len(headers))}{row_index}"
+        master_sheet.update(range_to_update, [row_data])
+        logger.info(f"Updated master sheet record for policy '{policy_number}' at row {row_index}")
+        return True
         
     except Exception as e:
-        logger.error(f"Error updating master sheet record: {str(e)}")
+        logger.error(f"Error updating master sheet record for policy '{policy_number}': {str(e)}")
         return False
-
-
 async def add_master_sheet_record(record_data: Dict[str, Any]) -> bool:
     """Add new record to master sheet"""
     try:

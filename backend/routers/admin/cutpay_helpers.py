@@ -755,11 +755,13 @@ async def update_agent_financials(db: AsyncSession, agent_code: str, net_premium
         # Update running totals
         current_running_balance = user_profile.running_balance or 0.0
         current_total_net_premium = user_profile.total_net_premium or 0.0
+        current_number_of_policies = user_profile.number_of_policies or 0
         
         user_profile.running_balance = current_running_balance + (running_balance or 0.0)
         user_profile.total_net_premium = current_total_net_premium + (net_premium or 0.0)
+        user_profile.number_of_policies = current_number_of_policies + 1
         
-        logger.info(f"Updated agent {agent_code} financials - Running Balance: {user_profile.running_balance}, Total Net Premium: {user_profile.total_net_premium}")
+        logger.info(f"Updated agent {agent_code} financials - Running Balance: {user_profile.running_balance}, Total Net Premium: {user_profile.total_net_premium}, Number of Policies: {user_profile.number_of_policies}")
         
     except Exception as e:
         logger.error(f"Error updating agent financials for {agent_code}: {str(e)}")

@@ -192,6 +192,10 @@ class AgentDetailResponse(BaseModel):
     agent_code: Optional[str] = None
     user_role: str
     
+    running_balance: Optional[float] = None
+    total_net_premium: Optional[float] = None
+    number_of_policies: Optional[int] = None
+
     # System fields
     avatar_url: Optional[str] = None
     preferences: Optional[dict] = None

@@ -113,7 +113,7 @@ async def upload_policy_pdf(
         
         # Verify the policy exists and user has access to it
         filter_user_id = user_id if user_role != "admin" else None
-        existing_policy = await policy_helpers.get_policy_by_id(db, policy_id, filter_user_id)
+        existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         
         if not existing_policy:
             raise HTTPException(
@@ -123,12 +123,12 @@ async def upload_policy_pdf(
         
         file_content = await file.read()
 
-        file_path, original_filename = await policy_helpers.save_uploaded_file_from_bytes(
+        file_path, original_filename = await PolicyHelpers.save_uploaded_file_from_bytes(
             file_content, file.filename, user_id
         )
         
         # Update the policy record with the new PDF file information
-        await policy_helpers.update_policy(
+        await PolicyHelpers.update_policy(
             db, 
             policy_id, 
             {
@@ -188,7 +188,7 @@ async def submit_policy(
             try:
 
                 agent_id_str = str(submitted_agent_id)
-                agent_profile = await policy_helpers.get_agent_by_user_id(db, agent_id_str)
+                agent_profile = await PolicyHelpers.get_agent_by_user_id(db, agent_id_str)
                 if not agent_profile:
                     logger.warning(f"Invalid agent_id submitted: {submitted_agent_id}")
                     raise HTTPException(
@@ -206,7 +206,7 @@ async def submit_policy(
                 )
         else:
             if user_role == "agent":
-                agent_profile = await policy_helpers.get_agent_by_user_id(db, user_id)
+                agent_profile = await PolicyHelpers.get_agent_by_user_id(db, user_id)
                 if agent_profile:
                     policy_dict["agent_id"] = str(agent_profile.user_id)
                     policy_dict["agent_code"] = agent_profile.agent_code
@@ -216,27 +216,10 @@ async def submit_policy(
                     policy_dict["agent_id"] = str(user_id)
                     policy_dict["agent_code"] = None
         
-        submitted_child_id = policy_dict.get("child_id")
-        if submitted_child_id:
-            try:
-                child_details = await policy_helpers.get_child_id_details(db, submitted_child_id)
-                if not child_details:
-                    logger.warning(f"Invalid child_id submitted: {submitted_child_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Child ID {submitted_child_id} not found"
-                    )
-                policy_dict["broker_name"] = child_details.broker
-                policy_dict["insurance_company"] = child_details.insurance_company
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Error validating child_id {submitted_child_id}: {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid child_id provided"                )
+        # Note: child_id validation removed since frontend gets child_id from our own /policies/helpers/child-ids endpoint
+        # The child_id is already validated when frontend fetches it, so no need to re-validate here
         
-        policy = await policy_helpers.create_policy(
+        policy = await PolicyHelpers.create_policy(
             db=db,
             policy_data=policy_dict,
             file_path=pdf_file_path,
@@ -245,11 +228,11 @@ async def submit_policy(
         )
 
         if policy.agent_code:
-            await policy_helpers.update_agent_financials(
+            await PolicyHelpers.update_agent_financials(
                 db, 
                 policy.agent_code, 
-                policy.payment_by_office or 0.0, 
-                policy.total_agent_payout_amount or 0.0
+                policy.net_premium or 0.0,  # net_premium parameter (like cutpay)
+                policy.running_bal or 0.0   # running_balance parameter (like cutpay.running_bal)
             )
             await db.commit()
         
@@ -330,7 +313,7 @@ async def list_policies(
         filter_user_id = user_id if user_role != "admin" else None
         filter_agent_id = agent_id if user_role == "admin" else None
         
-        result = await policy_helpers.get_policies(
+        result = await PolicyHelpers.get_policies(
             db=db,
             page=page,
             page_size=page_size,
@@ -377,7 +360,7 @@ async def get_policy_details(
         
         filter_user_id = user_id if user_role != "admin" else None
         
-        policy = await policy_helpers.get_policy_by_id(db, policy_id, filter_user_id)
+        policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         if not policy:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -417,13 +400,9 @@ async def update_policy(
         filter_user_id = user_id if user_role != "admin" else None
 
         update_data = policy_data.model_dump(exclude_unset=True)        
-        if "child_id" in update_data and update_data["child_id"]:
-            child_details = await policy_helpers.get_child_id_details(db, update_data["child_id"])
-            if child_details:
-                update_data["broker_name"] = child_details.broker
-                update_data["insurance_company"] = child_details.insurance_company
+        # Note: child_id validation removed since frontend gets child_id from our own endpoint
         
-        policy = await policy_helpers.update_policy(db, policy_id, update_data, filter_user_id)
+        policy = await PolicyHelpers.update_policy(db, policy_id, update_data, filter_user_id)
         if not policy:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -431,7 +410,36 @@ async def update_policy(
             )
           # Sync to Google Sheets
         try:
-            policy_dict_for_sheets = await policy_helpers.convert_policy_to_dict(policy)
+            policy_dict_for_sheets = {
+                'id': policy.id,
+                'policy_number': policy.policy_number,
+                'policy_type': policy.policy_type,
+                'insurance_type': policy.insurance_type,
+                'agent_id': policy.agent_id,
+                'agent_code': policy.agent_code,
+                'child_id': policy.child_id,
+                'broker_name': policy.broker_name,
+                'insurance_company': policy.insurance_company,
+                'vehicle_type': policy.vehicle_type,
+                'registration_number': policy.registration_number,
+                'vehicle_class': policy.vehicle_class,
+                'vehicle_segment': policy.vehicle_segment,
+                'gross_premium': policy.gross_premium,
+                'gst': policy.gst,
+                'net_premium': policy.net_premium,
+                'od_premium': policy.od_premium,
+                'tp_premium': policy.tp_premium,
+                'payment_by_office': policy.payment_by_office,
+                'total_agent_payout_amount': policy.total_agent_payout_amount,
+                'start_date': policy.start_date,
+                'end_date': policy.end_date,
+                'uploaded_by': policy.uploaded_by,
+                'pdf_file_name': policy.pdf_file_name,
+                'ai_confidence_score': policy.ai_confidence_score,
+                'manual_override': policy.manual_override,
+                'created_at': policy.created_at,
+                'updated_at': policy.updated_at
+            }
             google_sheets_sync.sync_policy(policy_dict_for_sheets, "UPDATE")
             logger.info(f"Updated policy {policy.id} synced to Google Sheets")
         except Exception as sync_error:
@@ -469,7 +477,7 @@ async def delete_policy(
         
         filter_user_id = user_id if user_role != "admin" else None
         
-        success = await policy_helpers.delete_policy(db, policy_id, filter_user_id)
+        success = await PolicyHelpers.delete_policy(db, policy_id, filter_user_id)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -513,9 +521,31 @@ async def get_child_id_options(
         else:
             target_agent_id = str(user_id)
         
-        child_ids = await policy_helpers.get_available_child_ids(db, target_agent_id)
+        # Use the same logic as child router's /active endpoint
+        from routers.child.helpers import ChildHelpers
+        child_helpers = ChildHelpers()
         
-        return [ChildIdOption(**child_id) for child_id in child_ids]
+        active_requests = await child_helpers.get_user_active_child_ids(
+            db=db,
+            user_id=target_agent_id
+        )
+        
+        # Format the response to match ChildIdOption schema
+        child_id_options = []
+        for req in active_requests:
+            # Extract the required fields
+            child_id = req.child_id if req.child_id else ""
+            broker_name = req.broker.name if req.broker else ""
+            insurance_company = req.insurer.name if req.insurer else ""
+            
+            if child_id:  # Only include if child_id exists
+                child_id_options.append(ChildIdOption(
+                    child_id=child_id,
+                    broker_name=broker_name,
+                    insurance_company=insurance_company
+                ))
+        
+        return child_id_options
         
     except Exception as e:
         logger.error(f"Error fetching child ID options: {str(e)}")
@@ -536,7 +566,7 @@ async def get_agent_options(
     **Requires policy manage permission**
     """
     try:
-        agents = await policy_helpers.get_available_agents(db)
+        agents = await PolicyHelpers.get_available_agents(db)
         
         return [AgentOption(**agent) for agent in agents]
         
@@ -575,7 +605,7 @@ async def export_policies_csv(
         # For agents, filter by their user_id; for admins, no filter
         filter_user_id = str(user_id) if user_role != "admin" else None
         
-        csv_content = await policy_helpers.export_policies_to_csv(
+        csv_content = await PolicyHelpers.export_policies_to_csv(
             db, filter_user_id, start_date, end_date
         )
         
@@ -628,7 +658,7 @@ async def get_agent_policies(
     Returns paginated list of policies for the specified agent with only relevant fields.
     """
     try:
-        result = await policy_helpers.get_agent_policies(
+        result = await PolicyHelpers.get_agent_policies(
             db=db,
             agent_code=agent_code,
             page=page,

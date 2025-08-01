@@ -83,7 +83,7 @@ class UniversalRecordProcessingReport(BaseModel):
     
     # Processing metadata
     processed_at: datetime = Field(default_factory=datetime.now)
-    processed_by_user_id: int
+    processed_by_user_id: str  # Accept user ID as UUID string
 
 
 class UniversalRecordUploadResponse(BaseModel):

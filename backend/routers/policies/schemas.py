@@ -29,7 +29,6 @@ class PolicyBase(BaseModel):
     # Vehicle Details
     vehicle_type: Optional[str] = None
     registration_number: Optional[str] = None
-    registration_no: Optional[str] = None  # Alternative field name
     vehicle_class: Optional[str] = None
     vehicle_segment: Optional[str] = None
     make_model: Optional[str] = None
@@ -63,6 +62,7 @@ class PolicyBase(BaseModel):
     # Agent Financial Tracking Fields
     payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
     total_agent_payout_amount: Optional[float] = Field(None, description="Total amount to be paid out to agent")
+    running_bal: Optional[float] = Field(None, description="Running balance for agent financial tracking (calculated by frontend)")
     
     # Additional Policy Configuration
     code_type: Optional[str] = None  # Direct, Broker, Child ID
@@ -146,6 +146,7 @@ class PolicyUpdate(BaseModel):
     tp_premium: Optional[float] = None
     payment_by_office: Optional[float] = None
     total_agent_payout_amount: Optional[float] = None
+    running_bal: Optional[float] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     manual_override: Optional[bool] = None

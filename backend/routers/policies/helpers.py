@@ -150,25 +150,51 @@ class PolicyHelpers:
     
     @staticmethod
     async def get_child_id_details(db: AsyncSession, child_id: str) -> Optional[ChildIdRequest]:
-        """Get child ID details"""
+        """Get child ID details using the same working pattern as child router"""
         try:
-            result = await db.execute(
-                select(ChildIdRequest).where(ChildIdRequest.child_id == child_id)
-            )
-            return result.scalar_one_or_none()
+            # Validate child_id format before querying
+            if not child_id or not child_id.strip():
+                logger.warning(f"Empty or invalid child_id provided: '{child_id}'")
+                return None
+            
+            # Use the working pattern from child helpers
+            from routers.child.helpers import ChildHelpers
+            child_helpers = ChildHelpers()
+            
+            # Build query similar to child helpers pattern
+            query = select(ChildIdRequest).where(ChildIdRequest.child_id == child_id)
+            result = await db.execute(query)
+            
+            # Use the working .scalars().all() pattern then get first item
+            child_requests = result.scalars().all()
+            
+            if child_requests:
+                return child_requests[0]  # Return first match
+            return None
+            
         except Exception as e:
-            logger.error(f"Error fetching child ID details: {str(e)}")
+            logger.error(f"Error fetching child ID details for '{child_id}': {str(e)}")
             return None
     @staticmethod
     async def get_available_child_ids(db: AsyncSession, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get available child IDs for dropdown, filtered by agent_id if provided"""
         try:
-            query = select(ChildIdRequest).where(ChildIdRequest.status == "accepted")
+            # Build the query step by step
+            query = select(ChildIdRequest)
+            query = query.where(ChildIdRequest.status == "accepted")
 
             if agent_id:
-                query = query.where(ChildIdRequest.user_id == uuid.UUID(agent_id))
+                try:
+                    agent_uuid = uuid.UUID(agent_id)
+                    query = query.where(ChildIdRequest.user_id == agent_uuid)
+                except ValueError:
+                    logger.error(f"Invalid UUID format for agent_id: {agent_id}")
+                    return []
             
+            # Execute the query
             result = await db.execute(query)
+            
+            # Use same pattern as get_available_agents
             child_requests = result.scalars().all()
             
             return [
@@ -184,7 +210,7 @@ class PolicyHelpers:
         except Exception as e:
             logger.error(f"Error fetching child IDs for agent {agent_id}: {str(e)}")
             return []
-    
+            
     @staticmethod
     async def get_available_agents(db: AsyncSession) -> List[Dict[str, Any]]:
         """Get available agents for admin dropdown"""
@@ -527,7 +553,7 @@ class PolicyHelpers:
             )
 
     @staticmethod
-    async def update_agent_financials(db: AsyncSession, agent_code: str, payment_by_office: float, total_agent_payout_amount: float):
+    async def update_agent_financials(db: AsyncSession, agent_code: str, net_premium: float, running_balance: float):
         """Update agent's running balance, total net premium, and number of policies when a policy is created/updated"""
         if not agent_code:
             return
@@ -543,19 +569,16 @@ class PolicyHelpers:
                 logger.warning(f"Agent profile not found for agent_code: {agent_code}")
                 return
             
-            # Update running balance (add payment_by_office)
+            # Update running totals (same pattern as cutpay)
             current_running_balance = agent_profile.running_balance or 0.0
-            agent_profile.running_balance = current_running_balance + (payment_by_office or 0.0)
-            
-            # Update total net premium (add total_agent_payout_amount)
             current_total_net_premium = agent_profile.total_net_premium or 0.0
-            agent_profile.total_net_premium = current_total_net_premium + (total_agent_payout_amount or 0.0)
-            
-            # Increment number of policies
             current_number_of_policies = agent_profile.number_of_policies or 0
+            
+            agent_profile.running_balance = current_running_balance + (running_balance or 0.0)
+            agent_profile.total_net_premium = current_total_net_premium + (net_premium or 0.0)
             agent_profile.number_of_policies = current_number_of_policies + 1
             
-            logger.info(f"Updated agent {agent_code} financials: running_balance={agent_profile.running_balance}, total_net_premium={agent_profile.total_net_premium}, number_of_policies={agent_profile.number_of_policies}")
+            logger.info(f"Updated agent {agent_code} financials - Running Balance: {agent_profile.running_balance}, Total Net Premium: {agent_profile.total_net_premium}, Number of Policies: {agent_profile.number_of_policies}")
             
         except Exception as e:
             logger.error(f"Error updating agent financials for {agent_code}: {str(e)}")

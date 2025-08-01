@@ -9,6 +9,7 @@ import csv
 import io
 import logging
 import os
+import uuid
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from fastapi import HTTPException, status
 
-from models import Policy, CutPay
+from models import Policy, CutPay, ReconciliationReport
 from utils.google_sheets import sync_policy_to_master_sheet, sync_cutpay_to_master_sheet
 from .schemas import (
     UniversalRecordProcessingReport, 
@@ -315,13 +316,22 @@ async def process_universal_record_csv(
         
         # Get existing master sheet data for this insurer
         existing_master_data = await get_master_sheet_data(insurer_name=insurer_name)
+        logger.info(f"Found {len(existing_master_data)} existing records in master sheet for insurer '{insurer_name}'")
         
-        # Create a lookup dictionary by policy number
+        # Create a lookup dictionary by policy number (case-insensitive and trimmed)
         existing_records_by_policy = {}
         for record in existing_master_data:
             policy_number = record.get('Policy Number')
             if policy_number:
-                existing_records_by_policy[policy_number] = record
+                # Normalize policy number for lookup - handle both string and numeric values
+                try:
+                    normalized_policy = str(policy_number).strip().lower()
+                    existing_records_by_policy[normalized_policy] = record
+                except Exception as e:
+                    logger.warning(f"Error normalizing policy number '{policy_number}': {str(e)}")
+                    continue
+        
+        logger.info(f"Created lookup for {len(existing_records_by_policy)} existing policies: {list(existing_records_by_policy.keys())}")
         
         # Process each record
         for record in mapped_records:
@@ -331,10 +341,23 @@ async def process_universal_record_csv(
                 stats.error_details.append("Missing Policy Number in record")
                 continue
             
+            # Normalize policy number for lookup - handle both string and numeric values
             try:
-                if policy_number in existing_records_by_policy:
+                normalized_policy = str(policy_number).strip().lower()
+            except Exception as e:
+                logger.error(f"Error normalizing policy number '{policy_number}': {str(e)}")
+                stats.total_errors += 1
+                stats.error_details.append(f"Invalid Policy Number format: {policy_number}")
+                continue
+                
+            logger.info(f"Processing universal record policy '{policy_number}' (normalized: '{normalized_policy}')")
+            
+            try:
+                if normalized_policy in existing_records_by_policy:
                     # Update existing record in master sheet
-                    existing_record = existing_records_by_policy[policy_number]
+                    existing_record = existing_records_by_policy[normalized_policy]
+                    
+                    logger.info(f"Found existing record for policy '{policy_number}' (normalized: '{normalized_policy}')")
                     
                     # Compare and update fields
                     has_changes, changed_fields = await compare_and_update_master_record(
@@ -343,12 +366,19 @@ async def process_universal_record_csv(
                     
                     if has_changes:
                         # Set MATCH STATUS to TRUE
-                        record['Match Status'] = True
+                        record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
                         
                         # Update in Google Sheets
-                        await update_master_sheet_record(policy_number, record)
+                        update_success = await update_master_sheet_record(policy_number, record)
                         
-                        stats.total_records_updated += 1
+                        if update_success:
+                            stats.total_records_updated += 1
+                            logger.info(f"Successfully updated policy '{policy_number}' with changes: {changed_fields}")
+                            logger.info(f"MATCH STATUS set to TRUE for policy '{policy_number}'")
+                        else:
+                            stats.total_errors += 1
+                            stats.error_details.append(f"Failed to update policy '{policy_number}' in Google Sheets")
+                            logger.error(f"Failed to update policy '{policy_number}' in Google Sheets")
                         
                         # Track field changes
                         for field in changed_fields:
@@ -358,38 +388,53 @@ async def process_universal_record_csv(
                             policy_number=policy_number,
                             record_type="master_sheet",
                             action="updated",
-                            changed_fields=changed_fields,
+                            changed_fields={field: f"Updated {field}" for field in changed_fields},
                             previous_values={},  # Would need to implement if needed
                             new_values=record
                         ))
                     else:
                         # No changes but still set MATCH STATUS to TRUE
-                        record['Match Status'] = True
-                        await update_master_sheet_record(policy_number, record)
+                        record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
+                        update_success = await update_master_sheet_record(policy_number, record)
+                        
+                        if update_success:
+                            logger.info(f"Policy '{policy_number}' had no changes, but MATCH STATUS updated to TRUE")
+                        else:
+                            stats.total_errors += 1
+                            stats.error_details.append(f"Failed to update MATCH STATUS for policy '{policy_number}'")
+                            logger.error(f"Failed to update MATCH STATUS for policy '{policy_number}'")
                         
                         change_details.append(RecordChangeDetail(
                             policy_number=policy_number,
                             record_type="master_sheet",
                             action="no_change",
-                            changed_fields=[],
+                            changed_fields={},
                             previous_values={},
                             new_values={}
                         ))
                 
                 else:
                     # Add new record to master sheet
-                    record['Match Status'] = True
+                    logger.info(f"Policy '{policy_number}' (normalized: '{normalized_policy}') not found in existing records, adding new record")
+                    
+                    record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
                     record['Insurer Name'] = insurer_name
                     
-                    await add_master_sheet_record(record)
+                    add_success = await add_master_sheet_record(record)
                     
-                    stats.total_records_added += 1
+                    if add_success:
+                        stats.total_records_added += 1
+                        logger.info(f"Successfully added new policy '{policy_number}' with MATCH STATUS = TRUE")
+                    else:
+                        stats.total_errors += 1
+                        stats.error_details.append(f"Failed to add new policy '{policy_number}' to Google Sheets")
+                        logger.error(f"Failed to add new policy '{policy_number}' to Google Sheets")
                     
                     change_details.append(RecordChangeDetail(
                         policy_number=policy_number,
                         record_type="master_sheet",
                         action="added",
-                        changed_fields=list(record.keys()),
+                        changed_fields={},  # Use empty dict instead of list
                         previous_values={},
                         new_values=record
                     ))
@@ -403,7 +448,8 @@ async def process_universal_record_csv(
         end_time = datetime.now()
         stats.processing_time_seconds = (end_time - start_time).total_seconds()
         
-        return UniversalRecordProcessingReport(
+        # Create reconciliation report
+        report = UniversalRecordProcessingReport(
             stats=stats,
             change_details=change_details,
             insurer_name=insurer_name,
@@ -414,6 +460,42 @@ async def process_universal_record_csv(
             },
             processed_by_user_id=admin_user_id
         )
+        
+        # Save reconciliation report to database for persistence
+        try:
+            # Calculate variance and coverage percentages
+            total_policies_in_master = len(await get_master_sheet_data(insurer_name=insurer_name))
+            variance_percentage = (stats.total_errors / stats.total_records_processed * 100) if stats.total_records_processed > 0 else 0.0
+            coverage_percentage = ((stats.total_records_updated + stats.total_records_added) / stats.total_records_processed * 100) if stats.total_records_processed > 0 else 0.0
+            
+            db_report = ReconciliationReport(
+                insurer_name=insurer_name,
+                report_type="universal_record",
+                total_records_processed=stats.total_records_processed,
+                total_records_updated=stats.total_records_updated,
+                total_records_added=stats.total_records_added,
+                total_records_skipped=stats.total_records_skipped,
+                total_errors=stats.total_errors,
+                processing_time_seconds=stats.processing_time_seconds,
+                data_variance_percentage=round(variance_percentage, 2),
+                coverage_percentage=round(coverage_percentage, 2),
+                field_changes=stats.field_changes,
+                error_details=stats.error_details,
+                change_details=[detail.dict() for detail in change_details],
+                file_info=report.file_info,
+                status="completed" if stats.total_errors == 0 else "partial",
+                processed_by=uuid.UUID(admin_user_id) if isinstance(admin_user_id, str) else admin_user_id
+            )
+            
+            db.add(db_report)
+            await db.commit()
+            logger.info(f"Saved reconciliation report to database for insurer '{insurer_name}'")
+            
+        except Exception as e:
+            logger.error(f"Failed to save reconciliation report to database: {str(e)}")
+            await db.rollback()
+        
+        return report
         
     except Exception as e:
         logger.error(f"Error in universal record processing: {str(e)}")
@@ -474,7 +556,13 @@ async def generate_reconciliation_summary(
         total_policies_in_system = len(master_sheet_data)
         
         # Calculate match statistics based on match_status field
-        matched_records = [record for record in master_sheet_data if record.get('Match Status') == True]
+        matched_records = []
+        for record in master_sheet_data:
+            match_status = record.get('Match Status', '')
+            # Check for both string "TRUE" and boolean True
+            if match_status == "TRUE" or match_status == True or str(match_status).upper() == "TRUE":
+                matched_records.append(record)
+        
         total_matches = len(matched_records)
         total_mismatches = total_policies_in_system - total_matches
         
@@ -509,3 +597,33 @@ async def generate_reconciliation_summary(
 
 # Initialize insurer mappings on module load
 _load_mappings_from_csv()
+
+
+def normalize_field_value(field_name: str, value: Any) -> str:
+    """Normalize field values for comparison"""
+    if value is None:
+        return ""
+    
+    # Convert to string and strip whitespace
+    normalized = str(value).strip()
+    
+    # For numeric fields, try to normalize format
+    if "premium" in field_name.lower() or "amount" in field_name.lower():
+        try:
+            # Try to parse as float and format consistently
+            float_val = float(normalized.replace(',', ''))
+            return f"{float_val:.2f}"
+        except:
+            pass
+    
+    # For date fields
+    if "date" in field_name.lower():
+        try:
+            # Try to parse and format consistently
+            from datetime import datetime
+            parsed_date = datetime.strptime(normalized, "%Y-%m-%d")
+            return parsed_date.strftime("%Y-%m-%d")
+        except:
+            pass
+    
+    return normalized

@@ -534,7 +534,6 @@ class Policy(Base):
     # Vehicle Details (from PDF extraction)
     vehicle_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    registration_no: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Alternative field name
     vehicle_class: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     vehicle_segment: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -567,6 +566,7 @@ class Policy(Base):
     # Agent Financial Tracking
     payment_by_office: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
     total_agent_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
+    running_bal: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
     
     # Additional Policy Configuration
     code_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Direct, Broker, Child ID
@@ -756,5 +756,71 @@ class CutPayAgentConfig(Base):
         UniqueConstraint('agent_code', 'date', name='unique_cutpay_agent_config_per_date'),
         Index('idx_cutpay_agent_config_agent_code', 'agent_code'),
         Index('idx_cutpay_agent_config_date', 'date'),
+    )
+
+
+class ReconciliationReport(Base):
+    """
+    Reconciliation Report Model
+    Stores detailed reconciliation reports from universal record processing
+    """
+    __tablename__ = "reconciliation_reports"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    
+    # Report Metadata
+    insurer_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    report_type: Mapped[str] = mapped_column(String(50), nullable=False, default="universal_record")  # Type of reconciliation
+    file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Original file name
+    
+    # Processing Statistics
+    total_records_processed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_records_updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_records_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_records_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processing_time_seconds: Mapped[Numeric] = mapped_column(Numeric(10, 3), nullable=False, default=0.0)
+    
+    # Reconciliation Metrics
+    data_variance_percentage: Mapped[Numeric] = mapped_column(Numeric(5, 2), nullable=False, default=0.0)
+    coverage_percentage: Mapped[Numeric] = mapped_column(Numeric(5, 2), nullable=False, default=0.0)
+    
+    # Detailed Data
+    field_changes: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)  # Field-level change counts
+    error_details: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)  # List of errors
+    change_details: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)  # Detailed change log
+    file_info: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)  # Original headers, unmapped headers, etc.
+    
+    # Processing Status
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="completed")  # completed, failed, partial
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Audit fields
+    processed_by: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), 
+        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        nullable=True
+    )
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime(True), 
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+        nullable=False
+    )
+    
+    # Relationships
+    processed_by_user: Mapped[Optional["Users"]] = relationship("Users", foreign_keys=[processed_by])
+    
+    # Constraints
+    __table_args__ = (
+        Index('idx_reconciliation_reports_insurer', 'insurer_name'),
+        Index('idx_reconciliation_reports_created_at', 'created_at'),
+        Index('idx_reconciliation_reports_processed_by', 'processed_by'),
+        Index('idx_reconciliation_reports_status', 'status'),
     )
 
