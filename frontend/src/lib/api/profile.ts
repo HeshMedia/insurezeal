@@ -40,12 +40,15 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error Details:', {
-      response: error.response?.data,
-      status: error.response?.status,
-      message: error.message,
-      config: error.config
-    })
+    // Only log errors that are not permission-related
+    if (error.response?.status !== 401 && error.response?.status !== 403) {
+      console.error('API Error Details:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        message: error.message,
+        config: error.config
+      })
+    }
     
     // Extract meaningful error message
     let message = 'An unexpected error occurred'

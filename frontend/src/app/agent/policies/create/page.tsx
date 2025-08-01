@@ -29,7 +29,7 @@ import {
 // Import components
 import PolicyPdfUpload from '@/components/forms/policy-pdf-upload'
 import AdditionalDocumentsUpload, { DocumentTypeConfig } from '@/components/forms/additional-documents-upload'
-import PolicyInputForm from '@/components/agent/policy/policy-input-form-complete'
+import InputForm from '@/components/forms/input-form'
 
 // Import IndexedDB utilities
 import { debugIndexedDB } from '@/lib/utils/indexeddb'
@@ -164,9 +164,9 @@ const CreatePolicyPage = () => {
         )
       case 3:
         return (
-          <PolicyInputForm 
+          <InputForm 
+            formType="policy"
             onPrev={handlePreviousStep}
-            showCalculations={false}
           />
         )
       default:
@@ -273,7 +273,7 @@ const CreatePolicyPage = () => {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
           transition={{ duration: 0.3 }}
-          className="max-w-4xl mx-auto"
+          className="max-w-[90vw] mx-auto"
         >
           <Card className="shadow-xl border-0 bg-white/80 backdrop-blur-sm">
             <CardHeader className="text-center border-b bg-gradient-to-r from-blue-50 to-indigo-50">

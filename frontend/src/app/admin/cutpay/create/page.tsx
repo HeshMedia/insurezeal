@@ -30,7 +30,7 @@ import {
 // Import components
 import PolicyPdfUpload from '@/components/forms/policy-pdf-upload'
 import AdditionalDocumentsUpload, { DocumentTypeConfig } from '@/components/forms/additional-documents-upload'
-import AdminInputForm from '@/components/forms/input-form'
+import InputForm from '@/components/forms/input-form'
 
 // Import IndexedDB utilities
 import { debugIndexedDB } from '@/lib/utils/indexeddb'
@@ -162,7 +162,8 @@ const CreateCutPayPage = () => {
         )
       case 3:
         return (
-          <AdminInputForm 
+          <InputForm 
+            formType="cutpay"
             onPrev={handlePreviousStep}
           />
         )
