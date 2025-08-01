@@ -37,9 +37,9 @@ import { AgentSummary } from "@/types/admin.types";
 import { clearAllFromIndexedDB } from "@/lib/utils/indexeddb";
 import { CreateCutpayTransactionCutpayPostRequest } from "@/types/cutpay.types";
 import { Insurer, Broker, AdminChildId } from "@/types/superadmin.types";
-import { CutPayFormSchema, CutPayFormSchemaType } from "./form-schema";
-import { formFields, FormFieldConfig, FormFieldPath } from "./form-config";
-import Calculations from "./calculations";
+import { CutPayFormSchema, CutPayFormSchemaType } from "../admin/cutpay/form-schema";
+import { formFields, FormFieldConfig, FormFieldPath } from "../admin/cutpay/form-config";
+import Calculations from "../admin/cutpay/calculations";
 import { Loader2 } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
 
