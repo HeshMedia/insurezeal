@@ -213,3 +213,10 @@ class AgentOption(BaseModel):
     agent_id: UUID
     agent_code: str
     full_name: str
+
+class PolicyNumberCheckResponse(BaseModel):
+    """Response for policy number duplicate check"""
+    policy_number: str
+    is_duplicate: bool
+    message: str
+    existing_policy_id: Optional[UUID] = None

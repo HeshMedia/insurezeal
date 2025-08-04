@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import Field
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 import io
@@ -13,7 +14,8 @@ from routers.auth.auth import get_current_user
 from routers.policies.helpers import PolicyHelpers
 from routers.policies.schemas import (
     PolicyResponse, PolicyCreate, PolicyUpdate, PolicySummary, PolicyListResponse,
-    PolicyUploadResponse, AIExtractionResponse, ChildIdOption, AgentOption
+    PolicyUploadResponse, AIExtractionResponse, ChildIdOption, AgentOption,
+    PolicyNumberCheckResponse
 )
 from dependencies.rbac import require_permission
 from utils.google_sheets import google_sheets_sync
@@ -495,6 +497,62 @@ async def delete_policy(
             detail="Failed to delete policy"
         )
 
+
+@router.get("/helpers/check-policy-number", response_model=PolicyNumberCheckResponse)
+async def check_policy_number_duplicate(
+    policy_number: str = Query(..., description="Policy number to check for duplicates"),
+    exclude_policy_id: Optional[str] = Query(None, description="Policy ID to exclude from check (for updates)"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_policy_read)
+):
+    """
+    Check if a policy number already exists in the database in real-time
+    
+    **Requires policy read permission**
+    
+    - **policy_number**: The policy number to check for duplicates
+    - **exclude_policy_id**: Optional policy ID to exclude from the check (useful for updates)
+    
+    This endpoint is designed for real-time validation to prevent duplicate submissions
+    before other form details are filled.
+    """
+    try:
+        # Validate policy number format (basic validation)
+        if not policy_number or not policy_number.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Policy number cannot be empty"
+            )
+        
+        # Convert exclude_policy_id to UUID if provided
+        exclude_uuid = None
+        if exclude_policy_id:
+            try:
+                exclude_uuid = uuid.UUID(exclude_policy_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid exclude_policy_id format"
+                )
+        
+        # Check for duplicate using helper method
+        result = await policy_helpers.check_policy_number_duplicate(
+            policy_number=policy_number,
+            db=db,
+            exclude_policy_id=exclude_uuid
+        )
+        
+        return PolicyNumberCheckResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking policy number duplicate: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to check policy number"
+        )
 
 @router.get("/helpers/child-ids", response_model=List[ChildIdOption])
 async def get_child_id_options(
