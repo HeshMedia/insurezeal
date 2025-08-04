@@ -763,3 +763,56 @@ class PolicyHelpers:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to fetch policies for agent {agent_code}"
             )
+
+    async def check_policy_number_duplicate(
+        self, 
+        policy_number: str, 
+        db: AsyncSession,
+        exclude_policy_id: Optional[uuid.UUID] = None
+    ) -> Dict[str, Any]:
+        """
+        Check if a policy number already exists in the database
+        
+        Args:
+            policy_number: The policy number to check
+            db: Database session
+            exclude_policy_id: Optional policy ID to exclude from the check (useful for updates)
+            
+        Returns:
+            Dict containing duplicate check results
+        """
+        try:
+            # Normalize policy number (strip whitespace, convert to uppercase)
+            normalized_policy_number = policy_number.strip().upper()
+            
+            # Build query to check for existing policy number
+            query = select(Policy).where(Policy.policy_number.ilike(normalized_policy_number))
+            
+            # If excluding a specific policy (for updates), add that condition
+            if exclude_policy_id:
+                query = query.where(Policy.id != exclude_policy_id)
+            
+            result = await db.execute(query)
+            existing_policy = result.scalar_one_or_none()
+            
+            if existing_policy:
+                return {
+                    "policy_number": policy_number,
+                    "is_duplicate": True,
+                    "message": f"Policy number '{policy_number}' already exists in the system",
+                    "existing_policy_id": existing_policy.id
+                }
+            else:
+                return {
+                    "policy_number": policy_number,
+                    "is_duplicate": False,
+                    "message": f"Policy number '{policy_number}' is available",
+                    "existing_policy_id": None
+                }
+                
+        except Exception as e:
+            logger.error(f"Error checking policy number duplicate for {policy_number}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to check policy number availability"
+            )
