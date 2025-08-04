@@ -146,3 +146,58 @@ class MasterSheetStatsResponse(BaseModel):
     top_agents: List[Dict[str, Any]]
     top_insurers: List[Dict[str, Any]]
     monthly_summary: List[Dict[str, Any]]
+
+class AgentMISRecord(BaseModel):
+    """Filtered master sheet record for agent MIS with specific fields removed"""
+    # Core Transaction Data  
+    id: Optional[str] = None
+    reporting_month: Optional[str] = None
+    booking_date: Optional[str] = None
+    agent_code: Optional[str] = None
+    insurer_name: Optional[str] = None
+    broker_name: Optional[str] = None
+    
+    # Policy Information
+    policy_number: Optional[str] = None
+    formatted_policy_number: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone_number: Optional[str] = None
+    major_categorisation: Optional[str] = None
+    product_insurer_report: Optional[str] = None
+    product_type: Optional[str] = None
+    plan_type: Optional[str] = None
+    
+    # Premium Details (excluding sensitive broker commission data)
+    gross_premium: Optional[str] = None
+    net_premium: Optional[str] = None
+    
+    # Vehicle Details
+    registration_no: Optional[str] = None
+    make_model: Optional[str] = None
+    model: Optional[str] = None
+    
+    # Agent relevant commission data only
+    agent_commission_perc: Optional[str] = None
+    agent_po_amount: Optional[str] = None
+    total_agent_po: Optional[str] = None
+    running_balance: Optional[str] = None
+    already_given_to_agent: Optional[str] = None
+    
+    # Timestamps
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class AgentMISStats(BaseModel):
+    """Statistics for agent MIS data"""
+    number_of_policies: int
+    running_balance: float
+    total_net_premium: float
+
+class AgentMISResponse(BaseModel):
+    """Response for agent MIS data with filtered fields and statistics"""
+    records: List[AgentMISRecord]
+    stats: AgentMISStats
+    total_count: int
+    page: int
+    page_size: int
+    total_pages: int

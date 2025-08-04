@@ -498,41 +498,44 @@ async def delete_policy(
 
 @router.get("/helpers/child-ids", response_model=List[ChildIdOption])
 async def get_child_id_options(
-    agent_id: str = Query(None, description="Agent ID to filter child IDs (admin only)"),
+    insurer_code: str = Query(..., description="Required insurer code to filter child IDs"),
+    broker_code: Optional[str] = Query(None, description="Optional broker code to filter child IDs"),
+    agent_id: Optional[str] = Query(None, description="Optional agent ID to filter child IDs (admin only)"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_read)
 ):
     """
-    Get available child IDs for dropdown
+    Get available child IDs for dropdown with filtering
     
     **Requires policy read permission**
     
-    - **agent_id**: Optional agent ID to filter child IDs (for admins)
-    - If agent_id is provided and user is admin: returns child IDs for that agent
-    - If agent_id is not provided or user is agent: returns child IDs for current user
+    - **insurer_code**: Required insurer code to filter by
+    - **broker_code**: Optional broker code to filter by 
+    - **agent_id**: Optional agent ID to filter by (admin only)
+    - Returns child IDs matching the filter criteria
     """
     try:
-        user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        if agent_id and user_role == "admin":
-            target_agent_id = agent_id
-        else:
-            target_agent_id = str(user_id)
-        
-        # Use the same logic as child router's /active endpoint
+        # If agent_id is provided but user is not admin, ignore agent_id filter
+        if agent_id and user_role != "admin":
+            agent_id = None
+            
+        # Use the new filtered method
         from routers.child.helpers import ChildHelpers
         child_helpers = ChildHelpers()
         
-        active_requests = await child_helpers.get_user_active_child_ids(
+        filtered_requests = await child_helpers.get_filtered_child_ids(
             db=db,
-            user_id=target_agent_id
+            insurer_code=insurer_code,
+            broker_code=broker_code,
+            agent_id=agent_id
         )
         
         # Format the response to match ChildIdOption schema
         child_id_options = []
-        for req in active_requests:
+        for req in filtered_requests:
             # Extract the required fields
             child_id = req.child_id if req.child_id else ""
             broker_name = req.broker.name if req.broker else ""
@@ -548,7 +551,7 @@ async def get_child_id_options(
         return child_id_options
         
     except Exception as e:
-        logger.error(f"Error fetching child ID options: {str(e)}")
+        logger.error(f"Error fetching filtered child ID options: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch child ID options"

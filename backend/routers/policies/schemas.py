@@ -55,9 +55,8 @@ class PolicyBase(BaseModel):
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
     
-    # Agent Commission Fields (only these two for policies)
+    # Agent Commission Fields (only one for policies now)
     agent_commission_given_percent: Optional[float] = None
-    agent_extra_percent: Optional[float] = None
     
     # Agent Financial Tracking Fields
     payment_by_office: Optional[float] = Field(None, description="Amount paid by office")

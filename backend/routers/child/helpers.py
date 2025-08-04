@@ -439,6 +439,57 @@ class ChildHelpers:
                 detail="Failed to fetch active child IDs"
             )
 
+    async def get_filtered_child_ids(
+        self,
+        db: AsyncSession,
+        insurer_code: str,
+        broker_code: Optional[str] = None,
+        agent_id: Optional[str] = None
+    ) -> List[ChildIdRequest]:
+        """
+        Get active child IDs filtered by parameters
+        
+        Args:
+            db: Database session
+            insurer_code: Required insurer code to filter by
+            broker_code: Optional broker code to filter by
+            agent_id: Optional agent ID to filter by
+            
+        Returns:
+            List of filtered ChildIdRequest objects
+        """
+        try:
+            from sqlalchemy.orm import selectinload
+            
+            # Build query conditions
+            conditions = [
+                ChildIdRequest.status == "accepted",
+                Insurer.code == insurer_code
+            ]
+            
+            if broker_code:
+                conditions.append(Broker.code == broker_code)
+                
+            if agent_id:
+                conditions.append(ChildIdRequest.user_id == uuid.UUID(agent_id))
+            
+            query = select(ChildIdRequest).options(
+                selectinload(ChildIdRequest.insurer),
+                selectinload(ChildIdRequest.broker)
+            ).join(Insurer).join(Broker).where(
+                and_(*conditions)
+            ).order_by(desc(ChildIdRequest.approved_at))
+            
+            result = await db.execute(query)
+            return result.scalars().all()
+            
+        except Exception as e:
+            logger.error(f"Error fetching filtered child IDs: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch filtered child IDs"
+            )
+
     async def get_all_child_requests(
         self,
         db: AsyncSession,

@@ -534,3 +534,202 @@ class MISHelpers:
         except Exception as e:
             logger.error(f"Error finding record row for ID {record_id}: {str(e)}")
             return None
+
+    async def get_agent_mis_data(
+        self,
+        agent_code: str,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get filtered master sheet data for specific agent with removed sensitive fields
+        Only returns records where MATCH STATUS = TRUE
+        
+        Args:
+            agent_code: Agent code to filter by
+            page: Page number (1-based)
+            page_size: Number of records per page
+            
+        Returns:
+            Dictionary with filtered records, statistics, and pagination info
+        """
+        try:
+            if not self.sheets_client.client:
+                logger.error("Google Sheets client not initialized")
+                return {
+                    "records": [],
+                    "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+
+            # Get all data from master sheet
+            logger.info(f"Fetching agent MIS data for agent: {agent_code}")
+            
+            values = self.sheets_client.read_range("A:CX")  # Read all columns
+            if not values or len(values) < 2:
+                logger.warning("No data found in master sheet")
+                return {
+                    "records": [],
+                    "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+
+            headers = values[0] if values else []
+            data_rows = values[1:] if len(values) > 1 else []
+            
+            # Find column indices
+            agent_code_idx = None
+            match_status_idx = None
+            for i, header in enumerate(headers):
+                if header and "agent_code" in header.lower():
+                    agent_code_idx = i
+                elif header and "match" in header.lower() and "status" in header.lower():
+                    match_status_idx = i
+                    
+            if agent_code_idx is None:
+                logger.error("Agent code column not found in headers")
+                return {
+                    "records": [],
+                    "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+
+            # Filter records for this agent with MATCH STATUS = TRUE
+            filtered_rows = []
+            for row in data_rows:
+                if len(row) > agent_code_idx and str(row[agent_code_idx]).strip() == agent_code:
+                    # Check match status if column exists
+                    if match_status_idx is None or (len(row) > match_status_idx and str(row[match_status_idx]).upper() == "TRUE"):
+                        filtered_rows.append(row)
+
+            total_count = len(filtered_rows)
+            
+            # Calculate statistics
+            running_balance = 0.0
+            total_net_premium = 0.0
+            
+            running_balance_idx = None
+            net_premium_idx = None
+            for i, header in enumerate(headers):
+                if header and "running_balance" in header.lower():
+                    running_balance_idx = i
+                elif header and "net_premium" in header.lower():
+                    net_premium_idx = i
+                    
+            for row in filtered_rows:
+                if running_balance_idx is not None and len(row) > running_balance_idx:
+                    try:
+                        running_balance += float(str(row[running_balance_idx]).replace(',', '') or 0)
+                    except (ValueError, TypeError):
+                        pass
+                        
+                if net_premium_idx is not None and len(row) > net_premium_idx:
+                    try:
+                        total_net_premium += float(str(row[net_premium_idx]).replace(',', '') or 0)
+                    except (ValueError, TypeError):
+                        pass
+
+            # Pagination
+            total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 1
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_rows = filtered_rows[start_idx:end_idx]
+
+            # Convert to records with filtered fields
+            records = []
+            for row in paginated_rows:
+                record = self._convert_row_to_agent_mis_record(headers, row)
+                if record:
+                    records.append(record)
+
+            return {
+                "records": records,
+                "stats": {
+                    "number_of_policies": total_count,
+                    "running_balance": running_balance,
+                    "total_net_premium": total_net_premium
+                },
+                "total_count": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching agent MIS data: {str(e)}")
+            return {
+                "records": [],
+                "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                "total_count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+
+    def _convert_row_to_agent_mis_record(self, headers: List[str], row: List[str]) -> Optional[Dict[str, Any]]:
+        """
+        Convert sheet row to AgentMISRecord with filtered fields
+        """
+        try:
+            # Map of schema fields to possible header variations (filtered for agent MIS)
+            field_mapping = {
+                "id": ["id"],
+                "reporting_month": ["reporting_month"],
+                "booking_date": ["booking_date"],
+                "agent_code": ["agent_code"],
+                "insurer_name": ["insurer_name"],
+                "broker_name": ["broker_name"],
+                "policy_number": ["policy_number"],
+                "formatted_policy_number": ["formatted_policy_number"],
+                "customer_name": ["customer_name"],
+                "customer_phone_number": ["customer_phone_number"],
+                "major_categorisation": ["major_categorisation"],
+                "product_insurer_report": ["product_insurer_report"],
+                "product_type": ["product_type"],
+                "plan_type": ["plan_type"],
+                "gross_premium": ["gross_premium"],
+                "net_premium": ["net_premium"],
+                "registration_no": ["registration_no"],
+                "make_model": ["make_model"],
+                "model": ["model"],
+                "agent_commission_perc": ["agent_commission_perc"],
+                "agent_po_amount": ["agent_po_amount"],
+                "total_agent_po": ["total_agent_po"],
+                "running_balance": ["running_balance"],
+                "already_given_to_agent": ["already_given_to_agent"],
+                "created_at": ["created_at"],
+                "updated_at": ["updated_at"]
+            }
+
+            record = {}
+            
+            for field, possible_headers in field_mapping.items():
+                value = None
+                for header_variation in possible_headers:
+                    for i, header in enumerate(headers):
+                        if header and header_variation.lower() in header.lower():
+                            value = row[i] if i < len(row) else None
+                            break
+                    if value is not None:
+                        break
+                
+                # Clean the value
+                if value is not None:
+                    value = str(value).strip() if value != "" else None
+                
+                record[field] = value
+
+            return record
+
+        except Exception as e:
+            logger.error(f"Error converting row to agent MIS record: {str(e)}")
+            return None
