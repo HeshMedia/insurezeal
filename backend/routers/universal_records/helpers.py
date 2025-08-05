@@ -307,6 +307,15 @@ async def process_universal_record_csv(
         
         stats.total_records_processed = len(mapped_records)
         
+        # Debug: Log some sample incoming policy numbers with their normalized versions
+        if mapped_records:
+            sample_incoming_policies = [record.get('Policy Number', 'N/A') for record in mapped_records[:3]]
+            logger.info(f"Sample incoming policy numbers from CSV: {sample_incoming_policies}")
+            
+            # Show normalized versions
+            normalized_incoming = [normalize_policy_number(record.get('Policy Number', '')) for record in mapped_records[:3]]
+            logger.info(f"Sample normalized incoming policies: {normalized_incoming}")
+        
         # Import Google Sheets utility functions
         from utils.google_sheets import (
             get_master_sheet_data,
@@ -318,6 +327,35 @@ async def process_universal_record_csv(
         existing_master_data = await get_master_sheet_data(insurer_name=insurer_name)
         logger.info(f"Found {len(existing_master_data)} existing records in master sheet for insurer '{insurer_name}'")
         
+        # Debug: Also check ALL records to see if policy exists with different insurer name
+        all_master_data = await get_master_sheet_data(insurer_name=None)
+        logger.info(f"Found {len(all_master_data)} total records in master sheet (all insurers)")
+        
+        # Check if our target policy exists in all records but with different insurer name
+        target_policies = [record.get('Policy Number', '') for record in mapped_records[:3]]
+        for target_policy in target_policies:
+            if target_policy:
+                target_normalized = normalize_policy_number(target_policy)
+                for record in all_master_data:
+                    existing_policy = record.get('Policy Number', '')
+                    existing_normalized = normalize_policy_number(existing_policy)
+                    if existing_normalized == target_normalized:
+                        existing_insurer = record.get('Insurer Name', 'N/A')
+                        logger.info(f"FOUND POLICY '{target_policy}' in master sheet with insurer name: '{existing_insurer}' (looking for: '{insurer_name}')")
+                        break
+        
+        # Debug: Log some raw policy numbers from master sheet with their normalized versions
+        if existing_master_data:
+            sample_raw_policies = [record.get('Policy Number', 'N/A') for record in existing_master_data[:5]]
+            logger.info(f"Sample raw policy numbers from master sheet: {sample_raw_policies}")
+            
+            # Show normalized versions and insurer names
+            for i, record in enumerate(existing_master_data[:5]):
+                policy_num = record.get('Policy Number', 'N/A')
+                insurer = record.get('Insurer Name', 'N/A')
+                normalized = normalize_policy_number(policy_num)
+                logger.info(f"Master sheet record {i+1}: Policy='{policy_num}' -> Normalized='{normalized}', Insurer='{insurer}'")
+        
         # Create a lookup dictionary by policy number (case-insensitive and trimmed)
         existing_records_by_policy = {}
         for record in existing_master_data:
@@ -325,13 +363,17 @@ async def process_universal_record_csv(
             if policy_number:
                 # Normalize policy number for lookup - handle both string and numeric values
                 try:
-                    normalized_policy = str(policy_number).strip().lower()
-                    existing_records_by_policy[normalized_policy] = record
+                    normalized_policy = normalize_policy_number(policy_number)
+                    if normalized_policy:  # Only add if normalization produced a valid result
+                        existing_records_by_policy[normalized_policy] = record
                 except Exception as e:
                     logger.warning(f"Error normalizing policy number '{policy_number}': {str(e)}")
                     continue
         
-        logger.info(f"Created lookup for {len(existing_records_by_policy)} existing policies: {list(existing_records_by_policy.keys())}")
+        logger.info(f"Created lookup for {len(existing_records_by_policy)} existing policies")
+        if existing_records_by_policy:
+            sample_keys = list(existing_records_by_policy.keys())[:5]  # Show first 5 for debugging
+            logger.info(f"Sample existing policy keys: {sample_keys}")
         
         # Process each record
         for record in mapped_records:
@@ -343,7 +385,11 @@ async def process_universal_record_csv(
             
             # Normalize policy number for lookup - handle both string and numeric values
             try:
-                normalized_policy = str(policy_number).strip().lower()
+                normalized_policy = normalize_policy_number(policy_number)
+                if not normalized_policy:  # Check if normalization produced a valid result
+                    stats.total_errors += 1
+                    stats.error_details.append(f"Invalid Policy Number format: {policy_number}")
+                    continue
             except Exception as e:
                 logger.error(f"Error normalizing policy number '{policy_number}': {str(e)}")
                 stats.total_errors += 1
@@ -351,13 +397,26 @@ async def process_universal_record_csv(
                 continue
                 
             logger.info(f"Processing universal record policy '{policy_number}' (normalized: '{normalized_policy}')")
+            logger.info(f"Looking for normalized policy '{normalized_policy}' in {len(existing_records_by_policy)} existing records")
+            
+            # Debug: Check if this specific policy exists in any form
+            for existing_normalized, existing_record in existing_records_by_policy.items():
+                if existing_normalized == normalized_policy:
+                    logger.info(f"EXACT MATCH FOUND: '{normalized_policy}' matches existing '{existing_normalized}'")
+                    break
+            else:
+                logger.info(f"NO EXACT MATCH: '{normalized_policy}' not found in existing normalized keys")
+                # Show the closest matches for debugging
+                similar_keys = [k for k in existing_records_by_policy.keys() if policy_number.upper() in k or k in policy_number.upper()]
+                if similar_keys:
+                    logger.info(f"Similar existing keys found: {similar_keys}")
             
             try:
                 if normalized_policy in existing_records_by_policy:
                     # Update existing record in master sheet
                     existing_record = existing_records_by_policy[normalized_policy]
                     
-                    logger.info(f"Found existing record for policy '{policy_number}' (normalized: '{normalized_policy}')")
+                    logger.info(f"MATCH FOUND: Existing record found for policy '{policy_number}' (normalized: '{normalized_policy}')")
                     
                     # Compare and update fields
                     has_changes, changed_fields = await compare_and_update_master_record(
@@ -414,30 +473,65 @@ async def process_universal_record_csv(
                         ))
                 
                 else:
-                    # Add new record to master sheet
-                    logger.info(f"Policy '{policy_number}' (normalized: '{normalized_policy}') not found in existing records, adding new record")
+                    # Policy not found in filtered records, check if it exists in ALL records
+                    logger.info(f"Policy '{policy_number}' not found in '{insurer_name}' records, checking all records...")
                     
-                    record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
-                    record['Insurer Name'] = insurer_name
+                    # Search in all records (not filtered by insurer)
+                    all_master_data = await get_master_sheet_data(insurer_name=None)
+                    found_in_all = False
                     
-                    add_success = await add_master_sheet_record(record)
+                    for all_record in all_master_data:
+                        all_policy = all_record.get('Policy Number', '')
+                        if normalize_policy_number(all_policy) == normalized_policy:
+                            existing_insurer = all_record.get('Insurer Name', 'Unknown')
+                            logger.warning(f"CROSS-INSURER MATCH: Policy '{policy_number}' exists with insurer '{existing_insurer}' but processing for '{insurer_name}'")
+                            
+                            # Update the existing record but also update the insurer name
+                            record['Insurer Name'] = insurer_name  # Update to current insurer
+                            
+                            # Update the record
+                            update_success = await update_master_sheet_record(policy_number, record)
+                            
+                            if update_success:
+                                stats.total_records_updated += 1
+                                logger.info(f"Successfully updated cross-insurer policy '{policy_number}' and changed insurer to '{insurer_name}'")
+                            else:
+                                stats.total_errors += 1
+                                stats.error_details.append(f"Failed to update cross-insurer policy '{policy_number}'")
+                            
+                            found_in_all = True
+                            break
                     
-                    if add_success:
-                        stats.total_records_added += 1
-                        logger.info(f"Successfully added new policy '{policy_number}' with MATCH STATUS = TRUE")
-                    else:
-                        stats.total_errors += 1
-                        stats.error_details.append(f"Failed to add new policy '{policy_number}' to Google Sheets")
-                        logger.error(f"Failed to add new policy '{policy_number}' to Google Sheets")
-                    
-                    change_details.append(RecordChangeDetail(
-                        policy_number=policy_number,
-                        record_type="master_sheet",
-                        action="added",
-                        changed_fields={},  # Use empty dict instead of list
-                        previous_values={},
-                        new_values=record
-                    ))
+                    if not found_in_all:
+                        # Add new record to master sheet
+                        logger.info(f"NO MATCH: Policy '{policy_number}' (normalized: '{normalized_policy}') not found in existing records, adding new record")
+                        
+                        # Debug: show some existing policy numbers for comparison
+                        if existing_records_by_policy:
+                            sample_existing = list(existing_records_by_policy.keys())[:3]
+                            logger.info(f"Sample existing normalized policies for comparison: {sample_existing}")
+                        
+                        record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
+                        record['Insurer Name'] = insurer_name
+                        
+                        add_success = await add_master_sheet_record(record)
+                        
+                        if add_success:
+                            stats.total_records_added += 1
+                            logger.info(f"Successfully added new policy '{policy_number}' with MATCH STATUS = TRUE")
+                        else:
+                            stats.total_errors += 1
+                            stats.error_details.append(f"Failed to add new policy '{policy_number}' to Google Sheets")
+                            logger.error(f"Failed to add new policy '{policy_number}' to Google Sheets")
+                        
+                        change_details.append(RecordChangeDetail(
+                            policy_number=policy_number,
+                            record_type="master_sheet",
+                            action="added",
+                            changed_fields={},  # Use empty dict instead of list
+                            previous_values={},
+                            new_values=record
+                        ))
                     
             except Exception as e:
                 stats.total_errors += 1
@@ -597,6 +691,52 @@ async def generate_reconciliation_summary(
 
 # Initialize insurer mappings on module load
 _load_mappings_from_csv()
+
+
+def normalize_policy_number(policy_number: Any) -> str:
+    """
+    Normalize policy number for consistent comparison across all insurers
+    
+    This function handles various policy number formats:
+    - D195264389 (Go Digit)
+    - 12-1806-0006746459-00 (with hyphens)
+    - 3004/372635895/00/000 (with slashes)
+    - 'P300655564669 (with leading apostrophe)
+    - VVT0186550000100 (alphanumeric)
+    - 201520010424700079900000 (numeric)
+    
+    Normalization steps:
+    1. Convert to string and strip whitespace
+    2. Remove leading/trailing quotes and apostrophes
+    3. Remove only internal spaces and tabs (preserve hyphens, slashes, etc.)
+    4. Convert to uppercase for case-insensitive comparison
+    """
+    if policy_number is None:
+        return ""
+    
+    try:
+        # Convert to string and strip outer whitespace
+        normalized = str(policy_number).strip()
+        
+        # Remove leading/trailing quotes and apostrophes
+        normalized = normalized.strip('\'"\'')
+        
+        # Remove only internal spaces and tabs, but preserve other separators like -, /, \
+        # This handles cases where policy numbers legitimately contain separators
+        normalized = normalized.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '')
+        
+        # Convert to uppercase for case-insensitive comparison
+        normalized = normalized.upper()
+        
+        # Log the normalization for debugging
+        if policy_number != normalized:
+            logger.debug(f"Policy number normalized: '{policy_number}' -> '{normalized}'")
+        
+        return normalized
+        
+    except Exception as e:
+        logger.warning(f"Error normalizing policy number '{policy_number}': {str(e)}")
+        return str(policy_number) if policy_number else ""
 
 
 def normalize_field_value(field_name: str, value: Any) -> str:

@@ -12,6 +12,43 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_policy_number_for_sheets(policy_number: Any) -> str:
+    """
+    Normalize policy number for consistent comparison in Google Sheets
+    Must match the normalization used in universal_records/helpers.py
+    
+    This function handles various policy number formats:
+    - D195264389 (Go Digit)
+    - 12-1806-0006746459-00 (with hyphens)
+    - 3004/372635895/00/000 (with slashes)
+    - 'P300655564669 (with leading apostrophe)
+    - VVT0186550000100 (alphanumeric)
+    - 201520010424700079900000 (numeric)
+    """
+    if policy_number is None:
+        return ""
+    
+    try:
+        # Convert to string and strip outer whitespace
+        normalized = str(policy_number).strip()
+        
+        # Remove leading/trailing quotes and apostrophes
+        normalized = normalized.strip('\'"\'')
+        
+        # Remove only internal spaces and tabs, but preserve other separators like -, /, \
+        # This handles cases where policy numbers legitimately contain separators
+        normalized = normalized.replace(' ', '').replace('\t', '').replace('\n', '').replace('\r', '')
+        
+        # Convert to uppercase for case-insensitive comparison
+        normalized = normalized.upper()
+        
+        return normalized
+        
+    except Exception:
+        return str(policy_number) if policy_number else ""
+
+
 class GoogleSheetsSync:
     def __init__(self):
         self.credentials_path = GOOGLE_SHEETS_CREDENTIALS_JSON
@@ -695,13 +732,13 @@ async def update_master_sheet_record(policy_number: str, updated_data: Dict[str,
         all_records = master_sheet.get_all_records()
         headers = google_sheets_sync._get_master_sheet_headers()
         
-        # Find the row with matching policy number (case-insensitive and trimmed)
-        target_policy = str(policy_number).strip().lower()
+        # Find the row with matching policy number (consistent normalization)
+        target_policy = normalize_policy_number_for_sheets(policy_number)
         row_to_update = None
         row_index = None
         
         for i, record in enumerate(all_records):
-            existing_policy = str(record.get('Policy Number', '')).strip().lower()
+            existing_policy = normalize_policy_number_for_sheets(record.get('Policy Number', ''))
             if existing_policy == target_policy:
                 row_to_update = record
                 row_index = i + 2  # +2 because of header row and 1-based indexing
