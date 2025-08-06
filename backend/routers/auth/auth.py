@@ -20,6 +20,9 @@ from typing import Optional
 from datetime import datetime
 import logging
 
+# Import user_helpers for agent code generation
+from routers.users.helpers import user_helpers
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -106,12 +109,18 @@ async def register(
                 detail="Failed to create user account"
             )       
         supabase_user_id = auth_response.user.id
+        
+        # Generate automatic agent code for new user
+        agent_code = await user_helpers.generate_agent_code(db)
+        logger.info(f"Generated agent code {agent_code} for new user {user_data.username}")
+        
         new_user_profile = UserProfile(
             user_id=supabase_user_id,  
             username=user_data.username,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
-            user_role="agent" 
+            user_role="agent",
+            agent_code=agent_code  # Assign the generated agent code
         )
         
         db.add(new_user_profile)
