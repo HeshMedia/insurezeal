@@ -94,13 +94,10 @@ const InputForm: React.FC<InputFormProps> = ({
       status: "pending",
     },
   ]);
-
-  // React Query mutations for creating a cutpay transaction and uploading documents
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
   const submitPolicyMutation = useSubmitPolicy();
 
-  // Get current user profile to access agent_code
   const { data: userProfile } = useProfile();
 
   // State for child ID auto-fill functionality in policy mode
@@ -230,8 +227,6 @@ const InputForm: React.FC<InputFormProps> = ({
       
       // Only auto-fill if the current value is empty
       if (!planType) {
-
-        
         setValue("extracted_data.plan_type", extractedPlanType, {
           shouldValidate: true,
         });
@@ -1056,10 +1051,15 @@ const planTypeOptions = useMemo(
       setIsSubmitting(false); // Ensure submission state is reset
     }
   };
+  const keysToHideForAgent = [
+    "extracted_data.customer_phone_number",
+    "extracted_data.make_model",
+    "extracted_data.vehicle_variant",
+  ];
+ 
 
   const renderField = (field: FormFieldConfig) => {
-    const { key, label, type, options: configOptions, disabled, tag } = field;
-    
+    let { key, label, type, options: configOptions, disabled, tag } = field;
     // For policy mode: make insurer and broker readonly when auto-filled
     const isReadonlyInPolicyMode = formType === 'policy' && 
       (key === 'admin_input.insurer_code' || key === 'admin_input.broker_code') &&
@@ -1069,6 +1069,10 @@ const planTypeOptions = useMemo(
     if (key === "admin_input.payment_method" && paymentBy === "Agent") {
       return null;
     }
+
+   if (key === 'extracted_data.policy_number' || key === 'extracted_data.formatted_policy_number') {
+    disabled = true;
+  }
 
     // Helper function to render tags
     const renderTag = () => {
@@ -1374,9 +1378,17 @@ const planTypeOptions = useMemo(
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {currentFormFields
-                      .filter((f) => f.section === "extracted")
+                      .filter((f) => {
+                        // Hide specific extracted fields for agents
+                        if (keysToHideForAgent.includes(f.key)) {
+                          return false;
+                        }
+                        // Show only extracted section fields
+                        return f.section === "extracted";
+                      })
                       .map((field) => renderField(field as FormFieldConfig))}
                   </CardContent>
+
                 </Card>
               </div>
 
@@ -1405,7 +1417,7 @@ const planTypeOptions = useMemo(
                   <CardHeader className="bg-gray-50 border-b flex flex-row items-center justify-between px-4 py-0">
                     <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
                       <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                      Admin Input
+                      Input
                     </CardTitle>
                     {formType === 'cutpay' && typeof runningBalValue === "number" && (
                       <div className="text-right">
