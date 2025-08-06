@@ -92,6 +92,8 @@ async def update_current_user_profile(
                     detail="Username already taken"
                 )
         
+        # Check if user needs an agent code assignment
+        # This handles both new agent registrations and existing users without agent codes
         is_agent_registration = any([
             profile_update.bank_name,
             profile_update.account_number,
@@ -99,9 +101,13 @@ async def update_current_user_profile(
             profile_update.education_level
         ])
         
-        if is_agent_registration and not getattr(profile, 'agent_code', None):
+        # Automatically assign agent code if:
+        # 1. User is doing agent registration (has banking/education info), OR
+        # 2. User doesn't have an agent code yet (for existing users)
+        if (is_agent_registration or not getattr(profile, 'agent_code', None)) and not getattr(profile, 'agent_code', None):
             agent_code = await user_helpers.generate_agent_code(db)
             setattr(profile, 'agent_code', agent_code)
+            logger.info(f"Assigned agent code {agent_code} to user {current_user['user_id']}")
         
         update_data = profile_update.model_dump(exclude_unset=True)
         for field, value in update_data.items():
@@ -336,6 +342,131 @@ async def get_user_documents(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve documents"
+        )
+
+@router.post("/assign-agent-code")
+async def assign_agent_code_to_user(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually assign an agent code to the current user if they don't have one.
+    This is useful for existing users who registered before automatic agent code assignment.
+    """
+    try:
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
+        )
+        profile = result.scalar_one_or_none()
+        
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
+        
+        # Check if user already has an agent code
+        if profile.agent_code:
+            return {
+                "message": f"User already has agent code: {profile.agent_code}",
+                "agent_code": profile.agent_code,
+                "already_assigned": True
+            }
+        
+        # Generate and assign new agent code
+        agent_code = await user_helpers.generate_agent_code(db)
+        profile.agent_code = agent_code
+        profile.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(profile)
+        
+        logger.info(f"Manually assigned agent code {agent_code} to user {current_user['user_id']}")
+        
+        return {
+            "message": f"Agent code assigned successfully: {agent_code}",
+            "agent_code": agent_code,
+            "already_assigned": False
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning agent code: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to assign agent code"
+        )
+
+@router.post("/admin/bulk-assign-agent-codes")
+async def bulk_assign_agent_codes(
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Admin endpoint to assign agent codes to all users who don't have them.
+    Only accessible by admin users.
+    """
+    try:
+        # Check if user is admin or superadmin
+        if current_user.get("role") not in ["admin", "superadmin"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admin users can perform bulk agent code assignment"
+            )
+        
+        # Find all users without agent codes
+        result = await db.execute(
+            select(UserProfile).where(
+                and_(
+                    UserProfile.agent_code.is_(None),
+                    UserProfile.user_role == "agent"
+                )
+            )
+        )
+        users_without_codes = result.scalars().all()
+        
+        assigned_codes = []
+        errors = []
+        
+        for user_profile in users_without_codes:
+            try:
+                agent_code = await user_helpers.generate_agent_code(db)
+                user_profile.agent_code = agent_code
+                user_profile.updated_at = datetime.utcnow()
+                
+                assigned_codes.append({
+                    "user_id": str(user_profile.user_id),
+                    "username": user_profile.username,
+                    "agent_code": agent_code
+                })
+                
+                logger.info(f"Bulk assigned agent code {agent_code} to user {user_profile.username}")
+                
+            except Exception as e:
+                error_msg = f"Failed to assign agent code to user {user_profile.username}: {str(e)}"
+                errors.append(error_msg)
+                logger.error(error_msg)
+        
+        await db.commit()
+        
+        return {
+            "message": f"Bulk assignment completed. Assigned {len(assigned_codes)} agent codes.",
+            "assigned_codes": assigned_codes,
+            "total_assigned": len(assigned_codes),
+            "total_errors": len(errors),
+            "errors": errors
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in bulk agent code assignment: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to perform bulk agent code assignment"
         )
 
 @router.delete("/documents/{document_id}")

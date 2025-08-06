@@ -9,7 +9,7 @@ import os
 from typing import List, Optional, Dict, Any
 import logging
 from datetime import datetime, date
-from .schemas import DocumentTypeEnum
+from routers.users.schemas import DocumentTypeEnum
 
 logger = logging.getLogger(__name__)
 
@@ -139,22 +139,42 @@ class UserHelpers:
             return False   
         
     async def generate_agent_code(self, db: AsyncSession) -> str:
-        """Generate a unique agent code"""
+        """
+        Generate a unique agent code with format: IZ + 4 sequential numbers
+        Example: IZ0001, IZ0002, IZ0003
+        """
         try:
-            import random
-            import string
+            # Find the highest existing agent code number
+            result = await db.execute(
+                select(UserProfile.agent_code)
+                .where(UserProfile.agent_code.like('IZ%'))
+                .order_by(UserProfile.agent_code.desc())
+            )
+            existing_codes = result.scalars().all()
             
-            while True:
-                code = "AG" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-                
-                result = await db.execute(select(UserProfile).where(UserProfile.agent_code == code))
-                if not result.scalar_one_or_none():
-                    break
-                
+            # Find the highest number used
+            max_number = 0
+            for code in existing_codes:
+                if code and code.startswith('IZ') and len(code) == 6:
+                    try:
+                        number_part = int(code[2:])  # Extract number part after 'IZ'
+                        max_number = max(max_number, number_part)
+                    except ValueError:
+                        continue
+            
+            # Generate next sequential number
+            next_number = max_number + 1
+            code = f"IZ{next_number:04d}"  # Format with 4 digits, zero-padded
+            
+            logger.info(f"Generated new sequential agent code: {code}")
             return code
+                
         except Exception as e:
             logger.error(f"Error generating agent code: {str(e)}")
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate agent code"
+            )
 
     async def get_user_documents(self, user_id: str, db: AsyncSession) -> List[UserDocument]:
         """Get all documents for a user"""
@@ -252,7 +272,8 @@ class UserHelpers:
                     detail=f"Document upload failed: {str(storage_error)}"
                 )
             
-        except HTTPException:            raise
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Unexpected error in upload_and_save_document: {str(e)}")
             await db.rollback()
