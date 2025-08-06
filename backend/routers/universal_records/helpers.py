@@ -72,6 +72,9 @@ def _load_mappings_from_csv() -> None:
                         master_header = headers[i].strip()
                         if master_header:
                             mapping[insurer_header.strip()] = master_header
+                            # Debug GST mapping
+                            if master_header == "GST Amount":
+                                logger.info(f"Found GST mapping for {insurer_name}: '{insurer_header.strip()}' -> '{master_header}'")
                 
                 if mapping:
                     INSURER_MAPPINGS[insurer_name] = mapping
@@ -149,25 +152,94 @@ def parse_csv_with_mapping(
         csv_reader = csv.DictReader(io.StringIO(csv_content))
         original_headers = csv_reader.fieldnames or []
         
+        # Clean headers by removing BOM and other unwanted characters
+        cleaned_headers = []
+        for header in original_headers:
+            # Remove BOM (\ufeff) and other invisible characters
+            cleaned_header = header.replace('\ufeff', '').replace('\ufffe', '').strip()
+            cleaned_headers.append(cleaned_header)
+        
+        # Update the CSV reader with cleaned headers
+        csv_reader.fieldnames = cleaned_headers
+        
+        # Debug: Log the mapping and headers
+        logger.info(f"Original CSV headers: {original_headers}")
+        logger.info(f"Cleaned CSV headers: {cleaned_headers}")
+        logger.info(f"Insurer mapping: {insurer_mapping}")
+        
         # Create reverse mapping for headers not in mapping
-        unmapped_headers = [h for h in original_headers if h not in insurer_mapping]
+        unmapped_headers = [h for h in cleaned_headers if h not in insurer_mapping]
         
         mapped_records = []
-        for row in csv_reader:
+        for row_data in csv_reader:
+            # Clean the row data keys to remove BOM
+            row = {}
+            for key, value in row_data.items():
+                if key:  # Skip None keys
+                    cleaned_key = key.replace('\ufeff', '').replace('\ufffe', '').strip()
+                    row[cleaned_key] = value
+                
             mapped_row = {}
+            
+            # Debug: Log the first row to see what fields are available
+            if len(mapped_records) == 0:
+                logger.info(f"First row data (cleaned keys): {dict(row)}")
             
             # Apply mapping to known headers
             for original_header, value in row.items():
                 if original_header in insurer_mapping:
                     mapped_header = insurer_mapping[original_header]
                     mapped_row[mapped_header] = value
+                    # Debug policy number mapping
+                    if mapped_header == "Policy Number":
+                        logger.info(f"Policy Number mapped: '{original_header}' = '{value}' -> '{mapped_header}'")
                 else:
                     # Keep unmapped headers as-is
                     mapped_row[original_header] = value
             
+            # Handle special GST calculation mappings for Go Digit and other insurers
+            # Check if any mapping contains formula-like expressions for GST
+            for original_mapping, master_header in insurer_mapping.items():
+                if master_header == "GST Amount" and "+" in original_mapping:
+                    # This is a formula mapping like "IGST+CGST+SGST+UTGST+CESS"
+                    gst_components = [comp.strip() for comp in original_mapping.split('+')]
+                    total_gst = 0.0
+                    found_components = []
+                    
+                    # Find the policy number field for this insurer
+                    policy_number_field = None
+                    for orig_field, mapped_field in insurer_mapping.items():
+                        if mapped_field == "Policy Number":
+                            policy_number_field = orig_field
+                            break
+                    
+                    policy_value = row.get(policy_number_field, 'Unknown') if policy_number_field else 'Unknown'
+                    
+                    logger.info(f"Calculating GST from components: {gst_components} for row with policy: {policy_value}")
+                    
+                    for component in gst_components:
+                        if component in row:
+                            component_value_str = str(row[component]).strip()
+                            if component_value_str and component_value_str != '0' and component_value_str != '0.0':
+                                try:
+                                    component_value = float(component_value_str.replace(',', ''))
+                                    total_gst += component_value
+                                    found_components.append(f"{component}={component_value}")
+                                    logger.debug(f"GST component '{component}': {component_value}")
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Could not parse GST component '{component}' with value '{row[component]}': {e}")
+                            else:
+                                logger.debug(f"GST component '{component}' is zero or empty: '{component_value_str}'")
+                        else:
+                            logger.debug(f"GST component '{component}' not found in row")
+                    
+                    mapped_row["GST Amount"] = str(total_gst)
+                    logger.info(f"Calculated total GST Amount: {total_gst} from components: {found_components} for policy: {policy_value}")
+                    break
+            
             mapped_records.append(mapped_row)
         
-        return mapped_records, original_headers, unmapped_headers
+        return mapped_records, cleaned_headers, unmapped_headers
         
     except Exception as e:
         logger.error(f"Error parsing CSV with mapping: {str(e)}")
