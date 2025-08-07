@@ -56,7 +56,7 @@ export function AgentOverview() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Active Child IDs</p>
+                <p className="text-sm font-medium text-gray-600">Approved Child IDs</p>
                 <p className="text-2xl font-bold text-green-600">{stats.activeChildIds}</p>
               </div>
               <div className="p-3 bg-green-100 rounded-full">
@@ -66,25 +66,13 @@ export function AgentOverview() {
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 hover:shadow-md transition-shadow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Requests</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.totalRequests}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <FileText className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        
 
         <Card className="border border-gray-200 hover:shadow-md transition-shadow">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Pending</p>
+                <p className="text-sm font-medium text-gray-600">Pending Approval for Child IDs</p>
                 <p className="text-2xl font-bold text-yellow-600">{stats.pendingRequests}</p>
               </div>
               <div className="p-3 bg-yellow-100 rounded-full">
@@ -94,19 +82,7 @@ export function AgentOverview() {
           </CardContent>
         </Card>
 
-        <Card className="border border-gray-200 hover:shadow-md transition-shadow">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Approved</p>
-                <p className="text-2xl font-bold text-green-600">{stats.approvedRequests}</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+     
       </div>
 
       {/* Quick Actions */}
