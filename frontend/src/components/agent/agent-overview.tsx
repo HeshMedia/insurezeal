@@ -3,18 +3,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { 
-  FileText, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
   Award,
   Plus,
-  TrendingUp,
-  Calendar,
-  DollarSign,
   BarChart3
 } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip' 
 import { useChildIdRequests, useActiveChildIds } from "@/hooks/agentQuery"
 import { AgentMISTable } from "@/components/agent/dashboard-mis-table/agent-mis-table"
 import Link from "next/link"

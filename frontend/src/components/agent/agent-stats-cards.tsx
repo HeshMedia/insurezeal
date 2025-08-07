@@ -164,6 +164,7 @@ export function AgentStatsCards({
                                         <Info className="h-3 w-3" />
                                     </button>
                                 </TooltipTrigger>
+                                
                                 <TooltipContent
                                 side="top"
                                 align="center"
