@@ -1059,7 +1059,8 @@ const planTypeOptions = useMemo(
  
 
   const renderField = (field: FormFieldConfig) => {
-    let { key, label, type, options: configOptions, disabled, tag } = field;
+    const { key, label, type, options: configOptions, tag } = field;
+    let { disabled } = field;
     // For policy mode: make insurer and broker readonly when auto-filled
     const isReadonlyInPolicyMode = formType === 'policy' && 
       (key === 'admin_input.insurer_code' || key === 'admin_input.broker_code') &&
