@@ -6,7 +6,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { Badge } from '@/components/ui/badge'
 
 export default function AgentDashboard() {
-  const { user } = useAuth()
+
+ const { user } = useAuth()
 
   return (
     <DashboardWrapper requiredRole="agent">
@@ -29,7 +30,8 @@ export default function AgentDashboard() {
         </div>
 
         {/* Agent Overview */}
-        <AgentOverview />
+        <AgentOverview 
+        />
       </div>
     </DashboardWrapper>
   )

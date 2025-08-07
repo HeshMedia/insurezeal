@@ -5,7 +5,9 @@ import {
   ChildIdListResponse,
   ChildIdListParams,
   InsurerDropdownResponse,
-  BrokerInsurerDropdownResponse
+  BrokerInsurerDropdownResponse,
+  AgentMISParams,
+  AgentMISResponse
 } from '@/types/agent.types'
 
 // Create axios instance with Supabase authentication
@@ -85,6 +87,21 @@ export const agentApi = {
     // Get user's active (accepted) child IDs
     getActiveChildIds: async (): Promise<ChildIdRequest[]> => {
       const response = await apiClient.get('/active')
+      return response.data
+    }
+  },
+  // MIS APIs
+  mis: {
+    // Get agent MIS data (Admin/SuperAdmin only)
+    getAgentMISData: async (params: AgentMISParams): Promise<AgentMISResponse> => {
+      const {  page = 1, page_size = 50 } = params
+      
+      const response = await apiClient.get(`/mis/my-mis`, {
+        params: {
+          page,
+          page_size
+        }
+      })
       return response.data
     }
   }

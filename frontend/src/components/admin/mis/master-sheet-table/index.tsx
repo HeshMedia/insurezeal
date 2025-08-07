@@ -254,7 +254,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
             <TableBody className="bg-white">
               {table.getRowModel().rows.map((row, index) => (
                 <TableRow 
-                  key={row.original.id} 
+                  key={`${row.original.id}-${index}`} 
                   className={cn(
                     "transition-colors duration-200 border-b border-gray-200 hover:bg-blue-50",
                     index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
