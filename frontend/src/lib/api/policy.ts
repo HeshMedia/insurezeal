@@ -1,4 +1,4 @@
-import apiClient from "@/lib/utils/api-client"; 
+import { createAuthenticatedClient } from './client'
 import {
   AgentOption,
   ChildIdOption,
@@ -12,6 +12,10 @@ import {
   UpdatePolicyPayload,
   UploadPolicyPdfResponse,
 } from "@/types/policy.types";
+
+
+const apiClient = createAuthenticatedClient()
+
 
 export const extractPdfData = async (file: File): Promise<ExtractPdfDataResponse> => {
   const formData = new FormData();

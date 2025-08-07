@@ -12,6 +12,7 @@ const LoginPage = () => {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -93,7 +94,20 @@ const LoginPage = () => {
             </button>
           </div>
           
-          <div className="flex items-center justify-end w-full">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                disabled={loading}
+              />
+              <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-600">
+                Remember me
+              </label>
+            </div>
             <Link href="/reset-password" className="text-sm text-blue-600 hover:text-blue-500">
               Forgot password?
             </Link>

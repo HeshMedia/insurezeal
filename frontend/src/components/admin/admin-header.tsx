@@ -2,14 +2,14 @@
 
 import { Button } from "@/components/ui/button"
 import { LogOut } from "lucide-react"
-import { useLogout } from "@/hooks/authQuery"
+import { useLogout } from "@/hooks/useAuth"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 export function AdminHeader() {
-  const logoutMutation = useLogout()
+  const { logout } = useLogout()
 
   const handleLogout = () => {
-    logoutMutation.mutate()
+    logout()
   }
 
   return (

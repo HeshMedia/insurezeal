@@ -1,5 +1,4 @@
-import axios, { AxiosInstance } from 'axios'
-import Cookies from 'js-cookie'
+import { createAuthenticatedClient } from './client'
 import { 
   UserProfile, 
   UpdateProfileRequest, 
@@ -9,34 +8,12 @@ import {
   DocumentListResponse
 } from '@/types/profile.types'
 
-// Create axios instance (reusing the same configuration as auth.ts)
-const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+// Create axios instance with Supabase authentication
+const apiClient = createAuthenticatedClient()
 
 console.log('Profile API Base URL:', process.env.NEXT_PUBLIC_API_URL)
 
-// Request interceptor to add auth token
-apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get('access_token')
-  console.log('API Request token:', token ? 'Token present' : 'No token found')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  console.log('API Request:', {
-    method: config.method,
-    url: config.url,
-    baseURL: config.baseURL,
-    headers: config.headers,
-    data: config.data
-  })
-  return config
-})
-
-// Response interceptor for error handling
+// Response interceptor for error handling  
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
