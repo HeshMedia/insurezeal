@@ -25,7 +25,6 @@ import { cn } from '@/lib/utils'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
 interface AgentMISTableProps {
-  agentCode: string
   onStatsUpdate?: (stats: {
     number_of_policies: number
     running_balance: number
@@ -33,7 +32,7 @@ interface AgentMISTableProps {
   }) => void
 }
 
-export function AgentMISTable({ agentCode, onStatsUpdate }: AgentMISTableProps) {
+export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
   const {
     data,
     error,
@@ -43,7 +42,7 @@ export function AgentMISTable({ agentCode, onStatsUpdate }: AgentMISTableProps) 
     isLoading,
     refetch,
   } = useInfiniteQuery<AgentMISResponse, Error>({
-    queryKey: ['agent-mis', agentCode],
+    queryKey: ['agent-mis'],
     queryFn: async (context: { pageParam?: unknown }) => {
       const pageParam = typeof context.pageParam === 'number' ? context.pageParam : 1
       return agentApi.mis.getAgentMISData({
@@ -54,7 +53,7 @@ export function AgentMISTable({ agentCode, onStatsUpdate }: AgentMISTableProps) 
     initialPageParam: 1,
     getNextPageParam: lastPage =>
       lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
-    enabled: !!agentCode,
+
   })
 
   const { ref, inView } = useInView()
@@ -206,14 +205,7 @@ export function AgentMISTable({ agentCode, onStatsUpdate }: AgentMISTableProps) 
                 </span>
               </div>
             )}
-            {!hasNextPage && records.length > 0 && (
-              <div className="flex items-center gap-2 bg-green-50 px-6 py-3 rounded-lg border border-green-200">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-sm font-medium text-slate-700">
-                  All records loaded
-                </span>
-              </div>
-            )}
+            
           </div>
         </div>
       </div>
