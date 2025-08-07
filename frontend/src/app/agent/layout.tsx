@@ -19,7 +19,7 @@ export default function AgentLayout({ children }: AgentLayoutProps) {
         <AgentHeader />
         
         {/* Main Content */}
-        <div className="flex flex-1 flex-col gap-3 p-3 bg-gray-50/30 min-h-screen">
+        <div className="flex flex-1 flex-col gap-3 p-6 mr-15 bg-gray-50/30 ">
           {children}
         </div>
       </SidebarInset>

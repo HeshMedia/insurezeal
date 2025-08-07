@@ -8,7 +8,16 @@ import { Badge } from '@/components/ui/badge'
 
 export default function AgentDashboard() {
   const [user] = useAtom(userAtom)
-
+if (!user) {
+    // Render fallback or placeholder to keep server and client consistent
+    return (
+      <DashboardWrapper requiredRole="agent">
+        <div className="min-h-screen flex items-center justify-center">
+          Loading...
+        </div>
+      </DashboardWrapper>
+    );
+  }
   return (
     <DashboardWrapper requiredRole="agent">
       <div className="space-y-6">
@@ -30,7 +39,8 @@ export default function AgentDashboard() {
         </div>
 
         {/* Agent Overview */}
-        <AgentOverview />
+        <AgentOverview 
+        />
       </div>
     </DashboardWrapper>
   )
