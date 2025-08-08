@@ -4,12 +4,12 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
-import { useLogout } from "@/hooks/authQuery"
+import { useLogout } from "@/hooks/useAuth"
 import { usePathname } from "next/navigation"
 import { LogOut } from "lucide-react"
 
 export function AgentHeader() {
-  const logoutMutation = useLogout()
+  const { logout } = useLogout()
   const pathname = usePathname()
 
   const getBreadcrumbs = () => {
@@ -33,7 +33,7 @@ export function AgentHeader() {
   const breadcrumbs = getBreadcrumbs()
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2 border-b border-gray-200 bg-white px-4">
+    <header className="flex h-16 shrink-0 items-center mr-17 gap-2 border-b border-gray-200 bg-white px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-2 h-4" />
       
@@ -61,7 +61,7 @@ export function AgentHeader() {
 
       <div className="ml-auto">
         <Button
-          onClick={() => logoutMutation.mutate()}
+          onClick={() => logout()}
           variant="outline"
           size="sm"
           className="gap-2"

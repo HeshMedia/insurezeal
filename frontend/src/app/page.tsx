@@ -1,9 +1,6 @@
 'use client'
 
-import { useAtom } from 'jotai'
-import { userAtom } from '@/lib/atoms/auth'
-import { useAuthUser } from '@/hooks/authQuery'
-import { UserResponse } from '@/types/auth.types'
+import { useAuth } from '@/hooks/useAuth'
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -21,12 +18,22 @@ import {
   Play,
   ChevronRight
 } from 'lucide-react'
+import { getUserRole } from '@/lib/utils/auth'
 
 export default function Home() {
-  const [user] = useAtom(userAtom)
-  const { isLoading, isFetching } = useAuthUser()
-  const loading = isLoading || isFetching
+  const { user, loading } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const getUserDisplayName = () => {
+    return user?.user_metadata?.first_name || user?.user_metadata?.username || user?.email?.split('@')[0] || 'User'
+  }
+
+  const getUserDashboardPath = () => {
+    const role = getUserRole(user)
+    return role === 'admin' ? '/admin' 
+         : role === 'superadmin' ? '/superadmin' 
+         : '/agent'
+  }
 
   if (loading) {
     return (
@@ -88,15 +95,9 @@ export default function Home() {
               {user && (
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-700">
-                    Welcome, {(user as UserResponse).first_name || (user as UserResponse).username || 'User'}
+                    Welcome, {getUserDisplayName()}
                   </span>
-                  <Link href={
-                    (user as UserResponse).user_role === 'admin' 
-                      ? '/admin' 
-                      : (user as UserResponse).user_role === 'superadmin' 
-                        ? '/superadmin' 
-                        : '/agent'
-                  }>
+                  <Link href={getUserDashboardPath()}>
                     <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg">
                       Dashboard
                     </Button>
@@ -148,15 +149,9 @@ export default function Home() {
                   {user && (
                     <div className="flex flex-col space-y-2">
                       <div className="text-sm text-gray-700 px-3 py-2">
-                        Welcome, {(user as UserResponse).first_name || (user as UserResponse).username || 'User'}
+                        Welcome, {getUserDisplayName()}
                       </div>
-                      <Link href={
-                        (user as UserResponse).user_role === 'admin' 
-                          ? '/admin' 
-                          : (user as UserResponse).user_role === 'superadmin' 
-                            ? '/superadmin' 
-                            : '/agent'
-                      }>
+                      <Link href={getUserDashboardPath()}>
                         <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
                           Go to Dashboard
                         </Button>
@@ -210,13 +205,7 @@ export default function Home() {
                 )}
                 {user && (
                   <>
-                    <Link href={
-                      (user as UserResponse).user_role === 'admin' 
-                        ? '/admin' 
-                        : (user as UserResponse).user_role === 'superadmin' 
-                          ? '/superadmin' 
-                          : '/agent'
-                    }>
+                    <Link href={getUserDashboardPath()}>
                       <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
                         Go to Dashboard
                         <ArrowRight className="w-5 h-5 ml-2" />
@@ -405,13 +394,7 @@ export default function Home() {
               </>
             )}
             {user && (
-              <Link href={
-                (user as UserResponse).user_role === 'admin' 
-                  ? '/admin' 
-                  : (user as UserResponse).user_role === 'superadmin' 
-                    ? '/superadmin' 
-                    : '/agent'
-              }>
+              <Link href={getUserDashboardPath()}>
                 <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl">
                   Go to Dashboard
                   <ArrowRight className="w-5 h-5 ml-2" />

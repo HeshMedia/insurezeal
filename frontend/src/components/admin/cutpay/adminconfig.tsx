@@ -297,7 +297,7 @@ export function AgentConfigManagement() {
         <div className="flex justify-between items-center">
           <div>
             <CardTitle>Agent Configurations</CardTitle>
-            <CardDescription>Manage agent payment configurations.</CardDescription>
+            <CardDescription>Manage agent commission and payout configurations.</CardDescription>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>

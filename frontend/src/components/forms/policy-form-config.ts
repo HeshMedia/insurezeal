@@ -85,7 +85,6 @@ export const policyFormFields: PolicyFormFieldConfig[] = [
     { value: 'neft', label: 'NEFT' }
   ] },
   { key: 'admin_input.agent_commission_given_percent', label: 'Agent Commission %', type: 'number', section: 'admin' },
-  { key: 'admin_input.agent_extra_percent', label: 'Agent Extra %', type: 'number', section: 'admin' },
   { key: 'admin_input.payment_by_office', label: 'Payment By Office', type: 'number', section: 'admin', tag: 'payment-method-dependent' },
   { key: 'admin_input.admin_child_id', label: 'Child ID', type: 'select', section: 'admin', required: true },
   

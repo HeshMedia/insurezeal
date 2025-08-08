@@ -3,9 +3,9 @@
 import * as React from "react"
 import { useState } from "react"
 import { UserPlus, Lock, Mail, User, Users, Eye, EyeOff } from "lucide-react"
-import { useRegister } from "@/hooks/authQuery"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { signUp } from "@/lib/utils/supabase/auth"
 
 const RegisterPage = () => {
   const [formData, setFormData] = useState({
@@ -19,8 +19,7 @@ const RegisterPage = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [formError, setFormError] = useState("")
-  const registerMutation = useRegister()
-  const { isPending: loading, error } = registerMutation
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
 
   const handleRegister = async () => {
@@ -36,16 +35,23 @@ const RegisterPage = () => {
       setFormError("Passwords do not match.")
       return
     }
+    
     setFormError("")
-    const { email, password, username, first_name, last_name } = formData
-    registerMutation.mutate(
-      { email, password, username, first_name, last_name },
-      {
-        onSuccess: () => {
-          router.push('/login?message=Registration successful. Please check your email to verify your account.')
-        },
-      }
-    )
+    setLoading(true)
+    
+    try {
+      const { email, password, username, first_name, last_name } = formData
+      await signUp({ email, password, username, first_name, last_name })
+      
+      // Redirect to email verification page
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`)
+    } catch (error: unknown) {
+      console.error('Registration error:', error)
+      const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again."
+      setFormError(errorMessage)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,7 +78,8 @@ const RegisterPage = () => {
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <Mail className="w-4 h-4" />
-            </span>            <input
+            </span>
+            <input
               placeholder="Email *"
               type="email"
               name="email"
@@ -126,7 +133,8 @@ const RegisterPage = () => {
               />
             </div>
           </div>
-            <div className="relative">
+          
+          <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <Lock className="w-4 h-4" />
             </span>
@@ -181,31 +189,23 @@ const RegisterPage = () => {
               </div>
             </div>
           )}
-          {error && (
-            <div className="text-sm text-red-600 text-left bg-red-50 p-3 rounded-lg border border-red-200 max-w-full break-words">
-              <div className="flex items-start gap-2">
-                <span className="text-red-500 mt-0.5">⚠</span>
-                <span>{error.message}</span>
-              </div>
-            </div>
-          )}
         </div>
         
         <button
           onClick={handleRegister}
           disabled={loading}
-          className="w-full bg-gradient-to-b from-gray-700 to-gray-900 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 cursor-pointer transition mb-4 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-gradient-to-b from-blue-600 to-blue-700 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 cursor-pointer transition mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Creating Account...' : 'Create Account'}
         </button>
         
         <div className="text-center">
-          <span className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600">
             Already have an account?{' '}
             <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
               Sign in
             </Link>
-          </span>
+          </p>
         </div>
       </div>
     </div>

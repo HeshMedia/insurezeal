@@ -2,12 +2,12 @@
 
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
 import { AgentOverview } from '@/components/agent/agent-overview'
-import { useAtom } from 'jotai'
-import { userAtom } from '@/lib/atoms/auth'
+import { useAuth } from '@/hooks/useAuth'
 import { Badge } from '@/components/ui/badge'
 
 export default function AgentDashboard() {
-  const [user] = useAtom(userAtom)
+
+ const { user } = useAuth()
 
   return (
     <DashboardWrapper requiredRole="agent">
@@ -17,7 +17,7 @@ export default function AgentDashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                Welcome back, {user?.first_name || user?.username}!
+                Welcome back, {user?.user_metadata?.first_name || user?.user_metadata?.username || user?.email?.split('@')[0]}!
               </h1>
               <p className="text-gray-600 mt-1">
                 Manage your insurance business from your dashboard
@@ -30,7 +30,8 @@ export default function AgentDashboard() {
         </div>
 
         {/* Agent Overview */}
-        <AgentOverview />
+        <AgentOverview 
+        />
       </div>
     </DashboardWrapper>
   )

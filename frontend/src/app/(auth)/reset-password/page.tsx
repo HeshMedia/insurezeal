@@ -5,23 +5,14 @@ import { useState, Suspense } from "react"
 import { Lock, Mail, CheckCircle, ArrowLeft, Eye, EyeOff } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { authApi } from "@/lib/api/auth"
+import { resetPasswordForEmail, updatePassword } from "@/lib/utils/supabase/auth"
 
 const ResetPasswordContent = () => {
-  // Check if we have tokens from email link
   const searchParams = useSearchParams()
-  const accessToken = searchParams?.get('access_token')
-  const refreshToken = searchParams?.get('refresh_token')
-  const supabaseToken = searchParams?.get('supabase_token')
+  const isRecovery = searchParams?.get('type') === 'recovery'
   
-  // If we have tokens (either custom API or Supabase), show reset form. Otherwise show forgot password form.
-  const hasTokens = (accessToken && refreshToken) || supabaseToken
-  if (hasTokens) {
-    return <ResetPasswordForm 
-      accessToken={accessToken || undefined} 
-      refreshToken={refreshToken || undefined} 
-      supabaseToken={supabaseToken || undefined}
-    />
+  if (isRecovery) {
+    return <UpdatePasswordForm />
   } else {
     return <ForgotPasswordForm />
   }
@@ -46,15 +37,19 @@ const ForgotPasswordForm = () => {
     if (!email) {
       setError("Please enter your email address.")
       return
-    }    setError("")
+    }
+    
+    setError("")
     setMessage("")
     setLoading(true)
 
     try {
-      await authApi.forgotPassword(email)
+      await resetPasswordForEmail(email)
       setMessage("If an account with that email exists, a password reset link has been sent.")
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch (error: unknown) {
+      console.error('Reset password error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -70,7 +65,7 @@ const ForgotPasswordForm = () => {
         <h2 className="text-2xl font-semibold mb-2 text-center">
           Forgot Password?
         </h2>
-          <p className="text-gray-500 text-sm mb-6 text-center">
+        <p className="text-gray-500 text-sm mb-6 text-center">
           Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
 
@@ -124,16 +119,8 @@ const ForgotPasswordForm = () => {
   )
 }
 
-// Component for reset password (new password input)
-const ResetPasswordForm = ({ 
-  accessToken, 
-  refreshToken, 
-  supabaseToken 
-}: { 
-  accessToken?: string, 
-  refreshToken?: string,
-  supabaseToken?: string
-}) => {
+// Component for updating password
+const UpdatePasswordForm = () => {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -143,7 +130,7 @@ const ResetPasswordForm = ({
   const [error, setError] = useState("")
   const router = useRouter()
 
-  const handleResetPassword = async () => {
+  const handleUpdatePassword = async () => {
     if (!password || !confirmPassword) {
       setError("Please fill in all fields.")
       return
@@ -152,38 +139,29 @@ const ResetPasswordForm = ({
     if (password.length < 6) {
       setError("Password must be at least 6 characters long.")
       return
-    }    if (password !== confirmPassword) {
-      setError("Passwords don&apos;t match.")
+    }
+    
+    if (password !== confirmPassword) {
+      setError("Passwords don't match.")
       return
-    }setError("")
+    }
+
+    setError("")
     setMessage("")
     setLoading(true)
 
     try {
-      if (supabaseToken) {
-        // Handle Supabase token - you'll need to implement this based on your setup
-        // For now, show error that Supabase auth is not fully implemented
-        setError("Supabase authentication is not fully configured. Please use the forgot password form below.")
-        return
-      } else if (accessToken && refreshToken) {
-        // Handle custom API tokens
-        await authApi.resetPassword({
-          new_password: password,
-          access_token: accessToken,
-          refresh_token: refreshToken
-        })
-      } else {
-        setError("Invalid reset link. Please try requesting a new password reset.")
-        return
-      }
-
-      setMessage("Password reset successfully! Redirecting to login...")
-        // Redirect to login after 2 seconds
+      await updatePassword(password)
+      setMessage("Password updated successfully! Redirecting to login...")
+      
+      // Redirect to login after 2 seconds
       setTimeout(() => {
         router.push('/login')
       }, 2000)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch (error: unknown) {
+      console.error('Update password error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -197,14 +175,15 @@ const ResetPasswordForm = ({
         </div>
         
         <h2 className="text-2xl font-semibold mb-2 text-center">
-          Reset Your Password
+          Update Your Password
         </h2>
         
         <p className="text-gray-500 text-sm mb-6 text-center">
           Enter your new password below.
         </p>
 
-        <div className="w-full flex flex-col gap-4 mb-6">          <div className="relative">
+        <div className="w-full flex flex-col gap-4 mb-6">
+          <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <Lock className="w-4 h-4" />
             </span>
@@ -241,7 +220,7 @@ const ResetPasswordForm = ({
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
               minLength={6}
-              onKeyPress={(e) => e.key === 'Enter' && handleResetPassword()}
+              onKeyPress={(e) => e.key === 'Enter' && handleUpdatePassword()}
             />
             <button
               type="button"
@@ -268,11 +247,11 @@ const ResetPasswordForm = ({
         </div>
         
         <button
-          onClick={handleResetPassword}
+          onClick={handleUpdatePassword}
           disabled={loading}
           className="w-full bg-gradient-to-b from-green-600 to-green-700 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 cursor-pointer transition mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Resetting...' : 'Reset Password'}
+          {loading ? 'Updating...' : 'Update Password'}
         </button>
         
         <div className="text-center">

@@ -1,30 +1,17 @@
-import axios, { AxiosInstance } from 'axios'
-import Cookies from 'js-cookie'
+import { createAuthenticatedClient } from './client'
 import { 
   ChildIdRequest,
   CreateChildIdRequest,
   ChildIdListResponse,
   ChildIdListParams,
   InsurerDropdownResponse,
-  BrokerInsurerDropdownResponse
+  BrokerInsurerDropdownResponse,
+  AgentMISParams,
+  AgentMISResponse
 } from '@/types/agent.types'
 
-// Create axios instance
-const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Request interceptor to add auth token
-apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
+// Create axios instance with Supabase authentication
+const apiClient = createAuthenticatedClient()
 
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
@@ -100,6 +87,21 @@ export const agentApi = {
     // Get user's active (accepted) child IDs
     getActiveChildIds: async (): Promise<ChildIdRequest[]> => {
       const response = await apiClient.get('/active')
+      return response.data
+    }
+  },
+  // MIS APIs
+  mis: {
+    // Get agent MIS data (Admin/SuperAdmin only)
+    getAgentMISData: async (params: AgentMISParams): Promise<AgentMISResponse> => {
+      const {  page = 1, page_size = 50 } = params
+      
+      const response = await apiClient.get(`/mis/my-mis`, {
+        params: {
+          page,
+          page_size
+        }
+      })
       return response.data
     }
   }
