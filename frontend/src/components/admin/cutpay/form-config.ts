@@ -75,15 +75,15 @@ export const formFields: FormFieldConfig[] = [
   //  Admin Input (in order) - Some have autocalculated tag
   { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
   { key: 'admin_input.booking_date', label: 'Booking Date', type: 'date', section: 'admin' },
+  { key: 'admin_input.code_type', label: 'Code Type', type: 'select', section: 'admin' },
   { key: 'admin_input.insurer_code', label: 'Insurer Code', type: 'select', section: 'admin' },
   { key: 'admin_input.broker_code', label: 'Broker Code', type: 'select', section: 'admin' },
+  { key: 'admin_input.admin_child_id', label: 'Child ID', type: 'select', section: 'admin' },
   { key: 'admin_input.agent_code', label: 'Agent Code', type: 'select', section: 'admin' },
-  { key: 'admin_input.code_type', label: 'Code Type', type: 'select', section: 'admin' },
   { key: 'admin_input.payout_on', label: 'Payout On', type: 'select', section: 'admin' },
   { key: 'admin_input.incoming_grid_percent', label: 'Incoming Grid %', type: 'number', section: 'admin' },
   { key: 'admin_input.extra_grid', label: 'Incoming Extra Grid %', type: 'number', section: 'admin' },
   { key: 'admin_input.agent_commission_given_percent', label: 'Agent Commission %', type: 'number', section: 'admin' },
-  { key: 'admin_input.agent_extra_percent', label: 'Agent Extra Grid %', type: 'number', section: 'admin' },
   
   // OD+TP specific percentage fields - only shown when payout_on = "OD+TP"
   { key: 'admin_input.od_incoming_grid_percent', label: 'OD Incoming Grid %', type: 'number', section: 'admin' },
@@ -98,7 +98,6 @@ export const formFields: FormFieldConfig[] = [
   { key: 'admin_input.payment_method', label: 'Payment Method', type: 'select', section: 'admin', tag: 'payment-method-dependent' },
   { key: 'admin_input.payment_detail', label: 'Payment Detail', type: 'text', section: 'admin', tag: 'payment-method-dependent' },
   { key: 'admin_input.payment_by_office', label: 'Payment By Office', type: 'number', section: 'admin', tag: 'payment-method-dependent' },
-  { key: 'admin_input.admin_child_id', label: 'Admin Child ID', type: 'select', section: 'admin' },
   { key: 'claimed_by', label: 'Claimed By', type: 'select', section: 'admin' },
   { key: 'running_bal', label: 'Running Balance', type: 'number', section: 'admin', tag: 'autocalculated' },
   { key: 'notes', label: 'Notes', type: 'textarea', section: 'admin' },

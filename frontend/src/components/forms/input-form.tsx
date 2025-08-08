@@ -35,6 +35,7 @@ import {
   useBrokerList,
   useInsurerList,
   useAdminChildIdList,
+  useAvailableAdminChildIds,
 } from "@/hooks/superadminQuery";
 import { AgentSummary } from "@/types/admin.types";
 import { clearAllFromIndexedDB } from "@/lib/utils/indexeddb";
@@ -137,6 +138,9 @@ const InputForm: React.FC<InputFormProps> = ({
   const runningBalValue = watch("running_bal");
   const payoutOn = watch("admin_input.payout_on");
   const childIdValue = watch("admin_input.admin_child_id");
+  const codeType = watch("admin_input.code_type");
+  const insurerCode = watch("admin_input.insurer_code");
+  const brokerCode = watch("admin_input.broker_code");
 
   // Get form fields - using cutpay fields for both modes (cutpay form is working perfectly)
   const currentFormFields = formFields;
@@ -272,6 +276,12 @@ const InputForm: React.FC<InputFormProps> = ({
     formType === 'policy' ? userProfile?.user_id : undefined // Only fetch for policy forms with user ID
   );
 
+  // Dependent child IDs for cutpay forms based on insurer/broker selection
+  const { data: availableChildIds, isLoading: availableChildIdsLoading } = useAvailableAdminChildIds({
+    insurer_code: insurerCode || '',
+    broker_code: codeType === 'Broker' ? brokerCode || '' : undefined,
+  });
+
   // Auto-fill Insurance Company and Broker Name when Child ID is selected in policy mode
   useEffect(() => {
     if (childIdValue) {
@@ -307,6 +317,14 @@ const InputForm: React.FC<InputFormProps> = ({
     }
   }, [formType, childIdValue, adminChildIds, policyChildIds, setValue, setSelectedChildIdDetails]);
 
+  // Clear child ID when dependencies change (for dependent dropdown functionality)
+  useEffect(() => {
+    if (formType === 'cutpay') {
+      // Clear child ID when code type, insurer, or broker changes
+      setValue('admin_input.admin_child_id', null, { shouldValidate: true });
+    }
+  }, [codeType, insurerCode, brokerCode, formType, setValue]);
+
   // Memoizing select options to prevent re-computation on every render
   const insurerOptions = useMemo(
     () =>
@@ -335,16 +353,28 @@ const InputForm: React.FC<InputFormProps> = ({
         .filter((option) => option.value && option.value.trim() !== "") || [],
     [agents]
   );
-  const adminChildIdOptions = useMemo(
-    () =>
-      adminChildIds
+  // Dynamic child ID options based on form type and dependent selections
+  const adminChildIdOptions = useMemo(() => {
+    if (formType === 'cutpay') {
+      // Use dependent child IDs when code type, insurer, and broker are selected
+      if (codeType && insurerCode && (codeType === 'Direct' || brokerCode)) {
+        return availableChildIds
+          ?.map((c: AdminChildId) => ({
+            value: c.child_id,
+            label: `${c.child_id} - ${c.manager_name}`,
+          }))
+          .filter((option) => option.value && option.value.trim() !== "") || [];
+      }
+      // Fallback to all admin child IDs if dependencies not met
+      return adminChildIds
         ?.map((a: AdminChildId) => ({
           value: a.child_id,
           label: `${a.child_id} - ${a.manager_name}`,
         }))
-        .filter((option) => option.value && option.value.trim() !== "") || [],
-    [adminChildIds]
-  );
+        .filter((option) => option.value && option.value.trim() !== "") || [];
+    }
+    return [];
+  }, [formType, codeType, insurerCode, brokerCode, availableChildIds, adminChildIds]);
 
   // Policy-specific child ID options for agents
   const policyChildIdOptions = useMemo(
@@ -363,10 +393,7 @@ const InputForm: React.FC<InputFormProps> = ({
     () => ["Direct", "Broker"].map((o) => ({ value: o, label: o })),
     []
   );
-  const paymentByOptions = useMemo(
-    () => ["Agent", "InsureZeal"].map((o) => ({ value: o, label: o })),
-    []
-  );
+  // paymentByOptions is now dynamically generated in the renderField function
   const paymentMethodOptions = useMemo(
     () =>
       [
@@ -756,10 +783,9 @@ const planTypeOptions = useMemo(
         updateStepStatus("create-policy", "active");
 
         // Calculate simple agent payout for policy (for display purposes)
-        const grossPremium = data.extracted_data?.gross_premium || 0;
+        const netPremium = data.extracted_data?.net_premium || 0;
         const agentCommission = data.admin_input?.agent_commission_given_percent || 0;
-        const agentExtra = data.admin_input?.agent_extra_percent || 0;
-        const totalAgentPayoutAmount = grossPremium * (agentCommission + agentExtra) / 100;
+        const totalAgentPayoutAmount = netPremium * (agentCommission / 100);
         console.log("Policy mode - Agent payout amount:", totalAgentPayoutAmount);
 
         // Construct the comprehensive policy payload
@@ -822,7 +848,6 @@ const planTypeOptions = useMemo(
           
           // Agent commission and payout - use actual values
           agent_commission_given_percent: agentCommission || 0,
-          agent_extra_percent: agentExtra || 0,
           payment_by_office: data.admin_input?.payment_by_office || 0,
           total_agent_payout_amount: totalAgentPayoutAmount || 0,
           
@@ -849,7 +874,6 @@ const planTypeOptions = useMemo(
         console.log("Form Data:", data);
         console.log("Selected Child ID Details:", selectedChildIdDetails);
         console.log("Agent Commission:", agentCommission);
-        console.log("Agent Extra:", agentExtra);
         console.log("Total Agent Payout:", totalAgentPayoutAmount);
         console.log("Raw policy payload:", policyPayload);
         console.log("====================================");
@@ -957,7 +981,7 @@ const planTypeOptions = useMemo(
                 incoming_grid_percent: data.admin_input.payout_on === "OD+TP" ? null : (data.admin_input.incoming_grid_percent || null),
                 agent_commission_given_percent: data.admin_input.payout_on === "OD+TP" ? null : (data.admin_input.agent_commission_given_percent || null),
                 extra_grid: data.admin_input.payout_on === "OD+TP" ? null : (data.admin_input.extra_grid || null),
-                agent_extra_percent: data.admin_input.payout_on === "OD+TP" ? null : (data.admin_input.agent_extra_percent || null),
+                // agent_extra_percent removed from new formula
                 // OD+TP specific fields
                 od_incoming_grid_percent: data.admin_input.payout_on === "OD+TP" ? (data.admin_input.od_incoming_grid_percent || null) : null,
                 tp_incoming_grid_percent: data.admin_input.payout_on === "OD+TP" ? (data.admin_input.tp_incoming_grid_percent || null) : null,
@@ -1248,7 +1272,21 @@ const planTypeOptions = useMemo(
         options = formType === 'policy' ? policyChildIdOptions : adminChildIdOptions;
       }
       if (key === "admin_input.code_type") options = codeTypeOptions;
-      if (key === "admin_input.payment_by") options = paymentByOptions;
+      if (key === "admin_input.payment_by") {
+        // Enhanced payment by options with agent name when applicable
+        const selectedAgentCode = watch("admin_input.agent_code");
+        const selectedAgent = agents?.agents.find((agent: AgentSummary) => agent.agent_code === selectedAgentCode);
+        
+        options = ["Agent", "InsureZeal"].map((option) => {
+          if (option === "Agent" && selectedAgent) {
+            return {
+              value: option,
+              label: `Agent (${selectedAgent.first_name} ${selectedAgent.last_name})`
+            };
+          }
+          return { value: option, label: option };
+        });
+      }
       if (key === "admin_input.payment_method") options = paymentMethodOptions;
       if (key === "admin_input.payout_on") options = payoutOnOptions;
       if (key === "claimed_by") options = agentOptions;
@@ -1269,7 +1307,7 @@ const planTypeOptions = useMemo(
         (key === "admin_input.broker_code" && brokersLoading) ||
         (key === "admin_input.agent_code" && agentsLoading) ||
         (key === "admin_input.admin_child_id" && 
-         (formType === 'policy' ? policyChildIdsLoading : adminChildIdsLoading));
+         (formType === 'policy' ? policyChildIdsLoading : (adminChildIdsLoading || availableChildIdsLoading)));
 
       return (
         <div key={key} className="space-y-2">
@@ -1538,7 +1576,6 @@ const planTypeOptions = useMemo(
                                    f.key !== "running_bal" && 
                                    (f.key === "admin_input.admin_child_id" ||
                                     f.key === "admin_input.agent_commission_given_percent" ||
-                                    f.key === "admin_input.agent_extra_percent" ||
                                     f.key === "admin_input.code_type" ||
                                     f.key === "admin_input.payment_by" ||
                                     f.key === "admin_input.payment_method" ||
@@ -1787,14 +1824,13 @@ const planTypeOptions = useMemo(
                         <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                           <div className="text-lg font-semibold text-green-800">
                             ₹{(() => {
-                              const grossPremium = watch("extracted_data.gross_premium") || 0;
+                              const netPremium = watch("extracted_data.net_premium") || 0;
                               const agentCommission = watch("admin_input.agent_commission_given_percent") || 0;
-                              const agentExtra = watch("admin_input.agent_extra_percent") || 0;
-                              return (grossPremium * (agentCommission + agentExtra) / 100).toFixed(2);
+                              return (netPremium * (agentCommission / 100)).toFixed(2);
                             })()}
                           </div>
                           <div className="text-sm text-green-600 mt-1">
-                            Gross Premium × (Agent Commission % + Agent Extra %)
+                            Net Premium × Agent Commission %
                           </div>
                         </div>
                       </div>

@@ -123,8 +123,9 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
     const total_receivable_from_broker = roundToTwo(receivable_from_broker + extra_amount_receivable_from_broker);
     const total_receivable_from_broker_with_gst = roundToTwo(total_receivable_from_broker * 1.18);
     
-    const agent_extra_amount = roundToTwo(base_for_extras * (agent_extra_percent / 100));
-    const total_agent_po_amt = roundToTwo(agent_po_amt + agent_extra_amount);
+    // Agent extra amount is no longer used in the calculation
+    const agent_extra_amount = 0; // Set to 0 as per new formula requirements
+    const total_agent_po_amt = roundToTwo(agent_po_amt); // Only use base agent commission, no extra %
 
     // Calculate cut pay amount based on payment mode and cutpay received status
     let cut_pay_amount = 0;
