@@ -62,6 +62,7 @@ export interface AdminInputData {
   commissionable_premium?: number | null;
   payment_by?: string | null;
   payment_method?: string | null;
+  payment_detail?: string | null; // New field for payment detail
   payout_on?: string | null;
   agent_extra_percent?: number | null;
   payment_by_office?: string | null;
@@ -81,6 +82,8 @@ export interface AdminInputData {
   tp_agent_payout_percent?: number | null;
   od_incoming_grid_percent?: number | null;
   tp_incoming_grid_percent?: number | null;
+  od_incoming_extra_grid?: number | null;
+  tp_incoming_extra_grid?: number | null;
 }
 
 
