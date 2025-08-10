@@ -163,7 +163,7 @@ export function CutPayManagement() {
     return (
       transaction.policy_number?.toLowerCase().includes(query) ||
       transaction.customer_name?.toLowerCase().includes(query) ||
-      transaction.registration_no?.toLowerCase().includes(query) ||
+      transaction.registration_number?.toLowerCase().includes(query) ||
       transaction.agent_code?.toLowerCase().includes(query)
     )
   }) || []

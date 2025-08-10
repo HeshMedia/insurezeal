@@ -28,7 +28,6 @@ export const PolicyFormSchema = z.object({
   
   // Vehicle information
   registration_number: z.string().min(1, "Registration number is required"),
-  registration_no: z.string().optional(), // Backward compatibility
   vehicle_class: z.string().optional(),
   vehicle_segment: z.string().optional(),
   make_model: z.string().optional(),

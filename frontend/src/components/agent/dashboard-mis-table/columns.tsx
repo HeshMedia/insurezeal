@@ -87,7 +87,7 @@ export const columns = [
   createCurrencyColumn('net_premium', 'Net Premium'),
   
   // Vehicle Details
-  createReadOnlyColumn('registration_no', 'Registration No.'),
+  createReadOnlyColumn('registration_number', 'Registration No.'),
   createReadOnlyColumn('make_model', 'Make & Model'),
   createReadOnlyColumn('model', 'Model'),
   

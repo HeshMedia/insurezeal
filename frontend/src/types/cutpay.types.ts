@@ -19,10 +19,7 @@ export interface ExtractedPolicyData {
   od_premium?: number | null
   tp_premium?: number | null
   gst_amount?: number | null
-  // Vehicle registration details
-  registration_no?: string | null
-  registration_number?: string | null // Alternative field name
-  // Vehicle details
+  registration_number?: string | null 
   make_model?: string | null
   model?: string | null
   vehicle_variant?: string | null
@@ -168,7 +165,7 @@ export interface CutPayTransaction {
   od_premium: number | null
   tp_premium: number | null
   gst_amount: number | null
-  registration_no: string | null
+  registration_number: string | null
   make_model: string | null
   model: string | null
   vehicle_variant: string | null

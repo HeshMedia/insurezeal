@@ -280,7 +280,7 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                           </div>
                           <div>
                             <span className="font-medium text-gray-600">Registration Number:</span>
-                            <p className="text-gray-900">{extractionData.extracted_data?.registration_no || 'Not found'}</p>
+                            <p className="text-gray-900">{extractionData.extracted_data?.registration_number || 'Not found'}</p>
                           </div>
                           <div>
                             <span className="font-medium text-gray-600">Gross Premium:</span>

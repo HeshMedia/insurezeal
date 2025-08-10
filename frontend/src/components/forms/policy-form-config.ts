@@ -16,7 +16,7 @@ export interface PolicyFormFieldConfig {
 
 export const policyFormFields: PolicyFormFieldConfig[] = [
   // ✅ Extracted Data (PDF Extraction) - All have autofill tag
-  { key: 'extracted_data.policy_number', label: 'Policy Number', type: 'text', section: 'extracted', required: true, tag: 'autofill' },
+  { key: 'extracted_data.policy_number', label: 'Policy Number', type: 'text', section: 'extracted', required: true, tag: 'autofill' , disabled :true },
   { key: 'extracted_data.formatted_policy_number', label: 'Formatted Policy Number', type: 'text', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.major_categorisation', label: 'Major Categorisation', type: 'select', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.product_insurer_report', label: 'Product Insurer Report', type: 'text', section: 'extracted', tag: 'autofill' },
