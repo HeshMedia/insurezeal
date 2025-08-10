@@ -19,7 +19,6 @@ export const ExtractedPolicyDataSchema = z.object({
   tp_premium: z.number().optional().nullable(),
   gst_amount: z.number().optional().nullable(),
   // Vehicle registration details
-  registration_no: z.string().optional().nullable(),
   registration_number: z.string().optional().nullable(),
   // Vehicle details
   make_model: z.string().optional().nullable(),

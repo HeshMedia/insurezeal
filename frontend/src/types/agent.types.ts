@@ -109,7 +109,7 @@ export interface AgentMISRecord {
   plan_type: string;
   gross_premium: string;
   net_premium: string;
-  registration_no: string;
+  registration_number: string;
   make_model: string;
   model: string;
   agent_commission_perc: string;

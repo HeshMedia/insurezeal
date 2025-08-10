@@ -43,7 +43,7 @@ export const columns = [
   createEditableColumn('tp_premium', 'TP Premium'),
   createEditableColumn('gst_amount', 'GST Amount'),
   createEditableColumn('commissionable_premium', 'Commissionable Premium'),
-  createEditableColumn('registration_no', 'Registration No.'),
+  createEditableColumn('registration_number', 'Registration No.'),
   createEditableColumn('make_model', 'Make & Model'),
   createEditableColumn('model', 'Model'),
   createEditableColumn('vehicle_variant', 'Vehicle Variant'),
