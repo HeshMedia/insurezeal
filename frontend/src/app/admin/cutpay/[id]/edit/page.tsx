@@ -39,7 +39,7 @@ export default function CutPayEditPage() {
         od_premium: data.od_premium,
         tp_premium: data.tp_premium,
         gst_amount: data.gst_amount,
-        registration_number: data.registration_no,
+        registration_number: data.registration_number,
         make_model: data.make_model,
         model: data.model,
         vehicle_variant: data.vehicle_variant,

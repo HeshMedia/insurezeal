@@ -131,12 +131,13 @@ const InputForm: React.FC<InputFormProps> = ({
   // Watch for changes in specific form fields to trigger side effects
   const paymentBy = watch("admin_input.payment_by");
   const grossPremium = watch("extracted_data.gross_premium");
-  const registrationNo = watch("extracted_data.registration_no");
+  const registrationNo = watch("extracted_data.registration_number");
   const majorCategorisation = watch("extracted_data.major_categorisation");
   const planType = watch("extracted_data.plan_type");
   const runningBalValue = watch("running_bal");
-  const payoutOn = watch("admin_input.payout_on");
   const childIdValue = watch("admin_input.admin_child_id");
+  const cutpayReceivedStatus = watch("cutpay_received_status");
+  const cutPayAmount = watch("calculations.cut_pay_amount");
 
   // Get form fields - using cutpay fields for both modes (cutpay form is working perfectly)
   const currentFormFields = formFields;
@@ -236,6 +237,23 @@ const InputForm: React.FC<InputFormProps> = ({
       }
     }
   }, [pdfExtractionData?.extracted_data?.plan_type, planType, setValue]);
+
+  // Auto-populate cutpay_received based on cutpay_received_status
+  useEffect(() => {
+    if (cutpayReceivedStatus === "No") {
+      // Set cutpay_received to 0 when status is "No"
+      setValue("cutpay_received", 0, { shouldValidate: true });
+    } else if (cutpayReceivedStatus === "Yes" && cutPayAmount) {
+      // Pre-fill with calculated cutpay amount when status is "Yes"
+      setValue("cutpay_received", cutPayAmount, { shouldValidate: true });
+    } else if (cutpayReceivedStatus === "Partial" && cutPayAmount) {
+      // Pre-fill with calculated cutpay amount when status is "Partial" (user can edit)
+      setValue("cutpay_received", cutPayAmount, { shouldValidate: true });
+    } else if (!cutpayReceivedStatus) {
+      // Clear cutpay_received when no status is selected
+      setValue("cutpay_received", null, { shouldValidate: true });
+    }
+  }, [cutpayReceivedStatus, cutPayAmount, setValue]);
 
   // This is the single source of truth for the relationship between
   // registration number and major categorisation. It runs whenever
@@ -792,8 +810,7 @@ const planTypeOptions = useMemo(
           customer_phone_number: data.extracted_data?.customer_phone_number || "",
           insurance_type: data.extracted_data?.major_categorisation || "",
           vehicle_type: data.extracted_data?.product_insurer_report || "",
-          registration_number: data.extracted_data?.registration_no || "",
-          registration_no: data.extracted_data?.registration_no || "",
+          registration_number: data.extracted_data?.registration_number || "",
           vehicle_class: data.extracted_data?.make_model || "",
           vehicle_segment: data.extracted_data?.product_type || "",
           make_model: data.extracted_data?.make_model || "",
@@ -1082,8 +1099,7 @@ const planTypeOptions = useMemo(
  
 
   const renderField = (field: FormFieldConfig) => {
-    const { key, label, type, options: configOptions, tag } = field;
-    let { disabled } = field;
+    const { key, label, type, disabled, options: configOptions, tag } = field;
     // For policy mode: make insurer and broker readonly when auto-filled
     const isReadonlyInPolicyMode = formType === 'policy' && 
       (key === 'admin_input.insurer_code' || key === 'admin_input.broker_code') &&
@@ -1134,10 +1150,6 @@ const planTypeOptions = useMemo(
         return null;
       }
     }
-
-   if (key === 'extracted_data.policy_number' || key === 'extracted_data.formatted_policy_number') {
-    disabled = true;
-  }
 
     // Helper function to render tags
     const renderTag = () => {
@@ -1607,160 +1619,51 @@ const planTypeOptions = useMemo(
                             </div>
                           );
 
+                          // Add cutpay_received input field when status is "Yes" or "Partial"
                           if (
-                            watch("cutpay_received_status") === "Yes" ||
-                            watch("cutpay_received_status") === "Partial"
+                            cutpayReceivedStatus === "Yes" ||
+                            cutpayReceivedStatus === "Partial"
                           ) {
-                            // Remove the cutpay_received input field - only use the calculated one
-                            // The cutpay amount will be calculated automatically based on the logic
+                            acc.push(
+                              <div
+                                className="space-y-2"
+                                key="cutpay_received_wrapper"
+                              >
+                                <Label className="text-sm font-medium text-gray-700">
+                                  Cutpay Received Amount
+                                </Label>
+                                <Controller
+                                  name="cutpay_received"
+                                  control={control}
+                                  render={({
+                                    field: controllerField,
+                                    fieldState,
+                                  }) => (
+                                    <>
+                                      <Input
+                                        type="number"
+                                        className="h-10"
+                                        {...controllerField}
+                                        value={String(controllerField.value ?? "")}
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          const numValue = value === "" ? null : Number(value);
+                                          controllerField.onChange(numValue);
+                                        }}
+                                        step="0.01"
+                                        placeholder="Enter received amount"
+                                      />
+                                      {fieldState.error && (
+                                        <p className="text-red-500 text-xs mt-1">
+                                          {fieldState.error.message}
+                                        </p>
+                                      )}
+                                    </>
+                                  )}
+                                />
+                              </div>
+                            );
                           }
-                        }
-
-                        // Add OD+TP specific percentage fields when payout_on is "OD+TP" (only for cutpay)
-                        if (formType === 'cutpay' && field.key === "admin_input.payout_on" && payoutOn === "OD+TP") {
-                          // OD Agent Payout Percent
-                          acc.push(
-                            <div key="od_agent_payout_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                OD Agent Payout %
-                              </Label>
-                              <Controller
-                                name="admin_input.od_agent_payout_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter OD agent payout %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // TP Agent Payout Percent
-                          acc.push(
-                            <div key="tp_agent_payout_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                TP Agent Payout %
-                              </Label>
-                              <Controller
-                                name="admin_input.tp_agent_payout_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter TP agent payout %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // OD Incoming Grid Percent
-                          acc.push(
-                            <div key="od_incoming_grid_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                OD Incoming Grid %
-                              </Label>
-                              <Controller
-                                name="admin_input.od_incoming_grid_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter OD incoming grid %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // TP Incoming Grid Percent
-                          acc.push(
-                            <div key="tp_incoming_grid_percent" className="space-y-2">
-                              <Label className="text-sm font-medium text-gray-700">
-                                TP Incoming Grid %
-                              </Label>
-                              <Controller
-                                name="admin_input.tp_incoming_grid_percent"
-                                control={control}
-                                render={({ field: controllerField, fieldState }) => (
-                                  <>
-                                    <Input
-                                      type="number"
-                                      step="0.01"
-                                      {...controllerField}
-                                      value={String(controllerField.value ?? "")}
-                                      onChange={(e) => {
-                                        const value = e.target.value;
-                                        controllerField.onChange(
-                                          value === "" ? null : parseFloat(value)
-                                        );
-                                      }}
-                                      placeholder="Enter TP incoming grid %"
-                                      className="h-10"
-                                    />
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
                         }
                         
                         return acc;

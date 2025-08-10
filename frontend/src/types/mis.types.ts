@@ -22,7 +22,7 @@ export interface MasterSheetRecord {
   tp_premium: string;
   gst_amount: string;
   commissionable_premium: string;
-  registration_no: string;
+  registration_number: string;
   make_model: string;
   model: string;
   vehicle_variant: string;
