@@ -2,6 +2,7 @@ import { createAuthenticatedClient } from './client'
 import {
   AgentOption,
   ChildIdOption,
+  // ChildIdOptionsParams,
   ExportCsvParams,
   ExtractPdfDataResponse,
   ListAgentPoliciesParams,
@@ -70,9 +71,17 @@ export const deletePolicy = async (policyId: string): Promise<string> => {
   return data;
 };
 
-export const getChildIdOptions = async (agentId?: string): Promise<ChildIdOption[]> => {
+export const getChildIdOptions = async (params: {
+  insurer_code: string;
+  broker_code?: string;
+  agent_id?: string;
+}): Promise<ChildIdOption[]> => {
   const { data } = await apiClient.get("/policies/helpers/child-ids", {
-    params: agentId ? { agent_id: agentId } : {},
+    params: {
+      insurer_code: params.insurer_code,
+      ...(params.broker_code && { broker_code: params.broker_code }),
+      ...(params.agent_id && { agent_id: params.agent_id }),
+    },
   });
   return data;
 };
