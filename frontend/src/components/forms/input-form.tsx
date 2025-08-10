@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingDialog } from "@/components/ui/loading-dialog";
 import { useAgentList } from "@/hooks/adminQuery";
-import { useCreateCutPay, useUploadCutPayDocument, useUpdateCutPay } from "@/hooks/cutpayQuery";
+import { useCreateCutPay, useUploadCutPayDocument, useUpdateCutPay, useCutPayById } from "@/hooks/cutpayQuery";
 import { useSubmitPolicy, useChildIdOptions } from "@/hooks/policyQuery";
 import { useInsurers, useBrokersAndInsurers } from "@/hooks/agentQuery";
 import { useProfile } from "@/hooks/profileQuery";
@@ -105,6 +105,12 @@ const InputForm: React.FC<InputFormProps> = ({
 
   const { data: userProfile } = useProfile();
 
+  // Fetch existing cutpay data for edit mode
+  const { data: existingCutpayData } = useCutPayById(
+    editId || 0,
+    !!editId && formType === 'cutpay'
+  );
+
   // State for child ID auto-fill functionality in policy mode
   const [selectedChildIdDetails, setSelectedChildIdDetails] = useState<AdminChildId | ChildIdOption | null>(null);
   
@@ -126,6 +132,7 @@ const InputForm: React.FC<InputFormProps> = ({
           tp_agent_payout_percent: null,
           od_incoming_grid_percent: null,
           tp_incoming_grid_percent: null,
+          booking_date: new Date().toISOString().split('T')[0], // Default to current date
         },
         calculations: {},
         cutpay_received_status: null,
@@ -236,6 +243,64 @@ const InputForm: React.FC<InputFormProps> = ({
       );
     }
   }, [pdfExtractionData, setValue]);
+
+  // Effect to populate form with existing cutpay data in edit mode
+  useEffect(() => {
+    if (editId && existingCutpayData && formType === 'cutpay') {
+      console.log('Populating form with existing cutpay data:', existingCutpayData);
+      
+      // Populate extracted_data fields
+      if (existingCutpayData.policy_number) setValue("extracted_data.policy_number", existingCutpayData.policy_number, { shouldValidate: true });
+      if (existingCutpayData.formatted_policy_number) setValue("extracted_data.formatted_policy_number", existingCutpayData.formatted_policy_number, { shouldValidate: true });
+      if (existingCutpayData.major_categorisation) setValue("extracted_data.major_categorisation", existingCutpayData.major_categorisation, { shouldValidate: true });
+      if (existingCutpayData.product_insurer_report) setValue("extracted_data.product_insurer_report", existingCutpayData.product_insurer_report, { shouldValidate: true });
+      if (existingCutpayData.product_type) setValue("extracted_data.product_type", existingCutpayData.product_type, { shouldValidate: true });
+      if (existingCutpayData.plan_type) setValue("extracted_data.plan_type", existingCutpayData.plan_type, { shouldValidate: true });
+      if (existingCutpayData.customer_name) setValue("extracted_data.customer_name", existingCutpayData.customer_name, { shouldValidate: true });
+
+      if (existingCutpayData.gross_premium) setValue("extracted_data.gross_premium", existingCutpayData.gross_premium, { shouldValidate: true });
+      if (existingCutpayData.net_premium) setValue("extracted_data.net_premium", existingCutpayData.net_premium, { shouldValidate: true });
+      if (existingCutpayData.od_premium) setValue("extracted_data.od_premium", existingCutpayData.od_premium, { shouldValidate: true });
+      if (existingCutpayData.tp_premium) setValue("extracted_data.tp_premium", existingCutpayData.tp_premium, { shouldValidate: true });
+      if (existingCutpayData.gst_amount) setValue("extracted_data.gst_amount", existingCutpayData.gst_amount, { shouldValidate: true });
+      if (existingCutpayData.registration_number) setValue("extracted_data.registration_number", existingCutpayData.registration_number, { shouldValidate: true });
+      if (existingCutpayData.make_model) setValue("extracted_data.make_model", existingCutpayData.make_model, { shouldValidate: true });
+      if (existingCutpayData.model) setValue("extracted_data.model", existingCutpayData.model, { shouldValidate: true });
+      if (existingCutpayData.vehicle_variant) setValue("extracted_data.vehicle_variant", existingCutpayData.vehicle_variant, { shouldValidate: true });
+      if (existingCutpayData.gvw) setValue("extracted_data.gvw", existingCutpayData.gvw, { shouldValidate: true });
+      if (existingCutpayData.rto) setValue("extracted_data.rto", existingCutpayData.rto, { shouldValidate: true });
+      if (existingCutpayData.state) setValue("extracted_data.state", existingCutpayData.state, { shouldValidate: true });
+      if (existingCutpayData.fuel_type) setValue("extracted_data.fuel_type", existingCutpayData.fuel_type, { shouldValidate: true });
+      if (existingCutpayData.cc) setValue("extracted_data.cc", existingCutpayData.cc, { shouldValidate: true });
+      if (existingCutpayData.age_year) setValue("extracted_data.age_year", existingCutpayData.age_year, { shouldValidate: true });
+      if (existingCutpayData.ncb) setValue("extracted_data.ncb", existingCutpayData.ncb, { shouldValidate: true });
+      if (existingCutpayData.discount_percent) setValue("extracted_data.discount_percent", existingCutpayData.discount_percent, { shouldValidate: true });
+      if (existingCutpayData.business_type) setValue("extracted_data.business_type", existingCutpayData.business_type, { shouldValidate: true });
+      if (existingCutpayData.seating_capacity) setValue("extracted_data.seating_capacity", existingCutpayData.seating_capacity, { shouldValidate: true });
+      if (existingCutpayData.veh_wheels) setValue("extracted_data.veh_wheels", existingCutpayData.veh_wheels, { shouldValidate: true });
+
+      // Populate admin_input fields
+      if (existingCutpayData.reporting_month) setValue("admin_input.reporting_month", existingCutpayData.reporting_month, { shouldValidate: true });
+      if (existingCutpayData.booking_date) setValue("admin_input.booking_date", existingCutpayData.booking_date, { shouldValidate: true });
+      if (existingCutpayData.agent_code) setValue("admin_input.agent_code", existingCutpayData.agent_code, { shouldValidate: true });
+      if (existingCutpayData.code_type) setValue("admin_input.code_type", existingCutpayData.code_type, { shouldValidate: true });
+      if (existingCutpayData.incoming_grid_percent) setValue("admin_input.incoming_grid_percent", existingCutpayData.incoming_grid_percent, { shouldValidate: true });
+      if (existingCutpayData.agent_commission_given_percent) setValue("admin_input.agent_commission_given_percent", existingCutpayData.agent_commission_given_percent, { shouldValidate: true });
+      if (existingCutpayData.extra_grid) setValue("admin_input.extra_grid", existingCutpayData.extra_grid, { shouldValidate: true });
+      if (existingCutpayData.commissionable_premium) setValue("admin_input.commissionable_premium", existingCutpayData.commissionable_premium, { shouldValidate: true });
+      if (existingCutpayData.payment_by) setValue("admin_input.payment_by", existingCutpayData.payment_by, { shouldValidate: true });
+      if (existingCutpayData.payment_method) setValue("admin_input.payment_method", existingCutpayData.payment_method, { shouldValidate: true });
+      if (existingCutpayData.payout_on) setValue("admin_input.payout_on", existingCutpayData.payout_on, { shouldValidate: true });
+      if (existingCutpayData.payment_by_office) setValue("admin_input.payment_by_office", Number(existingCutpayData.payment_by_office), { shouldValidate: true });
+      if (existingCutpayData.insurer_broker_code) setValue("admin_input.insurer_code", existingCutpayData.insurer_broker_code, { shouldValidate: true });
+      
+      // Other fields
+      if (existingCutpayData.claimed_by) setValue("claimed_by", existingCutpayData.claimed_by, { shouldValidate: true });
+      if (existingCutpayData.running_bal) setValue("running_bal", existingCutpayData.running_bal, { shouldValidate: true });
+      if (existingCutpayData.notes) setValue("notes", existingCutpayData.notes, { shouldValidate: true });
+      
+    }
+  }, [editId, existingCutpayData, formType, setValue]);
 
   // Auto-fill plan type based on PDF extraction data
   useEffect(() => {
