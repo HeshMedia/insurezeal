@@ -644,7 +644,6 @@ class PolicyHelpers:
                     Policy.policy_number.ilike(f"%{search}%"),
                     Policy.customer_name.ilike(f"%{search}%"),
                     Policy.registration_number.ilike(f"%{search}%"),
-                    Policy.registration_no.ilike(f"%{search}%")
                 )
                 query = query.where(search_filter)
             
@@ -693,7 +692,6 @@ class PolicyHelpers:
                     # Vehicle Details
                     "vehicle_type": policy_data.get("vehicle_type"),
                     "registration_number": policy_data.get("registration_number"),
-                    "registration_no": policy_data.get("registration_no"),
                     "vehicle_class": policy_data.get("vehicle_class"),
                     "vehicle_segment": policy_data.get("vehicle_segment"),
                     "make_model": policy_data.get("make_model"),

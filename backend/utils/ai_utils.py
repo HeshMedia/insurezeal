@@ -74,7 +74,7 @@ class GeminiPolicyExtractor:
         - gst_amount should be the total tax amount (CGST + SGST combined)
 
         VEHICLE DETAILS (for Motor Insurance):
-        - registration_no: Vehicle Reg No, Registration No, Reg. No, Vehicle No (clean format without dashes or spaces)
+        - registration_number: Vehicle Reg No, Registration No, Reg. No, Vehicle No (clean format without dashes or spaces)
         - make_model: Vehicle make and model combined
         - model: Specific model name
         - vehicle_variant: Variant like VXI, ZXI, LXI, etc.
@@ -117,7 +117,7 @@ class GeminiPolicyExtractor:
             "od_premium": number or null,
             "tp_premium": number or null,
             "gst_amount": number or null,
-            "registration_no": "string or null",
+            "registration_number": "string or null",
             "make_model": "string or null",
             "model": "string or null",
             "vehicle_variant": "string or null",
@@ -278,11 +278,11 @@ class GeminiPolicyExtractor:
                     data['formatted_policy_number'] = '#' + str(data['formatted_policy_number'])
             
             # Clean registration number - remove dashes, spaces, and special characters
-            if data.get('registration_no'):
-                reg_no = str(data['registration_no']).upper()
+            if data.get('registration_number'):
+                reg_no = str(data['registration_number']).upper()
                 # Remove common separators and spaces
                 reg_no = reg_no.replace('-', '').replace(' ', '').replace('_', '').replace('.', '')
-                data['registration_no'] = reg_no
+                data['registration_number'] = reg_no
                 
                 # Extract RTO from first 4 characters of registration number
                 if len(reg_no) >= 4:
@@ -348,7 +348,7 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "gst_amount": extracted_data.get("gst_amount"),
                 
                 # Vehicle Details
-                "registration_no": extracted_data.get("registration_no"),
+                "registration_number": extracted_data.get("registration_number"),
                 "make_model": extracted_data.get("make_model"),
                 "model": extracted_data.get("model"),
                 "vehicle_variant": extracted_data.get("vehicle_variant"),
@@ -418,7 +418,7 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "gst_amount": extracted_data.get("gst_amount"),
                 
                 # Vehicle Details
-                "registration_no": extracted_data.get("registration_no"),
+                "registration_number": extracted_data.get("registration_number"),
                 "make_model": extracted_data.get("make_model"),
                 "model": extracted_data.get("model"),
                 "vehicle_variant": extracted_data.get("vehicle_variant"),
