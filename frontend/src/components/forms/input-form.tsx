@@ -30,6 +30,7 @@ import { LoadingDialog } from "@/components/ui/loading-dialog";
 import { useAgentList } from "@/hooks/adminQuery";
 import { useCreateCutPay, useUploadCutPayDocument, useUpdateCutPay } from "@/hooks/cutpayQuery";
 import { useSubmitPolicy, useChildIdOptions } from "@/hooks/policyQuery";
+import { useInsurers, useBrokersAndInsurers } from "@/hooks/agentQuery";
 import { useProfile } from "@/hooks/profileQuery";
 import {
   useBrokerList,
@@ -106,6 +107,9 @@ const InputForm: React.FC<InputFormProps> = ({
 
   // State for child ID auto-fill functionality in policy mode
   const [selectedChildIdDetails, setSelectedChildIdDetails] = useState<AdminChildId | ChildIdOption | null>(null);
+  
+  // State to store original running balance before calculations
+  const [originalRunningBalance, setOriginalRunningBalance] = useState<number>(0);
 
   // React Hook Form setup for form state management and validation
   // Note: Currently uses CutPayFormSchema for both cutpay and policy modes
@@ -142,6 +146,10 @@ const InputForm: React.FC<InputFormProps> = ({
   const codeType = watch("admin_input.code_type");
   const insurerCode = watch("admin_input.insurer_code");
   const brokerCode = watch("admin_input.broker_code");
+  
+  // Additional watches for policy form calculations
+  const netPremium = watch("extracted_data.net_premium");
+  const agentCommissionPercent = watch("admin_input.agent_commission_given_percent");
 
 
   // Get form fields - using cutpay fields for both modes (cutpay form is working perfectly)
@@ -290,9 +298,18 @@ const InputForm: React.FC<InputFormProps> = ({
   const { data: agents, isLoading: agentsLoading } = useAgentList();
   const { data: adminChildIds, isLoading: adminChildIdsLoading } = useAdminChildIdList();
   
-  // Policy-specific child IDs hook for agent users
+  // Fetching data for broker/insurer selection in policy forms
+  const { data: directInsurers, isLoading: directInsurersLoading } = useInsurers();
+  const { data: brokersAndInsurers, isLoading: brokersAndInsurersLoading } = useBrokersAndInsurers();
+
+  // Policy-specific child IDs hook - use the correct policy API with required parameters
   const { data: policyChildIds, isLoading: policyChildIdsLoading } = useChildIdOptions(
-    formType === 'policy' ? userProfile?.user_id : undefined // Only fetch for policy forms with user ID
+    formType === 'policy' && insurerCode 
+      ? {
+          insurer_code: insurerCode,
+          ...(codeType === 'Broker' && brokerCode && { broker_code: brokerCode }),
+        }
+      : undefined
   );
 
   // Dependent child IDs for cutpay forms based on insurer/broker selection
@@ -309,8 +326,8 @@ const InputForm: React.FC<InputFormProps> = ({
         const selectedChildId = policyChildIds.find(child => child.child_id === childIdValue);
         if (selectedChildId) {
           setSelectedChildIdDetails(selectedChildId);
-          // For policy child IDs, we don't have insurer/broker codes, just names
-          // So we skip the auto-fill for the dropdowns since agents don't use them
+          // For policy forms, just store the selected child details for payload
+          // Don't auto-fill or preserve any other fields - let user change them freely
         }
       } else if (formType === 'cutpay' && adminChildIds) {
         // Handle admin child IDs (for cutpay)
@@ -342,7 +359,49 @@ const InputForm: React.FC<InputFormProps> = ({
       // Clear child ID when code type, insurer, or broker changes
       setValue('admin_input.admin_child_id', null, { shouldValidate: true });
     }
+    // For policy forms, we don't clear child ID when dependencies change
+    // User can freely change any field without restrictions
   }, [codeType, insurerCode, brokerCode, formType, setValue]);
+
+  // Auto-populate policy start and end dates for policy form
+  useEffect(() => {
+    if (formType === 'policy') {
+      // Set start date to today if not already set
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      setValue("start_date" as any, today, { shouldValidate: true });
+      
+      // Set end date to one year from today
+      const endDateObj = new Date();
+      endDateObj.setFullYear(endDateObj.getFullYear() + 1);
+      const formattedEndDate = endDateObj.toISOString().split('T')[0]; // YYYY-MM-DD format
+      setValue("end_date" as any, formattedEndDate, { shouldValidate: true });
+    }
+  }, [formType, setValue]); // Only run once when form loads
+
+  // Update running balance for policy form when Payment by InsureZeal is selected
+  useEffect(() => {
+    if (formType === 'policy' && paymentBy === "InsureZeal") {
+      // Calculate the new running balance based on the formula
+      const totalAgentPayout = (netPremium || 0) * ((agentCommissionPercent || 0) / 100);
+      const grossPremiumVal = grossPremium || 0;
+      const calculatedAmount = totalAgentPayout - grossPremiumVal;
+      
+      // Get current running balance from form or use original balance
+      const currentRunningBalance = originalRunningBalance || 0;
+      const newRunningBalance = calculatedAmount + currentRunningBalance;
+      
+      // Update the running balance field
+      setValue("running_bal", newRunningBalance, { shouldValidate: true });
+    }
+  }, [formType, paymentBy, netPremium, agentCommissionPercent, grossPremium, originalRunningBalance, setValue]);
+
+  // Initialize original running balance when form loads
+  useEffect(() => {
+    if (formType === 'policy' && !originalRunningBalance) {
+      // Set initial original balance from current form value or 0
+      setOriginalRunningBalance(runningBalValue || 0);
+    }
+  }, [formType, originalRunningBalance, runningBalValue]);
 
   // Memoizing select options to prevent re-computation on every render
   const insurerOptions = useMemo(
@@ -406,6 +465,29 @@ const InputForm: React.FC<InputFormProps> = ({
         .filter((option) => option.value && option.value.trim() !== "") || [],
     [policyChildIds]
   );
+
+  // Policy-specific insurer and broker options
+  const policyInsurerOptions = useMemo(() => {
+    if (formType !== 'policy') return [];
+    
+    const sourceInsurers = codeType === 'Broker' 
+      ? brokersAndInsurers?.insurers 
+      : directInsurers;
+    
+    return sourceInsurers?.map((insurer) => ({
+      value: insurer.insurer_code,
+      label: `${insurer.name} (${insurer.insurer_code})`,
+    })) || [];
+  }, [formType, codeType, directInsurers, brokersAndInsurers]);
+
+  const policyBrokerOptions = useMemo(() => {
+    if (formType !== 'policy' || codeType !== 'Broker') return [];
+    
+    return brokersAndInsurers?.brokers?.map((broker) => ({
+      value: broker.broker_code,
+      label: `${broker.name} (${broker.broker_code})`,
+    })) || [];
+  }, [formType, codeType, brokersAndInsurers]);
 
   // Memoizing static select options
   const codeTypeOptions = useMemo(
@@ -816,8 +898,8 @@ const planTypeOptions = useMemo(
           pdf_file_path: data.policy_pdf_url || `uploads/policies/policy_${Date.now()}.pdf`,
           
           // Agent and Child ID information
-          // For agents, use their own id from profile; for admins, use selected agent
-          agent_id: formType === 'policy' && userProfile?.id ? userProfile.id : 
+          // For agents, use their user_id from profile; for admins, use selected agent
+          agent_id: formType === 'policy' && userProfile?.user_id ? userProfile.user_id : 
                    (agents?.agents?.find(a => a.agent_code === data.admin_input?.agent_code)?.id || ""),
           agent_code: formType === 'policy' && userProfile?.agent_code ? userProfile.agent_code : 
                      (data.admin_input?.agent_code || ""),
@@ -896,22 +978,25 @@ const planTypeOptions = useMemo(
         console.log("Raw policy payload:", policyPayload);
         console.log("====================================");
 
-        // Clean up empty strings to undefined for API compatibility (only for optional fields)
+        // Clean up empty strings to null for API compatibility (only for optional fields)
         const cleanPayload = Object.fromEntries(
-          Object.entries(policyPayload).map(([key, value]) => {
-            // Keep required fields even if empty
-            const requiredFields = ['policy_number', 'policy_type', 'pdf_file_path', 'pdf_file_name'];
-            if (requiredFields.includes(key)) {
-              return [key, value];
-            }
-            // For optional fields, convert empty strings to undefined, but keep 0 values
-            return [key, value === "" ? undefined : value];
-          })
+          Object.entries(policyPayload)
+            .map(([key, value]) => {
+              // Keep required fields even if empty
+              const requiredFields = ['policy_number', 'policy_type', 'pdf_file_path', 'pdf_file_name'];
+              if (requiredFields.includes(key)) {
+                return [key, value];
+              }
+              // For optional fields, convert empty strings to null, but keep 0 values
+              return [key, value === "" ? null : value];
+            })
+            .filter(([, value]) => value !== undefined) // Remove undefined values completely
         ) as SubmitPolicyPayload;
 
         console.log("=== Cleaned Payload Debug ===");
         console.log("Cleaned policy payload:", cleanPayload);
         console.log("Payload size (JSON):", JSON.stringify(cleanPayload).length, "characters");
+        console.log("JSON stringified payload:", JSON.stringify(cleanPayload, null, 2));
         console.log("============================");
 
         // Validate required fields before submission
@@ -1125,10 +1210,7 @@ const planTypeOptions = useMemo(
 
   const renderField = (field: FormFieldConfig) => {
     const { key, label, type, disabled, options: configOptions, tag } = field;
-    // For policy mode: make insurer and broker readonly when auto-filled
-    const isReadonlyInPolicyMode = formType === 'policy' && 
-      (key === 'admin_input.insurer_code' || key === 'admin_input.broker_code') &&
-      selectedChildIdDetails;
+    // Allow all fields to be editable in policy mode - no readonly restrictions
 
     // Get current payout_on value for conditional rendering
     const payoutOn = watch("admin_input.payout_on");
@@ -1276,8 +1358,14 @@ const planTypeOptions = useMemo(
     if (type === "select") {
       let options = configOptions || [];
       // Dynamically assign options based on the field key
-      if (key === "admin_input.insurer_code") options = insurerOptions;
-      if (key === "admin_input.broker_code") options = brokerOptions;
+      if (key === "admin_input.insurer_code") {
+        // For policy forms, use policy-specific insurer options based on code type
+        options = formType === 'policy' ? policyInsurerOptions : insurerOptions;
+      }
+      if (key === "admin_input.broker_code") {
+        // For policy forms, use policy-specific broker options; for cutpay use admin options
+        options = formType === 'policy' ? policyBrokerOptions : brokerOptions;
+      }
       if (key === "admin_input.agent_code") options = agentOptions;
       if (key === "admin_input.admin_child_id") {
         // For policy forms, use policy child IDs (agent-specific)
@@ -1316,8 +1404,10 @@ const planTypeOptions = useMemo(
 
       // Check if the data for this select is currently loading
       const isLoading =
-        (key === "admin_input.insurer_code" && insurersLoading) ||
-        (key === "admin_input.broker_code" && brokersLoading) ||
+        (key === "admin_input.insurer_code" && 
+         (formType === 'policy' ? (directInsurersLoading || brokersAndInsurersLoading) : insurersLoading)) ||
+        (key === "admin_input.broker_code" && 
+         (formType === 'policy' ? brokersAndInsurersLoading : brokersLoading)) ||
         (key === "admin_input.agent_code" && agentsLoading) ||
         (key === "admin_input.admin_child_id" && 
          (formType === 'policy' ? policyChildIdsLoading : (adminChildIdsLoading || availableChildIdsLoading)));
@@ -1352,7 +1442,7 @@ const planTypeOptions = useMemo(
                   value={
                     (controllerField.value as string) ?? undefined
                   }
-                  disabled={disabled || !!isReadonlyInPolicyMode}
+                  disabled={disabled}
                 >
                   <SelectTrigger className="h-10">
                     <SelectValue
@@ -1560,7 +1650,8 @@ const planTypeOptions = useMemo(
                       <span className="h-2 w-2 bg-green-500 rounded-full"></span>
                       Input
                     </CardTitle>
-                    {formType === 'cutpay' && typeof runningBalValue === "number" && (
+                    {(formType === 'cutpay' && typeof runningBalValue === "number") || 
+                     (formType === 'policy' && typeof runningBalValue === "number") ? (
                       <div className="text-right">
                         <Label className="text-sm font-medium text-gray-500">
                           Running Balance
@@ -1575,9 +1666,42 @@ const planTypeOptions = useMemo(
                           <span className="text-xl">
                             ₹{runningBalValue.toFixed(2)}
                           </span>
+                          {/* Show additional info for policy form when Payment by InsureZeal */}
+                          {formType === 'policy' && paymentBy === "InsureZeal" && (
+                            <div className="text-xs mt-1 font-normal">
+                              {(() => {
+                                const totalAgentPayout = (netPremium || 0) * ((agentCommissionPercent || 0) / 100);
+                                const grossPremiumVal = grossPremium || 0;
+                                const calculatedAmount = totalAgentPayout - grossPremiumVal;
+                                const currentRunningBalance = (runningBalValue || 0) - calculatedAmount; // Original balance before this transaction
+                                
+                                if (runningBalValue > 0) {
+                                  return `InsureZeal owes ₹${Math.abs(runningBalValue).toFixed(2)} to Agent (₹${calculatedAmount.toFixed(2)} + ₹${currentRunningBalance.toFixed(2)})`;
+                                } else if (runningBalValue < 0) {
+                                  return `Agent owes ₹${Math.abs(runningBalValue).toFixed(2)} to InsureZeal (₹${calculatedAmount.toFixed(2)} + ₹${currentRunningBalance.toFixed(2)})`;
+                                } else {
+                                  return "Account is balanced";
+                                }
+                              })()}
+                            </div>
+                          )}
+                          {/* Show standard info for cutpay or policy without InsureZeal payment */}
+                          {(formType === 'cutpay' || (formType === 'policy' && paymentBy !== "InsureZeal")) && (
+                            <div className="text-xs mt-1 font-normal">
+                              {(() => {
+                                if (runningBalValue > 0) {
+                                  return `InsureZeal owes ₹${Math.abs(runningBalValue).toFixed(2)} to Agent`;
+                                } else if (runningBalValue < 0) {
+                                  return `Agent owes ₹${Math.abs(runningBalValue).toFixed(2)} to InsureZeal`;
+                                } else {
+                                  return "Account is balanced";
+                                }
+                              })()}
+                            </div>
+                          )}
                         </div>
                       </div>
-                    )}
+                    ) : null}
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {currentFormFields
@@ -1590,9 +1714,12 @@ const planTypeOptions = useMemo(
                                    (f.key === "admin_input.admin_child_id" ||
                                     f.key === "admin_input.agent_commission_given_percent" ||
                                     f.key === "admin_input.code_type" ||
+                                    f.key === "admin_input.insurer_code" ||
+                                    f.key === "admin_input.broker_code" ||
                                     f.key === "admin_input.payment_by" ||
                                     f.key === "admin_input.payment_method" ||
-                                    f.key === "admin_input.payment_by_office" ||
+                                    // Hide payment_by_office when payment_by is "Agent" 
+                                    (f.key === "admin_input.payment_by_office" && paymentBy !== "Agent") ||
                                     f.key === "notes");
                           } else {
                             // For cutpay mode: show all admin fields except running_bal
@@ -1720,24 +1847,63 @@ const planTypeOptions = useMemo(
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {formType === 'policy' ? (
-                      // For policy mode: show simple agent payout calculation
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">
-                          Total Agent Payout Amount
-                        </Label>
-                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="text-lg font-semibold text-green-800">
-                            ₹{(() => {
-                              const netPremium = watch("extracted_data.net_premium") || 0;
-                              const agentCommission = watch("admin_input.agent_commission_given_percent") || 0;
-                              return (netPremium * (agentCommission / 100)).toFixed(2);
-                            })()}
-                          </div>
-                          <div className="text-sm text-green-600 mt-1">
-                            Net Premium × Agent Commission %
+                      // For policy mode: show calculation based on payment_by selection
+                      <>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-gray-700">
+                            Total Agent Payout Amount
+                          </Label>
+                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                            <div className="text-lg font-semibold text-green-800">
+                              ₹{(() => {
+                                const netPremium = watch("extracted_data.net_premium") || 0;
+                                const agentCommission = watch("admin_input.agent_commission_given_percent") || 0;
+                                const totalAgentPayout = (netPremium * (agentCommission / 100));
+                                
+                                return totalAgentPayout.toFixed(2);
+                              })()}
+                            </div>
+                            <div className="text-sm text-green-600 mt-1">
+                              Net Premium × Agent Commission %
+                            </div>
                           </div>
                         </div>
-                      </div>
+
+                        {paymentBy === "InsureZeal" && (
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium text-gray-700">
+                              Payment Calculation
+                            </Label>
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <div className="text-lg font-semibold text-blue-800">
+                                ₹{(() => {
+                                  const totalAgentPayout = (netPremium || 0) * ((agentCommissionPercent || 0) / 100);
+                                  const grossPremiumVal = grossPremium || 0;
+                                  const calculatedAmount = totalAgentPayout - grossPremiumVal;
+                                  return calculatedAmount.toFixed(2);
+                                })()}
+                              </div>
+                              <div className="text-sm text-blue-600 mt-1">
+                                Total Agent Payout (₹{((netPremium || 0) * ((agentCommissionPercent || 0) / 100)).toFixed(2)}) - Gross Premium (₹{(grossPremium || 0).toFixed(2)})
+                              </div>
+                              <div className="text-xs text-gray-500 mt-2">
+                                {(() => {
+                                  const totalAgentPayout = (netPremium || 0) * ((agentCommissionPercent || 0) / 100);
+                                  const grossPremiumVal = grossPremium || 0;
+                                  const calculatedAmount = totalAgentPayout - grossPremiumVal;
+                                  if (calculatedAmount > 0) {
+                                    return "This positive amount will be added to running balance (InsureZeal owes more to agent)";
+                                  } else if (calculatedAmount < 0) {
+                                    return "This negative amount will be added to running balance (Agent owes to InsureZeal)";
+                                  } else {
+                                    return "This transaction is balanced - no change to running balance";
+                                  }
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       // For cutpay mode: show all calculation fields
                       currentFormFields

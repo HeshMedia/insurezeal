@@ -226,3 +226,9 @@ export interface ListAgentPoliciesParams {
   page_size?: number;
   search?: string | null;
 }
+
+export interface ChildIdOptionsParams {
+  insurer_code: string;
+  broker_code?: string;
+  agent_id?: string;
+}

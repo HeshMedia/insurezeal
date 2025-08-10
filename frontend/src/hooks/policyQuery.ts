@@ -16,7 +16,8 @@ const policyKeys = {
   agentList: (agentCode: string, filters: ListAgentPoliciesParams) =>
     [...policyKeys.agentLists(), agentCode, filters] as const,
   helpers: () => [...policyKeys.all, "helpers"] as const,
-  childIds: (agentId?: string) => [...policyKeys.helpers(), "child-ids", agentId] as const,
+  childIds: (insurerCode?: string, brokerCode?: string, agentId?: string) => 
+    [...policyKeys.helpers(), "child-ids", insurerCode, brokerCode, agentId] as const,
   agents: () => [...policyKeys.helpers(), "agents"] as const,
 };
 
@@ -86,10 +87,15 @@ export const useDeletePolicy = () => {
   });
 };
 
-export const useChildIdOptions = (agentId?: string) => {
+export const useChildIdOptions = (params?: {
+  insurer_code: string;
+  broker_code?: string;
+  agent_id?: string;
+}) => {
   return useQuery({
-    queryKey: policyKeys.childIds(agentId),
-    queryFn: () => policyApi.getChildIdOptions(agentId),
+    queryKey: policyKeys.childIds(params?.insurer_code, params?.broker_code, params?.agent_id),
+    queryFn: () => params ? policyApi.getChildIdOptions(params) : Promise.resolve([]),
+    enabled: !!params?.insurer_code, // Only run when insurer_code is available
   });
 };
 
