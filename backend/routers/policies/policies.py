@@ -114,7 +114,8 @@ async def upload_policy_pdf(
         user_role = current_user.get("role", "agent")
         
         # Verify the policy exists and user has access to it
-        filter_user_id = user_id if user_role != "admin" else None
+        # Both admin and superadmin should see all policies
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         
         if not existing_policy:
@@ -312,8 +313,9 @@ async def list_policies(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
 
-        filter_user_id = user_id if user_role != "admin" else None
-        filter_agent_id = agent_id if user_role == "admin" else None
+        # Both admin and superadmin should see all policies
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
+        filter_agent_id = agent_id if user_role in ["admin", "superadmin"] else None
         
         result = await PolicyHelpers.get_policies(
             db=db,
@@ -360,7 +362,8 @@ async def get_policy_details(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        filter_user_id = user_id if user_role != "admin" else None
+        # Both admin and superadmin should see all policies
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         
         policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         if not policy:
@@ -399,7 +402,8 @@ async def update_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        filter_user_id = user_id if user_role != "admin" else None
+        # Both admin and superadmin should see all policies
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
 
         update_data = policy_data.model_dump(exclude_unset=True)        
         # Note: child_id validation removed since frontend gets child_id from our own endpoint
@@ -477,7 +481,8 @@ async def delete_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        filter_user_id = user_id if user_role != "admin" else None
+        # Both admin and superadmin should see all policies
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         
         success = await PolicyHelpers.delete_policy(db, policy_id, filter_user_id)
         if not success:
@@ -576,8 +581,8 @@ async def get_child_id_options(
     try:
         user_role = current_user.get("role", "agent")
         
-        # If agent_id is provided but user is not admin, ignore agent_id filter
-        if agent_id and user_role != "admin":
+        # If agent_id is provided but user is not admin/superadmin, ignore agent_id filter
+        if agent_id and user_role not in ["admin", "superadmin"]:
             agent_id = None
             
         # Use the new filtered method
@@ -663,8 +668,8 @@ async def export_policies_csv(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        # For agents, filter by their user_id; for admins, no filter
-        filter_user_id = str(user_id) if user_role != "admin" else None
+        # For agents, filter by their user_id; for admins/superadmins, no filter
+        filter_user_id = str(user_id) if user_role not in ["admin", "superadmin"] else None
         
         csv_content = await PolicyHelpers.export_policies_to_csv(
             db, filter_user_id, start_date, end_date

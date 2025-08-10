@@ -395,7 +395,7 @@ class ChildHelpers:
             HTTPException: If user is not an admin
         """
         user_role = current_user.get("role", "agent")
-        if user_role != "admin":
+        if user_role not in ["admin", "superadmin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin access required"
@@ -464,11 +464,11 @@ class ChildHelpers:
             # Build query conditions
             conditions = [
                 ChildIdRequest.status == "accepted",
-                Insurer.code == insurer_code
+                Insurer.insurer_code == insurer_code
             ]
             
             if broker_code:
-                conditions.append(Broker.code == broker_code)
+                conditions.append(Broker.broker_code == broker_code)
                 
             if agent_id:
                 conditions.append(ChildIdRequest.user_id == uuid.UUID(agent_id))
