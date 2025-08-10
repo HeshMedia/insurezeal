@@ -34,7 +34,7 @@ class MasterSheetRecord(BaseModel):
     commissionable_premium: Optional[str] = None
     
     # Vehicle Details
-    registration_no: Optional[str] = None
+    registration_number: Optional[str] = None
     make_model: Optional[str] = None
     model: Optional[str] = None
     vehicle_variant: Optional[str] = None
@@ -172,7 +172,7 @@ class AgentMISRecord(BaseModel):
     net_premium: Optional[str] = None
     
     # Vehicle Details
-    registration_no: Optional[str] = None
+    registration_number: Optional[str] = None
     make_model: Optional[str] = None
     model: Optional[str] = None
     

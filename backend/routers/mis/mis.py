@@ -6,7 +6,8 @@ from config import get_db
 from routers.auth.auth import get_current_user
 from dependencies.rbac import (
     require_admin_read,
-    require_admin_write
+    require_admin_write,
+    require_permission
 )
 from .schemas import (
     MasterSheetResponse,
@@ -460,4 +461,106 @@ async def get_agent_mis_data(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch agent MIS data for agent {agent_code}"
+        )
+
+@router.get("/my-mis", response_model=AgentMISResponse)
+async def get_my_mis_data(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=500, description="Items per page"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_permission("policies", "read"))
+):
+    """
+    Get agent's own MIS data
+    
+    **Agent endpoint**
+    
+    Returns the authenticated agent's own master sheet data with:
+    - Only records where MATCH STATUS = TRUE
+    - Sensitive broker commission fields removed
+    - Calculated statistics (number of policies, running balance, total net premium)
+    - Agent can only see their own data based on their user profile
+    
+    **Security:**
+    - Uses authenticated user's ID to lookup agent code from UserProfile
+    - Agent cannot access other agents' data
+    - Filtered data excludes sensitive broker information
+    
+    Fields excluded for privacy:
+    - Detailed broker commission structure
+    - Internal broker payout percentages
+    - Broker financial details
+    - CutPay internal calculations
+    """
+    try:
+        user_id = current_user["user_id"]
+        
+        # Get the agent's code from UserProfile table
+        from sqlalchemy import select
+        from models import UserProfile
+        
+        query = select(UserProfile.agent_code).where(UserProfile.user_id == user_id)
+        result = await db.execute(query)
+        agent_code = result.scalar_one_or_none()
+        
+        if not agent_code:
+            logger.warning(f"No agent code found for user: {user_id}")
+            return AgentMISResponse(
+                records=[],
+                stats=AgentMISStats(
+                    number_of_policies=0,
+                    running_balance=0.0,
+                    total_net_premium=0.0
+                ),
+                total_count=0,
+                page=page,
+                page_size=page_size,
+                total_pages=0
+            )
+        
+        logger.info(f"Fetching MIS data for agent: {agent_code} (user: {user_id})")
+        
+        result = await mis_helpers.get_agent_mis_data(
+            agent_code=agent_code,
+            page=page,
+            page_size=page_size
+        )
+        
+        if not result:
+            logger.warning(f"No MIS data found for agent: {agent_code}")
+            return AgentMISResponse(
+                records=[],
+                stats=AgentMISStats(
+                    number_of_policies=0,
+                    running_balance=0.0,
+                    total_net_premium=0.0
+                ),
+                total_count=0,
+                page=page,
+                page_size=page_size,
+                total_pages=0
+            )
+            
+        # Convert records to AgentMISRecord objects
+        agent_records = []
+        for record_dict in result["records"]:
+            agent_records.append(AgentMISRecord(**record_dict))
+            
+        stats = AgentMISStats(**result["stats"])
+        
+        return AgentMISResponse(
+            records=agent_records,
+            stats=stats,
+            total_count=result["total_count"],
+            page=result["page"],
+            page_size=result["page_size"],
+            total_pages=result["total_pages"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in get_my_mis_data for user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch your MIS data"
         )

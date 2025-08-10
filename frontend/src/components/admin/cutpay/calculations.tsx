@@ -175,6 +175,7 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
         break;
     }
 
+
     const extra_amount_receivable_from_broker = roundToTwo(
       base_for_extras * (extra_grid / 100)
     );
@@ -189,6 +190,7 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
       base_for_extras * (agent_extra_percent / 100)
     );
     const total_agent_po_amt = roundToTwo(agent_po_amt + agent_extra_amount);
+
 
     // Calculate cut pay amount based on payment mode
     let cut_pay_amount = 0;

@@ -365,7 +365,7 @@ class CutPay(Base):
     gst_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
     
     # 🤖 PDF Extraction - Vehicle Details (for Motor Insurance)
-    registration_no: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     vehicle_variant: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

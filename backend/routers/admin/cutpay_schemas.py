@@ -29,7 +29,7 @@ class ExtractedPolicyData(BaseModel):
     gst_amount: Optional[float] = Field(None, description="GST amount")
     
     # Vehicle Details (for Motor Insurance)
-    registration_no: Optional[str] = Field(None, description="Vehicle registration number")
+    registration_number: Optional[str] = Field(None, description="Vehicle registration number")
     make_model: Optional[str] = Field(None, description="Vehicle make and model")
     model: Optional[str] = Field(None, description="Specific model name")
     vehicle_variant: Optional[str] = Field(None, description="Vehicle variant")
@@ -44,6 +44,7 @@ class ExtractedPolicyData(BaseModel):
     business_type: Optional[str] = Field(None, description="Usage type")
     seating_capacity: Optional[int] = Field(None, description="Number of seats")
     veh_wheels: Optional[int] = Field(None, description="Number of wheels")
+    is_private_car: Optional[bool] = Field(None, description="Whether this is a private car")
 
 # =============================================================================
 # ADMIN INPUT SCHEMAS
@@ -189,7 +190,7 @@ class CutPayUpdate(BaseModel):
     gst_amount: Optional[float] = Field(None)
     
     # Vehicle details
-    registration_no: Optional[str] = Field(None)
+    registration_number: Optional[str] = Field(None)
     make_model: Optional[str] = Field(None)
     model: Optional[str] = Field(None)
     vehicle_variant: Optional[str] = Field(None)
@@ -287,7 +288,7 @@ class CutPayResponse(BaseModel):
     gst_amount: Optional[float]
     
     # Vehicle Details
-    registration_no: Optional[str]
+    registration_number: Optional[str]
     make_model: Optional[str]
     model: Optional[str]
     vehicle_variant: Optional[str]
