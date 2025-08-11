@@ -168,7 +168,7 @@ class PolicySummary(BaseModel):
     id: UUID
     policy_number: str
     policy_type: str
-    insurance_type: str
+    insurance_type: Optional[str] = None
     agent_code: Optional[str] = None
     vehicle_type: Optional[str] = None
     registration_number: Optional[str] = None
@@ -191,10 +191,11 @@ class PolicyUploadResponse(BaseModel):
     """Response after PDF upload and AI extraction"""
     policy_id: Optional[UUID] = None  
     extracted_data: dict
-    confidence_score: float
+    confidence_score: Optional[float] = None
     pdf_file_path: str 
     pdf_file_name: str  
     message: str
+    upload_url: Optional[str] = None
 
 class AIExtractionResponse(BaseModel):
     """Response from AI extraction"""

@@ -18,7 +18,11 @@ from .helpers import user_helpers
 from utils.model_utils import model_data_from_orm
 from typing import Optional
 import logging
+import os
+import uuid
 from datetime import datetime
+from typing import Optional
+from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url, guess_content_type, put_object
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +147,10 @@ async def update_current_user_profile(
 
 @router.post("/me/profile-image", response_model=ProfileImageUpload)
 async def upload_profile_image(
-    file: UploadFile = File(..., description="Profile image file (JPEG, PNG, GIF, or WebP, max 5MB)"),
+    file: Optional[UploadFile] = File(None, description="Profile image file (JPEG, PNG, GIF, or WebP, max 5MB)"),
+    presign: bool = Form(False),
+    filename: Optional[str] = Form(None),
+    content_type: Optional[str] = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -170,11 +177,35 @@ async def upload_profile_image(
                 detail="User profile not found"
             )
         
-        if not file.filename:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No file uploaded"
+        # If presign is requested (or no file provided), return a presigned URL and save the CloudFront URL
+        if presign or file is None:
+            if not filename:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="filename is required for presign")
+
+            # Delete existing avatar if any
+            if profile.avatar_url:
+                try:
+                    await user_helpers.delete_profile_image(profile.avatar_url)
+                except Exception:
+                    pass
+
+            key = build_key(prefix=f"profiles/{profile.id}", filename=filename)
+            ctype = content_type or guess_content_type(filename, "image/jpeg")
+            upload_url = generate_presigned_put_url(key=key, content_type=ctype)
+            image_url = build_cloudfront_url(key)
+
+            profile.avatar_url = image_url
+            profile.updated_at = datetime.utcnow()
+            await db.commit()
+
+            return ProfileImageUpload(
+                avatar_url=image_url,
+                message="Presigned URL generated successfully; upload directly to S3.",
+                upload_url=upload_url
             )
+
+        if not file.filename:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file uploaded")
         
         if profile.avatar_url:
             await user_helpers.delete_profile_image(profile.avatar_url)
@@ -185,10 +216,7 @@ async def upload_profile_image(
         profile.updated_at = datetime.utcnow()
         await db.commit()
         
-        return ProfileImageUpload(
-            avatar_url=image_url,
-            message="Profile image uploaded successfully"
-        )
+        return ProfileImageUpload(avatar_url=image_url, message="Profile image uploaded successfully")
         
     except HTTPException:
         raise
@@ -248,23 +276,32 @@ async def delete_profile_image(
 
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(
-    file: UploadFile = File(..., description="Document file (PDF, JPEG, PNG, max 10MB)"),
+    file: UploadFile = File(None),
     document_type: DocumentTypeEnum = Form(...),
     document_name: str = Form(...),
+    presign: bool = Form(False),
+    filename: str | None = Form(None),
+    content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Upload a document for agent registration
+    Upload a document for agent registration - supports both presigned URLs and direct upload
     
     Accepts document files in the following formats:
     - PDF (.pdf)
     - JPEG (.jpg, .jpeg)
     - PNG (.png)
     
-    Maximum file size: 5MB
+    Maximum file size: 10MB
+    
+    Two modes:
+    1. presign=true: Generate presigned URL for frontend to upload directly to S3
+    2. presign=false (default): Direct upload through this endpoint
     """
     try:
+        logger.info(f"📄 DOCUMENT UPLOAD: Processing document_type='{document_type}', presign={presign}, has_file={file is not None}")
+        
         result = await db.execute(
             select(UserProfile).where(UserProfile.user_id == current_user["user_id"])
         )
@@ -275,23 +312,108 @@ async def upload_document(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User profile not found"
             )
-        
+
+        # PRESIGNED URL GENERATION
+        if presign or not file:
+            if not filename:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required for presigned upload")
+            
+            # Validate file extension
+            allowed_extensions = ['.pdf', '.jpg', '.jpeg', '.png']
+            file_ext = os.path.splitext(filename)[1].lower()
+            if file_ext not in allowed_extensions:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail=f"File type {file_ext} not allowed. Allowed: {', '.join(allowed_extensions)}"
+                )
+            
+            # Generate S3 key and presigned URL
+            key = build_key(prefix=f"documents/{profile.user_id}", filename=filename)
+            upload_url = generate_presigned_put_url(key=key, content_type=content_type or guess_content_type(filename, "application/pdf"))
+            document_url = build_cloudfront_url(key)
+
+            # ✅ SAVE DOCUMENT RECORD IMMEDIATELY (like CutPay approach)
+            logger.info(f"🔵 PRESIGNED: Creating document record for user {profile.user_id}")
+            logger.info(f"🔵 PRESIGNED: Document URL: {document_url}")
+            
+            document_record = UserDocument(
+                user_id=current_user["user_id"],
+                document_type=document_type.value,
+                document_name=document_name,
+                document_url=document_url,
+                file_size=0,  # Will be updated when file is actually uploaded
+                upload_date=datetime.utcnow()
+            )
+            
+            db.add(document_record)
+            await db.commit()
+            await db.refresh(document_record)
+            
+            logger.info(f"🔵 PRESIGNED: Document record created with ID: {document_record.id}")
+            
+            return DocumentUploadResponse.model_validate({
+                **{column.name: getattr(document_record, column.name) for column in document_record.__table__.columns},
+                "document_id": str(document_record.id),
+                "message": "Presigned URL generated; upload directly to S3",
+                "upload_url": upload_url
+            })
+
+        # DIRECT UPLOAD HANDLING
         if not file.filename:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No file uploaded"
             )
         
-        document_record = await user_helpers.upload_and_save_document(
-            str(profile.user_id), 
-            file, 
-            document_type, 
-            document_name,
-            db
+        # Validate file type and size
+        allowed_types = ["application/pdf", "image/jpeg", "image/png"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File type {file.content_type} not allowed. Allowed: {', '.join(allowed_types)}"
+            )
+        
+        file_content = await file.read()
+        if len(file_content) > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File size must be less than 10MB"
+            )
+
+        # Upload to S3
+        try:
+            file_extension = os.path.splitext(file.filename)[1] if file.filename else '.pdf'
+            unique_filename = f"{document_type.value}_{uuid.uuid4().hex[:8]}{file_extension}"
+            unique_key = build_key(prefix=f"documents/{profile.user_id}", filename=unique_filename)
+            put_object(key=unique_key, body=file_content, content_type=file.content_type)
+            document_url = build_cloudfront_url(unique_key)
+            logger.info(f"🟢 DIRECT: Successfully uploaded to S3: {unique_key}")
+        except Exception as upload_error:
+            logger.error(f"S3 upload error: {str(upload_error)}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload document: {str(upload_error)}")
+
+        # ✅ SAVE DOCUMENT RECORD TO DATABASE
+        logger.info(f"🟢 DIRECT: Creating document record for user {profile.user_id}")
+        logger.info(f"🟢 DIRECT: Document URL: {document_url}")
+        
+        document_record = UserDocument(
+            user_id=current_user["user_id"],
+            document_type=document_type.value,
+            document_name=document_name,
+            document_url=document_url,
+            file_size=len(file_content),
+            upload_date=datetime.utcnow()
         )
+        
+        db.add(document_record)
+        await db.commit()
+        await db.refresh(document_record)
+        
+        logger.info(f"🟢 DIRECT: Document record created with ID: {document_record.id}")
+        
         return DocumentUploadResponse.model_validate({
             **{column.name: getattr(document_record, column.name) for column in document_record.__table__.columns},
-            "document_id": str(document_record.id),  
+            "document_id": str(document_record.id),
             "message": "Document uploaded successfully"
         })
         

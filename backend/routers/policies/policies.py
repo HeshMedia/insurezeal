@@ -19,6 +19,7 @@ from routers.policies.schemas import (
 )
 from dependencies.rbac import require_permission
 from utils.google_sheets import google_sheets_sync
+from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 security = HTTPBearer()
@@ -88,8 +89,11 @@ async def extract_pdf_data_endpoint(
 
 @router.post("/upload", response_model=PolicyUploadResponse)
 async def upload_policy_pdf(
-    file: UploadFile = File(..., description="Policy PDF file"),
+    file: UploadFile | None = File(None, description="Policy PDF file (if presign=false)"),
     policy_id: str = Form(..., description="Policy ID to associate with the uploaded PDF"),
+    presign: bool = Form(False),
+    filename: str | None = Form(None),
+    content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_write)
@@ -104,17 +108,48 @@ async def upload_policy_pdf(
     Returns file upload information
     """
     try:
-        if not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only PDF files are allowed"
+        if presign or not file:
+            user_id = current_user["user_id"]
+            user_role = current_user.get("role", "agent")
+            filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
+            existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
+            if not existing_policy:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found or you don't have access to it")
+
+            if not filename:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="filename is required for presign")
+            if not filename.lower().endswith('.pdf'):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
+
+            key = build_key(prefix=f"policies/{user_id}", filename=filename)
+            upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
+            file_path = build_cloudfront_url(key)
+
+            await PolicyHelpers.update_policy(
+                db,
+                policy_id,
+                {"pdf_file_path": file_path, "pdf_file_name": filename},
+                filter_user_id,
             )
+
+            return PolicyUploadResponse(
+                policy_id=policy_id,
+                extracted_data={},
+                confidence_score=None,
+                pdf_file_path=file_path,
+                pdf_file_name=filename,
+                message="Presigned URL generated; upload directly to S3",
+                upload_url=upload_url,
+            )
+
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
         
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
         # Verify the policy exists and user has access to it
-        filter_user_id = user_id if user_role != "admin" else None
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         
         if not existing_policy:
@@ -141,7 +176,7 @@ async def upload_policy_pdf(
         )
         
         return PolicyUploadResponse(
-            policy_id=policy_id, 
+            policy_id=policy_id,
             extracted_data={},
             confidence_score=None,
             pdf_file_path=file_path,
@@ -312,8 +347,8 @@ async def list_policies(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
 
-        filter_user_id = user_id if user_role != "admin" else None
-        filter_agent_id = agent_id if user_role == "admin" else None
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
+        filter_agent_id = agent_id if user_role in ["admin", "superadmin"] else None
         
         result = await PolicyHelpers.get_policies(
             db=db,
@@ -360,7 +395,7 @@ async def get_policy_details(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        filter_user_id = user_id if user_role != "admin" else None
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         
         policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         if not policy:
@@ -399,7 +434,7 @@ async def update_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        filter_user_id = user_id if user_role != "admin" else None
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
 
         update_data = policy_data.model_dump(exclude_unset=True)        
         # Note: child_id validation removed since frontend gets child_id from our own endpoint
@@ -477,7 +512,7 @@ async def delete_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        filter_user_id = user_id if user_role != "admin" else None
+        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         
         success = await PolicyHelpers.delete_policy(db, policy_id, filter_user_id)
         if not success:
@@ -556,41 +591,44 @@ async def check_policy_number_duplicate(
 
 @router.get("/helpers/child-ids", response_model=List[ChildIdOption])
 async def get_child_id_options(
-    agent_id: str = Query(None, description="Agent ID to filter child IDs (admin only)"),
+    insurer_code: str = Query(..., description="Required insurer code to filter child IDs"),
+    broker_code: Optional[str] = Query(None, description="Optional broker code to filter child IDs"),
+    agent_id: Optional[str] = Query(None, description="Optional agent ID to filter child IDs (admin only)"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_read)
 ):
     """
-    Get available child IDs for dropdown
+    Get available child IDs for dropdown with filtering
     
     **Requires policy read permission**
     
-    - **agent_id**: Optional agent ID to filter child IDs (for admins)
-    - If agent_id is provided and user is admin: returns child IDs for that agent
-    - If agent_id is not provided or user is agent: returns child IDs for current user
+    - **insurer_code**: Required insurer code to filter by
+    - **broker_code**: Optional broker code to filter by 
+    - **agent_id**: Optional agent ID to filter by (admin only)
+    - Returns child IDs matching the filter criteria
     """
     try:
-        user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        if agent_id and user_role == "admin":
-            target_agent_id = agent_id
-        else:
-            target_agent_id = str(user_id)
-        
-        # Use the same logic as child router's /active endpoint
+        # If agent_id is provided but user is not admin/superadmin, ignore agent_id filter
+        if agent_id and user_role not in ["admin", "superadmin"]:
+            agent_id = None
+            
+        # Use the new filtered method
         from routers.child.helpers import ChildHelpers
         child_helpers = ChildHelpers()
         
-        active_requests = await child_helpers.get_user_active_child_ids(
+        filtered_requests = await child_helpers.get_filtered_child_ids(
             db=db,
-            user_id=target_agent_id
+            insurer_code=insurer_code,
+            broker_code=broker_code,
+            agent_id=agent_id
         )
         
         # Format the response to match ChildIdOption schema
         child_id_options = []
-        for req in active_requests:
+        for req in filtered_requests:
             # Extract the required fields
             child_id = req.child_id if req.child_id else ""
             broker_name = req.broker.name if req.broker else ""
@@ -606,7 +644,7 @@ async def get_child_id_options(
         return child_id_options
         
     except Exception as e:
-        logger.error(f"Error fetching child ID options: {str(e)}")
+        logger.error(f"Error fetching filtered child ID options: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch child ID options"
@@ -660,8 +698,8 @@ async def export_policies_csv(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        # For agents, filter by their user_id; for admins, no filter
-        filter_user_id = str(user_id) if user_role != "admin" else None
+        # For agents, filter by their user_id; for admins/superadmins, no filter
+        filter_user_id = str(user_id) if user_role not in ["admin", "superadmin"] else None
         
         csv_content = await PolicyHelpers.export_policies_to_csv(
             db, filter_user_id, start_date, end_date

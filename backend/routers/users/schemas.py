@@ -159,6 +159,7 @@ class DocumentUploadResponse(BaseModel):
     document_url: str
     upload_date: datetime
     message: str
+    upload_url: Optional[str] = None  # For presigned URLs
 
     class Config:
         from_attributes = True
@@ -172,6 +173,7 @@ class ProfileImageUpload(BaseModel):
     """Response schema for profile image upload"""
     avatar_url: str
     message: str
+    upload_url: Optional[str] = None  # For presigned URLs
 
 class UserProfileResponse(BaseModel):
     id: str

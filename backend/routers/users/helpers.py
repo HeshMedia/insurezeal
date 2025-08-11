@@ -43,100 +43,42 @@ class UserHelpers:
         return self._storage
     
     async def upload_profile_image(self, user_id: str, file: UploadFile) -> str:
-        """
-        Upload profile image to Supabase Storage and return the public URL
-        """        
-        try:            
+        """Upload profile image to S3 and return the CloudFront URL"""
+        try:
             logger.info(f"Starting upload for user_id: {user_id}")
-            
+
             allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
             if file.content_type not in allowed_types:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"File type {file.content_type} not allowed"
-                )
-            
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"File type {file.content_type} not allowed")
+
             file_content = await file.read()
-            if len(file_content) > 5 * 1024 * 1024:  
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="File size must be less than 5MB"
-                )
-        
+            if len(file_content) > 5 * 1024 * 1024:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 5MB")
+
             await file.seek(0)
-            
-            file_extension = os.path.splitext(file.filename)[1] if file.filename else '.jpg'
-            unique_filename = f"profiles/{user_id}/{uuid.uuid4()}{file_extension}"
-            
-            bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "insurezeal")
-            
-            try:
-                supabase_client = get_supabase_admin_client()
-                
-                response = supabase_client.storage.from_(bucket_name).upload(
-                    path=unique_filename,
-                    file=file_content,
-                    file_options={"content-type": file.content_type}
-                )
-                
-                logger.info(f"Upload response: {response}")
-                
-                if hasattr(response, 'error') and response.error:
-                    logger.error(f"Upload error: {response.error}")
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Failed to upload image"
-                    )
-                
-                public_url = supabase_client.storage.from_(bucket_name).get_public_url(unique_filename)
-                logger.info(f"Public URL: {public_url}")
-                
-                return public_url
-                
-            except Exception as upload_error:
-                logger.error(f"Upload error: {str(upload_error)}")
-                logger.error(f"Upload error type: {type(upload_error)}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Upload failed: {str(upload_error)}"
-                )
-            
+
+            from utils.s3_utils import build_key, build_cloudfront_url, put_object, guess_content_type
+
+            filename = file.filename or "image.jpg"
+            key = build_key(prefix=f"profiles/{user_id}", filename=filename)
+            content_type = file.content_type or guess_content_type(filename, "image/jpeg")
+            put_object(key=key, body=file_content, content_type=content_type)
+            return build_cloudfront_url(key)
+
         except HTTPException:
             raise
         except Exception as e:
             logger.error(f"Unexpected error uploading profile image: {str(e)}")
-            logger.error(f"Error type: {type(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to upload image"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to upload image")
     
     async def delete_profile_image(self, image_url: str) -> bool:
-        """
-        Delete profile image from Supabase Storage
-        """
+        """Delete profile image from S3 via URL"""
         try:
-            bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "insurezeal")
-            
-            if "/storage/v1/object/public/" in image_url:
-                parts = image_url.split("/storage/v1/object/public/")[1]
-                path_parts = parts.split("/", 1)
-                if len(path_parts) > 1:
-                    file_path = path_parts[1]  
-                    
-                    response = self.storage.from_(bucket_name).remove([file_path])
-                    
-                    if response.get("error"):
-                        logger.warning(f"Failed to delete image from storage: {response['error']}")
-                        return False
-                    
-                    return True
-              
-            return False
-            
+            from utils.s3_utils import delete_object_by_url
+            return delete_object_by_url(image_url)
         except Exception as e:
             logger.error(f"Error deleting profile image: {str(e)}")
-            return False   
+            return False
         
     async def generate_agent_code(self, db: AsyncSession) -> str:
         """
