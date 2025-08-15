@@ -6,9 +6,11 @@ import {
   useReactTable,
   getCoreRowModel,
   flexRender,
+  getSortedRowModel,
+  SortingState,
 } from '@tanstack/react-table'
 import { useMasterSheetList, useBulkUpdateMasterSheet } from '@/hooks/misQuery'
-import { BulkUpdateItem } from '@/types/mis.types'
+import { BulkUpdateItem, MasterSheetListParams } from '@/types/mis.types'
 import { masterSheetPendingUpdatesAtom } from '@/lib/atoms/mis'
 import { columns as columnDefs } from './columns'
 import { toast } from 'sonner'
@@ -22,15 +24,103 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Save, Loader2, RotateCcw, Database } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { CalendarIcon, Settings2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Save, Loader2, RotateCcw, Database, Search, Filter, X } from 'lucide-react'
+import { format } from 'date-fns'
 import { useInView } from 'react-intersection-observer'
 import { cn } from '@/lib/utils'
+import { useDebounce } from '@/hooks/use-debounce'
 
 interface MasterSheetTableProps {
   onPendingChangesCount?: (count: number) => void
 }
 
 export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProps) {
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  
+  // Basic filters
+  const [agentCodeFilter, setAgentCodeFilter] = useState('')
+  const [insurerNameFilter, setInsurerNameFilter] = useState('')
+  const [policyNumberFilter, setPolicyNumberFilter] = useState('')
+  const [reportingMonthFilter, setReportingMonthFilter] = useState('')
+  
+  // Advanced filters
+  const [codeTypeFilter, setCodeTypeFilter] = useState('')
+  const [bookingDateFromFilter, setBookingDateFromFilter] = useState<Date | undefined>(undefined)
+  const [bookingDateToFilter, setBookingDateToFilter] = useState<Date | undefined>(undefined)
+  const [productTypeFilter, setProductTypeFilter] = useState('')
+  const [paymentByFilter, setPaymentByFilter] = useState('')
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState('')
+  const [majorCategorisationFilter, setMajorCategorisationFilter] = useState('')
+  const [stateFilter, setStateFilter] = useState('')
+  const [brokerNameFilter, setBrokerNameFilter] = useState('')
+  
+  const [sorting, setSorting] = useState<SortingState>([])
+
+  // Debounce search terms to avoid excessive API calls
+  const debouncedSearchTerm = useDebounce(searchTerm, 300)
+  const debouncedAgentCode = useDebounce(agentCodeFilter, 300)
+  const debouncedInsurerName = useDebounce(insurerNameFilter, 300)
+  const debouncedPolicyNumber = useDebounce(policyNumberFilter, 300)
+  const debouncedReportingMonth = useDebounce(reportingMonthFilter, 300)
+  const debouncedCodeType = useDebounce(codeTypeFilter, 300)
+  const debouncedProductType = useDebounce(productTypeFilter, 300)
+  const debouncedPaymentBy = useDebounce(paymentByFilter, 300)
+  const debouncedInvoiceStatus = useDebounce(invoiceStatusFilter, 300)
+  const debouncedMajorCategorisation = useDebounce(majorCategorisationFilter, 300)
+  const debouncedState = useDebounce(stateFilter, 300)
+  const debouncedBrokerName = useDebounce(brokerNameFilter, 300)
+
+  // Build query parameters
+  const queryParams: MasterSheetListParams = useMemo(() => ({
+    page_size: 50,
+    ...(debouncedSearchTerm && { search: debouncedSearchTerm }),
+    ...(debouncedAgentCode && { agent_code: debouncedAgentCode }),
+    ...(debouncedInsurerName && { insurer_name: debouncedInsurerName }),
+    ...(debouncedPolicyNumber && { policy_number: debouncedPolicyNumber }),
+    ...(debouncedReportingMonth && { reporting_month: debouncedReportingMonth }),
+    ...(debouncedCodeType && { code_type: debouncedCodeType }),
+    ...(bookingDateFromFilter && { booking_date_from: format(bookingDateFromFilter, 'yyyy-MM-dd') }),
+    ...(bookingDateToFilter && { booking_date_to: format(bookingDateToFilter, 'yyyy-MM-dd') }),
+    ...(debouncedProductType && { product_type: debouncedProductType }),
+    ...(debouncedPaymentBy && { payment_by: debouncedPaymentBy }),
+    ...(debouncedInvoiceStatus && { invoice_status: debouncedInvoiceStatus }),
+    ...(debouncedMajorCategorisation && { major_categorisation: debouncedMajorCategorisation }),
+    ...(debouncedState && { state: debouncedState }),
+    ...(debouncedBrokerName && { broker_name: debouncedBrokerName }),
+  }), [
+    debouncedSearchTerm, 
+    debouncedAgentCode, 
+    debouncedInsurerName, 
+    debouncedPolicyNumber, 
+    debouncedReportingMonth,
+    debouncedCodeType,
+    bookingDateFromFilter,
+    bookingDateToFilter,
+    debouncedProductType,
+    debouncedPaymentBy,
+    debouncedInvoiceStatus,
+    debouncedMajorCategorisation,
+    debouncedState,
+    debouncedBrokerName
+  ])
+
   const {
     data,
     error,
@@ -38,7 +128,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
     hasNextPage,
     isFetchingNextPage,
     isLoading,
-  } = useMasterSheetList({ page_size: 50 })
+  } = useMasterSheetList(queryParams)
   
   const bulkUpdateMutation = useBulkUpdateMasterSheet()
   
@@ -70,6 +160,11 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
     data: records,
     columns: columnDefs,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    state: {
+      sorting,
+    },
+    onSortingChange: setSorting,
     meta: {
       updateDataById: updateData,
       editingCell,
@@ -77,6 +172,29 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
       pendingUpdates,
     },
   })
+
+  const clearAllFilters = () => {
+    setSearchTerm('')
+    setAgentCodeFilter('')
+    setInsurerNameFilter('')
+    setPolicyNumberFilter('')
+    setReportingMonthFilter('')
+    setCodeTypeFilter('')
+    setBookingDateFromFilter(undefined)
+    setBookingDateToFilter(undefined)
+    setProductTypeFilter('')
+    setPaymentByFilter('')
+    setInvoiceStatusFilter('')
+    setMajorCategorisationFilter('')
+    setStateFilter('')
+    setBrokerNameFilter('')
+    toast.success("All filters cleared")
+  }
+
+  const hasActiveFilters = searchTerm || agentCodeFilter || insurerNameFilter || policyNumberFilter || 
+    reportingMonthFilter || codeTypeFilter || bookingDateFromFilter || bookingDateToFilter || 
+    productTypeFilter || paymentByFilter || invoiceStatusFilter || majorCategorisationFilter || 
+    stateFilter || brokerNameFilter
 
   const handleSaveChanges = () => {
     const updates: BulkUpdateItem[] = []
@@ -228,6 +346,377 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
               </Button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ENHANCED SEARCH AND FILTERS SECTION */}
+      <div className="bg-gradient-to-r from-white via-blue-50 to-indigo-50 border-b border-gray-200/50">
+        <div className="px-8 py-6">
+          {/* Search Bar and Filter Toggle */}
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative flex-1 max-w-2xl">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Input
+                placeholder="Search across all fields (policies, agents, customers, etc.)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-12 pr-4 h-12 text-base bg-white/80 backdrop-blur-sm border-gray-300 rounded-xl shadow-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+              />
+            </div>
+            
+            <Button
+              variant={showFilters ? "default" : "outline"}
+              onClick={() => setShowFilters(!showFilters)}
+              className={cn(
+                "h-12 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg",
+                showFilters 
+                  ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                  : "bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-blue-50"
+              )}
+            >
+              <Settings2 className="mr-2 h-5 w-5" />
+              Filters
+              {showFilters ? (
+                <ChevronUp className="ml-2 h-4 w-4" />
+              ) : (
+                <ChevronDown className="ml-2 h-4 w-4" />
+              )}
+              {hasActiveFilters && (
+                <span className="ml-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
+                  {[
+                    searchTerm, agentCodeFilter, insurerNameFilter, policyNumberFilter, 
+                    reportingMonthFilter, codeTypeFilter, bookingDateFromFilter, bookingDateToFilter,
+                    productTypeFilter, paymentByFilter, invoiceStatusFilter, majorCategorisationFilter,
+                    stateFilter, brokerNameFilter
+                  ].filter(Boolean).length}
+                </span>
+              )}
+            </Button>
+
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="default"
+                onClick={clearAllFilters}
+                className="h-12 px-4 rounded-xl bg-white/80 backdrop-blur-sm border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 shadow-lg"
+              >
+                <X className="mr-2 h-4 w-4" />
+                Clear All
+              </Button>
+            )}
+          </div>
+
+          {/* Collapsible Filters Panel */}
+          {showFilters && (
+            <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-xl p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                
+                {/* Basic Filters Row 1 */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    Agent Code
+                  </label>
+                  <Input
+                    placeholder="e.g., AG001, AG002..."
+                    value={agentCodeFilter}
+                    onChange={(e) => setAgentCodeFilter(e.target.value)}
+                    className="h-10 bg-white border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Insurer Name
+                  </label>
+                  <Input
+                    placeholder="e.g., ICICI, HDFC, Bajaj..."
+                    value={insurerNameFilter}
+                    onChange={(e) => setInsurerNameFilter(e.target.value)}
+                    className="h-10 bg-white border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                    Broker Name
+                  </label>
+                  <Input
+                    placeholder="e.g., PB Fintech, PolicyBazaar..."
+                    value={brokerNameFilter}
+                    onChange={(e) => setBrokerNameFilter(e.target.value)}
+                    className="h-10 bg-white border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    Policy Number
+                  </label>
+                  <Input
+                    placeholder="Full or partial policy number..."
+                    value={policyNumberFilter}
+                    onChange={(e) => setPolicyNumberFilter(e.target.value)}
+                    className="h-10 bg-white border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Advanced Filters Row 2 */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                    Code Type
+                  </label>
+                  <Select value={codeTypeFilter} onValueChange={setCodeTypeFilter}>
+                    <SelectTrigger className="h-10 bg-white border-gray-300 rounded-lg">
+                      <SelectValue placeholder="Select code type..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All Code Types</SelectItem>
+                      <SelectItem value="Direct">Direct</SelectItem>
+                      <SelectItem value="Broker">Broker</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    Product Type
+                  </label>
+                  <Select value={productTypeFilter} onValueChange={setProductTypeFilter}>
+                    <SelectTrigger className="h-10 bg-white border-gray-300 rounded-lg">
+                      <SelectValue placeholder="Select product..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All Products</SelectItem>
+                      <SelectItem value="Private Car">Private Car</SelectItem>
+                      <SelectItem value="Bike">Bike</SelectItem>
+                      <SelectItem value="GCV">GCV</SelectItem>
+                      <SelectItem value="PCV">PCV</SelectItem>
+                      <SelectItem value="Misc D">Misc D</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-pink-500 rounded-full"></div>
+                    Payment By
+                  </label>
+                  <Select value={paymentByFilter} onValueChange={setPaymentByFilter}>
+                    <SelectTrigger className="h-10 bg-white border-gray-300 rounded-lg">
+                      <SelectValue placeholder="Select payment by..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All Payment Methods</SelectItem>
+                      <SelectItem value="Agent">Agent</SelectItem>
+                      <SelectItem value="InsureZeal">InsureZeal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-teal-500 rounded-full"></div>
+                    Invoice Status
+                  </label>
+                  <Select value={invoiceStatusFilter} onValueChange={setInvoiceStatusFilter}>
+                    <SelectTrigger className="h-10 bg-white border-gray-300 rounded-lg">
+                      <SelectValue placeholder="Select status..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All Statuses</SelectItem>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                      <SelectItem value="Cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Date Range Filters Row 3 */}
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                    Booking Date From
+                  </label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="h-10 w-full justify-start text-left font-normal bg-white border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {bookingDateFromFilter ? format(bookingDateFromFilter, "PPP") : "Select start date..."}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={bookingDateFromFilter}
+                        onSelect={setBookingDateFromFilter}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-amber-600 rounded-full"></div>
+                    Booking Date To
+                  </label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="h-10 w-full justify-start text-left font-normal bg-white border-gray-300 rounded-lg hover:bg-gray-50"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {bookingDateToFilter ? format(bookingDateToFilter, "PPP") : "Select end date..."}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={bookingDateToFilter}
+                        onSelect={setBookingDateToFilter}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-cyan-500 rounded-full"></div>
+                    Reporting Month
+                  </label>
+                  <Input
+                    type="month"
+                    value={reportingMonthFilter}
+                    onChange={(e) => setReportingMonthFilter(e.target.value)}
+                    className="h-10 bg-white border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                    State
+                  </label>
+                  <Input
+                    placeholder="e.g., Maharashtra, Delhi..."
+                    value={stateFilter}
+                    onChange={(e) => setStateFilter(e.target.value)}
+                    className="h-10 bg-white border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-violet-500 rounded-full"></div>
+                    Major Categorisation
+                  </label>
+                  <Select value={majorCategorisationFilter} onValueChange={setMajorCategorisationFilter}>
+                    <SelectTrigger className="h-10 bg-white border-gray-300 rounded-lg">
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All Categories</SelectItem>
+                      <SelectItem value="Motor">Motor</SelectItem>
+                      <SelectItem value="Health">Health</SelectItem>
+                      <SelectItem value="Life">Life</SelectItem>
+                      <SelectItem value="General">General</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Active Filters Summary */}
+              {hasActiveFilters && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Filter className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-semibold text-gray-700">Active filters:</span>
+                    {searchTerm && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                        Search: {searchTerm}
+                      </span>
+                    )}
+                    {agentCodeFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                        Agent: {agentCodeFilter}
+                      </span>
+                    )}
+                    {insurerNameFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                        Insurer: {insurerNameFilter}
+                      </span>
+                    )}
+                    {brokerNameFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                        Broker: {brokerNameFilter}
+                      </span>
+                    )}
+                    {policyNumberFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                        Policy: {policyNumberFilter}
+                      </span>
+                    )}
+                    {codeTypeFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 border border-indigo-200">
+                        Code Type: {codeTypeFilter}
+                      </span>
+                    )}
+                    {productTypeFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">
+                        Product: {productTypeFilter}
+                      </span>
+                    )}
+                    {paymentByFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-pink-100 text-pink-800 border border-pink-200">
+                        Payment By: {paymentByFilter}
+                      </span>
+                    )}
+                    {invoiceStatusFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800 border border-teal-200">
+                        Status: {invoiceStatusFilter}
+                      </span>
+                    )}
+                    {bookingDateFromFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                        From: {format(bookingDateFromFilter, "MMM dd, yyyy")}
+                      </span>
+                    )}
+                    {bookingDateToFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                        To: {format(bookingDateToFilter, "MMM dd, yyyy")}
+                      </span>
+                    )}
+                    {reportingMonthFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800 border border-cyan-200">
+                        Month: {reportingMonthFilter}
+                      </span>
+                    )}
+                    {stateFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        State: {stateFilter}
+                      </span>
+                    )}
+                    {majorCategorisationFilter && (
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-100 text-violet-800 border border-violet-200">
+                        Category: {majorCategorisationFilter}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

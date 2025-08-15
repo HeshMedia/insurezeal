@@ -39,7 +39,7 @@ export const formFields: FormFieldConfig[] = [
     { value: 'GCV', label: 'GCV' },
     { value: 'GCV - 3W', label: 'GCV - 3W' },
     { value: 'Misc D', label: 'Misc D' },
-    { value: 'P-Car', label: 'P-Car' },
+    { value: 'Private Car', label: 'Private Car' },
     { value: 'PCV - 3W', label: 'PCV - 3W' },
     { value: 'PCV - 4W', label: 'PCV - 4W' },
     { value: 'Route Bus', label: 'Route Bus' },
@@ -71,10 +71,14 @@ export const formFields: FormFieldConfig[] = [
   { key: 'extracted_data.business_type', label: 'Business Type', type: 'text', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.seating_capacity', label: 'Seating Capacity', type: 'number', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.veh_wheels', label: 'Number of Wheels', type: 'number', section: 'extracted', tag: 'autofill' },
+  { key: 'extracted_data.policy_start_date', label: 'Policy Start Date', type: 'date', section: 'extracted', tag: 'autofill' },
+  { key: 'extracted_data.policy_end_date', label: 'Policy End Date', type: 'date', section: 'extracted', tag: 'autofill' },
+  { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
 
   //  Admin Input (in order) - Some have autocalculated tag
-  { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
   { key: 'admin_input.booking_date', label: 'Booking Date', type: 'date', section: 'admin' },
+  { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
+
   { key: 'admin_input.code_type', label: 'Code Type', type: 'select', section: 'admin' },
   { key: 'admin_input.insurer_code', label: 'Insurer Code', type: 'select', section: 'admin' },
   { key: 'admin_input.broker_code', label: 'Broker Code', type: 'select', section: 'admin' },
@@ -84,7 +88,7 @@ export const formFields: FormFieldConfig[] = [
   { key: 'admin_input.incoming_grid_percent', label: 'Incoming Grid %', type: 'number', section: 'admin' },
   { key: 'admin_input.extra_grid', label: 'Incoming Extra Grid %', type: 'number', section: 'admin' },
   { key: 'admin_input.agent_commission_given_percent', label: 'Agent Commission %', type: 'number', section: 'admin' },
-  { key: 'admin_input.agent_extra_percent', label: 'Agent Extra Grid %', type: 'number', section: 'admin' },
+  { key: 'admin_input.agent_extra_percent', label: 'Agent Extra Grid %', type: 'number', section: 'admin', disabled: true, tag: 'autocalculated' },
 
   // OD+TP specific percentage fields - only shown when payout_on = "OD+TP"
   { key: 'admin_input.od_incoming_grid_percent', label: 'OD Incoming Grid %', type: 'number', section: 'admin' },

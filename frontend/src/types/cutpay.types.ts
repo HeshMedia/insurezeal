@@ -37,6 +37,8 @@ export interface ExtractedPolicyData {
   seating_capacity?: number | null
   veh_wheels?: number | null
   is_private_car?: boolean | null
+  policy_start_date?: string | null
+  policy_end_date?: string | null
 }
 
 // PDF extraction response

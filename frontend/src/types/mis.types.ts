@@ -79,6 +79,15 @@ export interface MasterSheetListParams {
   insurer_name?: string;
   policy_number?: string;
   reporting_month?: string;
+  code_type?: string;
+  booking_date_from?: string;
+  booking_date_to?: string;
+  product_type?: string;
+  payment_by?: string;
+  invoice_status?: string;
+  major_categorisation?: string;
+  state?: string;
+  broker_name?: string;
 }
 
 // Response for the master sheet list endpoint

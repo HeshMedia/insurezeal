@@ -1,27 +1,56 @@
 "use client"
 
-import { createColumnHelper } from '@tanstack/react-table'
+import { createColumnHelper, Column } from '@tanstack/react-table'
 import { MasterSheetRecord } from '@/types/mis.types'
 import { EditableCell } from './editable-cell'
+import { Button } from '@/components/ui/button'
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 const columnHelper = createColumnHelper<MasterSheetRecord>()
 
+// Helper to create a sortable header
+const createSortableHeader = (title: string) => {
+  const SortableHeader = ({ column }: { column: Column<MasterSheetRecord, unknown> }) => {
+    return (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        className="h-auto p-0 font-bold text-slate-700 hover:text-slate-900 hover:bg-transparent"
+      >
+        {title}
+        {column.getIsSorted() === "asc" ? (
+          <ArrowUp className="ml-2 h-4 w-4" />
+        ) : column.getIsSorted() === "desc" ? (
+          <ArrowDown className="ml-2 h-4 w-4" />
+        ) : (
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        )}
+      </Button>
+    )
+  }
+  SortableHeader.displayName = `SortableHeader-${title}`
+  return SortableHeader
+}
+
 // Helper to create an editable column to reduce boilerplate
-const createEditableColumn = (id: keyof MasterSheetRecord, header: string) => {
+const createEditableColumn = (id: keyof MasterSheetRecord, header: string, enableSorting: boolean = true) => {
   return columnHelper.accessor(id, {
-    header,
+    header: enableSorting ? createSortableHeader(header) : header,
     cell: EditableCell,
+    enableSorting,
   })
 }
 
 export const columns = [
   columnHelper.accessor('row_number', {
-    header: 'Row #',
+    header: createSortableHeader('Row #'),
     cell: (info) => <div className="px-4 py-2 font-mono text-xs text-center text-gray-500">{info.getValue()}</div>,
+    enableSorting: true,
   }),
   columnHelper.accessor('policy_number', {
-    header: 'Policy Number',
+    header: createSortableHeader('Policy Number'),
     cell: (info) => <div className="px-4 py-2 font-medium text-gray-900">{info.getValue()}</div>,
+    enableSorting: true,
   }),
   createEditableColumn('reporting_month', 'Reporting Month'),
   createEditableColumn('booking_date', 'Booking Date'),
