@@ -12,7 +12,7 @@ export default function CutPayPage() {
         <Tabs defaultValue="transactions" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="agent-configs">Agent Configurations</TabsTrigger>
+            <TabsTrigger value="agent-configs">Payout Payments</TabsTrigger>
           </TabsList>
           <TabsContent value="transactions" className="space-y-4">
             <CutPayManagement />

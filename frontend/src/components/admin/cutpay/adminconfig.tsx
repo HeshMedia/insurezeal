@@ -296,7 +296,7 @@ export function AgentConfigManagement() {
       <CardHeader>
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle>Agent Configurations</CardTitle>
+            <CardTitle>Payout Payments</CardTitle>
             <CardDescription>Manage agent commission and payout configurations.</CardDescription>
           </div>
           <Dialog open={isCreateDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -394,7 +394,7 @@ export function AgentConfigManagement() {
             ) : (
               <TableRow>
                 <TableCell colSpan={5} className="text-center">
-                  No agent configurations found.
+                  No payout payments found.
                 </TableCell>
               </TableRow>
             )}
