@@ -574,9 +574,6 @@ class Policy(Base):
     payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     cluster: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
-    # Private Car Detection
-    is_private_car: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=False)
-    
     # Dates
     start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)

@@ -44,7 +44,10 @@ class ExtractedPolicyData(BaseModel):
     business_type: Optional[str] = Field(None, description="Usage type")
     seating_capacity: Optional[int] = Field(None, description="Number of seats")
     veh_wheels: Optional[int] = Field(None, description="Number of wheels")
-    is_private_car: Optional[bool] = Field(None, description="Whether this is a private car")
+    
+    # Policy Dates
+    start_date: Optional[str] = Field(None, description="Policy start date (YYYY-MM-DD)")
+    end_date: Optional[str] = Field(None, description="Policy end date (YYYY-MM-DD)")
 
 # =============================================================================
 # ADMIN INPUT SCHEMAS
@@ -60,16 +63,16 @@ class AdminInputData(BaseModel):
     code_type: Optional[str] = Field(None, description="Selection (Direct, Broker)")
     
     # Commission Configuration
-    incoming_grid_percent: Optional[float] = Field(None, ge=0, le=100, description="Commission rate from insurer")
-    agent_commission_given_percent: Optional[float] = Field(None, ge=0, le=100, description="Rate paid to agent")
-    extra_grid: Optional[float] = Field(None, ge=0, le=100, description="Additional commission percentage")
+    incoming_grid_percent: Optional[float] = Field(None, description="Commission rate from insurer")
+    agent_commission_given_percent: Optional[float] = Field(None, description="Rate paid to agent")
+    extra_grid: Optional[float] = Field(None, description="Additional commission percentage")
     commissionable_premium: Optional[float] = Field(None, description="Base amount for commission calculation")
     
     # Payment Configuration
     payment_by: Optional[str] = Field(None, description="Who handles customer payment")
     payment_method: Optional[str] = Field(None, description="Payment method if InsureZeal pays")
     payout_on: Optional[str] = Field(None, description="Payout calculation basis")
-    agent_extra_percent: Optional[float] = Field(None, ge=0, le=100, description="Additional agent commission percentage")
+    agent_extra_percent: Optional[float] = Field(None, description="Additional agent commission percentage")
     payment_by_office: Optional[float] = Field(None, description="Who pays agent payout")
     
     # Relationship Selection
@@ -115,7 +118,7 @@ class CalculationResult(BaseModel):
     total_agent_po_amt: Optional[float] = Field(None, description="Total agent payout")
 
     # Frontend Calculated Fields
-    iz_total_po_percent: Optional[float] = Field(None, ge=0, le=100, description="InsureZeal total payout percentage")
+    iz_total_po_percent: Optional[float] = Field(None, description="InsureZeal total payout percentage")
     already_given_to_agent: Optional[float] = Field(None, ge=0, description="Amount already paid to agent")
     broker_payout_amount: Optional[float] = Field(None, ge=0, description="Payout amount for the broker")
 
@@ -211,14 +214,14 @@ class CutPayUpdate(BaseModel):
     booking_date: Optional[date] = Field(None)
     agent_code: Optional[str] = Field(None)
     code_type: Optional[str] = Field(None)
-    incoming_grid_percent: Optional[float] = Field(None, ge=0, le=100)
-    agent_commission_given_percent: Optional[float] = Field(None, ge=0, le=100)
-    extra_grid: Optional[float] = Field(None, ge=0, le=100)
+    incoming_grid_percent: Optional[float] = Field(None)
+    agent_commission_given_percent: Optional[float] = Field(None)
+    extra_grid: Optional[float] = Field(None)
     commissionable_premium: Optional[float] = Field(None)
     payment_by: Optional[str] = Field(None)
     payment_method: Optional[str] = Field(None)
     payout_on: Optional[str] = Field(None)
-    agent_extra_percent: Optional[float] = Field(None, ge=0, le=100)
+    agent_extra_percent: Optional[float] = Field(None)
     payment_by_office: Optional[float] = Field(None)
     
     # Foreign keys - now using codes instead of IDs
@@ -234,8 +237,8 @@ class CutPayUpdate(BaseModel):
     
     # Post-CutPay details fields
     already_given_to_agent: Optional[float] = Field(None, ge=0)
-    iz_total_po_percent: Optional[float] = Field(None, ge=0, le=100)
-    broker_po_percent: Optional[float] = Field(None, ge=0, le=100)
+    iz_total_po_percent: Optional[float] = Field(None)
+    broker_po_percent: Optional[float] = Field(None)
     broker_payout_amount: Optional[float] = Field(None, ge=0)
     invoice_status: Optional[str] = Field(None)
     remarks: Optional[str] = Field(None)

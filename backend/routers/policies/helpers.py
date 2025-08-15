@@ -708,7 +708,6 @@ class PolicyHelpers:
                     "business_type": policy_data.get("business_type"),
                     "seating_capacity": policy_data.get("seating_capacity"),
                     "veh_wheels": policy_data.get("veh_wheels"),
-                    "is_private_car": policy_data.get("is_private_car"),
                     
                     # Premium Details
                     "gross_premium": policy_data.get("gross_premium"),

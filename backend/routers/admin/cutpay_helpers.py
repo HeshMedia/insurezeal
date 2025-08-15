@@ -636,7 +636,7 @@ async def get_filtered_dropdowns(db: AsyncSession, insurer_id: Optional[int] = N
             for broker in broker_result.scalars().all()
         ]
         
-        # Get admin child IDs (filter by insurer/broker if provided)
+        # Get admin child IDs with strict code type logic
         admin_child_query = select(AdminChildID).options(
             joinedload(AdminChildID.insurer),
             joinedload(AdminChildID.broker)
@@ -645,8 +645,20 @@ async def get_filtered_dropdowns(db: AsyncSession, insurer_id: Optional[int] = N
         conditions = []
         if insurer_id:
             conditions.append(AdminChildID.insurer_id == insurer_id)
+        
+        # Apply strict code type filtering logic
         if broker_id:
-            conditions.append(AdminChildID.broker_id == broker_id)
+            # Broker type: Must have both insurer and broker, and code_type must be "broker"
+            conditions.extend([
+                AdminChildID.broker_id == broker_id,
+                AdminChildID.code_type.ilike('%broker%')  # Handle "Broker Code" or "broker"
+            ])
+        else:
+            # Direct type: Only insurer, no broker, and code_type must be "direct"
+            conditions.extend([
+                AdminChildID.broker_id.is_(None),
+                AdminChildID.code_type.ilike('%direct%')  # Handle "Direct Code" or "direct"
+            ])
         
         if conditions:
             admin_child_query = admin_child_query.where(and_(*conditions))

@@ -580,9 +580,17 @@ async def get_child_id_options(
     """
     try:
         user_role = current_user.get("role", "agent")
+        user_id = current_user["user_id"]
         
-        # If agent_id is provided but user is not admin/superadmin, ignore agent_id filter
-        if agent_id and user_role not in ["admin", "superadmin"]:
+        # Determine which agent_id to use for filtering
+        if user_role not in ["admin", "superadmin"]:
+            # For agents: always filter by their own user_id, ignore any provided agent_id
+            agent_id = str(user_id)
+        elif agent_id and user_role in ["admin", "superadmin"]:
+            # For admin/superadmin: use provided agent_id if given
+            agent_id = agent_id
+        else:
+            # For admin/superadmin without agent_id: no agent filtering
             agent_id = None
             
         # Use the new filtered method

@@ -94,9 +94,6 @@ class GeminiPolicyExtractor:
         - business_type: Private, Commercial, Taxi, etc.
         - seating_capacity: Number of seats
         - veh_wheels: Number of wheels (2/4)
-        - is_private_car: Boolean value (true/false) - Determine if this is a private car:
-          * true if: product_type contains "Private Car"
-          * false if: Commercial Vehicle, Taxi, Bus, Goods Carrier, or any commercial/business use vehicle
 
         POLICY DATES:
         - start_date: Policy start date, effective date, from date (format: YYYY-MM-DD)
@@ -132,7 +129,6 @@ class GeminiPolicyExtractor:
             "business_type": "string or null",
             "seating_capacity": number or null,
             "veh_wheels": number or null,
-            "is_private_car": boolean,
             "start_date": "string or null",
             "end_date": "string or null",
             "confidence_score": number
@@ -363,7 +359,6 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "business_type": extracted_data.get("business_type"),
                 "seating_capacity": extracted_data.get("seating_capacity"),
                 "veh_wheels": extracted_data.get("veh_wheels"),
-                "is_private_car": extracted_data.get("is_private_car", False),
                 
                 # Policy Dates
                 "start_date": extracted_data.get("start_date"),
@@ -433,7 +428,6 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "business_type": extracted_data.get("business_type"),
                 "seating_capacity": extracted_data.get("seating_capacity"),
                 "veh_wheels": extracted_data.get("veh_wheels"),
-                "is_private_car": extracted_data.get("is_private_car", False),
                 
                 # Policy Dates
                 "start_date": extracted_data.get("start_date"),

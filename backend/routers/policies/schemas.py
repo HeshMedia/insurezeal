@@ -45,7 +45,6 @@ class PolicyBase(BaseModel):
     business_type: Optional[str] = None
     seating_capacity: Optional[int] = None
     veh_wheels: Optional[int] = None
-    is_private_car: Optional[bool] = Field(None, description="Whether this is a private car")
     
     # Premium Details
     gross_premium: Optional[float] = None

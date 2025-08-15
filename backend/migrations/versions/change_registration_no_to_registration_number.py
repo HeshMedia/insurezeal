@@ -1,8 +1,8 @@
 """change registration_no to registration_number in cutpay
 
 Revision ID: change_registration_no
-Revises: f7042c6405fe
-Create Date: 2025-08-09 12:00:00.000000
+Revises: ff8fe434d15c
+Create Date: 2025-08-15 12:00:00.000000
 
 """
 from alembic import op
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'change_registration_no'
-down_revision = 'f7042c6405fe'
+down_revision = 'ff8fe434d15c'
 branch_labels = None
 depends_on = None
 
