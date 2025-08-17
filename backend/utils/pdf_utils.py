@@ -53,7 +53,7 @@ class PDFProcessor:
                 file_path=pdf_path,
                 wait_for_completion=True,
                 wait_timeout=200,
-                mode="high_quality",
+                mode="low_cost",
                 output_mode="text"
             )
             

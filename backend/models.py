@@ -29,8 +29,8 @@ Base = declarative_base()
 
 class Users(Base):
     """
-    Supabase auth.users table schema
-    This mirrors the Supabase authentication table to enable proper foreign key relationships
+    Local users table that replicates Supabase auth.users via webhook
+    This stores replicated user data to enable proper foreign key relationships
     """
     __tablename__ = "users"
     __table_args__ = (
@@ -51,10 +51,6 @@ class Users(Base):
         Index("users_instance_id_email_idx", "instance_id"),
         Index("users_instance_id_idx", "instance_id"),
         Index("users_is_anonymous_idx", "is_anonymous"),
-        {
-            "comment": "Auth: Stores user login data within a secure schema.",
-            "schema": "auth",
-        },
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -138,7 +134,7 @@ class UserProfile(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False
     )
@@ -235,7 +231,7 @@ class UserDocument(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -273,7 +269,7 @@ class ChildIdRequest(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -301,7 +297,7 @@ class ChildIdRequest(Base):
     
     approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     approved_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(True))
@@ -472,7 +468,7 @@ class CutPay(Base):
     # Audit fields
     created_by: Mapped[Optional[UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(
@@ -689,7 +685,7 @@ class AdminChildID(Base):
     
     created_by: Mapped[Optional[UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(
@@ -730,7 +726,7 @@ class CutPayAgentConfig(Base):
     # Audit fields
     created_by: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(
@@ -795,7 +791,7 @@ class ReconciliationReport(Base):
     # Audit fields
     processed_by: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(
