@@ -13,9 +13,9 @@ from config import get_db
 from routers.auth.auth import get_current_user
 from routers.policies.helpers import PolicyHelpers
 from routers.policies.schemas import (
-    PolicyResponse, PolicyCreate, PolicyUpdate, PolicySummary, PolicyListResponse,
+    PolicyResponse, PolicyCreateRequest, PolicyUpdate, PolicySummary, PolicyListResponse,
     PolicyUploadResponse, AIExtractionResponse, ChildIdOption, AgentOption,
-    PolicyNumberCheckResponse
+    PolicyNumberCheckResponse, PolicySummaryResponse, PolicyCreateResponse
 )
 from dependencies.rbac import require_permission
 from utils.google_sheets import google_sheets_sync
@@ -158,9 +158,9 @@ async def upload_policy_pdf(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
             detail="Failed to upload policy PDF"        )
 
-@router.post("/submit", response_model=PolicyResponse)
+@router.post("/submit", response_model=PolicyCreateResponse)
 async def submit_policy(
-    policy_data: PolicyCreate,
+    policy_data: PolicyCreateRequest,
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_write)
@@ -170,111 +170,48 @@ async def submit_policy(
     
     **Requires policy write permission**
     
-    - **policy_data**: Complete policy information including:
-        - PDF-extracted data (policy_number, premiums, dates, etc.) - can be edited by user
-        - User-provided data (agent_id, child_id, broker_name, etc.)
-        - File information (pdf_file_path, pdf_file_name)
-        - AI metadata (ai_confidence_score, manual_override)
+    - **policy_data**: Complete policy information from frontend
     
-    Creates the policy record in the database
+    Saves essential fields to database and full data to Google Sheets
     """
     try:
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
     
         policy_dict = policy_data.model_dump()
-        pdf_file_path = policy_dict.pop("pdf_file_path")
-        pdf_file_name = policy_dict.pop("pdf_file_name")
         
-        submitted_agent_id = policy_dict.get("agent_id")
-        if submitted_agent_id:
-            try:
-
-                agent_id_str = str(submitted_agent_id)
-                agent_profile = await PolicyHelpers.get_agent_by_user_id(db, agent_id_str)
-                if not agent_profile:
-                    logger.warning(f"Invalid agent_id submitted: {submitted_agent_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Agent with ID {submitted_agent_id} not found"
-                    )
-                policy_dict["agent_code"] = agent_profile.agent_code
-            except HTTPException:
-                raise
-            except Exception as e:
-                logger.error(f"Error validating agent_id {submitted_agent_id}: {str(e)}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid agent_id provided"
-                )
-        else:
-            if user_role == "agent":
-                agent_profile = await PolicyHelpers.get_agent_by_user_id(db, user_id)
-                if agent_profile:
-                    policy_dict["agent_id"] = str(agent_profile.user_id)
-                    policy_dict["agent_code"] = agent_profile.agent_code
-                    logger.info(f"Auto-assigned agent_id {user_id} for agent user")
-                else:
-                    logger.warning(f"Agent profile not found for user {user_id}")
-                    policy_dict["agent_id"] = str(user_id)
-                    policy_dict["agent_code"] = None
+        # Extract essential fields for database storage
+        essential_fields = {
+            "policy_number": policy_dict.get("policy_number"),
+            "child_id": policy_dict.get("child_id"),
+            "agent_code": policy_dict.get("agent_code"),
+            "customer_documents_url": policy_dict.get("customer_documents_url"),
+            "vehicle_documents_url": policy_dict.get("vehicle_documents_url"),
+            "policy_documents_url": policy_dict.get("policy_documents_url"),
+            "booking_date": policy_dict.get("booking_date"),
+            "policy_start_date": policy_dict.get("start_date"),
+            "policy_end_date": policy_dict.get("end_date")
+        }
         
-        # Note: child_id validation removed since frontend gets child_id from our own /policies/helpers/child-ids endpoint
-        # The child_id is already validated when frontend fetches it, so no need to re-validate here
-        
-        policy = await PolicyHelpers.create_policy(
+        # Save to database with only essential fields
+        policy = await PolicyHelpers.create_simplified_policy(
             db=db,
-            policy_data=policy_dict,
-            file_path=pdf_file_path,
-            file_name=pdf_file_name,
-            uploaded_by=user_id
+            essential_data=essential_fields
         )
-
-        if policy.agent_code:
-            await PolicyHelpers.update_agent_financials(
-                db, 
-                policy.agent_code, 
-                policy.net_premium or 0.0,  # net_premium parameter (like cutpay)
-                policy.running_bal or 0.0   # running_balance parameter (like cutpay.running_bal)
-            )
-            await db.commit()
         
-        policy_dict_for_sheets = {
-            'id': policy.id,
-            'policy_number': policy.policy_number,
-            'policy_type': policy.policy_type,
-            'insurance_type': policy.insurance_type,
-            'agent_id': policy.agent_id,
-            'agent_code': policy.agent_code,
-            'child_id': policy.child_id,
-            'broker_name': policy.broker_name,
-            'insurance_company': policy.insurance_company,
-            'vehicle_type': policy.vehicle_type,
-            'registration_number': policy.registration_number,
-            'vehicle_class': policy.vehicle_class,
-            'vehicle_segment': policy.vehicle_segment,
-            'gross_premium': policy.gross_premium,
-            'gst': policy.gst,
-            'net_premium': policy.net_premium,
-            'od_premium': policy.od_premium,
-            'tp_premium': policy.tp_premium,
-            'payment_by_office': policy.payment_by_office,
-            'total_agent_payout_amount': policy.total_agent_payout_amount,
-            'start_date': policy.start_date,
-            'end_date': policy.end_date,
-            'uploaded_by': policy.uploaded_by,
-            'pdf_file_name': policy.pdf_file_name,
-            'ai_confidence_score': policy.ai_confidence_score,
-            'manual_override': policy.manual_override,
-            'created_at': policy.created_at,
-            'updated_at': policy.updated_at        }
+        # Save full data to Google Sheets
         try:
-            google_sheets_sync.sync_policy(policy_dict_for_sheets, "CREATE")
-            logger.info(f"Policy {policy.id} synced to Google Sheets")
+            from utils.google_sheets import sync_policy_to_master_sheet
+            await sync_policy_to_master_sheet(policy_dict)
+            logger.info(f"Policy {policy.policy_number} synced to Google Sheets")
         except Exception as sync_error:
-            logger.error(f"Failed to sync policy {policy.id} to Google Sheets: {str(sync_error)}")
+            logger.error(f"Failed to sync policy {policy.policy_number} to Google Sheets: {str(sync_error)}")
         
-        return PolicyResponse.model_validate(policy)
+        return PolicyCreateResponse(
+            id=policy.id,
+            policy_number=policy.policy_number,
+            message="Policy created successfully"
+        )
         
     except HTTPException:
         raise
@@ -285,55 +222,35 @@ async def submit_policy(
             detail="Failed to submit policy"
         )
 
-@router.get("/", response_model=PolicyListResponse)
+@router.get("/", response_model=List[PolicySummaryResponse])
 async def list_policies(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    policy_type: str = Query(None, description="Filter by policy type"),
-    agent_id: str = Query(None, description="Filter by agent ID (admin only)"),
-    search: str = Query(None, description="Search by policy number, registration, or agent code"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_read)
 ):
     """
-    Get paginated list of policies
+    Get list of policies (simplified summary from database)
     
     **Requires policy read permission**
     
-    - **page**: Page number
-    - **page_size**: Items per page
-    - **policy_type**: Filter by policy type
-    - **agent_id**: Filter by agent (admin only)
-    - **search**: Search term
-    
-    Agents can only see their own policies, admins can see all
+    Returns simplified policy summaries stored in database
     """
     try:
-        user_id = current_user["user_id"]
-        user_role = current_user.get("role", "agent")
-
-        # Both admin and superadmin should see all policies
-        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
-        filter_agent_id = agent_id if user_role in ["admin", "superadmin"] else None
+        from sqlalchemy import select
+        from models import Policy
         
-        result = await PolicyHelpers.get_policies(
-            db=db,
-            page=page,
-            page_size=page_size,
-            user_id=filter_user_id,
-            agent_id=filter_agent_id,
-            policy_type=policy_type,
-            search=search
+        # Get simplified policies from database
+        result = await db.execute(
+            select(Policy)
+            .offset(skip)
+            .limit(limit)
+            .order_by(Policy.created_at.desc())
         )
+        policies = result.scalars().all()
         
-        return PolicyListResponse(
-            policies=[PolicySummary.model_validate(policy) for policy in result["policies"]],
-            total_count=result["total_count"],
-            page=result["page"],
-            page_size=result["page_size"],
-            total_pages=result["total_pages"]
-        )
+        return [PolicySummaryResponse.model_validate(policy) for policy in policies]
         
     except HTTPException:
         raise
