@@ -29,8 +29,8 @@ Base = declarative_base()
 
 class Users(Base):
     """
-    Supabase auth.users table schema
-    This mirrors the Supabase authentication table to enable proper foreign key relationships
+    Local users table that replicates Supabase auth.users via webhook
+    This stores replicated user data to enable proper foreign key relationships
     """
     __tablename__ = "users"
     __table_args__ = (
@@ -51,10 +51,6 @@ class Users(Base):
         Index("users_instance_id_email_idx", "instance_id"),
         Index("users_instance_id_idx", "instance_id"),
         Index("users_is_anonymous_idx", "is_anonymous"),
-        {
-            "comment": "Auth: Stores user login data within a secure schema.",
-            "schema": "auth",
-        },
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -138,7 +134,7 @@ class UserProfile(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False
     )
@@ -235,7 +231,7 @@ class UserDocument(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -273,7 +269,7 @@ class ChildIdRequest(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
@@ -301,7 +297,7 @@ class ChildIdRequest(Base):
     
     approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     approved_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(True))
@@ -326,155 +322,34 @@ class ChildIdRequest(Base):
 
 class CutPay(Base):
     """
-    Comprehensive CutPay model for Master Sheet integration
-    Includes document upload, PDF extraction, manual data entry, calculations, and dual Google Sheets sync
-    
-    Field Sources:
-    - 🤖 PDF Extraction: Automatically extracted from policy documents
-    - 👤 Admin Input: Manually entered by admin users
-    - 🔄 Auto-Calculated: Computed based on other fields
-    - 📊 Database Auto: Auto-fetched from relationships
+    CutPay model simplified to store only essential fields
+    Detailed data goes to Google Sheets for calculations
     """
     __tablename__ = "cut_pay"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     
-    # =============================================================================
-    # DOCUMENT & EXTRACTION FIELDS
-    # =============================================================================
-    
-    # Document URLs
-    policy_pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    additional_documents: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    
-    # 🤖 PDF Extraction - Basic Policy Information
+    # Essential fields only
     policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    formatted_policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    major_categorisation: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Motor, Life, Health
-    product_insurer_report: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    product_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Private Car, etc.
-    plan_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comp, STP, SAOD
-    customer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    customer_phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # 🤖 PDF Extraction
-    
-    # 🤖 PDF Extraction - Premium & Financial Details
-    gross_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    od_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Own Damage
-    tp_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Third Party
-    gst_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    
-    # 🤖 PDF Extraction - Vehicle Details (for Motor Insurance)
-    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    vehicle_variant: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    gvw: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Gross Vehicle Weight
-    rto: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    fuel_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    cc: Mapped[Optional[int]] = mapped_column(nullable=True)  # Engine capacity
-    age_year: Mapped[Optional[int]] = mapped_column(nullable=True)
-    ncb: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YES/NO
-    discount_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    business_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    seating_capacity: Mapped[Optional[int]] = mapped_column(nullable=True)
-    veh_wheels: Mapped[Optional[int]] = mapped_column(nullable=True)
-    
-    # =============================================================================
-    # ADMIN MANUAL INPUT FIELDS
-    # =============================================================================
-    
-    # 👤 Transaction Configuration
-    reporting_month: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # MMM'YY format
-    booking_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    child_id_request_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("child_id_requests.id"), nullable=True)
     agent_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    code_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Direct, Broker, Child ID
     
-    # 👤 Commission Configuration
-    incoming_grid_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    agent_commission_given_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    extra_grid: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    commissionable_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    
-    # 👤 Payment Configuration
-    payment_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Agent, InsureZeal
-    payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    payout_on: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # OD, NP, OD+TP
-    agent_extra_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    payment_by_office: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-
-    # 👤 Relationship Selection (Foreign Keys)
+    # Relationship fields for linking to insurers, brokers, and admin child IDs
     insurer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("insurers.id"), nullable=True)
     broker_id: Mapped[Optional[int]] = mapped_column(ForeignKey("brokers.id"), nullable=True)
-    child_id_request_id: Mapped[Optional[UUID]] = mapped_column(ForeignKey("child_id_requests.id"), nullable=True)
     admin_child_id: Mapped[Optional[str]] = mapped_column(ForeignKey("admin_child_ids.child_id"), nullable=True)
     
-    # =============================================================================
-    # AUTO-CALCULATED FIELDS
-    # =============================================================================
+    # Document URLs
+    customer_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    vehicle_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    policy_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    # 📊 Database Auto-Population
-    insurer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    broker_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    insurer_broker_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    cluster: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # 👤 Admin Input
+    # Important dates
+    booking_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    policy_start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    policy_end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     
-    # 🔄 Commission Calculations
-    receivable_from_broker: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    extra_amount_receivable_from_broker: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    total_receivable_from_broker: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    total_receivable_from_broker_with_gst: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    
-    # 🔄 CutPay & Payout Calculations
-    cut_pay_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    agent_po_amt: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    agent_extra_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    total_agent_po_amt: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    
-    # =============================================================================
-    # ADMIN TRACKING FIELDS
-    # =============================================================================
-    
-    # Transaction Progress Tracking
-    claimed_by: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    running_bal: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    cutpay_received: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # 👤 Admin Input: cutpay amount received
-    
-    # =============================================================================
-    # POST-CUTPAY DETAILS FIELDS
-    # =============================================================================
-    
-    # 👤 Post-CutPay Admin Input Fields
-    already_given_to_agent: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    iz_total_po_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)  # Auto-calculated: incoming_grid_percent + extra_grid
-    broker_po_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    broker_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    invoice_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # GST pending, invoicing pending, paid, payment pending
-    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    
-    # =============================================================================
-    # SYSTEM FIELDS
-    # =============================================================================
-    
-
-    
-    # Google Sheets sync tracking
-    synced_to_cutpay_sheet: Mapped[bool] = mapped_column(Boolean, default=False)
-    synced_to_master_sheet: Mapped[bool] = mapped_column(Boolean, default=False)
-    cutpay_sheet_row_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    master_sheet_row_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    
-    # Additional info
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
-    # Audit fields
-    created_by: Mapped[Optional[UUID]] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
-        nullable=True
-    )
+    # System fields
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(True), 
         server_default=text("CURRENT_TIMESTAMP"),
@@ -487,116 +362,42 @@ class CutPay(Base):
         nullable=False
     )
     
-    
     # Relationships
+    child_id_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", back_populates="cutpay_transactions")
     insurer: Mapped[Optional["Insurer"]] = relationship("Insurer", back_populates="cutpay_transactions")
     broker: Mapped[Optional["Broker"]] = relationship("Broker", back_populates="cutpay_transactions")
-    child_id_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", back_populates="cutpay_transactions")
     admin_child: Mapped[Optional["AdminChildID"]] = relationship("AdminChildID", foreign_keys=[admin_child_id])
 
 
 class Policy(Base):
     """
     Policy table for storing insurance policy details
+    Simplified to store only essential fields - detailed data goes to Google Sheets
     """
     __tablename__ = "policies"
     
     id: Mapped[UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
-    # User & Agent Info
-    uploaded_by: Mapped[UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("user_profiles.user_id"), nullable=False)
-    agent_id: Mapped[Optional[UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("user_profiles.user_id"), nullable=True)
-    agent_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    child_id: Mapped[Optional[str]] = mapped_column(String(50), ForeignKey("child_id_requests.child_id"), nullable=True)
-    
-    # Auto-populated from Child ID
-    broker_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    insurance_company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    
-    # =============================================================================
-    # POLICY DETAILS (from CutPay fields)
-    # =============================================================================
-    
-    # Basic Policy Information (from PDF extraction)
+    # Essential fields only
     policy_number: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
-    formatted_policy_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    major_categorisation: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Motor, Life, Health
-    product_insurer_report: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    product_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Private Car, etc.
-    plan_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comp, STP, SAOD
-    customer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    customer_phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    child_id: Mapped[Optional[str]] = mapped_column(String(50), ForeignKey("child_id_requests.child_id"), nullable=True)
+    agent_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
-    # Legacy field names for backward compatibility
-    policy_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Motor, Health, etc.
-    insurance_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Comprehensive, Third Party
+    # Document URLs
+    customer_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    vehicle_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    policy_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
-    # Vehicle Details (from PDF extraction)
-    vehicle_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    vehicle_class: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    vehicle_segment: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    vehicle_variant: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    gvw: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)  # Gross Vehicle Weight
-    rto: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    fuel_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    cc: Mapped[Optional[int]] = mapped_column(nullable=True)  # Engine capacity
-    age_year: Mapped[Optional[int]] = mapped_column(nullable=True)
-    ncb: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YES/NO
-    discount_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    business_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    seating_capacity: Mapped[Optional[int]] = mapped_column(nullable=True)
-    veh_wheels: Mapped[Optional[int]] = mapped_column(nullable=True)
+    # Important dates
+    booking_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    policy_start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    policy_end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
     
-    # Premium Details (from PDF extraction)
-    gross_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    gst: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    gst_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Alternative field name
-    net_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
-    od_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Own Damage
-    tp_premium: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)  # Third Party
-    
-    # Agent Commission Fields (only these two for policies)
-    agent_commission_given_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    agent_extra_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
-    
-    # Agent Financial Tracking
-    payment_by_office: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
-    total_agent_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
-    running_bal: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True, default=0.0)
-    
-    # Additional Policy Configuration
-    code_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Direct, Broker, Child ID
-    payment_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Agent, InsureZeal
-    payment_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    cluster: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    
-    # Dates
-    start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
-    end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
-    
-    # File Storage
-    pdf_file_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    pdf_file_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    
-    # AI Extraction
-    ai_extracted_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # Store raw AI response
-    ai_confidence_score: Mapped[Optional[float]] = mapped_column(Numeric(3, 2), nullable=True)
-    manual_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    
-    # Additional fields
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
-    # Timestamps
+    # System fields
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    uploader: Mapped["UserProfile"] = relationship("UserProfile", foreign_keys=[uploaded_by])
-    agent: Mapped[Optional["UserProfile"]] = relationship("UserProfile", foreign_keys=[agent_id])
     child_request: Mapped[Optional["ChildIdRequest"]] = relationship("ChildIdRequest", foreign_keys=[child_id])
 
 
@@ -689,7 +490,7 @@ class AdminChildID(Base):
     
     created_by: Mapped[Optional[UUID]] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(
@@ -730,7 +531,7 @@ class CutPayAgentConfig(Base):
     # Audit fields
     created_by: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(
@@ -795,7 +596,7 @@ class ReconciliationReport(Base):
     # Audit fields
     processed_by: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), 
-        ForeignKey("auth.users.id", ondelete="SET NULL"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )
     created_at: Mapped[DateTime] = mapped_column(

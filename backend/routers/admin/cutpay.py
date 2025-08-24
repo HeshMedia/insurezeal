@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, attributes
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from uuid import UUID
@@ -18,7 +18,7 @@ import traceback
 import uuid
 import os
 
-from config import get_db, get_supabase_admin_client
+from config import get_db, AWS_S3_BUCKET
 from ..auth.auth import get_current_user
 from dependencies.rbac import require_admin_cutpay
 from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID, CutPayAgentConfig
@@ -119,7 +119,25 @@ async def create_cutpay_transaction(
 
             cutpay_dict = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
             if cutpay_data.extracted_data:
-                cutpay_dict.update(cutpay_data.extracted_data.dict(exclude_unset=True))
+                extracted_dict = cutpay_data.extracted_data.dict(exclude_unset=True)
+                # Fix field mapping: schema uses start_date/end_date but model uses policy_start_date/policy_end_date
+                if 'start_date' in extracted_dict:
+                    start_date_str = extracted_dict.pop('start_date')
+                    if start_date_str:
+                        try:
+                            from datetime import datetime
+                            extracted_dict['policy_start_date'] = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid start_date format: {start_date_str}")
+                if 'end_date' in extracted_dict:
+                    end_date_str = extracted_dict.pop('end_date')
+                    if end_date_str:
+                        try:
+                            from datetime import datetime
+                            extracted_dict['policy_end_date'] = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid end_date format: {end_date_str}")
+                cutpay_dict.update(extracted_dict)
             if cutpay_data.admin_input:
                 admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
                 broker_code = admin_fields.pop('broker_code', None)
@@ -163,19 +181,16 @@ async def create_cutpay_transaction(
     sync_results = None
     try:
         logger.info(f"Step 2: Starting Google Sheets sync for new CutPay ID {cutpay.id}.")
-        from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
+        from utils.quarterly_sheets_manager import quarterly_manager
         
         cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
         for key, value in cutpay_dict.items():
             if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
             elif isinstance(value, UUID): cutpay_dict[key] = str(value)
 
-        # Resolve insurer and broker names before syncing
-        cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
-
-        cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-        master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-        sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+        # Route to quarterly sheet instead of dedicated cutpay sheet
+        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict)
+        sync_results = {"cutpay": quarterly_result}
         logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
         
     except Exception as e:
@@ -197,10 +212,6 @@ async def create_cutpay_transaction(
                 if sync_results.get("cutpay", {}).get("success"):
                     final_cutpay.cutpay_sheet_row_id = sync_results["cutpay"].get("row_id")
                     final_cutpay.synced_to_cutpay_sheet = True
-                
-                if sync_results.get("master", {}).get("success"):
-                    final_cutpay.master_sheet_row_id = sync_results["master"].get("row_id")
-                    final_cutpay.synced_to_master_sheet = True
 
             await final_db_session.refresh(final_cutpay)
             logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
@@ -439,16 +450,15 @@ async def get_dashboard_stats(
         
         # Get completed and draft transactions counts
         completed_transactions = await db.scalar(
-            select(func.count(CutPay.id)).where(CutPay.synced_to_master_sheet == True)
+            select(func.count(CutPay.id)).where(CutPay.synced_to_cutpay_sheet == True)
         ) or 0
         draft_transactions = await db.scalar(
-            select(func.count(CutPay.id)).where(CutPay.synced_to_master_sheet == False)
+            select(func.count(CutPay.id)).where(CutPay.synced_to_cutpay_sheet == False)
         ) or 0
         
         pending_sync_result = await db.execute(
             select(func.count(CutPay.id)).where(
-                (CutPay.synced_to_cutpay_sheet == False) |
-                (CutPay.synced_to_master_sheet == False)
+                (CutPay.synced_to_cutpay_sheet == False)
             )
         )
         pending_sync = pending_sync_result.scalar()
@@ -607,19 +617,16 @@ async def bulk_update_cutpay_transactions(
             sync_results = None
             try:
                 logger.info(f"Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
-                from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
+                from utils.quarterly_sheets_manager import quarterly_manager
                 
                 cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
                 for key, value in cutpay_dict.items():
                     if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
                     elif isinstance(value, UUID): cutpay_dict[key] = str(value)
 
-                # Resolve insurer and broker names before syncing
-                cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
-
-                cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-                master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-                sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+                # Route to quarterly sheet instead of dedicated cutpay sheet
+                quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
+                sync_results = {"cutpay": quarterly_result}
                 logger.info(f"Google Sheets sync completed for CutPay ID {cutpay.id}.")
                 
                 # Update sync flags
@@ -627,11 +634,6 @@ async def bulk_update_cutpay_transactions(
                     cutpay.synced_to_cutpay_sheet = True
                     if sync_results["cutpay"].get("row_id"):
                         cutpay.cutpay_sheet_row_id = sync_results["cutpay"]["row_id"]
-                
-                if sync_results.get("master", {}).get("success"):
-                    cutpay.synced_to_master_sheet = True
-                    if sync_results["master"].get("row_id"):
-                        cutpay.master_sheet_row_id = sync_results["master"]["row_id"]
                 
                 await db.commit()
                 await db.refresh(cutpay)
@@ -705,29 +707,22 @@ async def manual_sync_to_google_sheets(
             logger.info(f"Manual sync for CutPay {cutpay_id} with data keys: {list(cutpay_dict.keys())}")
             
             # Attempt sync
-            from utils.google_sheets import google_sheets_sync
+            from utils.quarterly_sheets_manager import quarterly_manager
             
-            cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-            master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
+            quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
             
             # Update sync flags
-            if cutpay_sync_result and cutpay_sync_result.get("success"):
+            if quarterly_result and quarterly_result.get("success"):
                 cutpay.synced_to_cutpay_sheet = True
-                if cutpay_sync_result.get("row_id"):
-                    cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
-            
-            if master_sync_result and master_sync_result.get("success"):
-                cutpay.synced_to_master_sheet = True
-                if master_sync_result.get("row_id"):
-                    cutpay.master_sheet_row_id = master_sync_result["row_id"]
+                if quarterly_result.get("row_id"):
+                    cutpay.cutpay_sheet_row_id = quarterly_result["row_id"]
             
             await db.commit()
             
             sync_results.append({
                 "cutpay_id": cutpay_id,
                 "success": True,
-                "cutpay_sheet_sync": cutpay_sync_result,
-                "master_sheet_sync": master_sync_result
+                "cutpay_sheet_sync": quarterly_result
             })
             
         except Exception as e:
@@ -921,19 +916,16 @@ async def update_cutpay_transaction(
     sync_results = None
     try:
         logger.info(f"Step 2: Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
-        from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
+        from utils.quarterly_sheets_manager import quarterly_manager
         
         cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
         for key, value in cutpay_dict.items():
             if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
             elif isinstance(value, UUID): cutpay_dict[key] = str(value)
 
-        # Resolve insurer and broker names before syncing
-        cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
-
-        cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-        master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-        sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+        # Route to quarterly sheet instead of dedicated cutpay sheet
+        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
+        sync_results = {"cutpay": quarterly_result}
         logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
         
     except Exception as e:
@@ -956,10 +948,6 @@ async def update_cutpay_transaction(
                 if sync_results.get("cutpay", {}).get("success"):
                     final_cutpay.cutpay_sheet_row_id = sync_results["cutpay"].get("row_id")
                     final_cutpay.synced_to_cutpay_sheet = True
-                
-                if sync_results.get("master", {}).get("success"):
-                    final_cutpay.master_sheet_row_id = sync_results["master"].get("row_id")
-                    final_cutpay.synced_to_master_sheet = True
 
             await final_db_session.refresh(final_cutpay)
             logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
@@ -985,12 +973,6 @@ async def delete_cutpay_transaction(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"CutPay transaction {cutpay_id} not found"
         )
-
-    if cutpay.synced_to_master_sheet:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete CutPay transaction that has been synced to Master Sheet"
-        )
     
     await db.delete(cutpay)
     await db.commit()
@@ -1005,8 +987,11 @@ async def delete_cutpay_transaction(
 @router.post("/{cutpay_id}/upload-document", response_model=DocumentUploadResponse)
 async def upload_policy_document(
     cutpay_id: int,
-    file: UploadFile = File(...),
+    file: UploadFile = File(None),
     document_type: str = Form("policy_pdf"),
+    presign: bool = Form(False),
+    filename: str | None = Form(None),
+    content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_cutpay)
@@ -1028,11 +1013,68 @@ async def upload_policy_document(
                 detail=f"CutPay transaction {cutpay_id} not found"
             )
         
-        if not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only PDF files are supported"
+        from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
+
+        if presign or not file:
+            if not filename or not filename.lower().endswith('.pdf'):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valid PDF filename is required")
+            key = build_key(prefix=f"cutpay/{cutpay_id}", filename=filename)
+            upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
+            document_url = build_cloudfront_url(key)
+
+            # ✅ COMPREHENSIVE DEBUGGING FOR PRESIGNED UPLOADS
+            logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' for CutPay {cutpay_id}")
+            logger.info(f"🔵 PRESIGNED: Document URL generated: {document_url}")
+            logger.info(f"🔵 PRESIGNED: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
+            logger.info(f"🔵 PRESIGNED: Before update - additional_documents: {cutpay.additional_documents}")
+            
+            # Normalize document_type to handle any whitespace/case issues
+            document_type_clean = document_type.strip() if document_type else ""
+            logger.info(f"🔵 PRESIGNED: Cleaned document_type: '{document_type_clean}'")
+            logger.info(f"🔵 PRESIGNED: document_type_clean == 'policy_pdf': {document_type_clean == 'policy_pdf'}")
+
+            if document_type_clean == "policy_pdf":
+                logger.info(f"✅ PRESIGNED: ENTERING policy_pdf branch - UPDATING policy_pdf_url")
+                old_url = cutpay.policy_pdf_url
+                cutpay.policy_pdf_url = document_url
+                logger.info(f"✅ PRESIGNED: policy_pdf_url updated from '{old_url}' to '{cutpay.policy_pdf_url}'")
+            else:
+                logger.info(f"❌ PRESIGNED: ENTERING additional_documents branch for type: '{document_type_clean}'")
+                if not cutpay.additional_documents:
+                    cutpay.additional_documents = {}
+                    logger.info(f"❌ PRESIGNED: Initialized empty additional_documents dict")
+                
+                old_value = cutpay.additional_documents.get(document_type_clean, "None")
+                
+                # ✅ PROPER JSON FIELD UPDATE - Create new dict to trigger SQLAlchemy change detection
+                updated_additional_docs = dict(cutpay.additional_documents) if cutpay.additional_documents else {}
+                updated_additional_docs[document_type_clean] = document_url
+                cutpay.additional_documents = updated_additional_docs
+                
+                logger.info(f"❌ PRESIGNED: additional_documents['{document_type_clean}'] updated from '{old_value}' to '{document_url}'")
+                logger.info(f"❌ PRESIGNED: New additional_documents dict: {cutpay.additional_documents}")
+            
+            # Mark the field as modified to ensure SQLAlchemy detects the change
+            attributes.flag_modified(cutpay, 'additional_documents')
+            
+            # Force database commit and refresh
+            await db.commit()
+            await db.refresh(cutpay)
+            
+            logger.info(f"🔵 PRESIGNED: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
+            logger.info(f"🔵 PRESIGNED: After commit/refresh - additional_documents: {cutpay.additional_documents}")
+            logger.info(f"Generated presigned URL for CutPay {cutpay_id}, key: {key}")
+
+            return DocumentUploadResponse(
+                document_url=document_url, 
+                document_type=document_type, 
+                upload_status="presigned", 
+                message="Presigned URL generated; upload directly to S3", 
+                upload_url=upload_url
             )
+
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are supported")
 
         file_content = await file.read()
         if len(file_content) > 10 * 1024 * 1024: 
@@ -1042,52 +1084,58 @@ async def upload_policy_document(
             )
 
         try:
-            supabase_client = get_supabase_admin_client()
-            bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "insurezeal")
-
+            from utils.s3_utils import build_key, build_cloudfront_url, put_object
             file_extension = os.path.splitext(file.filename)[1] if file.filename else '.pdf'
-            unique_filename = f"cutpay/{cutpay_id}/{uuid.uuid4()}{file_extension}"
-
-            response = supabase_client.storage.from_(bucket_name).upload(
-                path=unique_filename,
-                file=file_content,
-                file_options={"content-type": "application/pdf"}
-            )
-            
-            if hasattr(response, 'error') and response.error:
-                logger.error(f"Supabase upload error: {response.error}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Failed to upload PDF to storage"
-                )
-            document_url = supabase_client.storage.from_(bucket_name).get_public_url(unique_filename)
-            
-        except HTTPException:
-            raise
+            unique_key = build_key(prefix=f"cutpay/{cutpay_id}", filename=f"x{file_extension}")
+            put_object(key=unique_key, body=file_content, content_type="application/pdf")
+            document_url = build_cloudfront_url(unique_key)
         except Exception as upload_error:
             logger.error(f"Upload error: {str(upload_error)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to upload PDF: {str(upload_error)}"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload PDF: {str(upload_error)}")
 
-        if document_type == "policy_pdf":
+        # ✅ COMPREHENSIVE DEBUGGING FOR DIRECT UPLOADS
+        logger.info(f"🟢 DIRECT: Processing document_type='{document_type}' for CutPay {cutpay_id}")
+        logger.info(f"🟢 DIRECT: Document URL generated: {document_url}")
+        logger.info(f"🟢 DIRECT: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
+        logger.info(f"🟢 DIRECT: Before update - additional_documents: {cutpay.additional_documents}")
+        
+        # Normalize document_type to handle any whitespace/case issues
+        document_type_clean = document_type.strip() if document_type else ""
+        logger.info(f"🟢 DIRECT: Cleaned document_type: '{document_type_clean}'")
+        logger.info(f"🟢 DIRECT: document_type_clean == 'policy_pdf': {document_type_clean == 'policy_pdf'}")
+
+        if document_type_clean == "policy_pdf":
+            logger.info(f"✅ DIRECT: ENTERING policy_pdf branch - UPDATING policy_pdf_url")
+            old_url = cutpay.policy_pdf_url
             cutpay.policy_pdf_url = document_url
+            logger.info(f"✅ DIRECT: policy_pdf_url updated from '{old_url}' to '{cutpay.policy_pdf_url}'")
         else:
+            logger.info(f"❌ DIRECT: ENTERING additional_documents branch for type: '{document_type_clean}'")
             if not cutpay.additional_documents:
                 cutpay.additional_documents = {}
-            cutpay.additional_documents[document_type] = document_url
+                logger.info(f"❌ DIRECT: Initialized empty additional_documents dict")
+            
+            old_value = cutpay.additional_documents.get(document_type_clean, "None")
+            
+            # ✅ PROPER JSON FIELD UPDATE - Create new dict to trigger SQLAlchemy change detection
+            updated_additional_docs = dict(cutpay.additional_documents) if cutpay.additional_documents else {}
+            updated_additional_docs[document_type_clean] = document_url
+            cutpay.additional_documents = updated_additional_docs
+            
+            logger.info(f"❌ DIRECT: additional_documents['{document_type_clean}'] updated from '{old_value}' to '{document_url}'")
+            logger.info(f"❌ DIRECT: New additional_documents dict: {cutpay.additional_documents}")
+        
+        # Mark the field as modified to ensure SQLAlchemy detects the change
+        attributes.flag_modified(cutpay, 'additional_documents')
         
         await db.commit()
+        await db.refresh(cutpay)
         
+        logger.info(f"🟢 DIRECT: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
+        logger.info(f"🟢 DIRECT: After commit/refresh - additional_documents: {cutpay.additional_documents}")
         logger.info(f"Uploaded {document_type} for CutPay {cutpay_id}")
         
-        return DocumentUploadResponse(
-            document_url=document_url,
-            document_type=document_type,
-            upload_status="success",
-            message=f"Document uploaded successfully"
-        )
+        return DocumentUploadResponse(document_url=document_url, document_type=document_type, upload_status="success", message=f"Document uploaded successfully")
         
     except Exception as e:
         logger.error(f"Failed to upload document for CutPay {cutpay_id}: {str(e)}")

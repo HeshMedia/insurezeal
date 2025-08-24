@@ -23,6 +23,7 @@ RESOURCES_FOR_ROLES = {
         'admin/stats': ['read'],
         'admin/child-requests': ['read', 'write', 'update'],
         'admin/cutpay': ['read', 'write', 'update', 'delete'],
+        'admin/quarterly-sheets': ['read', 'write', 'update', 'delete'],
         
         'users/me': ['read', 'write'],
         'users/documents': ['read', 'write', 'delete'],
@@ -36,6 +37,7 @@ RESOURCES_FOR_ROLES = {
         'admin/stats': ['read'],
         'admin/child-requests': ['read', 'write', 'update'],
         'admin/cutpay': ['read', 'write', 'update', 'delete'],
+        'admin/quarterly-sheets': ['read', 'write', 'update', 'delete'],
         
         'superadmin/brokers': ['read'],
         'superadmin/insurers': ['read'],
@@ -77,6 +79,8 @@ def normalize_path(path: str) -> str:
                 return 'admin/stats'
             elif segments[1] == 'child-requests':
                 return 'admin/child-requests'
+            elif segments[1] == 'quarterly-sheets':
+                return 'admin/quarterly-sheets'
             elif segments[1] == 'universal-records':
                 return 'admin' 
         return 'admin'
@@ -199,6 +203,12 @@ require_admin_stats = require_permission("admin/stats", "read")
 require_admin_child_requests = require_permission("admin/child-requests", "read")
 require_admin_child_requests_write = require_permission("admin/child-requests", "write")
 require_admin_child_requests_update = require_permission("admin/child-requests", "update")
+
+# Quarterly Sheets permissions
+require_admin_quarterly_sheets_read = require_permission("admin/quarterly-sheets", "read")
+require_admin_quarterly_sheets_write = require_permission("admin/quarterly-sheets", "write")
+require_admin_quarterly_sheets_update = require_permission("admin/quarterly-sheets", "update")
+require_admin_quarterly_sheets_delete = require_permission("admin/quarterly-sheets", "delete")
 
 require_superadmin_read = require_permission("superadmin", "read")
 require_superadmin_write = require_permission("superadmin", "write")

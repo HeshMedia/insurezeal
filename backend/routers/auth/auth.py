@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from config import get_db, get_supabase_client
-from models import UserProfile
+from models import UserProfile, Users
 from .schemas import (
     UserRegister, 
     UserLogin, 
@@ -12,13 +12,19 @@ from .schemas import (
     TokenResponse,
     ForgotPasswordRequest,
     VerifyResetTokenRequest,
-    ResetPasswordRequest
+    ResetPasswordRequest,
+    SupabaseWebhookEvent
 )
 from .helpers import auth_helpers
 from utils.model_utils import model_data_from_orm
 from typing import Optional
 from datetime import datetime
 import logging
+import os
+import uuid
+import hmac
+import hashlib
+import json
 
 # Import user_helpers for agent code generation
 from routers.users.helpers import user_helpers
@@ -327,4 +333,162 @@ async def logout(
     except Exception as e:
         logger.error(f"Logout failed: {str(e)}")
         return {"message": "Logout completed"}  
+
+
+@router.post("/webhooks/supabase", status_code=200)
+async def supabase_webhook(
+    request: Request,
+    webhook_data: SupabaseWebhookEvent,
+    db: AsyncSession = Depends(get_db),
+    authorization: Optional[str] = Header(None),
+    x_hook_signature: Optional[str] = Header(None, alias="x-hook-signature")
+):
+    """
+    Supabase webhook to replicate auth.users into our local database
+    Handles user creation, updates, and deletion events from Supabase Auth
+    """
+    try:
+        # Verify webhook security
+        webhook_secret = os.getenv("SUPABASE_WEBHOOK_SECRET")
+        if not webhook_secret:
+            logger.error("SUPABASE_WEBHOOK_SECRET not configured")
+            raise HTTPException(status_code=500, detail="Webhook not configured")
+        
+        # Verify the webhook signature if provided
+        if x_hook_signature:
+            body = await request.body()
+            expected_signature = hmac.new(
+                webhook_secret.encode(),
+                body,
+                hashlib.sha256
+            ).hexdigest()
+            
+            if not hmac.compare_digest(f"sha256={expected_signature}", x_hook_signature):
+                logger.warning("Invalid webhook signature")
+                raise HTTPException(status_code=401, detail="Invalid signature")
+        
+        # Verify Bearer token if provided (alternative security method)
+        elif authorization:
+            if not authorization.startswith("Bearer "):
+                raise HTTPException(status_code=401, detail="Invalid authorization header")
+            
+            token = authorization.split(" ")[1]
+            if token != webhook_secret:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            logger.warning("No security headers provided for webhook")
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        
+        event_type = webhook_data.type
+        user_data = webhook_data.record
+        
+        logger.info(f"Processing Supabase webhook: {event_type} for user {user_data.id}")
+        
+        if event_type in ["INSERT", "UPDATE"]:
+            # Create or update user in local database
+            await upsert_user_from_supabase(db, user_data)
+            
+        elif event_type == "DELETE":
+            # Soft delete user in local database
+            await soft_delete_user(db, user_data.id)
+        
+        else:
+            logger.warning(f"Unhandled webhook event type: {event_type}")
+        
+        return {"status": "success", "message": f"Processed {event_type} event for user {user_data.id}"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+
+async def upsert_user_from_supabase(db: AsyncSession, user_data):
+    """
+    Create or update a user in the local database from Supabase webhook data
+    """
+    try:
+        # Check if user already exists
+        result = await db.execute(
+            select(Users).where(Users.id == user_data.id)
+        )
+        existing_user = result.scalar_one_or_none()
+        
+        # Extract role from raw_app_meta_data or raw_user_meta_data
+        role = None
+        if user_data.raw_app_meta_data and isinstance(user_data.raw_app_meta_data, dict):
+            role = user_data.raw_app_meta_data.get("role")
+        if not role and user_data.raw_user_meta_data and isinstance(user_data.raw_user_meta_data, dict):
+            role = user_data.raw_user_meta_data.get("role")
+        
+        if existing_user:
+            # Update existing user
+            existing_user.email = user_data.email
+            existing_user.phone = user_data.phone
+            existing_user.role = role
+            existing_user.email_confirmed_at = user_data.email_confirmed_at
+            existing_user.phone_confirmed_at = user_data.phone_confirmed_at
+            existing_user.last_sign_in_at = user_data.last_sign_in_at
+            existing_user.raw_app_meta_data = user_data.raw_app_meta_data
+            existing_user.raw_user_meta_data = user_data.raw_user_meta_data
+            existing_user.is_super_admin = user_data.is_super_admin
+            existing_user.banned_until = user_data.banned_until
+            existing_user.updated_at = user_data.updated_at or datetime.utcnow()
+            existing_user.deleted_at = None  # Clear deletion if user is being updated
+            
+            logger.info(f"Updated existing user {user_data.id} in local database")
+        else:
+            # Create new user
+            new_user = Users(
+                id=user_data.id,
+                email=user_data.email,
+                phone=user_data.phone,
+                role=role,
+                email_confirmed_at=user_data.email_confirmed_at,
+                phone_confirmed_at=user_data.phone_confirmed_at,
+                last_sign_in_at=user_data.last_sign_in_at,
+                raw_app_meta_data=user_data.raw_app_meta_data,
+                raw_user_meta_data=user_data.raw_user_meta_data,
+                is_super_admin=user_data.is_super_admin,
+                banned_until=user_data.banned_until,
+                created_at=user_data.created_at or datetime.utcnow(),
+                updated_at=user_data.updated_at or datetime.utcnow(),
+                # Set defaults for required fields
+                is_sso_user=False,
+                is_anonymous=False,
+            )
+            
+            db.add(new_user)
+            logger.info(f"Created new user {user_data.id} in local database")
+        
+        await db.commit()
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to upsert user {user_data.id}: {str(e)}", exc_info=True)
+        raise
+
+
+async def soft_delete_user(db: AsyncSession, user_id: uuid.UUID):
+    """
+    Soft delete a user by setting deleted_at timestamp
+    """
+    try:
+        result = await db.execute(
+            select(Users).where(Users.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if user:
+            user.deleted_at = datetime.utcnow()
+            await db.commit()
+            logger.info(f"Soft deleted user {user_id}")
+        else:
+            logger.warning(f"User {user_id} not found for deletion")
+            
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete user {user_id}: {str(e)}", exc_info=True)
+        raise
 
