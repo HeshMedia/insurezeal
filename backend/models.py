@@ -459,6 +459,29 @@ class CutPay(Base):
     # =============================================================================
     
 
+    # =============================================================================
+    # ADDITIONAL FIELDS FOR NEW MASTER SHEET STRUCTURE
+    # =============================================================================
+    
+    # Policy Start/End Dates
+    policy_start_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    policy_end_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
+    
+    # Additional financial tracking fields
+    invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    po_diff_broker_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    po_diff_broker_amt: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    agent_payout_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    agent_payout_amount: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    po_diff_agent_percent: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    po_diff_agent_amt: Mapped[Optional[float]] = mapped_column(Numeric(15, 2), nullable=True)
+    
+    # Corrected field name for vehicle wheels
+    veh_wheels: Mapped[Optional[int]] = mapped_column(nullable=True)
+    
+    # =============================================================================
+    # SYSTEM FIELDS
+    # =============================================================================
     
     # Google Sheets sync tracking
     synced_to_cutpay_sheet: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -589,6 +612,9 @@ class Policy(Base):
     
     # Additional fields
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Additional fields for new master sheet structure
+    invoice_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

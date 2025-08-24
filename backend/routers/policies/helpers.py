@@ -448,8 +448,8 @@ class PolicyHelpers:
         """Provide default values for required fields that cannot be null"""
 
         if not policy_data.get('insurance_type'):
-            policy_type = policy_data.get('policy_type', '').lower()
-            vehicle_type = policy_data.get('vehicle_type', '').lower()
+            policy_type = (policy_data.get('policy_type') or '').lower()
+            vehicle_type = (policy_data.get('vehicle_type') or '').lower()
             
             if 'motor' in policy_type or 'vehicle' in vehicle_type:
                 policy_data['insurance_type'] = 'Comprehensive'

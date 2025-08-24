@@ -19,6 +19,7 @@ from routers.policies.schemas import (
 )
 from dependencies.rbac import require_permission
 from utils.google_sheets import google_sheets_sync
+from utils.quarterly_sheets_manager import quarterly_manager
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 security = HTTPBearer()
@@ -269,10 +270,65 @@ async def submit_policy(
             'created_at': policy.created_at,
             'updated_at': policy.updated_at        }
         try:
-            google_sheets_sync.sync_policy(policy_dict_for_sheets, "CREATE")
-            logger.info(f"Policy {policy.id} synced to Google Sheets")
+            # Route to quarterly sheet instead of master sheet
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Prepare data for quarterly sheet with the new headers structure
+            policy_dict_for_quarterly = {
+                'Reporting Month (mmm\'yy)': policy_dict_for_sheets.get('reporting_month', ''),
+                'Child ID/ User ID [Provided by Insure Zeal]': policy_dict_for_sheets.get('child_id', ''),
+                'Insurer /broker code': policy_dict_for_sheets.get('agent_code', ''),
+                'Policy Start Date': policy_dict_for_sheets.get('start_date', ''),
+                'Policy End Date': policy_dict_for_sheets.get('end_date', ''),
+                'Booking Date(Click to select Date)': '',
+                'Broker Name': policy_dict_for_sheets.get('broker_name', ''),
+                'Insurer name': policy_dict_for_sheets.get('insurance_company', ''),
+                'Major Categorisation( Motor/Life/ Health)': policy_dict_for_sheets.get('major_categorisation', ''),
+                'Product (Insurer Report)': policy_dict_for_sheets.get('product_insurer_report', ''),
+                'Product Type': policy_dict_for_sheets.get('product_type', ''),
+                'Plan type (Comp/STP/SAOD)': policy_dict_for_sheets.get('plan_type', ''),
+                'Gross premium': policy_dict_for_sheets.get('gross_premium', ''),
+                'GST Amount': policy_dict_for_sheets.get('gst_amount', ''),
+                'Net premium': policy_dict_for_sheets.get('net_premium', ''),
+                'OD Preimium': policy_dict_for_sheets.get('od_premium', ''),
+                'TP Premium': policy_dict_for_sheets.get('tp_premium', ''),
+                'Policy number': policy_dict_for_sheets.get('policy_number', ''),
+                'Formatted Policy number': policy_dict_for_sheets.get('formatted_policy_number', ''),
+                'Registration.no': policy_dict_for_sheets.get('registration_number', ''),
+                'Make_Model': policy_dict_for_sheets.get('make_model', ''),
+                'Model': policy_dict_for_sheets.get('model', ''),
+                'Vehicle_Variant': policy_dict_for_sheets.get('vehicle_variant', ''),
+                'GVW': policy_dict_for_sheets.get('gvw', ''),
+                'RTO': policy_dict_for_sheets.get('rto', ''),
+                'State': policy_dict_for_sheets.get('state', ''),
+                'Cluster': policy_dict_for_sheets.get('cluster', ''),
+                'Fuel Type': policy_dict_for_sheets.get('fuel_type', ''),
+                'CC': policy_dict_for_sheets.get('cc', ''),
+                'Age(Year)': policy_dict_for_sheets.get('age_year', ''),
+                'NCB (YES/NO)': policy_dict_for_sheets.get('ncb', ''),
+                'Discount %': policy_dict_for_sheets.get('discount_percent', ''),
+                'Business Type': policy_dict_for_sheets.get('business_type', ''),
+                'Seating Capacity': policy_dict_for_sheets.get('seating_capacity', ''),
+                'Veh_Wheels': policy_dict_for_sheets.get('veh_wheels', ''),
+                'Customer Name': policy_dict_for_sheets.get('customer_name', ''),
+                'Customer Number': policy_dict_for_sheets.get('customer_phone_number', ''),
+                'Payment By Office': policy_dict_for_sheets.get('payment_by_office', ''),
+                'PO Paid To Agent': policy_dict_for_sheets.get('total_agent_payout_amount', ''),
+                'Running Bal': policy_dict_for_sheets.get('running_bal', ''),
+                '  Invoice Number  ': policy_dict_for_sheets.get('invoice_number', ''),
+                'Match': 'False'
+            }
+            
+            # Route to current quarterly sheet
+            quarterly_result = quarterly_manager.route_new_record_to_current_quarter(policy_dict_for_quarterly)
+            
+            if quarterly_result.get('success'):
+                logger.info(f"Policy {policy.id} routed to quarterly sheet: {quarterly_result.get('sheet_name')}")
+            else:
+                logger.error(f"Failed to route policy {policy.id} to quarterly sheet: {quarterly_result.get('error')}")
+                
         except Exception as sync_error:
-            logger.error(f"Failed to sync policy {policy.id} to Google Sheets: {str(sync_error)}")
+            logger.error(f"Failed to route policy {policy.id} to quarterly sheet: {str(sync_error)}")
         
         return PolicyResponse.model_validate(policy)
         
@@ -414,42 +470,94 @@ async def update_policy(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Policy not found"
             )
-          # Sync to Google Sheets
+        # Sync to quarterly Google Sheets
         try:
-            policy_dict_for_sheets = {
-                'id': policy.id,
-                'policy_number': policy.policy_number,
-                'policy_type': policy.policy_type,
-                'insurance_type': policy.insurance_type,
-                'agent_id': policy.agent_id,
-                'agent_code': policy.agent_code,
-                'child_id': policy.child_id,
-                'broker_name': policy.broker_name,
-                'insurance_company': policy.insurance_company,
-                'vehicle_type': policy.vehicle_type,
-                'registration_number': policy.registration_number,
-                'vehicle_class': policy.vehicle_class,
-                'vehicle_segment': policy.vehicle_segment,
-                'gross_premium': policy.gross_premium,
-                'gst': policy.gst,
-                'net_premium': policy.net_premium,
-                'od_premium': policy.od_premium,
-                'tp_premium': policy.tp_premium,
-                'payment_by_office': policy.payment_by_office,
-                'total_agent_payout_amount': policy.total_agent_payout_amount,
-                'start_date': policy.start_date,
-                'end_date': policy.end_date,
-                'uploaded_by': policy.uploaded_by,
-                'pdf_file_name': policy.pdf_file_name,
-                'ai_confidence_score': policy.ai_confidence_score,
-                'manual_override': policy.manual_override,
-                'created_at': policy.created_at,
-                'updated_at': policy.updated_at
+            # Map policy data to quarterly sheet format
+            quarterly_data = {
+                'date': policy.created_at.strftime('%d-%m-%Y') if policy.created_at else "",
+                'insurer_name': policy.insurance_company or "",
+                'product': "Motor",
+                'client_name': policy.client_name or "",
+                'policy_holder_mobile': "",
+                'vehicle_make': "",
+                'vehicle_model': "",
+                'variant': "",
+                'fuel_type': "",
+                'vehicle_reg_no': policy.registration_number or "",
+                'manufacturing_year': "",
+                'vehicle_age': "",
+                'rto': "",
+                'policy_no': policy.policy_number or "",
+                'invoice_no': policy.invoice_number or "",
+                'policy_start_date': policy.start_date.strftime('%d-%m-%Y') if policy.start_date else "",
+                'policy_end_date': policy.end_date.strftime('%d-%m-%Y') if policy.end_date else "",
+                'policy_tenure': "",
+                'idv': "",
+                'net_premium': policy.net_premium or 0,
+                'od_premium': policy.od_premium or 0,
+                'tp_premium': policy.tp_premium or 0,
+                'commission_percentage': "",
+                'commission_amount': "",
+                'discount_amount': "",
+                'final_premium': policy.net_premium or 0,
+                'payment_mode': "",
+                'payment_type': "",
+                'payment_reference': "",
+                'bank_name': "",
+                'branch_name': "",
+                'cheque_number': "",
+                'cheque_date': "",
+                'transaction_date': "",
+                'transaction_status': "",
+                'payment_status': "",
+                'receipt_no': "",
+                'receipt_date': "",
+                'gstin': "",
+                'pan_number': "",
+                'adhaar_number': "",
+                'email_id': "",
+                'agent_code': policy.agent_code or "",
+                'agent_name': "",
+                'agent_mobile': "",
+                'agent_email': "",
+                'team_leader': "",
+                'regional_manager': "",
+                'zonal_head': "",
+                'branch_office': "",
+                'state': "",
+                'region': "",
+                'zone': "",
+                'business_source': "",
+                'lead_source': "",
+                'campaign_name': "",
+                'utm_source': "",
+                'utm_medium': "",
+                'utm_campaign': "",
+                'referral_code': "",
+                'promo_code': "",
+                'discount_code': "",
+                'coupon_code': "",
+                'loyalty_points_used': "",
+                'loyalty_points_earned': "",
+                'customer_segment': "",
+                'policy_type': "",
+                'cover_type': "",
+                'previous_policy_number': "",
+                'previous_insurer': "",
+                'claim_history': "",
+                'no_claim_bonus': "",
+                'remarks': "",
+                'special_instructions': "",
+                'uploaded_by': policy.uploaded_by or "",
+                'uploaded_date': policy.created_at.strftime('%d-%m-%Y') if policy.created_at else "",
+                'last_updated_by': "",
+                'last_updated_date': policy.updated_at.strftime('%d-%m-%Y') if policy.updated_at else ""
             }
-            google_sheets_sync.sync_policy(policy_dict_for_sheets, "UPDATE")
-            logger.info(f"Updated policy {policy.id} synced to Google Sheets")
+            
+            quarterly_manager.route_new_record_to_current_quarter(quarterly_data, "UPDATE")
+            logger.info(f"Updated policy {policy.id} synced to quarterly Google Sheets")
         except Exception as sync_error:
-            logger.error(f"Failed to sync updated policy {policy.id} to Google Sheets: {str(sync_error)}")
+            logger.error(f"Failed to sync updated policy {policy.id} to quarterly Google Sheets: {str(sync_error)}")
             # Don't fail the main operation if Google Sheets sync fails
         
         return PolicyResponse.model_validate(policy)
