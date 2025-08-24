@@ -15,6 +15,8 @@ from routers.admin.cutpay import router as cutpay_router
 from routers.admin.public import router as public_router
 from routers.mis.mis import router as mis_router
 from routers.universal_records.universal_records import router as universal_records_router
+from routers.admin.quarterly_sheets import router as quarterly_sheets_router
+from utils.quarterly_scheduler import startup_quarterly_system, shutdown_quarterly_system
 
 # Setup detailed logging
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +39,29 @@ app = FastAPI(
 )
 
 logger.info("--- FastAPI application starting up ---")
+
+# Add startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Application startup event"""
+    logger.info("Running application startup tasks...")
+    try:
+        # Start quarterly system
+        await startup_quarterly_system()
+        logger.info("Startup tasks completed successfully")
+    except Exception as e:
+        logger.error(f"Error in startup tasks: {str(e)}")
+
+@app.on_event("shutdown") 
+async def shutdown_event():
+    """Application shutdown event"""
+    logger.info("Running application shutdown tasks...")
+    try:
+        # Stop quarterly system
+        await shutdown_quarterly_system()
+        logger.info("Shutdown tasks completed successfully")
+    except Exception as e:
+        logger.error(f"Error in shutdown tasks: {str(e)}")
 
 logger.info("Configuring CORS middleware...")
 app.add_middleware(
@@ -79,6 +104,9 @@ try:
     
     app.include_router(universal_records_router)
     logger.info("Included universal_records_router.")
+    
+    app.include_router(quarterly_sheets_router)
+    logger.info("Included quarterly_sheets_router.")
 
     logger.info("All routers included successfully.")
 

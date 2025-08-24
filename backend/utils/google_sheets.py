@@ -9,6 +9,7 @@ from config import (
     GOOGLE_SHEETS_CREDENTIALS_JSON, 
     GOOGLE_SHEETS_DOCUMENT_ID
 )
+from .quarterly_sheets_manager import quarterly_manager
 
 logger = logging.getLogger(__name__)
 
@@ -131,16 +132,23 @@ class GoogleSheetsSync:
     def _find_next_empty_row(self, worksheet) -> int:
         """Find the next empty row in the worksheet starting from column A"""
         try:
-            # Get all values in column A to find the last non-empty row
-            col_a_values = worksheet.col_values(1)  # Column A (1-indexed)
+            # Get all values from the worksheet to find the actual last row with data
+            all_values = worksheet.get_all_values()
             
-            # Find the next empty row (add 1 to the length to get next row)
-            next_row = len(col_a_values) + 1
+            # Find the last row that contains any data
+            last_row_with_data = 0
+            for i, row in enumerate(all_values):
+                if any(cell.strip() for cell in row):
+                    last_row_with_data = i + 1  # gspread uses 1-based indexing
+            
+            # Next empty row is the one after the last row with data
+            next_row = last_row_with_data + 1
             
             # Ensure we don't overwrite the header row
             if next_row <= 1:
                 next_row = 2
                 
+            logger.info(f"Google Sheets utility - Found next empty row: {next_row} (last data row was: {last_row_with_data})")
             return next_row
             
         except Exception as e:
@@ -268,10 +276,14 @@ class GoogleSheetsSync:
         """
         Syncs a CutPay transaction to the 'Master' sheet using a dictionary.
         Updates the row if master_sheet_row_id exists, otherwise creates a new row.
+        Also routes data to current quarterly sheet.
         """
         try:
             if not self.client:
                 return {"success": False, "error": "Google Sheets client not initialized"}
+
+            # First, sync to quarterly sheet
+            quarterly_result = self._sync_to_quarterly_sheet(cutpay_data)
 
             headers = self._get_master_sheet_headers()
             master_sheet = self._get_or_create_worksheet("Master", headers)
@@ -298,15 +310,42 @@ class GoogleSheetsSync:
                 row_number = next_row_number
                 logger.info(f"Added new Master sheet row {row_number} for transaction {cutpay_id}")
 
-            return {
+            result = {
                 "success": True,
                 "row_id": str(row_number),
                 "sheet_name": "Master"
             }
+            
+            # Include quarterly sync result
+            if quarterly_result:
+                result["quarterly_sync"] = quarterly_result
+
+            return result
 
         except Exception as e:
             logger.error(f"Failed to sync CutPay transaction {cutpay_data.get('id')} to Master sheet: {str(e)}")
             return {"success": False, "error": str(e)}
+
+    def _sync_to_quarterly_sheet(self, cutpay_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Sync data to current quarterly sheet"""
+        try:
+            # Import here to avoid circular imports
+            from .quarterly_sheets_manager import quarterly_manager
+            
+            # Check if quarterly sheet needs to be created
+            transition_check = quarterly_manager.check_quarter_transition()
+            
+            # Route the data to current quarter
+            quarterly_result = quarterly_manager.route_new_record_to_current_quarter(cutpay_data)
+            
+            return {
+                "quarterly_sheet_result": quarterly_result,
+                "transition_check": transition_check
+            }
+            
+        except Exception as e:
+            logger.error(f"Error syncing to quarterly sheet: {str(e)}")
+            return {"error": str(e)}
 
     def sync_policy(self, policy_data: Dict[str, Any], action: str = "CREATE"):
         """Sync policy to Google Sheets and Master sheet"""
@@ -380,40 +419,66 @@ class GoogleSheetsSync:
         self._safe_sync(_sync)
     
     def _sync_policy_to_master_sheet(self, policy_data: Dict[str, Any]):
-        """Sync policy data to Master sheet with relevant fields"""
+        """Sync policy data to Master sheet with relevant fields using new header structure"""
         master_headers = self._get_master_sheet_headers()
         master_sheet = self._get_or_create_worksheet("Master", master_headers)
         
         if not master_sheet:
             return
         
-        # Map policy data to master sheet format
-        master_row_data = [""] * len(master_headers)
-        
-        # Map fields that exist in both policy and master sheet
+        # Map policy data to new master sheet format
         field_mappings = {
-            "ID": policy_data.get('id', ''),
-            "Agent Code": policy_data.get('agent_code', ''),
-            "Insurer Name": policy_data.get('insurance_company', ''),
+            "Reporting Month (mmm'yy)": policy_data.get('reporting_month', ''),
+            "Child ID/ User ID [Provided by Insure Zeal]": policy_data.get('child_id', ''),
+            "Insurer /broker code": policy_data.get('agent_code', ''),
+            "Policy Start Date": policy_data.get('start_date', ''),
+            "Policy End Date": policy_data.get('end_date', ''),
+            "Booking Date(Click to select Date)": '',  # Not available in policy data
             "Broker Name": policy_data.get('broker_name', ''),
-            "Policy Number": policy_data.get('policy_number', ''),
-            "Gross Premium": policy_data.get('gross_premium', ''),
-            "Net Premium": policy_data.get('net_premium', ''),
-            "OD Premium": policy_data.get('od_premium', ''),
-            "TP Premium": policy_data.get('tp_premium', ''),
+            "Insurer name": policy_data.get('insurance_company', ''),
+            "Major Categorisation( Motor/Life/ Health)": policy_data.get('major_categorisation', ''),
+            "Product (Insurer Report)": policy_data.get('product_insurer_report', ''),
+            "Product Type": policy_data.get('product_type', ''),
+            "Plan type (Comp/STP/SAOD)": policy_data.get('plan_type', ''),
+            "Gross premium": policy_data.get('gross_premium', ''),
             "GST Amount": policy_data.get('gst', ''),
-            "Registration No": policy_data.get('registration_number', ''),
+            "Net premium": policy_data.get('net_premium', ''),
+            "OD Preimium": policy_data.get('od_premium', ''),
+            "TP Premium": policy_data.get('tp_premium', ''),
+            "Policy number": policy_data.get('policy_number', ''),
+            "Formatted Policy number": policy_data.get('formatted_policy_number', ''),
+            "Registration.no": policy_data.get('registration_number', ''),
+            "Make_Model": policy_data.get('make_model', ''),
+            "Model": policy_data.get('model', ''),
+            "Vehicle_Variant": policy_data.get('vehicle_variant', ''),
+            "GVW": policy_data.get('gvw', ''),
+            "RTO": policy_data.get('rto', ''),
+            "State": policy_data.get('state', ''),
+            "Cluster": policy_data.get('cluster', ''),
+            "Fuel Type": policy_data.get('fuel_type', ''),
+            "CC": policy_data.get('cc', ''),
+            "Age(Year)": policy_data.get('age_year', ''),
+            "NCB (YES/NO)": policy_data.get('ncb', ''),
+            "Discount %": policy_data.get('discount_percent', ''),
+            "Business Type": policy_data.get('business_type', ''),
+            "Seating Capacity": policy_data.get('seating_capacity', ''),
+            "Veh_Wheels": policy_data.get('veh_wheels', ''),
+            "Customer Name": policy_data.get('customer_name', ''),
+            "Customer Number": policy_data.get('customer_phone_number', ''),
             "Payment By Office": policy_data.get('payment_by_office', ''),
-            "Total Agent PO": policy_data.get('total_agent_payout_amount', ''),
-            "Created At": policy_data.get('created_at', ''),
-            "Updated At": policy_data.get('updated_at', ''),
-            "MATCH STATUS": 'False'  # Always set to False for policies
+            "PO Paid To Agent": policy_data.get('total_agent_payout_amount', ''),
+            "Running Bal": policy_data.get('running_bal', ''),
+            "Match": 'False'  # Always set to False for policies
         }
         
-        # Fill the row data based on header mappings
-        for i, header in enumerate(master_headers):
-            if header in field_mappings:
-                master_row_data[i] = str(field_mappings[header]) if field_mappings[header] is not None else ''
+        # Create row data based on header order
+        master_row_data = []
+        for header in master_headers:
+            value = field_mappings.get(header, '')
+            if value is not None:
+                master_row_data.append(str(value))
+            else:
+                master_row_data.append('')
         
         # Find next empty row and insert
         next_row = self._find_next_empty_row(master_sheet)
@@ -517,39 +582,92 @@ class GoogleSheetsSync:
         return row
 
     def _prepare_master_sheet_row_data(self, cutpay_data: Dict[str, Any]) -> List[Any]:
-        """Prepares a list of values for a row in the 'Master' sheet, ordered according to headers."""
-        keys_in_order = [
-            'id', 'reporting_month', 'booking_date', 'agent_code', 'code_type',
-            'insurer_name', 'broker_name', 'insurer_broker_code',
-            'policy_number', 'formatted_policy_number', 'customer_name', 'customer_phone_number', 'major_categorisation',
-            'product_insurer_report', 'product_type', 'plan_type',
-            'gross_premium', 'net_premium', 'od_premium', 'tp_premium', 'gst_amount', 'commissionable_premium',
-            'registration_number', 'make_model', 'model', 'vehicle_variant', 'gvw', 'rto',
-            'state', 'cluster', 'fuel_type', 'cc', 'age_year', 'ncb', 'discount_percent',
-            'business_type', 'seating_capacity', 'vehicle_wheels',
-            'incoming_grid_perc', 'agent_commission_perc', 'extra_grid_perc', 'agent_extra_perc',
-            'payment_by', 'payment_method', 'payout_on', 'payment_by_office',
-            'receivable_from_broker', 'extra_amount_receivable_from_broker', 'total_receivable_from_broker', 'total_receivable_from_broker_with_gst',
-            'cut_pay_amount', 'agent_po_amt', 'agent_extra_amount', 'total_agent_po_amt',
-            'claimed_by', 'running_bal', 'cutpay_received',
-            # Post-CutPay fields
-            'already_given_to_agent', 'iz_total_po_percent', 'broker_po_percent', 'broker_payout_amount', 'invoice_status', 'remarks', 'company',
-            'notes',
-            'created_at', 'updated_at'
-        ]
+        """Prepares a list of values for a row in the 'Master' sheet, ordered according to new headers."""
+        # Updated mapping based on new header structure
+        field_mappings = {
+            "Reporting Month (mmm'yy)": cutpay_data.get('reporting_month', ''),
+            "Child ID/ User ID [Provided by Insure Zeal]": cutpay_data.get('admin_child_id', ''),
+            "Insurer /broker code": cutpay_data.get('insurer_broker_code', ''),
+            "Policy Start Date": cutpay_data.get('start_date', ''),
+            "Policy End Date": cutpay_data.get('end_date', ''),
+            "Booking Date(Click to select Date)": cutpay_data.get('booking_date', ''),
+            "Broker Name": cutpay_data.get('broker_name', ''),
+            "Insurer name": cutpay_data.get('insurer_name', ''),
+            "Major Categorisation( Motor/Life/ Health)": cutpay_data.get('major_categorisation', ''),
+            "Product (Insurer Report)": cutpay_data.get('product_insurer_report', ''),
+            "Product Type": cutpay_data.get('product_type', ''),
+            "Plan type (Comp/STP/SAOD)": cutpay_data.get('plan_type', ''),
+            "Gross premium": cutpay_data.get('gross_premium', ''),
+            "GST Amount": cutpay_data.get('gst_amount', ''),
+            "Net premium": cutpay_data.get('net_premium', ''),
+            "OD Preimium": cutpay_data.get('od_premium', ''),
+            "TP Premium": cutpay_data.get('tp_premium', ''),
+            "Policy number": cutpay_data.get('policy_number', ''),
+            "Formatted Policy number": cutpay_data.get('formatted_policy_number', ''),
+            "Registration.no": cutpay_data.get('registration_number', ''),
+            "Make_Model": cutpay_data.get('make_model', ''),
+            "Model": cutpay_data.get('model', ''),
+            "Vehicle_Variant": cutpay_data.get('vehicle_variant', ''),
+            "GVW": cutpay_data.get('gvw', ''),
+            "RTO": cutpay_data.get('rto', ''),
+            "State": cutpay_data.get('state', ''),
+            "Cluster": cutpay_data.get('cluster', ''),
+            "Fuel Type": cutpay_data.get('fuel_type', ''),
+            "CC": cutpay_data.get('cc', ''),
+            "Age(Year)": cutpay_data.get('age_year', ''),
+            "NCB (YES/NO)": cutpay_data.get('ncb', ''),
+            "Discount %": cutpay_data.get('discount_percent', ''),
+            "Business Type": cutpay_data.get('business_type', ''),
+            "Seating Capacity": cutpay_data.get('seating_capacity', ''),
+            "Veh_Wheels": cutpay_data.get('veh_wheels', ''),
+            "Customer Name": cutpay_data.get('customer_name', ''),
+            "Customer Number": cutpay_data.get('customer_phone_number', ''),
+            "Commissionable Premium": cutpay_data.get('commissionable_premium', ''),
+            "Incoming Grid %": cutpay_data.get('incoming_grid_percent', ''),
+            "Receivable from Broker": cutpay_data.get('receivable_from_broker', ''),
+            "Extra Grid": cutpay_data.get('extra_grid', ''),
+            "Extra Amount Receivable from Broker": cutpay_data.get('extra_amount_receivable_from_broker', ''),
+            " Total Receivable from Broker ": cutpay_data.get('total_receivable_from_broker', ''),
+            " Claimed By ": cutpay_data.get('claimed_by', ''),
+            "Payment by": cutpay_data.get('payment_by', ''),
+            "Payment Mode": cutpay_data.get('payment_method', ''),
+            "Cut Pay Amount Received From Agent": cutpay_data.get('cut_pay_amount', ''),
+            "Already Given to agent": cutpay_data.get('already_given_to_agent', ''),
+            " Actual Agent_PO%": cutpay_data.get('agent_commission_given_percent', ''),
+            "Agent_PO_AMT": cutpay_data.get('agent_po_amt', ''),
+            "Agent_Extra%": cutpay_data.get('agent_extra_percent', ''),
+            "Agent_Extr_Amount": cutpay_data.get('agent_extra_amount', ''),
+            "Payment By Office": cutpay_data.get('payment_by_office', ''),
+            "PO Paid To Agent": cutpay_data.get('total_agent_po_amt', ''),
+            "Running Bal": cutpay_data.get('running_bal', ''),
+            " Total Receivable from Broker Include 18% GST ": cutpay_data.get('total_receivable_from_broker_with_gst', ''),
+            " IZ Total PO%  ": cutpay_data.get('iz_total_po_percent', ''),
+            " As per Broker PO%  ": cutpay_data.get('broker_po_percent', ''),
+            " As per Broker PO AMT  ": cutpay_data.get('broker_payout_amount', ''),
+            " PO% Diff Broker ": '',  # New field - needs to be calculated
+            " PO AMT Diff Broker ": '',  # New field - needs to be calculated
+            " As per Agent Payout% ": '',  # New field - needs to be calculated
+            " As per Agent Payout Amount ": '',  # New field - needs to be calculated
+            " PO% Diff Agent ": '',  # New field - needs to be calculated
+            " PO AMT Diff Agent ": '',  # New field - needs to be calculated
+            "  Invoice Status  ": cutpay_data.get('invoice_status', ''),
+            "  Invoice Number  ": '',  # New field - needs to be added to model
+            " Remarks ": cutpay_data.get('remarks', ''),
+            "Match": 'False'  # Default match status
+        }
         
-        # Prepare row data - AI already adds hash prefix to formatted_policy_number
-        row = []
-        for key in keys_in_order:
-            value = cutpay_data.get(key, '')
+        # Get headers and prepare row data
+        headers = self._get_master_sheet_headers()
+        row_data = []
+        
+        for header in headers:
+            value = field_mappings.get(header, '')
             if value is not None:
-                row.append(str(value))
+                row_data.append(str(value))
             else:
-                row.append('')
+                row_data.append('')
         
-        # Always add MATCH STATUS as False at the end
-        row.append('False')
-        return row
+        return row_data
 
     def _get_cutpay_sheet_headers(self) -> List[str]:
         """Get comprehensive headers for CutPay sheet"""
@@ -593,50 +711,78 @@ class GoogleSheetsSync:
         ]
     
     def _get_master_sheet_headers(self) -> List[str]:
-        """Get comprehensive headers for Master sheet"""
+        """Get comprehensive headers for Master sheet based on new requirements"""
         return [
-            # Core Transaction Data
-            "ID", "Reporting Month", "Booking Date", "Agent Code", "Code Type",
-            "Insurer Name", "Broker Name", "Insurer Broker Code",
-            
-            # Policy Information
-            "Policy Number", "Formatted Policy Number", "Customer Name", "Customer Phone Number", "Major Categorisation",
-            "Product Insurer Report", "Product Type", "Plan Type",
-            
-            # Premium Details
-            "Gross Premium", "Net Premium", "OD Premium", "TP Premium", "GST Amount", "Commissionable Premium",
-            
-            # Vehicle Details
-            "Registration No", "Make Model", "Model", "Vehicle Variant", "GVW", "RTO",
-            "State", "Cluster", "Fuel Type", "CC", "Age Year", "NCB", "Discount Percent",
-            "Business Type", "Seating Capacity", "Vehicle Wheels",
-            
-            # Commission Structure
-            "Incoming Grid %", "Agent Commission %", "Extra Grid %", "Agent Extra %",
-            
-            # Payment Configuration
-            "Payment By", "Payment Method", "Payout On", "Payment By Office",
-            
-            # Calculated Commission Amounts
-            "Receivable from Broker", "Extra Amount Receivable", "Total Receivable", "Total Receivable with GST",
-            
-            # CutPay & Payout Amounts
-            "CutPay Amount", "Agent PO Amount", "Agent Extra Amount", "Total Agent PO",
-            
-            # Transaction Tracking
-            "Claimed By", "Running Balance", "CutPay Received",
-            
-            # Post-CutPay Fields
-            "Already Given to Agent", "IZ Total PO %", "Broker PO %", "Broker Payout Amount", "Invoice Status", "Remarks", "Company",
-            
-            # Notes
-            "Notes",
-            
-            # Timestamps
-            "Created At", "Updated At",
-            
-            # Match Status (always last)
-            "MATCH STATUS"
+            # Updated headers according to new master sheet requirements
+            "Reporting Month (mmm'yy)",
+            "Child ID/ User ID [Provided by Insure Zeal]",
+            "Insurer /broker code",
+            "Policy Start Date",
+            "Policy End Date",
+            "Booking Date(Click to select Date)",
+            "Broker Name",
+            "Insurer name",
+            "Major Categorisation( Motor/Life/ Health)",
+            "Product (Insurer Report)",
+            "Product Type",
+            "Plan type (Comp/STP/SAOD)",
+            "Gross premium",
+            "GST Amount",
+            "Net premium",
+            "OD Preimium",
+            "TP Premium",
+            "Policy number",
+            "Formatted Policy number",
+            "Registration.no",
+            "Make_Model",
+            "Model",
+            "Vehicle_Variant",
+            "GVW",
+            "RTO",
+            "State",
+            "Cluster",
+            "Fuel Type",
+            "CC",
+            "Age(Year)",
+            "NCB (YES/NO)",
+            "Discount %",
+            "Business Type",
+            "Seating Capacity",
+            "Veh_Wheels",
+            "Customer Name",
+            "Customer Number",
+            "Commissionable Premium",
+            "Incoming Grid %",
+            "Receivable from Broker",
+            "Extra Grid",
+            "Extra Amount Receivable from Broker",
+            " Total Receivable from Broker ",
+            " Claimed By ",
+            "Payment by",
+            "Payment Mode",
+            "Cut Pay Amount Received From Agent",
+            "Already Given to agent",
+            " Actual Agent_PO%",
+            "Agent_PO_AMT",
+            "Agent_Extra%",
+            "Agent_Extr_Amount",
+            "Payment By Office",
+            "PO Paid To Agent",
+            "Running Bal",
+            " Total Receivable from Broker Include 18% GST ",
+            " IZ Total PO%  ",
+            " As per Broker PO%  ",
+            " As per Broker PO AMT  ",
+            " PO% Diff Broker ",
+            " PO AMT Diff Broker ",
+            " As per Agent Payout% ",
+            " As per Agent Payout Amount ",
+            " PO% Diff Agent ",
+            " PO AMT Diff Agent ",
+            "  Invoice Status  ",
+            "  Invoice Number  ",
+            " Remarks ",
+            "Match"
         ]
 
 # =============================================================================
@@ -732,13 +878,13 @@ async def update_master_sheet_record(policy_number: str, updated_data: Dict[str,
         all_records = master_sheet.get_all_records()
         headers = google_sheets_sync._get_master_sheet_headers()
         
-        # Find the row with matching policy number (consistent normalization)
+        # Find the row with matching policy number (using new header structure)
         target_policy = normalize_policy_number_for_sheets(policy_number)
         row_to_update = None
         row_index = None
         
         for i, record in enumerate(all_records):
-            existing_policy = normalize_policy_number_for_sheets(record.get('Policy Number', ''))
+            existing_policy = normalize_policy_number_for_sheets(record.get('Policy number', ''))
             if existing_policy == target_policy:
                 row_to_update = record
                 row_index = i + 2  # +2 because of header row and 1-based indexing
@@ -791,16 +937,12 @@ async def add_master_sheet_record(record_data: Dict[str, Any]) -> bool:
         for header in headers:
             if header in record_data:
                 row_data.append(record_data[header])
-            elif header == "Created At":
-                row_data.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            elif header == "Updated At":
-                row_data.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             else:
                 row_data.append("")
         
         # Add the row
         master_sheet.append_row(row_data)
-        logger.info(f"Added new master sheet record for policy {record_data.get('Policy Number', 'unknown')}")
+        logger.info(f"Added new master sheet record for policy {record_data.get('Policy number', 'unknown')}")
         return True
         
     except Exception as e:

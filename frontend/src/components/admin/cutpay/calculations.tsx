@@ -83,20 +83,17 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
         calculatedCommissionablePremium = (od_premium || 0) + (tp_premium || 0);
         break;
       default:
-        // Fallback to original logic if payout_on is not set
+        // Primary logic: Check if vehicle type is private car and policy type is comprehensive/SAOD
         if (
           product_type?.toLowerCase().includes("private") &&
-          product_type?.toLowerCase().includes("car")
+          product_type?.toLowerCase().includes("car") &&
+          (plan_type?.toLowerCase().includes("comprehensive") ||
+           plan_type?.toLowerCase().includes("saod"))
         ) {
-          if (
-            plan_type?.toLowerCase().includes("comprehensive") ||
-            plan_type?.toLowerCase().includes("saod")
-          ) {
-            calculatedCommissionablePremium = od_premium;
-          } else {
-            calculatedCommissionablePremium = net_premium;
-          }
+          // For private car + comprehensive/SAOD, use OD premium as base
+          calculatedCommissionablePremium = od_premium;
         } else {
+          // For all other cases, use net premium
           calculatedCommissionablePremium = net_premium;
         }
         break;
@@ -120,6 +117,26 @@ const Calculations: React.FC<CalculationProps> = ({ control, setValue }) => {
     net_premium,
     tp_premium,
     commissionable_premium,
+    setValue,
+  ]);
+
+  // Auto-calculate agent_extra_percent: agent commission% - incoming grid% + incoming extra grid%
+  useEffect(() => {
+    const calculatedAgentExtra = agent_commission_given_percent - incoming_grid_percent + extra_grid;
+    const roundedCalculatedAgentExtra = roundToTwo(calculatedAgentExtra);
+    
+    if (roundedCalculatedAgentExtra !== agent_extra_percent) {
+      setValue(
+        "admin_input.agent_extra_percent",
+        roundedCalculatedAgentExtra,
+        { shouldValidate: true }
+      );
+    }
+  }, [
+    agent_commission_given_percent,
+    incoming_grid_percent,
+    extra_grid,
+    agent_extra_percent,
     setValue,
   ]);
 

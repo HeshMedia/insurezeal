@@ -88,9 +88,9 @@ class MISHelpers:
                 search_term = search.strip().lower()
                 filtered_records = []
                 for record in all_records:
-                    # Search across key fields
+                    # Search across key fields using new field names
                     searchable_fields = [
-                        record.policy_number, record.agent_code, record.customer_name,
+                        record.policy_number, record.child_id, record.customer_name,
                         record.insurer_name, record.broker_name, record.registration_number
                     ]
                     
@@ -439,83 +439,20 @@ class MISHelpers:
             return {"error": str(e)}
     
     def _convert_row_to_record(self, row_data: Dict[str, Any], row_number: int) -> MasterSheetRecord:
-        """Convert a sheet row dictionary to MasterSheetRecord"""
-        # Map the headers to our schema fields
-        field_mapping = {
-            "ID": "id",
-            "Reporting Month": "reporting_month",
-            "Booking Date": "booking_date",
-            "Agent Code": "agent_code",
-            "Code Type": "code_type",
-            "Insurer Name": "insurer_name",
-            "Broker Name": "broker_name",
-            "Insurer Broker Code": "insurer_broker_code",
-            "Policy Number": "policy_number",
-            "Formatted Policy Number": "formatted_policy_number",
-            "Customer Name": "customer_name",
-            "Customer Phone Number": "customer_phone_number",
-            "Major Categorisation": "major_categorisation",
-            "Product Insurer Report": "product_insurer_report",
-            "Product Type": "product_type",
-            "Plan Type": "plan_type",
-            "Gross Premium": "gross_premium",
-            "Net Premium": "net_premium",
-            "OD Premium": "od_premium",
-            "TP Premium": "tp_premium",
-            "GST Amount": "gst_amount",
-            "Commissionable Premium": "commissionable_premium",
-            "Registration No": "registration_number",
-            "Make Model": "make_model",
-            "Model": "model",
-            "Vehicle Variant": "vehicle_variant",
-            "GVW": "gvw",
-            "RTO": "rto",
-            "State": "state",
-            "Cluster": "cluster",
-            "Fuel Type": "fuel_type",
-            "CC": "cc",
-            "Age Year": "age_year",
-            "NCB": "ncb",
-            "Discount Percent": "discount_percent",
-            "Business Type": "business_type",
-            "Seating Capacity": "seating_capacity",
-            "Vehicle Wheels": "vehicle_wheels",
-            "Incoming Grid %": "incoming_grid_perc",
-            "Agent Commission %": "agent_commission_perc",
-            "Extra Grid %": "extra_grid_perc",
-            "Agent Extra %": "agent_extra_perc",
-            "Payment By": "payment_by",
-            "Payment Method": "payment_method",
-            "Payout On": "payout_on",
-            "Payment By Office": "payment_by_office",
-            "Receivable from Broker": "receivable_from_broker",
-            "Extra Amount Receivable": "extra_amount_receivable",
-            "Total Receivable": "total_receivable",
-            "Total Receivable with GST": "total_receivable_with_gst",
-            "CutPay Amount": "cut_pay_amount",
-            "Agent PO Amount": "agent_po_amount",
-            "Agent Extra Amount": "agent_extra_amount",
-            "Total Agent PO": "total_agent_po",
-            "Claimed By": "claimed_by",
-            "Running Balance": "running_balance",
-            "CutPay Received": "cutpay_received",
-            "Already Given to Agent": "already_given_to_agent",
-            "IZ Total PO %": "iz_total_po_percent",
-            "Broker PO %": "broker_po_percent",
-            "Broker Payout Amount": "broker_payout_amount",
-            "Invoice Status": "invoice_status",
-            "Remarks": "remarks",
-            "Company": "company",
-            "Notes": "notes",
-            "Created At": "created_at",
-            "Updated At": "updated_at"
-        }
+        """Convert a sheet row dictionary to MasterSheetRecord using new header structure"""
         
-        # Create record with mapped fields
-        record_data = {"row_number": row_number}
-        for sheet_header, field_name in field_mapping.items():
-            record_data[field_name] = str(row_data.get(sheet_header, "")) if row_data.get(sheet_header) else None
+        # Create record using field aliases for new headers
+        record_data = {}
         
+        # Map each new header to its corresponding field
+        for header_key, value in row_data.items():
+            # Use the header key directly as it matches our field aliases
+            record_data[header_key] = str(value) if value is not None else ""
+        
+        # Add row number for tracking
+        record_data["row_number"] = row_number
+        
+        # Create the record using field aliases
         return MasterSheetRecord(**record_data)
     
     async def _find_record_row(self, worksheet, record_id: str) -> Optional[int]:

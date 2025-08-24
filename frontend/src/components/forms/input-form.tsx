@@ -603,7 +603,7 @@ const planTypeOptions = useMemo(
     []
   );
   const businessTypeOptions = useMemo(
-    () => ["Brand New", "Roll Over" , "Renewable"].map((o) => ({ value: o, label: o })),
+    () => ["Brand New", "Rollover", "Renewed"].map((o) => ({ value: o, label: o })),
     []
   );
 
@@ -1295,6 +1295,11 @@ const planTypeOptions = useMemo(
       return null;
     }
 
+    // Skip payment_by_office field if payment_by is "Agent"
+    if (key === "admin_input.payment_by_office" && watch("admin_input.payment_by") === "Agent") {
+      return null;
+    }
+
     // Conditional rendering for OD+TP: hide regular fields when payout_on is "OD+TP"
     if (payoutOn === "OD+TP") {
       const fieldsToHideForODTP = [
@@ -1783,7 +1788,7 @@ const planTypeOptions = useMemo(
                                     f.key === "admin_input.broker_code" ||
                                     f.key === "admin_input.payment_by" ||
                                     f.key === "admin_input.payment_method" ||
-                                    // Hide payment_by_office when payment_by is "Agent" 
+                                    // Show payment_by_office only when payment_by is NOT "Agent" 
                                     (f.key === "admin_input.payment_by_office" && paymentBy !== "Agent") ||
                                     f.key === "notes");
                           } else {
