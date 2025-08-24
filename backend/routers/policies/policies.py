@@ -19,7 +19,9 @@ from routers.policies.schemas import (
 )
 from dependencies.rbac import require_permission
 from utils.google_sheets import google_sheets_sync
+from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
 from utils.quarterly_sheets_manager import quarterly_manager
+
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 security = HTTPBearer()
@@ -89,8 +91,11 @@ async def extract_pdf_data_endpoint(
 
 @router.post("/upload", response_model=PolicyUploadResponse)
 async def upload_policy_pdf(
-    file: UploadFile = File(..., description="Policy PDF file"),
+    file: UploadFile | None = File(None, description="Policy PDF file (if presign=false)"),
     policy_id: str = Form(..., description="Policy ID to associate with the uploaded PDF"),
+    presign: bool = Form(False),
+    filename: str | None = Form(None),
+    content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_write)
@@ -105,17 +110,46 @@ async def upload_policy_pdf(
     Returns file upload information
     """
     try:
-        if not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only PDF files are allowed"
+        if presign or not file:
+            user_id = current_user["user_id"]
+            user_role = current_user.get("role", "agent")
+            filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
+            existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
+            if not existing_policy:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found or you don't have access to it")
+
+            if not filename:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="filename is required for presign")
+            if not filename.lower().endswith('.pdf'):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
+
+            key = build_key(prefix=f"policies/{user_id}", filename=filename)
+            upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
+            file_path = build_cloudfront_url(key)
+
+            await PolicyHelpers.update_policy(
+                db,
+                policy_id,
+                {"pdf_file_path": file_path, "pdf_file_name": filename},
+                filter_user_id,
             )
+
+            return PolicyUploadResponse(
+                policy_id=policy_id,
+                extracted_data={},
+                confidence_score=None,
+                pdf_file_path=file_path,
+                pdf_file_name=filename,
+                message="Presigned URL generated; upload directly to S3",
+                upload_url=upload_url,
+            )
+
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
         
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        # Verify the policy exists and user has access to it
-        # Both admin and superadmin should see all policies
         filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         
@@ -143,7 +177,7 @@ async def upload_policy_pdf(
         )
         
         return PolicyUploadResponse(
-            policy_id=policy_id, 
+            policy_id=policy_id,
             extracted_data={},
             confidence_score=None,
             pdf_file_path=file_path,
@@ -316,6 +350,7 @@ async def list_policies(
             detail="Failed to fetch policies"
         )
 
+
 @router.get("/{policy_id}", response_model=PolicyResponse)
 async def get_policy_details(
     policy_id: str,
@@ -334,7 +369,6 @@ async def get_policy_details(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        # Both admin and superadmin should see all policies
         filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         
         policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
@@ -374,7 +408,6 @@ async def update_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        # Both admin and superadmin should see all policies
         filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
 
         update_data = policy_data.model_dump(exclude_unset=True)        
@@ -505,7 +538,6 @@ async def delete_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
         
-        # Both admin and superadmin should see all policies
         filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
         
         success = await PolicyHelpers.delete_policy(db, policy_id, filter_user_id)

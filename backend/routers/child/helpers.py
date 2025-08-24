@@ -439,7 +439,7 @@ class ChildHelpers:
                 detail="Failed to fetch active child IDs"
             )
 
-    async def get_filtered_child_ids(
+     async def get_filtered_child_ids(
         self,
         db: AsyncSession,
         insurer_code: str,

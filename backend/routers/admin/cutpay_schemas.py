@@ -451,6 +451,7 @@ class DocumentUploadResponse(BaseModel):
     document_type: str
     upload_status: str
     message: str
+    upload_url: Optional[str] = None
 
 class ExtractionRequest(BaseModel):
     """Schema for PDF extraction request"""

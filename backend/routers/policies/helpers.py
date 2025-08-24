@@ -34,63 +34,32 @@ class PolicyHelpers:
     
     @staticmethod
     async def save_uploaded_file(file: UploadFile, user_id: str) -> Tuple[str, str]:
-        """Save uploaded PDF file to Supabase storage and return URL and name"""
+        """Save uploaded PDF file to S3 and return URL and name"""
         try:
-            supabase = get_supabase_admin_client()
-            
             file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'pdf'
             unique_filename = f"policies/{user_id}/{uuid.uuid4()}.{file_extension}"
-
             file_content = await file.read()
-            try:
-                result = supabase.storage.from_(SUPABASE_STORAGE_BUCKET).upload(
-                    unique_filename, 
-                    file_content,
-                    file_options={"content-type": "application/pdf"}
-                )
-                
-                url_result = supabase.storage.from_(SUPABASE_STORAGE_BUCKET).get_public_url(unique_filename)
-                
-            except Exception as upload_error:
-                raise Exception(f"Supabase upload error: {str(upload_error)}")
-            
+            from utils.s3_utils import put_object, build_cloudfront_url
+            put_object(key=unique_filename, body=file_content, content_type="application/pdf")
+            url_result = build_cloudfront_url(unique_filename)
             return url_result, file.filename
-            
         except Exception as e:
-            logger.error(f"Error saving uploaded file to Supabase: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save uploaded file"
-            )
+            logger.error(f"Error saving uploaded file to S3: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save uploaded file")
     
     @staticmethod
     async def save_uploaded_file_from_bytes(file_content: bytes, filename: str, user_id: str) -> Tuple[str, str]:
-        """Save uploaded PDF file from bytes to Supabase storage and return URL and name"""
+        """Save uploaded PDF file from bytes to S3 and return URL and name"""
         try:
-            supabase = get_supabase_admin_client()           
             file_extension = filename.split('.')[-1] if '.' in filename else 'pdf'
             unique_filename = f"policies/{user_id}/{uuid.uuid4()}.{file_extension}"
-            
-            try:
-                result = supabase.storage.from_(SUPABASE_STORAGE_BUCKET).upload(
-                    unique_filename, 
-                    file_content,
-                    file_options={"content-type": "application/pdf"}
-                )
-                
-                url_result = supabase.storage.from_(SUPABASE_STORAGE_BUCKET).get_public_url(unique_filename)
-                
-            except Exception as upload_error:
-                raise Exception(f"Supabase upload error: {str(upload_error)}")
-            
+            from utils.s3_utils import put_object, build_cloudfront_url
+            put_object(key=unique_filename, body=file_content, content_type="application/pdf")
+            url_result = build_cloudfront_url(unique_filename)
             return url_result, filename
-            
         except Exception as e:
-            logger.error(f"Error saving uploaded file to Supabase: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to save uploaded file"
-            )
+            logger.error(f"Error saving uploaded file to S3: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save uploaded file")
     
     @staticmethod
     async def process_policy_pdf(file_content: bytes) -> Optional[Dict[str, Any]]:
@@ -413,22 +382,17 @@ class PolicyHelpers:
     
     @staticmethod
     async def delete_policy(db: AsyncSession, policy_id: str, user_id: Optional[str] = None) -> bool:
-        """Delete policy and associated PDF from Supabase storage"""
+        """Delete policy and associated PDF from S3"""
         try:
             policy = await PolicyHelpers.get_policy_by_id(db, policy_id, user_id)
             if not policy:
                 return False               
-                try:
-                    supabase = get_supabase_admin_client()
-                    if policy.pdf_file_path:
-                        url_parts = policy.pdf_file_path.split(f'/{SUPABASE_STORAGE_BUCKET}/')
-                        if len(url_parts) > 1:
-                            file_path = url_parts[1]
-                            result = supabase.storage.from_(SUPABASE_STORAGE_BUCKET).remove([file_path])
-                            if result:
-                                logger.info(f"Deleted PDF from Supabase: {file_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to delete PDF file from Supabase: {str(e)}")
+            try:
+                if policy.pdf_file_path:
+                    from utils.s3_utils import delete_object_by_url
+                    delete_object_by_url(policy.pdf_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete PDF file from S3: {str(e)}")
             
             await db.delete(policy)
             await db.commit()
