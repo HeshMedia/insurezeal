@@ -88,10 +88,10 @@ class MISHelpers:
                 search_term = search.strip().lower()
                 filtered_records = []
                 for record in all_records:
-                    # Search across key fields
+                    # Search across key fields using new field names
                     searchable_fields = [
-                        record.policy_number, record.agent_code, record.customer_name,
-                        record.insurer_name, record.broker_name, record.registration_no
+                        record.policy_number, record.child_id, record.customer_name,
+                        record.insurer_name, record.broker_name, record.registration_number
                     ]
                     
                     if any(field and search_term in str(field).lower() for field in searchable_fields):
@@ -439,83 +439,20 @@ class MISHelpers:
             return {"error": str(e)}
     
     def _convert_row_to_record(self, row_data: Dict[str, Any], row_number: int) -> MasterSheetRecord:
-        """Convert a sheet row dictionary to MasterSheetRecord"""
-        # Map the headers to our schema fields
-        field_mapping = {
-            "ID": "id",
-            "Reporting Month": "reporting_month",
-            "Booking Date": "booking_date",
-            "Agent Code": "agent_code",
-            "Code Type": "code_type",
-            "Insurer Name": "insurer_name",
-            "Broker Name": "broker_name",
-            "Insurer Broker Code": "insurer_broker_code",
-            "Policy Number": "policy_number",
-            "Formatted Policy Number": "formatted_policy_number",
-            "Customer Name": "customer_name",
-            "Customer Phone Number": "customer_phone_number",
-            "Major Categorisation": "major_categorisation",
-            "Product Insurer Report": "product_insurer_report",
-            "Product Type": "product_type",
-            "Plan Type": "plan_type",
-            "Gross Premium": "gross_premium",
-            "Net Premium": "net_premium",
-            "OD Premium": "od_premium",
-            "TP Premium": "tp_premium",
-            "GST Amount": "gst_amount",
-            "Commissionable Premium": "commissionable_premium",
-            "Registration No": "registration_no",
-            "Make Model": "make_model",
-            "Model": "model",
-            "Vehicle Variant": "vehicle_variant",
-            "GVW": "gvw",
-            "RTO": "rto",
-            "State": "state",
-            "Cluster": "cluster",
-            "Fuel Type": "fuel_type",
-            "CC": "cc",
-            "Age Year": "age_year",
-            "NCB": "ncb",
-            "Discount Percent": "discount_percent",
-            "Business Type": "business_type",
-            "Seating Capacity": "seating_capacity",
-            "Vehicle Wheels": "vehicle_wheels",
-            "Incoming Grid %": "incoming_grid_perc",
-            "Agent Commission %": "agent_commission_perc",
-            "Extra Grid %": "extra_grid_perc",
-            "Agent Extra %": "agent_extra_perc",
-            "Payment By": "payment_by",
-            "Payment Method": "payment_method",
-            "Payout On": "payout_on",
-            "Payment By Office": "payment_by_office",
-            "Receivable from Broker": "receivable_from_broker",
-            "Extra Amount Receivable": "extra_amount_receivable",
-            "Total Receivable": "total_receivable",
-            "Total Receivable with GST": "total_receivable_with_gst",
-            "CutPay Amount": "cut_pay_amount",
-            "Agent PO Amount": "agent_po_amount",
-            "Agent Extra Amount": "agent_extra_amount",
-            "Total Agent PO": "total_agent_po",
-            "Claimed By": "claimed_by",
-            "Running Balance": "running_balance",
-            "CutPay Received": "cutpay_received",
-            "Already Given to Agent": "already_given_to_agent",
-            "IZ Total PO %": "iz_total_po_percent",
-            "Broker PO %": "broker_po_percent",
-            "Broker Payout Amount": "broker_payout_amount",
-            "Invoice Status": "invoice_status",
-            "Remarks": "remarks",
-            "Company": "company",
-            "Notes": "notes",
-            "Created At": "created_at",
-            "Updated At": "updated_at"
-        }
+        """Convert a sheet row dictionary to MasterSheetRecord using new header structure"""
         
-        # Create record with mapped fields
-        record_data = {"row_number": row_number}
-        for sheet_header, field_name in field_mapping.items():
-            record_data[field_name] = str(row_data.get(sheet_header, "")) if row_data.get(sheet_header) else None
+        # Create record using field aliases for new headers
+        record_data = {}
         
+        # Map each new header to its corresponding field
+        for header_key, value in row_data.items():
+            # Use the header key directly as it matches our field aliases
+            record_data[header_key] = str(value) if value is not None else ""
+        
+        # Add row number for tracking
+        record_data["row_number"] = row_number
+        
+        # Create the record using field aliases
         return MasterSheetRecord(**record_data)
     
     async def _find_record_row(self, worksheet, record_id: str) -> Optional[int]:
@@ -533,4 +470,187 @@ class MISHelpers:
             
         except Exception as e:
             logger.error(f"Error finding record row for ID {record_id}: {str(e)}")
+            return None
+
+    async def get_agent_mis_data(
+        self,
+        agent_code: str,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get filtered master sheet data for specific agent with removed sensitive fields
+        Only returns records where MATCH STATUS = TRUE
+        
+        Args:
+            agent_code: Agent code to filter by
+            page: Page number (1-based)
+            page_size: Number of records per page
+            
+        Returns:
+            Dictionary with filtered records, statistics, and pagination info
+        """
+        try:
+            if not self.sheets_client.client:
+                logger.error("Google Sheets client not initialized")
+                return {
+                    "records": [],
+                    "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+
+            # Get Master sheet
+            master_sheet = self.sheets_client._get_or_create_worksheet(
+                "Master", 
+                self.sheets_client._get_master_sheet_headers()
+            )
+            
+            if not master_sheet:
+                logger.error("Could not access Master sheet")
+                return {
+                    "records": [],
+                    "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+
+            # Get all data from the sheet as dictionaries
+            all_data = master_sheet.get_all_records()
+            logger.info(f"Retrieved {len(all_data)} total records from Master sheet")
+            
+            # Filter records for this agent
+            filtered_records = []
+            for record in all_data:
+                # Check if agent code matches (try both possible field names)
+                record_agent_code = str(record.get('Agent Code', record.get('agent_code', ''))).strip()
+                
+                # Check if MATCH STATUS is TRUE (try different possible field names)
+                match_status = str(record.get('MATCH STATUS', record.get('Match Status', record.get('match_status', 'TRUE')))).upper().strip()
+                
+                logger.info(f"Record agent code: '{record_agent_code}', Match status: '{match_status}', Target: '{agent_code}'")
+                
+                if record_agent_code == agent_code and match_status == 'TRUE':
+                    filtered_records.append(record)
+            
+            logger.info(f"Filtered to {len(filtered_records)} records for agent: {agent_code}")
+            
+            # Calculate statistics
+            running_balance = 0.0
+            total_net_premium = 0.0
+            
+            for record in filtered_records:
+                try:
+                    # Get running balance value with better parsing
+                    balance_val = record.get('Running Balance', record.get('running_balance', '0'))
+                    if balance_val and str(balance_val).strip():
+                        balance_str = str(balance_val).replace(',', '').replace('₹', '').strip()
+                        if balance_str and balance_str != '':
+                            running_balance += float(balance_str)
+                            logger.info(f"Added balance: {balance_str} -> running total: {running_balance}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Could not parse running balance '{balance_val}': {e}")
+                    
+                try:
+                    # Get net premium value with better parsing
+                    net_val = record.get('Net Premium', record.get('net_premium', '0'))
+                    if net_val and str(net_val).strip():
+                        net_str = str(net_val).replace(',', '').replace('₹', '').strip()
+                        if net_str and net_str != '':
+                            total_net_premium += float(net_str)
+                            logger.info(f"Added net premium: {net_str} -> running total: {total_net_premium}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Could not parse net premium '{net_val}': {e}")
+            
+            logger.info(f"Final statistics - Running Balance: {running_balance}, Net Premium: {total_net_premium}")
+
+            total_count = len(filtered_records)
+            
+            # Pagination
+            total_pages = (total_count + page_size - 1) // page_size if page_size > 0 else 1
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_records = filtered_records[start_idx:end_idx]
+
+            # Convert to AgentMISRecord format with filtered fields
+            agent_records = []
+            for record in paginated_records:
+                agent_record = self._convert_record_to_agent_mis_record(record)
+                if agent_record:
+                    agent_records.append(agent_record)
+
+            return {
+                "records": agent_records,
+                "stats": {
+                    "number_of_policies": total_count,
+                    "running_balance": running_balance,
+                    "total_net_premium": total_net_premium
+                },
+                "total_count": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching agent MIS data: {str(e)}")
+            return {
+                "records": [],
+                "stats": {"number_of_policies": 0, "running_balance": 0.0, "total_net_premium": 0.0},
+                "total_count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+
+    def _convert_record_to_agent_mis_record(self, record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Convert master sheet record dictionary to AgentMISRecord with filtered fields
+        """
+        try:
+            # Field mapping for AgentMISRecord (using actual Google Sheet header names)
+            agent_mis_record = {
+                "id": record.get("ID", record.get("id")),
+                "reporting_month": record.get("Reporting Month", record.get("reporting_month")),
+                "booking_date": record.get("Booking Date", record.get("booking_date")),
+                "agent_code": record.get("Agent Code", record.get("agent_code")),
+                "insurer_name": record.get("Insurer Name", record.get("insurer_name")),
+                "broker_name": record.get("Broker Name", record.get("broker_name")),
+                "policy_number": record.get("Policy Number", record.get("policy_number")),
+                "formatted_policy_number": record.get("Formatted Policy Number", record.get("formatted_policy_number")),
+                "customer_name": record.get("Customer Name", record.get("customer_name")),
+                "customer_phone_number": record.get("Customer Phone Number", record.get("customer_phone_number")),
+                "major_categorisation": record.get("Major Categorisation", record.get("major_categorisation")),
+                "product_insurer_report": record.get("Product Insurer Report", record.get("product_insurer_report")),
+                "product_type": record.get("Product Type", record.get("product_type")),
+                "plan_type": record.get("Plan Type", record.get("plan_type")),
+                "gross_premium": record.get("Gross Premium", record.get("gross_premium")),
+                "net_premium": record.get("Net Premium", record.get("net_premium")),
+                "registration_number": record.get("Registration No", record.get("registration_number")),
+                "make_model": record.get("Make Model", record.get("make_model")),
+                "model": record.get("Model", record.get("model")),
+                "agent_commission_perc": record.get("Agent Commission %", record.get("agent_commission_perc")),
+                "agent_po_amount": record.get("Agent PO Amount", record.get("agent_po_amount")),
+                "total_agent_po": record.get("Total Agent PO", record.get("total_agent_po")),
+                "running_balance": record.get("Running Balance", record.get("running_balance")),
+                "already_given_to_agent": record.get("Already Given to Agent", record.get("already_given_to_agent")),
+                "created_at": record.get("Created At", record.get("created_at")),
+                "updated_at": record.get("Updated At", record.get("updated_at"))
+            }
+
+            # Clean None values and convert to strings where needed
+            for key, value in agent_mis_record.items():
+                if value is not None:
+                    agent_mis_record[key] = str(value).strip() if str(value).strip() else None
+                else:
+                    agent_mis_record[key] = None
+
+            return agent_mis_record
+
+        except Exception as e:
+            logger.error(f"Error converting record to agent MIS record: {str(e)}")
             return None

@@ -27,7 +27,6 @@ import {
   CreditCard,
   LayoutGrid,
   List,
-  Table2
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -163,7 +162,7 @@ export function CutPayManagement() {
     return (
       transaction.policy_number?.toLowerCase().includes(query) ||
       transaction.customer_name?.toLowerCase().includes(query) ||
-      transaction.registration_no?.toLowerCase().includes(query) ||
+      transaction.registration_number?.toLowerCase().includes(query) ||
       transaction.agent_code?.toLowerCase().includes(query)
     )
   }) || []
@@ -235,10 +234,6 @@ export function CutPayManagement() {
                 <DropdownMenuItem onClick={() => setViewMode('list')}>
                   <List className="h-4 w-4 mr-2" />
                   List View
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/admin/cutpay/table')}>
-                  <Table2 className="h-4 w-4 mr-2" />
-                  Table View
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

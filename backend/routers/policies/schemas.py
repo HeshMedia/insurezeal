@@ -4,6 +4,65 @@ from datetime import date, datetime
 from uuid import UUID
 import json
 
+# =============================================================================
+# SIMPLIFIED SCHEMAS FOR DATABASE STORAGE
+# =============================================================================
+
+class PolicySummaryResponse(BaseModel):
+    """Simplified response for policy summaries from database"""
+    id: UUID
+    policy_number: str
+    child_id: Optional[str] = None
+    agent_code: Optional[str] = None
+    customer_documents_url: Optional[str] = None
+    vehicle_documents_url: Optional[str] = None
+    policy_documents_url: Optional[str] = None
+    booking_date: Optional[date] = None
+    policy_start_date: Optional[date] = None
+    policy_end_date: Optional[date] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+class CutPaySummaryResponse(BaseModel):
+    """Simplified response for cutpay summaries from database"""
+    id: int
+    policy_number: Optional[str] = None
+    child_id_request_id: Optional[UUID] = None
+    agent_code: Optional[str] = None
+    insurer_id: Optional[int] = None
+    broker_id: Optional[int] = None
+    admin_child_id: Optional[str] = None
+    customer_documents_url: Optional[str] = None
+    vehicle_documents_url: Optional[str] = None
+    policy_documents_url: Optional[str] = None
+    booking_date: Optional[date] = None
+    policy_start_date: Optional[date] = None
+    policy_end_date: Optional[date] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class PolicyCreateResponse(BaseModel):
+    """Response after creating a policy"""
+    id: UUID
+    policy_number: str
+    message: str
+
+class CutPayCreateResponse(BaseModel):
+    """Response after creating a cutpay"""
+    id: int
+    policy_number: Optional[str] = None
+    message: str
+
+# =============================================================================
+# FRONTEND SCHEMAS (UNCHANGED FOR NOW)
+# =============================================================================
+
 class PolicyBase(BaseModel):
     # Agent & Child Info
     agent_id: Optional[UUID] = None
@@ -45,7 +104,6 @@ class PolicyBase(BaseModel):
     business_type: Optional[str] = None
     seating_capacity: Optional[int] = None
     veh_wheels: Optional[int] = None
-    is_private_car: Optional[bool] = Field(None, description="Whether this is a private car")
     
     # Premium Details
     gross_premium: Optional[float] = None
@@ -55,9 +113,8 @@ class PolicyBase(BaseModel):
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
     
-    # Agent Commission Fields (only these two for policies)
+    # Agent Commission Fields (only one for policies now)
     agent_commission_given_percent: Optional[float] = None
-    agent_extra_percent: Optional[float] = None
     
     # Agent Financial Tracking Fields
     payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
@@ -77,8 +134,8 @@ class PolicyBase(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
-class PolicyCreate(PolicyBase):
-    """Schema for creating a new policy with all possible fields"""
+class PolicyCreateRequest(PolicyBase):
+    """Schema for creating a new policy with all possible fields from frontend"""
     pdf_file_path: str = Field(..., description="Supabase URL of the uploaded PDF")
     pdf_file_name: str = Field(..., description="Original filename of the PDF")
     
@@ -86,7 +143,8 @@ class PolicyCreate(PolicyBase):
     manual_override: Optional[bool] = False
     
     class Config:
-        json_schema_extra = {            "example": {
+        json_schema_extra = {
+            "example": {
                 # Agent & Child Info (optional - auto-filled for agents, validated for admins)
                 "agent_id": "123e4567-e89b-12d3-a456-426614174000",  # Will be auto-filled for agents or validated for admins
                 "agent_code": "AGT001",  # Auto-filled based on agent_id
@@ -126,6 +184,80 @@ class PolicyCreate(PolicyBase):
             }
         }
 
+# =============================================================================
+# CUTPAY SCHEMAS (FOR FRONTEND COMPATIBILITY)
+# =============================================================================
+
+class CutPayBase(BaseModel):
+    """Base CutPay schema with all frontend fields"""
+    # Document URLs
+    policy_pdf_url: Optional[str] = None
+    additional_documents: Optional[dict] = None
+    
+    # Basic Policy Information
+    policy_number: Optional[str] = None
+    formatted_policy_number: Optional[str] = None
+    major_categorisation: Optional[str] = None
+    product_insurer_report: Optional[str] = None
+    product_type: Optional[str] = None
+    plan_type: Optional[str] = None
+    customer_name: Optional[str] = None
+    customer_phone_number: Optional[str] = None
+    
+    # Premium & Financial Details
+    gross_premium: Optional[float] = None
+    net_premium: Optional[float] = None
+    od_premium: Optional[float] = None
+    tp_premium: Optional[float] = None
+    gst_amount: Optional[float] = None
+    
+    # Vehicle Details
+    registration_number: Optional[str] = None
+    make_model: Optional[str] = None
+    model: Optional[str] = None
+    vehicle_variant: Optional[str] = None
+    gvw: Optional[float] = None
+    rto: Optional[str] = None
+    state: Optional[str] = None
+    fuel_type: Optional[str] = None
+    cc: Optional[int] = None
+    age_year: Optional[int] = None
+    ncb: Optional[str] = None
+    discount_percent: Optional[float] = None
+    business_type: Optional[str] = None
+    seating_capacity: Optional[int] = None
+    veh_wheels: Optional[int] = None
+    
+    # Transaction Configuration
+    reporting_month: Optional[str] = None
+    booking_date: Optional[date] = None
+    agent_code: Optional[str] = None
+    code_type: Optional[str] = None
+    
+    # Commission Configuration
+    incoming_grid_percent: Optional[float] = None
+    agent_commission_given_percent: Optional[float] = None
+    extra_grid: Optional[float] = None
+    commissionable_premium: Optional[float] = None
+    
+    # Payment Configuration
+    payment_by: Optional[str] = None
+    payment_method: Optional[str] = None
+    payout_on: Optional[str] = None
+    agent_extra_percent: Optional[float] = None
+    payment_by_office: Optional[float] = None
+    
+    # All other fields...
+    notes: Optional[str] = None
+
+class CutPayCreateRequest(CutPayBase):
+    """Schema for creating CutPay from frontend"""
+    pass
+
+# =============================================================================
+# LEGACY COMPATIBILITY SCHEMAS
+# =============================================================================
+
 class PolicyUpdate(BaseModel):
     agent_id: Optional[UUID] = None
     agent_code: Optional[str] = None
@@ -152,6 +284,7 @@ class PolicyUpdate(BaseModel):
     manual_override: Optional[bool] = None
 
 class PolicyResponse(PolicyBase):
+    """Full response for detailed view (will be changed to use Google Sheets later)"""
     id: UUID
     uploaded_by: UUID
     pdf_file_name: str
@@ -164,7 +297,7 @@ class PolicyResponse(PolicyBase):
         from_attributes = True
 
 class PolicySummary(BaseModel):
-    """Summary for list view"""
+    """Legacy summary for list view"""
     id: UUID
     policy_number: str
     policy_type: str

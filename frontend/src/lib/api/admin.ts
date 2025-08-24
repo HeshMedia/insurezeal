@@ -1,5 +1,4 @@
-import axios, { AxiosInstance } from 'axios'
-import Cookies from 'js-cookie'
+import { createAuthenticatedClient } from './client'
 import { 
   AgentListResponse,
   AgentListParams,
@@ -12,22 +11,8 @@ import {
   ChildRequestStatusUpdate,
 } from '@/types/admin.types'
 
-// Create axios instance
-const apiClient: AxiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
-
-// Request interceptor to add auth token
-apiClient.interceptors.request.use((config) => {
-  const token = Cookies.get('access_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
+// Create axios instance with Supabase authentication
+const apiClient = createAuthenticatedClient()
 
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
@@ -36,6 +21,8 @@ apiClient.interceptors.response.use(
     // Only log errors that are not permission-related for agents
     if (error.response?.status !== 401 && error.response?.status !== 403) {
       console.error('Admin API Error:', {
+        url: error.config?.url,
+        method: error.config?.method,
         response: error.response?.data,
         status: error.response?.status,
         message: error.message

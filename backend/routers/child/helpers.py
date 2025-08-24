@@ -439,7 +439,7 @@ class ChildHelpers:
                 detail="Failed to fetch active child IDs"
             )
 
-    async def get_filtered_child_ids(
+     async def get_filtered_child_ids(
         self,
         db: AsyncSession,
         insurer_code: str,
@@ -447,38 +447,66 @@ class ChildHelpers:
         agent_id: Optional[str] = None
     ) -> List[ChildIdRequest]:
         """
-        Get active child IDs filtered by parameters
+        Get active child IDs filtered by parameters with strict code type logic
         
         Args:
             db: Database session
             insurer_code: Required insurer code to filter by
             broker_code: Optional broker code to filter by
-            agent_id: Optional agent ID to filter by
+            agent_id: Optional agent ID to filter by (only for agents)
             
         Returns:
             List of filtered ChildIdRequest objects
+            
+        Logic:
+            - If broker_code provided: Only return child IDs with code_type="broker" AND matching both insurer_code AND broker_code
+            - If broker_code not provided: Only return child IDs with code_type="direct" AND matching insurer_code
+            - If agent_id provided: Only return child IDs assigned to that specific agent
         """
         try:
             from sqlalchemy.orm import selectinload
             
-            # Build query conditions
+            # Base conditions
             conditions = [
                 ChildIdRequest.status == "accepted",
-                Insurer.code == insurer_code
+                Insurer.insurer_code == insurer_code
             ]
             
+            # Apply strict code type logic
             if broker_code:
-                conditions.append(Broker.code == broker_code)
+                # Broker type: Must have both insurer and broker codes
+                conditions.extend([
+                    ChildIdRequest.code_type == "broker",
+                    Broker.broker_code == broker_code
+                ])
+            else:
+                # Direct type: Only insurer code, no broker
+                conditions.extend([
+                    ChildIdRequest.code_type == "direct",
+                    ChildIdRequest.broker_code.is_(None)
+                ])
                 
+            # Agent filter: Only return child IDs assigned to this agent
             if agent_id:
                 conditions.append(ChildIdRequest.user_id == uuid.UUID(agent_id))
             
-            query = select(ChildIdRequest).options(
-                selectinload(ChildIdRequest.insurer),
-                selectinload(ChildIdRequest.broker)
-            ).join(Insurer).join(Broker).where(
-                and_(*conditions)
-            ).order_by(desc(ChildIdRequest.approved_at))
+            # Build query with proper joins
+            if broker_code:
+                # For broker type, we need both joins
+                query = select(ChildIdRequest).options(
+                    selectinload(ChildIdRequest.insurer),
+                    selectinload(ChildIdRequest.broker)
+                ).join(Insurer).join(Broker).where(
+                    and_(*conditions)
+                ).order_by(desc(ChildIdRequest.approved_at))
+            else:
+                # For direct type, only join with insurer (no broker)
+                query = select(ChildIdRequest).options(
+                    selectinload(ChildIdRequest.insurer),
+                    selectinload(ChildIdRequest.broker)
+                ).join(Insurer).outerjoin(Broker).where(
+                    and_(*conditions)
+                ).order_by(desc(ChildIdRequest.approved_at))
             
             result = await db.execute(query)
             return result.scalars().all()

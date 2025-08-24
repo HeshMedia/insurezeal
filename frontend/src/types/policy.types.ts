@@ -18,7 +18,6 @@ export interface Policy {
   insurance_type: string;
   vehicle_type: string;
   registration_number: string;
-  registration_no: string;
   vehicle_class: string;
   vehicle_segment: string;
   make_model: string;
@@ -132,7 +131,6 @@ export interface SubmitPolicyPayload {
   insurance_type?: string;
   vehicle_type?: string;
   registration_number?: string;
-  registration_no?: string;
   vehicle_class?: string;
   vehicle_segment?: string;
   make_model?: string;
@@ -227,4 +225,10 @@ export interface ListAgentPoliciesParams {
   page?: number;
   page_size?: number;
   search?: string | null;
+}
+
+export interface ChildIdOptionsParams {
+  insurer_code: string;
+  broker_code?: string;
+  agent_id?: string;
 }

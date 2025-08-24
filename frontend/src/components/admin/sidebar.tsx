@@ -4,9 +4,7 @@ import * as React from "react"
 import { User, Settings, BarChart3, Users, Shield, DollarSign, MessageSquare, Database , FileSpreadsheet } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { useAtom } from "jotai"
-import { userAtom } from "@/lib/atoms/auth"
-import { useProfile } from "@/hooks/profileQuery"
+import { useAuth } from "@/hooks/useAuth"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Sidebar,
@@ -67,8 +65,7 @@ const navigationItems = [
 ]
 
 export function AdminSidebar({ ...props }) {
-  const [user] = useAtom(userAtom)
-  const { data: profile } = useProfile()
+  const { user } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
 
@@ -89,13 +86,13 @@ export function AdminSidebar({ ...props }) {
     return 'U'
   }
   const getDisplayName = () => {
-    if (user?.first_name && user?.last_name) {
-      return `${user.first_name} ${user.last_name}`
+    if (user?.user_metadata?.first_name && user?.user_metadata?.last_name) {
+      return `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
     }
-    if (user?.first_name) {
-      return user.first_name
+    if (user?.user_metadata?.first_name) {
+      return user.user_metadata.first_name
     }
-    return user?.username || 'Admin User'
+    return user?.user_metadata?.username || user?.email?.split('@')[0] || 'Admin User'
   }
   
   return (
@@ -151,12 +148,12 @@ export function AdminSidebar({ ...props }) {
             >
               <Avatar className="h-7 w-7 rounded-md ring-1 ring-gray-200 shrink-0">
                 <AvatarImage 
-                  src={profile?.avatar_url} 
+                  src={user?.user_metadata?.avatar_url} 
                   alt={getDisplayName()}
                   className="object-cover"
                 />
                 <AvatarFallback className="bg-gradient-to-br from-slate-700 to-slate-800 text-white text-xs font-medium rounded-md">
-                  {getInitials(user?.first_name, user?.last_name, user?.username)}
+                  {getInitials(user?.user_metadata?.first_name, user?.user_metadata?.last_name, user?.user_metadata?.username)}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight min-w-0">

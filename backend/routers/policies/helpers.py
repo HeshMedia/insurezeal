@@ -412,8 +412,8 @@ class PolicyHelpers:
         """Provide default values for required fields that cannot be null"""
 
         if not policy_data.get('insurance_type'):
-            policy_type = policy_data.get('policy_type', '').lower()
-            vehicle_type = policy_data.get('vehicle_type', '').lower()
+            policy_type = (policy_data.get('policy_type') or '').lower()
+            vehicle_type = (policy_data.get('vehicle_type') or '').lower()
             
             if 'motor' in policy_type or 'vehicle' in vehicle_type:
                 policy_data['insurance_type'] = 'Comprehensive'
@@ -608,7 +608,6 @@ class PolicyHelpers:
                     Policy.policy_number.ilike(f"%{search}%"),
                     Policy.customer_name.ilike(f"%{search}%"),
                     Policy.registration_number.ilike(f"%{search}%"),
-                    Policy.registration_no.ilike(f"%{search}%")
                 )
                 query = query.where(search_filter)
             
@@ -657,7 +656,6 @@ class PolicyHelpers:
                     # Vehicle Details
                     "vehicle_type": policy_data.get("vehicle_type"),
                     "registration_number": policy_data.get("registration_number"),
-                    "registration_no": policy_data.get("registration_no"),
                     "vehicle_class": policy_data.get("vehicle_class"),
                     "vehicle_segment": policy_data.get("vehicle_segment"),
                     "make_model": policy_data.get("make_model"),
@@ -674,7 +672,6 @@ class PolicyHelpers:
                     "business_type": policy_data.get("business_type"),
                     "seating_capacity": policy_data.get("seating_capacity"),
                     "veh_wheels": policy_data.get("veh_wheels"),
-                    "is_private_car": policy_data.get("is_private_car"),
                     
                     # Premium Details
                     "gross_premium": policy_data.get("gross_premium"),
@@ -779,4 +776,59 @@ class PolicyHelpers:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to check policy number availability"
+            )
+
+    @staticmethod
+    async def create_simplified_policy(
+        db: AsyncSession,
+        essential_data: Dict[str, Any]
+    ) -> Policy:
+        """
+        Create a simplified policy record with only essential fields
+        
+        Args:
+            db: Database session
+            essential_data: Dictionary containing only essential policy fields
+            
+        Returns:
+            Created Policy instance
+        """
+        try:
+            # Create policy with only essential fields
+            policy = Policy(
+                policy_number=essential_data.get("policy_number"),
+                child_id=essential_data.get("child_id"),
+                agent_code=essential_data.get("agent_code"),
+                customer_documents_url=essential_data.get("customer_documents_url"),
+                vehicle_documents_url=essential_data.get("vehicle_documents_url"),
+                policy_documents_url=essential_data.get("policy_documents_url"),
+                booking_date=essential_data.get("booking_date"),
+                policy_start_date=essential_data.get("policy_start_date"),
+                policy_end_date=essential_data.get("policy_end_date")
+            )
+            
+            db.add(policy)
+            await db.commit()
+            await db.refresh(policy)
+            
+            logger.info(f"Created simplified policy: {policy.policy_number}")
+            return policy
+            
+        except IntegrityError as e:
+            await db.rollback()
+            if "unique constraint" in str(e).lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Policy number {essential_data.get('policy_number')} already exists"
+                )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Database constraint violation: {str(e)}"
+            )
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Error creating simplified policy: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create policy: {str(e)}"
             )

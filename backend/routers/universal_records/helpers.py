@@ -209,7 +209,7 @@ def parse_csv_with_mapping(
                     # Find the policy number field for this insurer
                     policy_number_field = None
                     for orig_field, mapped_field in insurer_mapping.items():
-                        if mapped_field == "Policy Number":
+                        if mapped_field == "Policy number":
                             policy_number_field = orig_field
                             break
                     
@@ -286,62 +286,6 @@ def preview_csv_with_mapping(
         unmapped_headers=unmapped_headers,
         total_rows=len(mapped_records)
     )
-
-
-def normalize_field_value(field_name: str, value: Any) -> Any:
-    """Normalize field values based on expected data types"""
-    
-    if value is None or value == '':
-        return None
-    
-    # String fields
-    string_fields = [
-        'Policy Number', 'Product Type', 'Agent Code', 'Broker Name',
-        'Insurer Name', 'Customer Name', 'Registration No', 'Make Model',
-        'Model', 'Notes', 'Payment Method', 'Payment By'
-    ]
-    
-    # Decimal fields
-    decimal_fields = [
-        'Gross Premium', 'Net Premium', 'OD Premium', 'TP Premium',
-        'GST Amount', 'CutPay Amount', 'Agent Commission %'
-    ]
-    
-    # Date fields
-    date_fields = ['Booking Date', 'Created At', 'Updated At']
-    
-    try:
-        if field_name in string_fields:
-            return str(value).strip() if value else None
-        
-        elif field_name in decimal_fields:
-            if isinstance(value, (int, float)):
-                return Decimal(str(value))
-            elif isinstance(value, str):
-                # Remove currency symbols and commas
-                clean_value = value.replace(',', '').replace('₹', '').replace('$', '').strip()
-                if clean_value:
-                    return Decimal(clean_value)
-            return None
-        
-        elif field_name in date_fields:
-            if isinstance(value, str):
-                # Try multiple date formats
-                for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-                    try:
-                        return datetime.strptime(value.strip(), fmt).date()
-                    except ValueError:
-                        continue
-            return None
-        
-        else:
-            # Return as-is for unknown fields
-            return value
-            
-    except (ValueError, InvalidOperation) as e:
-        logger.warning(f"Failed to normalize {field_name} with value {value}: {str(e)}")
-        return None
-
 
 async def process_universal_record_csv(
     db: AsyncSession,

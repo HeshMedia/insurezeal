@@ -16,7 +16,7 @@ export interface PolicyFormFieldConfig {
 
 export const policyFormFields: PolicyFormFieldConfig[] = [
   // ✅ Extracted Data (PDF Extraction) - All have autofill tag
-  { key: 'extracted_data.policy_number', label: 'Policy Number', type: 'text', section: 'extracted', required: true, tag: 'autofill' },
+  { key: 'extracted_data.policy_number', label: 'Policy Number', type: 'text', section: 'extracted', required: true, tag: 'autofill' , disabled :true },
   { key: 'extracted_data.formatted_policy_number', label: 'Formatted Policy Number', type: 'text', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.major_categorisation', label: 'Major Categorisation', type: 'select', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.product_insurer_report', label: 'Product Insurer Report', type: 'text', section: 'extracted', tag: 'autofill' },
@@ -85,7 +85,6 @@ export const policyFormFields: PolicyFormFieldConfig[] = [
     { value: 'neft', label: 'NEFT' }
   ] },
   { key: 'admin_input.agent_commission_given_percent', label: 'Agent Commission %', type: 'number', section: 'admin' },
-  { key: 'admin_input.agent_extra_percent', label: 'Agent Extra %', type: 'number', section: 'admin' },
   { key: 'admin_input.payment_by_office', label: 'Payment By Office', type: 'number', section: 'admin', tag: 'payment-method-dependent' },
   { key: 'admin_input.admin_child_id', label: 'Child ID', type: 'select', section: 'admin', required: true },
   

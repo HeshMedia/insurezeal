@@ -1,59 +1,46 @@
 "use client"
 
 import * as React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { LogIn, Lock, Mail, Eye, EyeOff } from "lucide-react"
-import { useLogin } from "@/hooks/authQuery"
-import { useAtom } from 'jotai'
-import { authErrorAtom } from '@/lib/atoms/auth'
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { signIn } from "@/lib/utils/supabase/auth"
+import { getUserRole, getDefaultRedirectPath } from "@/lib/utils/auth"
 
 const LoginPage = () => {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
-  
-  const [error, setError] = useAtom(authErrorAtom)
-  const loginMutation = useLogin()
-  const { isPending: loading } = loginMutation
-  const router = useRouter()// Handle Supabase recovery tokens from URL hash
-  useEffect(() => {
-    const handleSupabaseRecovery = () => {
-      const hash = window.location.hash
-      // console.log('Hash:', hash) // Debug log (removed for production safety)
-      
-      if (hash.includes('access_token') && hash.includes('type=recovery')) {
-        // Parse the hash parameters
-        const params = new URLSearchParams(hash.substring(1)) // Remove the #
-        const access_token = params.get('access_token')
-        const refresh_token = params.get('refresh_token')
-        
-        // Removed logging of extracted tokens for security
-        
-        if (access_token && refresh_token) {
-          // Clear the hash from URL
-          window.history.replaceState(null, '', window.location.pathname)
-          // Redirect to reset password page with tokens
-          router.push(`/reset-password?access_token=${access_token}&refresh_token=${refresh_token}`)
-        } else {
-          console.error('Missing tokens:', { access_token: !!access_token, refresh_token: !!refresh_token })
-        }
-      }
-    }
+  const [error, setError] = useState<string>("")
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
-    handleSupabaseRecovery()
-  }, [router])
-
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     if (!email || !password) {
-      setError(new Error("Please enter both email and password."));
-      return;
+      setError("Please enter both email and password.")
+      return
     }
-    setError(null); // Clear previous errors
-    loginMutation.mutate({ data: { email, password }, rememberMe });
-  };
+    
+    setError("")
+    setLoading(true)
+
+    try {
+      const { user } = await signIn({ email, password })
+      
+      if (user) {
+        const userRole = getUserRole(user)
+        const redirectPath = userRole ? getDefaultRedirectPath(userRole) : '/'
+        router.push(redirectPath)
+      }
+    } catch (error: unknown) {
+      console.error('Login error:', error)
+      const errorMessage = error instanceof Error ? error.message : "Login failed. Please try again."
+      setError(errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-white rounded-xl z-1">
@@ -62,11 +49,12 @@ const LoginPage = () => {
           <LogIn className="w-7 h-7 text-black" />
         </div>
         <h2 className="text-2xl font-semibold mb-2 text-center">
-          Sign in to InsureZeal
+          Welcome Back
         </h2>
         <p className="text-gray-500 text-sm mb-6 text-center">
-          Access your insurance management dashboard
+          Sign in to your InsureZeal account
         </p>
+        
         <div className="w-full flex flex-col gap-3 mb-2">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -80,7 +68,9 @@ const LoginPage = () => {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
             />
-          </div>          <div className="relative">
+          </div>
+          
+          <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               <Lock className="w-4 h-4" />
             </span>
@@ -92,7 +82,8 @@ const LoginPage = () => {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               onKeyPress={(e) => e.key === 'Enter' && handleSignIn()}
-            />            <button
+            />
+            <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
@@ -102,41 +93,31 @@ const LoginPage = () => {
             </button>
           </div>
           
-          {/* Remember Me Checkbox */}
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                disabled={loading}
-              />
-              <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
-                Remember me
-              </label>
-            </div>
-            <Link href="/reset-password" className="text-xs hover:underline font-medium text-blue-600">
+          <div className="flex items-center justify-end w-full">
+            <Link href="/reset-password" className="text-sm text-blue-600 hover:text-blue-500">
               Forgot password?
             </Link>
           </div>
 
           {error && (
-            <div className="text-sm text-red-500 text-left bg-red-50 p-2 rounded-lg border border-red-200">
-              {error.message}
+            <div className="text-sm text-red-600 text-left bg-red-50 p-3 rounded-lg border border-red-200 max-w-full break-words">
+              <div className="flex items-start gap-2">
+                <span className="text-red-500 mt-0.5">⚠</span>
+                <span>{error}</span>
+              </div>
             </div>
           )}
         </div>
-          <button
+        
+        <button
           onClick={handleSignIn}
           disabled={loading}
-          className="w-full bg-gradient-to-b from-gray-700 to-gray-900 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 cursor-pointer transition mb-4 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-gradient-to-b from-blue-600 to-blue-700 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 cursor-pointer transition mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? 'Signing in...' : 'Sign In'}
+          {loading ? 'Signing In...' : 'Sign In'}
         </button>
         
-        <div className="text-center space-y-2">
+        <div className="text-center">
           <p className="text-sm text-gray-600">
             Don&apos;t have an account?{' '}
             <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">

@@ -73,14 +73,14 @@ class AuthHelpers:
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail="Invalid token"
             )
-        except Exception as e:
+        except Exception as e: 
             logger.error(f"JWT verification failed: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, 
                 detail="Token verification failed"
             )
     
-    async def refresh_token(self, refresh_token: str):
+    async def   refresh_token(self, refresh_token: str):
         """Refresh access token using refresh token"""
         try:
             auth_response = self.supabase.auth.refresh_session(refresh_token)

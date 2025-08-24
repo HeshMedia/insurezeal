@@ -119,7 +119,25 @@ async def create_cutpay_transaction(
 
             cutpay_dict = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
             if cutpay_data.extracted_data:
-                cutpay_dict.update(cutpay_data.extracted_data.dict(exclude_unset=True))
+                extracted_dict = cutpay_data.extracted_data.dict(exclude_unset=True)
+                # Fix field mapping: schema uses start_date/end_date but model uses policy_start_date/policy_end_date
+                if 'start_date' in extracted_dict:
+                    start_date_str = extracted_dict.pop('start_date')
+                    if start_date_str:
+                        try:
+                            from datetime import datetime
+                            extracted_dict['policy_start_date'] = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid start_date format: {start_date_str}")
+                if 'end_date' in extracted_dict:
+                    end_date_str = extracted_dict.pop('end_date')
+                    if end_date_str:
+                        try:
+                            from datetime import datetime
+                            extracted_dict['policy_end_date'] = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid end_date format: {end_date_str}")
+                cutpay_dict.update(extracted_dict)
             if cutpay_data.admin_input:
                 admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
                 broker_code = admin_fields.pop('broker_code', None)
@@ -163,19 +181,16 @@ async def create_cutpay_transaction(
     sync_results = None
     try:
         logger.info(f"Step 2: Starting Google Sheets sync for new CutPay ID {cutpay.id}.")
-        from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
+        from utils.quarterly_sheets_manager import quarterly_manager
         
         cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
         for key, value in cutpay_dict.items():
             if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
             elif isinstance(value, UUID): cutpay_dict[key] = str(value)
 
-        # Resolve insurer and broker names before syncing
-        cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
-
-        cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-        master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-        sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+        # Route to quarterly sheet instead of dedicated cutpay sheet
+        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict)
+        sync_results = {"cutpay": quarterly_result}
         logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
         
     except Exception as e:
@@ -197,10 +212,6 @@ async def create_cutpay_transaction(
                 if sync_results.get("cutpay", {}).get("success"):
                     final_cutpay.cutpay_sheet_row_id = sync_results["cutpay"].get("row_id")
                     final_cutpay.synced_to_cutpay_sheet = True
-                
-                if sync_results.get("master", {}).get("success"):
-                    final_cutpay.master_sheet_row_id = sync_results["master"].get("row_id")
-                    final_cutpay.synced_to_master_sheet = True
 
             await final_db_session.refresh(final_cutpay)
             logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
@@ -439,16 +450,15 @@ async def get_dashboard_stats(
         
         # Get completed and draft transactions counts
         completed_transactions = await db.scalar(
-            select(func.count(CutPay.id)).where(CutPay.synced_to_master_sheet == True)
+            select(func.count(CutPay.id)).where(CutPay.synced_to_cutpay_sheet == True)
         ) or 0
         draft_transactions = await db.scalar(
-            select(func.count(CutPay.id)).where(CutPay.synced_to_master_sheet == False)
+            select(func.count(CutPay.id)).where(CutPay.synced_to_cutpay_sheet == False)
         ) or 0
         
         pending_sync_result = await db.execute(
             select(func.count(CutPay.id)).where(
-                (CutPay.synced_to_cutpay_sheet == False) |
-                (CutPay.synced_to_master_sheet == False)
+                (CutPay.synced_to_cutpay_sheet == False)
             )
         )
         pending_sync = pending_sync_result.scalar()
@@ -607,19 +617,16 @@ async def bulk_update_cutpay_transactions(
             sync_results = None
             try:
                 logger.info(f"Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
-                from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
+                from utils.quarterly_sheets_manager import quarterly_manager
                 
                 cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
                 for key, value in cutpay_dict.items():
                     if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
                     elif isinstance(value, UUID): cutpay_dict[key] = str(value)
 
-                # Resolve insurer and broker names before syncing
-                cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
-
-                cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-                master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-                sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+                # Route to quarterly sheet instead of dedicated cutpay sheet
+                quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
+                sync_results = {"cutpay": quarterly_result}
                 logger.info(f"Google Sheets sync completed for CutPay ID {cutpay.id}.")
                 
                 # Update sync flags
@@ -627,11 +634,6 @@ async def bulk_update_cutpay_transactions(
                     cutpay.synced_to_cutpay_sheet = True
                     if sync_results["cutpay"].get("row_id"):
                         cutpay.cutpay_sheet_row_id = sync_results["cutpay"]["row_id"]
-                
-                if sync_results.get("master", {}).get("success"):
-                    cutpay.synced_to_master_sheet = True
-                    if sync_results["master"].get("row_id"):
-                        cutpay.master_sheet_row_id = sync_results["master"]["row_id"]
                 
                 await db.commit()
                 await db.refresh(cutpay)
@@ -705,29 +707,22 @@ async def manual_sync_to_google_sheets(
             logger.info(f"Manual sync for CutPay {cutpay_id} with data keys: {list(cutpay_dict.keys())}")
             
             # Attempt sync
-            from utils.google_sheets import google_sheets_sync
+            from utils.quarterly_sheets_manager import quarterly_manager
             
-            cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-            master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
+            quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
             
             # Update sync flags
-            if cutpay_sync_result and cutpay_sync_result.get("success"):
+            if quarterly_result and quarterly_result.get("success"):
                 cutpay.synced_to_cutpay_sheet = True
-                if cutpay_sync_result.get("row_id"):
-                    cutpay.cutpay_sheet_row_id = cutpay_sync_result["row_id"]
-            
-            if master_sync_result and master_sync_result.get("success"):
-                cutpay.synced_to_master_sheet = True
-                if master_sync_result.get("row_id"):
-                    cutpay.master_sheet_row_id = master_sync_result["row_id"]
+                if quarterly_result.get("row_id"):
+                    cutpay.cutpay_sheet_row_id = quarterly_result["row_id"]
             
             await db.commit()
             
             sync_results.append({
                 "cutpay_id": cutpay_id,
                 "success": True,
-                "cutpay_sheet_sync": cutpay_sync_result,
-                "master_sheet_sync": master_sync_result
+                "cutpay_sheet_sync": quarterly_result
             })
             
         except Exception as e:
@@ -921,19 +916,16 @@ async def update_cutpay_transaction(
     sync_results = None
     try:
         logger.info(f"Step 2: Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
-        from utils.google_sheets import google_sheets_sync, resolve_insurer_broker_names
+        from utils.quarterly_sheets_manager import quarterly_manager
         
         cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
         for key, value in cutpay_dict.items():
             if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
             elif isinstance(value, UUID): cutpay_dict[key] = str(value)
 
-        # Resolve insurer and broker names before syncing
-        cutpay_dict = await resolve_insurer_broker_names(cutpay_dict)
-
-        cutpay_sync_result = await run_in_threadpool(google_sheets_sync.sync_cutpay_to_sheets, cutpay_dict)
-        master_sync_result = await run_in_threadpool(google_sheets_sync.sync_to_master_sheet, cutpay_dict)
-        sync_results = {"cutpay": cutpay_sync_result, "master": master_sync_result}
+        # Route to quarterly sheet instead of dedicated cutpay sheet
+        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
+        sync_results = {"cutpay": quarterly_result}
         logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
         
     except Exception as e:
@@ -956,10 +948,6 @@ async def update_cutpay_transaction(
                 if sync_results.get("cutpay", {}).get("success"):
                     final_cutpay.cutpay_sheet_row_id = sync_results["cutpay"].get("row_id")
                     final_cutpay.synced_to_cutpay_sheet = True
-                
-                if sync_results.get("master", {}).get("success"):
-                    final_cutpay.master_sheet_row_id = sync_results["master"].get("row_id")
-                    final_cutpay.synced_to_master_sheet = True
 
             await final_db_session.refresh(final_cutpay)
             logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
@@ -984,12 +972,6 @@ async def delete_cutpay_transaction(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"CutPay transaction {cutpay_id} not found"
-        )
-
-    if cutpay.synced_to_master_sheet:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete CutPay transaction that has been synced to Master Sheet"
         )
     
     await db.delete(cutpay)

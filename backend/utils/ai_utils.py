@@ -74,7 +74,7 @@ class GeminiPolicyExtractor:
         - gst_amount should be the total tax amount (CGST + SGST combined)
 
         VEHICLE DETAILS (for Motor Insurance):
-        - registration_no: Vehicle Reg No, Registration No, Reg. No, Vehicle No (clean format without dashes or spaces)
+        - registration_number: Vehicle Reg No, Registration No, Reg. No, Vehicle No (clean format without dashes or spaces)
         - make_model: Vehicle make and model combined
         - model: Specific model name
         - vehicle_variant: Variant like VXI, ZXI, LXI, etc.
@@ -95,6 +95,10 @@ class GeminiPolicyExtractor:
         - seating_capacity: Number of seats
         - veh_wheels: Number of wheels (2/4)
 
+        POLICY DATES:
+        - start_date: Policy start date, effective date, from date (format: YYYY-MM-DD)
+        - end_date: Policy end date, expiry date, to date (format: YYYY-MM-DD)
+
         Required JSON format:
         {{
             "policy_number": "string or null",
@@ -110,7 +114,7 @@ class GeminiPolicyExtractor:
             "od_premium": number or null,
             "tp_premium": number or null,
             "gst_amount": number or null,
-            "registration_no": "string or null",
+            "registration_number": "string or null",
             "make_model": "string or null",
             "model": "string or null",
             "vehicle_variant": "string or null",
@@ -125,6 +129,8 @@ class GeminiPolicyExtractor:
             "business_type": "string or null",
             "seating_capacity": number or null,
             "veh_wheels": number or null,
+            "start_date": "string or null",
+            "end_date": "string or null",
             "confidence_score": number
         }}
 
@@ -268,11 +274,11 @@ class GeminiPolicyExtractor:
                     data['formatted_policy_number'] = '#' + str(data['formatted_policy_number'])
             
             # Clean registration number - remove dashes, spaces, and special characters
-            if data.get('registration_no'):
-                reg_no = str(data['registration_no']).upper()
+            if data.get('registration_number'):
+                reg_no = str(data['registration_number']).upper()
                 # Remove common separators and spaces
                 reg_no = reg_no.replace('-', '').replace(' ', '').replace('_', '').replace('.', '')
-                data['registration_no'] = reg_no
+                data['registration_number'] = reg_no
                 
                 # Extract RTO from first 4 characters of registration number
                 if len(reg_no) >= 4:
@@ -284,6 +290,7 @@ class GeminiPolicyExtractor:
             logger.error(f"Error in post-processing extracted data: {str(e)}")
             return data
 
+#legacy helper func no longer in use
 async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
     """Extract comprehensive policy data from PDF using the Gemini extractor"""
     try:
@@ -337,7 +344,7 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "gst_amount": extracted_data.get("gst_amount"),
                 
                 # Vehicle Details
-                "registration_no": extracted_data.get("registration_no"),
+                "registration_number": extracted_data.get("registration_number"),
                 "make_model": extracted_data.get("make_model"),
                 "model": extracted_data.get("model"),
                 "vehicle_variant": extracted_data.get("vehicle_variant"),
@@ -352,6 +359,11 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
                 "business_type": extracted_data.get("business_type"),
                 "seating_capacity": extracted_data.get("seating_capacity"),
                 "veh_wheels": extracted_data.get("veh_wheels"),
+                
+                # Policy Dates
+                "start_date": extracted_data.get("start_date"),
+                "end_date": extracted_data.get("end_date"),
+                
                 "confidence_score": extracted_data.get("confidence_score", 0.0)
             }
         else:
@@ -401,7 +413,7 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "gst_amount": extracted_data.get("gst_amount"),
                 
                 # Vehicle Details
-                "registration_no": extracted_data.get("registration_no"),
+                "registration_number": extracted_data.get("registration_number"),
                 "make_model": extracted_data.get("make_model"),
                 "model": extracted_data.get("model"),
                 "vehicle_variant": extracted_data.get("vehicle_variant"),
@@ -416,6 +428,11 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "business_type": extracted_data.get("business_type"),
                 "seating_capacity": extracted_data.get("seating_capacity"),
                 "veh_wheels": extracted_data.get("veh_wheels"),
+                
+                # Policy Dates
+                "start_date": extracted_data.get("start_date"),
+                "end_date": extracted_data.get("end_date"),
+                
                 "confidence_score": extracted_data.get("confidence_score", 0.0)
             }
         else:

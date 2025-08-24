@@ -19,10 +19,7 @@ export interface ExtractedPolicyData {
   od_premium?: number | null
   tp_premium?: number | null
   gst_amount?: number | null
-  // Vehicle registration details
-  registration_no?: string | null
-  registration_number?: string | null // Alternative field name
-  // Vehicle details
+  registration_number?: string | null 
   make_model?: string | null
   model?: string | null
   vehicle_variant?: string | null
@@ -40,6 +37,8 @@ export interface ExtractedPolicyData {
   seating_capacity?: number | null
   veh_wheels?: number | null
   is_private_car?: boolean | null
+  policy_start_date?: string | null
+  policy_end_date?: string | null
 }
 
 // PDF extraction response
@@ -62,6 +61,7 @@ export interface AdminInputData {
   commissionable_premium?: number | null;
   payment_by?: string | null;
   payment_method?: string | null;
+  payment_detail?: string | null; // New field for payment detail
   payout_on?: string | null;
   agent_extra_percent?: number | null;
   payment_by_office?: string | null;
@@ -81,6 +81,8 @@ export interface AdminInputData {
   tp_agent_payout_percent?: number | null;
   od_incoming_grid_percent?: number | null;
   tp_incoming_grid_percent?: number | null;
+  od_incoming_extra_grid?: number | null;
+  tp_incoming_extra_grid?: number | null;
 }
 
 
@@ -165,7 +167,7 @@ export interface CutPayTransaction {
   od_premium: number | null
   tp_premium: number | null
   gst_amount: number | null
-  registration_no: string | null
+  registration_number: string | null
   make_model: string | null
   model: string | null
   vehicle_variant: string | null

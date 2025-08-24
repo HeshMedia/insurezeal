@@ -75,25 +75,45 @@ export function ActiveChildIds() {
       <div className="grid gap-6">
         {activeChildIds.map((childId) => (
           <Card key={childId.id} className="border border-green-200 shadow-sm">
-            <CardHeader className="pb-4">
+             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <CardTitle className="text-lg">
-                    Child ID: {childId.child_id}
-                  </CardTitle>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <CardTitle className="text-lg">
+                      Child ID: {childId.child_id}
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(childId.child_id || '', 'Child ID')}
+                      className="h-6 w-6 p-0 cursor-pointer"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                {childId.password && (
+                  <div className="flex items-center gap-2 ">
+                    <Key className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm font-mono bg-gray-50 px-2 py-1 rounded">
+                      {childId.password}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => copyToClipboard(childId.password || '', 'Password')}
+                      className="h-6 w-6 p-0 cursor-pointer"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
                 </div>
+                {/* RIGHT = Status badge */}
                 <div className="flex items-center gap-2">
                   <Badge className="bg-green-100 text-green-700 border-green-200">
                     Active
                   </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => copyToClipboard(childId.child_id || '', 'Child ID')}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -149,24 +169,6 @@ export function ActiveChildIds() {
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-gray-500" />
                     <span className="text-sm">{childId.email}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Password</p>
-                  <div className="flex items-center gap-2">
-                    <Key className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm font-mono bg-gray-50 px-2 py-1 rounded">
-                      {childId.password}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => copyToClipboard(childId.password || '', 'Password')}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
                   </div>
                 </div>
               </div>

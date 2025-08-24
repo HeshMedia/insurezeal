@@ -19,7 +19,6 @@ export const ExtractedPolicyDataSchema = z.object({
   tp_premium: z.number().optional().nullable(),
   gst_amount: z.number().optional().nullable(),
   // Vehicle registration details
-  registration_no: z.string().optional().nullable(),
   registration_number: z.string().optional().nullable(),
   // Vehicle details
   make_model: z.string().optional().nullable(),
@@ -105,6 +104,7 @@ export const CutPayFormSchema = z.object({
     commissionable_premium: z.number().optional().nullable(),
     payment_by: z.string().optional().nullable(),
     payment_method: z.string().optional().nullable(),
+    payment_detail: z.string().optional().nullable(), // New field for payment detail
     payout_on: z.string().optional().nullable(),
     agent_extra_percent: z.number().optional().nullable(),
     payment_by_office: z.number().optional().nullable(),
@@ -116,6 +116,8 @@ export const CutPayFormSchema = z.object({
     tp_agent_payout_percent: z.number().nullable().optional(),
     od_incoming_grid_percent: z.number().nullable().optional(),
     tp_incoming_grid_percent: z.number().nullable().optional(),
+    od_incoming_extra_grid: z.number().nullable().optional(),
+    tp_incoming_extra_grid: z.number().nullable().optional(),
   }),
   calculations: z.object({
     receivable_from_broker: z.number().optional().nullable(),
