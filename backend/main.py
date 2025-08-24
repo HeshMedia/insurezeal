@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from mangum import Mangum
 from fastapi.responses import HTMLResponse
 from fastapi import Request, HTTPException
 import os
@@ -30,14 +29,12 @@ app = FastAPI(
     title="Insurezeal Site API",
     description="A comprehensive API for a Insurezeal website",
     version="1.0.0",
-    root_path="/Prod" if IS_PRODUCTION else "",
     docs_url="/apidocs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     servers=[
         {"url": "http://localhost:8000", "description": "Local Development Server"},
-        {"url": "https://your-aws-api.execute-api.region.amazonaws.com/Prod", "description": "Production Server"},
-        {"url": "https://your-ngrok-tunnel.ngrok-free.app/", "description": "Ngrok Tunnel"},
+        {"url": "https://api.insurezeal.com", "description": "Production Server"},
     ],
 )
 
@@ -119,7 +116,7 @@ except Exception as e:
 
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):
-    openapi_url = "/Prod/openapi.json" if IS_PRODUCTION else "/openapi.json"
+    openapi_url = "/openapi.json"
     
     return HTMLResponse(
         f"""
@@ -167,10 +164,9 @@ def home():
         <h1>Welcome to Insurezeal Site API</h1>
         <hr>
         <ul>
-          <li><a href="/Prod/docs">Spotlight API Documentation</a></li>
-          <li><a href="/Prod/redoc">Redoc API Documentation</a></li>
-          <li><a href="/Prod/apidocs">Swagger API Documentation</a></li>
-          <li><a href="/Prod/openapi.json">OpenAPI Specification</a></li>
+          <li><a href="/docs">Spotlight API Documentation</a></li>
+          <li><a href="/redoc">Redoc API Documentation</a></li>
+          <li><a href="/openapi.json">OpenAPI Specification</a></li>
           <hr>
           <li><a href="http://localhost:3000">Frontend Website</a></li>
           <hr>
@@ -180,6 +176,15 @@ def home():
     </html>
     """
 
-handler = Mangum(app)
+@app.get("/health")
+def health_check():
+    """Health check endpoint for monitoring"""
+    return {"status": "healthy", "service": "insurezeal-api"}
 
 logger.info("--- FastAPI application startup complete ---")
+
+# For VPS deployment, we expose the app directly
+# Use: uvicorn main:app --host 0.0.0.0 --port 8000
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
