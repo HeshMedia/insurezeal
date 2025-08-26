@@ -105,7 +105,7 @@ async def get_agent_details(
     **Admin only endpoint**
     
     - **agent_id**: The ID of the agent to retrieve
-      Returns complete agent profile including all personal, professional,    and document information.
+      Returns complete agent profile including all personal, professional, and document information.
     """    
     
     try:
@@ -167,6 +167,7 @@ async def delete_agent_by_id(
             detail="Failed to delete agent"
         )
 
+#TODO: will test once to see if all the stats are correct, needed and add new ones
 @router.get("/agent-stats", response_model=AdminStatsResponse)
 async def get_admin_stats(
     current_user = Depends(get_current_user),
@@ -683,6 +684,7 @@ async def suspend_child_id(
             detail="Failed to suspend child ID"
         )
 
+#TODO: also check this
 @router.get("/child-statistics")
 async def get_child_id_statistics(
     current_user = Depends(get_current_user),
@@ -707,7 +709,6 @@ async def get_child_id_statistics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch child ID statistics"
         )
-
 
 @router.put("/agents/{user_id}/promote-to-admin", response_model=schemas.UserRoleUpdateResponse)
 async def promote_agent_to_admin(

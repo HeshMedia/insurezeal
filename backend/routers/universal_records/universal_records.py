@@ -27,6 +27,9 @@ from .schemas import (
     ReconciliationSummaryResponse
 )
 
+#TODO: universal record select krte hue b quarter(s) select krne pdenge taki unhi quarters me compare kre faltu sare nhi and isko b test krna hai fir
+#TODO: policy number ke sath sath ab child id b comapre hogi and dono match honge tab b records update krne hai i.e MATCH STATUS true krnehe compare krke warna kuch na krna
+
 router = APIRouter(prefix="/universal-records", tags=["Universal Records"])
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,9 @@ security = HTTPBearer()
 
 mis_helpers = MISHelpers()
 
+#TODO: SARE MIS ROUTES ME ABHI B MASTER SHEET HI CHLR HAI QUARTELY SHEET NHI YAHAN PE ABHI
 
+#TODO: idr ham quarter(s) pass krnege to wo wala data return hoga and iske sath me wo dusri calculation sheet (yahan pe total wala hi return hoga calculation sheet me)
 @router.get("/master-sheet", response_model=MasterSheetResponse)
 async def get_master_sheet_data(
     page: int = Query(1, ge=1, description="Page number"),
@@ -120,7 +122,7 @@ async def get_master_sheet_data(
             detail="Failed to fetch master sheet data"
         )
 
-
+#TODO: isme bhi quarter(s) pass krnege to wo quarter ki sheet pe update hoga
 @router.put("/master-sheet/bulk-update", response_model=BulkUpdateResponse)
 async def bulk_update_master_sheet(
     update_request: BulkUpdateRequest,
@@ -211,7 +213,7 @@ async def bulk_update_master_sheet(
             detail=f"Failed to perform bulk update: {str(e)}"
         )
 
-
+#TODO: ye route me wo summary/calcualtion sheet jo hai uska sara data bhejdo idr
 @router.get("/master-sheet/stats", response_model=MasterSheetStatsResponse)
 async def get_master_sheet_statistics(
     current_user = Depends(get_current_user),
@@ -265,7 +267,7 @@ async def get_master_sheet_statistics(
             detail="Failed to generate master sheet statistics"
         )
 
-
+#TODO: ab ye nayi updated quarterly sheet ke header bhejega
 @router.get("/master-sheet/fields")
 async def get_master_sheet_fields(
     current_user = Depends(get_current_user),
@@ -314,6 +316,10 @@ async def get_master_sheet_fields(
             detail="Failed to get master sheet fields"
         )
 
+#TODO: have to make this work for quartely sheets now to ham quarter and year pass kre (even multiple possible) and uski combined sheet return ho,
+# frontend se CSV yaan XLSX ka parameter b aye to us format me return krdo
+# also ho sake to maybe baad ke liye hi sahi wo sab running balance etc b for those quarter(s) calc hoke ajaye to basically 2 sheets return ho jayegi
+# ye ham dekh skte hai agar zyada heavy task hai to maybe if we use app scripts wo b sahi reh skta
 
 @router.get("/master-sheet/export")
 async def export_master_sheet_data(
@@ -391,6 +397,7 @@ async def export_master_sheet_data(
             detail="Failed to export master sheet data"
         )
 
+#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme yahan pe abhi limited fields pass hori but ham sari fields pass krenge as ye to admin ko dikhana hai na plus yahan both match status true and false hoga
 @router.get("/agent-mis/{agent_code}", response_model=AgentMISResponse)
 async def get_agent_mis_data(
     agent_code: str,
@@ -463,6 +470,8 @@ async def get_agent_mis_data(
             detail=f"Failed to fetch agent MIS data for agent {agent_code}"
         )
 
+#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme se bs limited fields milngei (jo current schema hai wohi fields) pr ofc unke naam changed hai to wo dekhna pdega
+#secodnly sath me wo calcualtion sheet ka bs agent wala (TRUE) wala part return krna hai idr that too for the agent code being passed
 @router.get("/my-mis", response_model=AgentMISResponse)
 async def get_my_mis_data(
     page: int = Query(1, ge=1, description="Page number"),

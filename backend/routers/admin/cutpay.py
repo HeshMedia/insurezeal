@@ -79,6 +79,7 @@ def safe_cutpay_response(cutpay_obj) -> CutPayResponse:
 # CORE CUTPAY OPERATIONS
 # =============================================================================
 
+#TODO: only saving the few selected fields in DB, need to sync all fields to Google Sheets though (check)
 @router.post("/", response_model=CutPayResponse)
 async def create_cutpay_transaction(
     cutpay_data: CutPayCreate,
@@ -222,6 +223,7 @@ async def create_cutpay_transaction(
         logger.critical(f"Step 3 FAILED: Updating sync flags failed for CutPay ID {cutpay.id}. Traceback:\n{traceback.format_exc()}")
         return safe_cutpay_response(cutpay)
 
+#TODO: should return the list of all cutpays from db, the limited number of columns that we are now storing
 @router.get("/", response_model=List[CutPayResponse])
 async def list_cutpay_transactions(
     skip: int = Query(0, ge=0),
@@ -363,73 +365,8 @@ async def get_filtered_dropdown_options(
 # EXPORT AND STATISTICS ENDPOINTS (must be before parameterized routes)
 # =============================================================================
 
-@router.get("/export")
-async def export_cutpay_data(
-    export_request: ExportRequest = Depends(),
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """Export CutPay data to CSV or Excel"""
-    
-    try:
-        query = select(CutPay)
-        
-        if export_request.date_from:
-            query = query.where(CutPay.booking_date >= export_request.date_from)
-        
-        if export_request.date_to:
-            query = query.where(CutPay.booking_date <= export_request.date_to)
-        
-        
-        if hasattr(export_request, 'insurer_codes') and export_request.insurer_codes:
-            insurer_ids = []
-            for code in export_request.insurer_codes:
-                try:
-                    insurer_id = await resolve_insurer_code_to_id(db, code)
-                    insurer_ids.append(insurer_id)
-                except HTTPException:
-                    continue
-            if insurer_ids:
-                query = query.where(CutPay.insurer_id.in_(insurer_ids))
-        
-        if hasattr(export_request, 'broker_codes') and export_request.broker_codes:
-            broker_ids = []
-            for code in export_request.broker_codes:
-                try:
-                    broker_id = await resolve_broker_code_to_id(db, code)
-                    broker_ids.append(broker_id)
-                except HTTPException:
-                    continue
-            if broker_ids:
-                query = query.where(CutPay.broker_id.in_(broker_ids))
-        
-        result = await db.execute(query)
-        transactions = result.scalars().all()
-        
-        output = io.StringIO()
-        writer = csv.writer(output)
-        
-        writer.writerow(CutPayResponse.model_fields.keys())
-        
-        for txn in transactions:
-            writer.writerow([getattr(txn, field) for field in CutPayResponse.model_fields.keys()])
-        
-        output.seek(0)
-        
-        return StreamingResponse(
-            output,
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=cutpay_export_{date.today()}.csv"}
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to export CutPay data: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to export data: {str(e)}"
-        )
 
+#TODO: ye hata do bc sab ye MIS me ayega bs ab as ham ye sab db me store thodi kr rhe udr hi ajaye seedha
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     current_user = Depends(get_current_user),
@@ -491,6 +428,7 @@ async def get_dashboard_stats(
 # BULK UPDATE ENDPOINT
 # =============================================================================
 
+#TODO: quartely sheet ka mention hai waise idr to ki hana krta hai update usme pr have to check and normally db me kya update krta hai wo b dkehna
 @router.put("/bulk-update", response_model=BulkUpdateResponse)
 async def bulk_update_cutpay_transactions(
     request: BulkUpdateRequest,
@@ -774,7 +712,11 @@ async def list_agent_configs(
             detail=f"Failed to fetch agent configurations: {str(e)}"
         )
 
-
+#TODO: cutpay id ka to nhi pta ab wo db me alag hoyegi master sheet me hoyegi hi nhi to idr jo b better ho url param yaan normally policy number hi pass krwao wo return kro fir
+#also ye policy number milega hame get all cutpay wale routes se right so wahan se frontend bhejga hame quarter b date se nikal ke fir ham usi quarter me check krnege time bachane ko
+# tho ho skta hai ki quarter alag b ho rtaher than whatver date there to frontend ko wahan dikhana b pdega phele to autofecth krke kya quarter hai
+# if user want he can change that but haan hame backend pe both policy number and quarter chaiye rhega PAR AB qo quarter jab pass krnege jo jo b tera quarter sheets ka logic hai ye manager
+# wo use handle kr rha hai ache se ke nhi wo dkehna ppdega aisa to nhi wo sare quarter check krega
 @router.get("/{cutpay_id}", response_model=CutPayResponse)
 async def get_cutpay_transaction(
     cutpay_id: int,
@@ -795,6 +737,8 @@ async def get_cutpay_transaction(
     await db.refresh(cutpay)
     return safe_cutpay_response(cutpay)
 
+#TODO: test hi krna basically to in a way limited fields hi nayi wali db me update hori na and ki quartely me b aram se chal rha
+#idr b get cutpay route jaise pass hoga hampe policy number and quarter so its easier for us and ham us quarter sheet ko hi dekhnge pr wo upar wali problem abhi b hai
 @router.put("/{cutpay_id}", response_model=CutPayResponse)
 async def update_cutpay_transaction(
     cutpay_id: int,
@@ -958,6 +902,7 @@ async def update_cutpay_transaction(
         logger.critical(f"Step 3 FAILED: Updating sync flags failed for CutPay ID {cutpay.id}. Traceback:\n{traceback.format_exc()}")
         return safe_cutpay_response(cutpay)
 
+#TODO: same shit as above 2 routes
 @router.delete("/{cutpay_id}")
 async def delete_cutpay_transaction(
     cutpay_id: int,
@@ -1203,6 +1148,7 @@ async def extract_pdf_data_endpoint(
 # AGENT FINANCIAL TRACKING ENDPOINTS
 # =============================================================================
 
+#TODO: throughout all cutpay routes ye finance details upgrade krna agent ki isko hatana hai as wo db me sotre hongi hi nhi ab, infact agent ke model se b hata do and ab ye details ham wo summary sheet se lenge to route ko refactor krdo uske hisaab se
 @router.get("/agent/{agent_code}/financial-summary", response_model=AgentFinancialSummary)
 async def get_agent_financial_summary_endpoint(
     agent_code: str,

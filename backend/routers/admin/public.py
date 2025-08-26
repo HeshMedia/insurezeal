@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/public", tags=["Public Admin"])
 
+#TODO: ek baar superadmins sab bnajeynge tab ye route ko remove krna hai yaad rkahne ko TODO hai ye
 @router.post("/promote-to-superadmin", response_model=UserRoleUpdateResponse)
 async def promote_to_superadmin(
     promotion_request: SuperadminPromotionRequest,

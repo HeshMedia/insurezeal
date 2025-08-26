@@ -32,6 +32,8 @@ require_policy_read = require_permission("policies", "read")
 require_policy_write = require_permission("policies", "write")
 require_policy_manage = require_permission("policies", "manage")
 
+
+#TODO: give the AI the list of all insurers and brokers full name and ofc unko khudke db me b dalo, ask AI to extract if they are avail so to cross check agent gaalt to nhi dal rha, agar null aye by any chance agent ki manlo nhi to forntend pe hoga ki agent ko allow nhi krnege jane ko age agar same na hua to
 @router.post("/extract-pdf-data", response_model=AIExtractionResponse)
 async def extract_pdf_data_endpoint(
     file: UploadFile = File(..., description="Policy PDF file for extraction"),
@@ -193,6 +195,7 @@ async def upload_policy_pdf(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
             detail="Failed to upload policy PDF"        )
 
+#TODO: line number 245 onwards kuch to dikkat hai yahan aise manusally sab kyu pass kre and mujhe lgra hai ye sahi b pass nhi kr rhe hai ham yaan pta nhi pr ye cutpay nhi tha atleast to dkehna hai yahan aisa kyu hai
 @router.post("/submit", response_model=PolicyCreateResponse)
 async def submit_policy(
     policy_data: PolicyCreateRequest,
@@ -311,6 +314,7 @@ async def submit_policy(
             detail="Failed to submit policy"
         )
 
+#TODO: same jaisa cutpay me tha ki yahan wo limited fields return krdo sari
 @router.get("/", response_model=List[PolicySummaryResponse])
 async def list_policies(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
@@ -351,6 +355,7 @@ async def list_policies(
         )
 
 
+#TODO: same jaisa cutoay me tha ki policy number pass kro and quarter(s) and uske hisab se return kro
 @router.get("/{policy_id}", response_model=PolicyResponse)
 async def get_policy_details(
     policy_id: str,
@@ -389,6 +394,7 @@ async def get_policy_details(
             detail="Failed to fetch policy details"
         )
 
+#TODO: same shit as above pr yahan pe wapis se koi jhol hai wo quartely sheet wale part me line 431 and ye to sahi me kuch aur hi lg rha and haan db me b update kro wo limited fields ko
 @router.put("/{policy_id}", response_model=PolicyResponse)
 async def update_policy(
     policy_id: str,
@@ -520,6 +526,7 @@ async def update_policy(
             detail="Failed to update policy"
         )
 
+#TODO: same shit pr isko lodh pdegi nhi shyad anyways db se b udha do
 @router.delete("/{policy_id}")
 async def delete_policy(
     policy_id: str,
@@ -707,6 +714,7 @@ async def get_agent_options(
             detail="Failed to fetch agent options"
         )
 
+#TODO: hata do bc wo mis wala export route hi chlga AAAAAAAA
 @router.get("/export/csv")
 async def export_policies_csv(
     start_date: Optional[date] = Query(None, description="Start date for filtering (YYYY-MM-DD)"),
@@ -764,7 +772,7 @@ async def export_policies_csv(
             detail="Failed to export policies to CSV"
         )
 
-
+#TODO: koi lodh nhi iski b wo agent MIS kaam krega iska hata do
 @router.get("/agent/{agent_code}", response_model=PolicyListResponse)
 async def get_agent_policies(
     agent_code: str,
