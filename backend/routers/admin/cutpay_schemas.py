@@ -668,11 +668,6 @@ class AgentPOResponse(BaseModel):
     latest_config_date: Optional[date]
     configurations_count: int
 
-class AgentFinancialSummary(BaseModel):
-    """Schema for agent financial summary"""
-    agent_code: str
-    running_balance: float
-    total_net_premium: float
-    last_updated: Optional[datetime]
+
 
 

@@ -684,7 +684,6 @@ async def suspend_child_id(
             detail="Failed to suspend child ID"
         )
 
-#TODO: also check this
 @router.get("/child-statistics")
 async def get_child_id_statistics(
     current_user = Depends(get_current_user),

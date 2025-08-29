@@ -30,7 +30,6 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 security = HTTPBearer()
 
-#TODO: ek baar wo running bal etc stats hata denge jab model se to yahan ke schema se b hatane dene hai and return nhi krne
 @router.get("/me", response_model=UserProfileResponse)
 async def get_current_user_profile(
     current_user = Depends(get_current_user),

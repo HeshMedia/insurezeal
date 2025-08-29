@@ -41,16 +41,13 @@ from .cutpay_schemas import (
     CutPayAgentConfigCreate,
     CutPayAgentConfigUpdate,
     CutPayAgentConfigResponse,
-    AgentPOResponse,
-    AgentFinancialSummary
+    AgentPOResponse
 )
 from .cutpay_helpers import (
     calculate_commission_amounts,
     get_dropdown_options,
     get_filtered_dropdowns,
     auto_populate_relationship_data,
-    update_agent_financials,
-    get_agent_financial_summary,
     validate_cutpay_data,
     validate_and_resolve_codes,
     resolve_broker_code_to_id,
@@ -162,14 +159,6 @@ async def create_cutpay_transaction(
             cutpay = CutPay(**cutpay_dict)
             auto_populate_relationship_data(cutpay, db)
             
-            # Update agent financials if agent_code is present
-            if cutpay.agent_code:
-                await update_agent_financials(
-                    db=db,
-                    agent_code=cutpay.agent_code,
-                    net_premium=cutpay.net_premium or 0.0,
-                    running_balance=cutpay.running_bal or 0.0
-                )
             db.add(cutpay)
 
         await db.refresh(cutpay)
@@ -537,15 +526,6 @@ async def bulk_update_cutpay_transactions(
                 
                 # Auto-populate relationship data
                 auto_populate_relationship_data(cutpay, db)
-                
-                # Update agent financials if agent_code is present and relevant fields changed
-                if cutpay.agent_code and ('net_premium' in update_data or 'running_bal' in update_data):
-                    await update_agent_financials(
-                        db=db,
-                        agent_code=cutpay.agent_code,
-                        net_premium=update_data.get('net_premium', 0.0) if 'net_premium' in update_data else 0.0,
-                        running_balance=update_data.get('running_bal', 0.0) if 'running_bal' in update_data else 0.0
-                    )
                             
             # Refresh to get committed data
             await db.refresh(cutpay)
@@ -839,15 +819,6 @@ async def update_cutpay_transaction(
             
             # Auto-populate relationship data
             auto_populate_relationship_data(cutpay, db)
-            
-            # Update agent financials if agent_code is present and relevant fields changed
-            if cutpay.agent_code and ('net_premium' in update_data or 'running_bal' in update_data):
-                await update_agent_financials(
-                    db=db,
-                    agent_code=cutpay.agent_code,
-                    net_premium=update_data.get('net_premium', 0.0) if 'net_premium' in update_data else 0.0,
-                    running_balance=update_data.get('running_bal', 0.0) if 'running_bal' in update_data else 0.0
-                )
                         
         # Refresh to get committed data
         await db.refresh(cutpay)
@@ -1150,24 +1121,11 @@ async def extract_pdf_data_endpoint(
 # =============================================================================
 
 #TODO: throughout all cutpay routes ye finance details upgrade krna agent ki isko hatana hai as wo db me sotre hongi hi nhi ab, infact agent ke model se b hata do and ab ye details ham wo summary sheet se lenge to route ko refactor krdo uske hisaab se
-@router.get("/agent/{agent_code}/financial-summary", response_model=AgentFinancialSummary)
-async def get_agent_financial_summary_endpoint(
-    agent_code: str,
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """Get financial summary for a specific agent"""
-    try:
-        summary = await get_agent_financial_summary(db, agent_code)
-        return AgentFinancialSummary(**summary)
-        
-    except Exception as e:
-        logger.error(f"Failed to get financial summary for agent {agent_code}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch agent financial summary: {str(e)}"
-        )
+@router.get("/agent/{agent_code}/financial-summary",)
+async def get_agent_financial_summary_endpoint():
+    #MENE YE SARE MODEL SE HATA DIYE NA TO YE ERROR DERA THA TO YAHAN KA CODE HATA DIYA WAISE B YE SAB REPLACE HONA HI HAI
+    #WITH DATA FROM GOOGLE SHEET
+    pass
 
 # =============================================================================
 # CUTPAY AGENT CONFIG ENDPOINTS
