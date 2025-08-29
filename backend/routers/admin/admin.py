@@ -167,7 +167,6 @@ async def delete_agent_by_id(
             detail="Failed to delete agent"
         )
 
-#TODO: will test once to see if all the stats are correct, needed and add new ones
 @router.get("/agent-stats", response_model=AdminStatsResponse)
 async def get_admin_stats(
     current_user = Depends(get_current_user),

@@ -295,13 +295,9 @@ class AdminHelpers:
             )
             new_agents_this_month = await db.scalar(new_agents_query) or 0
             
-            total_docs_query = select(func.count()).select_from(UserDocument)
-            total_documents = await db.scalar(total_docs_query) or 0
-            
             return {
                 "total_agents": total_agents,
                 "new_agents_this_month": new_agents_this_month,
-                "total_documents": total_documents
             }
             
         except Exception as e:
