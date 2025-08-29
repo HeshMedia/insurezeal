@@ -359,10 +359,10 @@ async def export_master_sheet_data(
         if not records:
             return {"message": "No data found for export."}
 
-        # Ensure MATCH STATUS is present at the end
+        # Ensure MATCH is present at the end
         for rec in records:
-            if "MATCH STATUS" not in rec:
-                rec["MATCH STATUS"] = False
+            if "MATCH" not in rec:
+                rec["MATCH"] = False
         headers = list(records[0].keys())
 
         if format == "csv":
@@ -397,7 +397,7 @@ async def export_master_sheet_data(
             detail="Failed to export master sheet data"
         )
 
-#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme yahan pe abhi limited fields pass hori but ham sari fields pass krenge as ye to admin ko dikhana hai na plus yahan both match status true and false hoga
+#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme yahan pe abhi limited fields pass hori but ham sari fields pass krenge as ye to admin ko dikhana hai na plus yahan both match true and false hoga
 @router.get("/agent-mis/{agent_code}", response_model=AgentMISResponse)
 async def get_agent_mis_data(
     agent_code: str,
@@ -413,7 +413,7 @@ async def get_agent_mis_data(
     **Admin/SuperAdmin only endpoint**
     
     Returns master sheet data filtered for the specified agent with:
-    - Only records where MATCH STATUS = TRUE
+    - Only records where MATCH = TRUE
     - Sensitive broker commission fields removed
     - Calculated statistics (number of policies, running balance, total net premium)
     
@@ -486,7 +486,7 @@ async def get_my_mis_data(
     **Agent endpoint**
     
     Returns the authenticated agent's own master sheet data with:
-    - Only records where MATCH STATUS = TRUE
+    - Only records where MATCH = TRUE
     - Sensitive broker commission fields removed
     - Calculated statistics (number of policies, running balance, total net premium)
     - Agent can only see their own data based on their user profile

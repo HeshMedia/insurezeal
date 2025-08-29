@@ -300,7 +300,7 @@ async def process_universal_record_csv(
     1. Applies insurer mapping to CSV data
     2. Gets existing records from Google master sheet for the insurer
     3. Compares and updates/adds records in Google master sheet only
-    4. Sets MATCH STATUS to TRUE for all updated/added records
+    4. Sets MATCH to TRUE for all updated/added records (requires BOTH Policy Number AND Child ID match)
     """
     
     start_time = datetime.now()
@@ -372,34 +372,43 @@ async def process_universal_record_csv(
                 normalized = normalize_policy_number(policy_num)
                 logger.info(f"Master sheet record {i+1}: Policy='{policy_num}' -> Normalized='{normalized}', Insurer='{insurer}'")
         
-        # Create a lookup dictionary by policy number (case-insensitive and trimmed)
-        existing_records_by_policy = {}
+        # Create a lookup dictionary by composite key (policy number + child ID)
+        existing_records_by_composite_key = {}
         for record in existing_master_data:
             policy_number = record.get('Policy Number')
+            child_id = record.get('Child ID/ User ID [Provided by Insure Zeal]', '').strip()
+            
             if policy_number:
-                # Normalize policy number for lookup - handle both string and numeric values
+                # Normalize policy number for lookup
                 try:
                     normalized_policy = normalize_policy_number(policy_number)
                     if normalized_policy:  # Only add if normalization produced a valid result
-                        existing_records_by_policy[normalized_policy] = record
+                        # Create composite key: policy_number + child_id
+                        composite_key = f"{normalized_policy}|{child_id}" if child_id else normalized_policy
+                        existing_records_by_composite_key[composite_key] = record
+                        
+                        # Also store just policy number for fallback logging
+                        logger.debug(f"Added composite key: '{composite_key}' for policy '{policy_number}' with child ID '{child_id}'")
                 except Exception as e:
                     logger.warning(f"Error normalizing policy number '{policy_number}': {str(e)}")
                     continue
         
-        logger.info(f"Created lookup for {len(existing_records_by_policy)} existing policies")
-        if existing_records_by_policy:
-            sample_keys = list(existing_records_by_policy.keys())[:5]  # Show first 5 for debugging
-            logger.info(f"Sample existing policy keys: {sample_keys}")
+        logger.info(f"Created lookup for {len(existing_records_by_composite_key)} existing records with composite keys (policy + child ID)")
+        if existing_records_by_composite_key:
+            sample_keys = list(existing_records_by_composite_key.keys())[:5]  # Show first 5 for debugging
+            logger.info(f"Sample existing composite keys: {sample_keys}")
         
         # Process each record
         for record in mapped_records:
             policy_number = record.get('Policy Number')
+            child_id = record.get('Child ID', '').strip() if record.get('Child ID') else ''
+            
             if not policy_number:
                 stats.total_errors += 1
                 stats.error_details.append("Missing Policy Number in record")
                 continue
             
-            # Normalize policy number for lookup - handle both string and numeric values
+            # Normalize policy number for lookup
             try:
                 normalized_policy = normalize_policy_number(policy_number)
                 if not normalized_policy:  # Check if normalization produced a valid result
@@ -411,28 +420,31 @@ async def process_universal_record_csv(
                 stats.total_errors += 1
                 stats.error_details.append(f"Invalid Policy Number format: {policy_number}")
                 continue
-                
-            logger.info(f"Processing universal record policy '{policy_number}' (normalized: '{normalized_policy}')")
-            logger.info(f"Looking for normalized policy '{normalized_policy}' in {len(existing_records_by_policy)} existing records")
             
-            # Debug: Check if this specific policy exists in any form
-            for existing_normalized, existing_record in existing_records_by_policy.items():
-                if existing_normalized == normalized_policy:
-                    logger.info(f"EXACT MATCH FOUND: '{normalized_policy}' matches existing '{existing_normalized}'")
+            # Create composite key for matching
+            composite_key = f"{normalized_policy}|{child_id}" if child_id else normalized_policy
+                
+            logger.info(f"Processing universal record policy '{policy_number}' with child ID '{child_id}' (composite key: '{composite_key}')")
+            logger.info(f"Looking for composite key '{composite_key}' in {len(existing_records_by_composite_key)} existing records")
+            
+            # Debug: Check if this specific composite key exists
+            for existing_key, existing_record in existing_records_by_composite_key.items():
+                if existing_key == composite_key:
+                    logger.info(f"EXACT MATCH FOUND: '{composite_key}' matches existing '{existing_key}'")
                     break
             else:
-                logger.info(f"NO EXACT MATCH: '{normalized_policy}' not found in existing normalized keys")
+                logger.info(f"NO EXACT MATCH: '{composite_key}' not found in existing composite keys")
                 # Show the closest matches for debugging
-                similar_keys = [k for k in existing_records_by_policy.keys() if policy_number.upper() in k or k in policy_number.upper()]
+                similar_keys = [k for k in existing_records_by_composite_key.keys() if normalized_policy in k]
                 if similar_keys:
-                    logger.info(f"Similar existing keys found: {similar_keys}")
+                    logger.info(f"Keys with same policy number but different child ID: {similar_keys}")
             
             try:
-                if normalized_policy in existing_records_by_policy:
-                    # Update existing record in master sheet
-                    existing_record = existing_records_by_policy[normalized_policy]
+                if composite_key in existing_records_by_composite_key:
+                    # BOTH Policy Number AND Child ID match - process the record
+                    existing_record = existing_records_by_composite_key[composite_key]
                     
-                    logger.info(f"MATCH FOUND: Existing record found for policy '{policy_number}' (normalized: '{normalized_policy}')")
+                    logger.info(f"COMPOSITE MATCH FOUND: Both policy '{policy_number}' and child ID '{child_id}' match existing record")
                     
                     # Compare and update fields
                     has_changes, changed_fields = await compare_and_update_master_record(
@@ -440,20 +452,20 @@ async def process_universal_record_csv(
                     )
                     
                     if has_changes:
-                        # Set MATCH STATUS to TRUE
-                        record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
+                        # Set MATCH to TRUE
+                        record['MATCH'] = "TRUE"  # Changed from "MATCH STATUS" to "MATCH"
                         
                         # Update in Google Sheets
                         update_success = await update_master_sheet_record(policy_number, record)
                         
                         if update_success:
                             stats.total_records_updated += 1
-                            logger.info(f"Successfully updated policy '{policy_number}' with changes: {changed_fields}")
-                            logger.info(f"MATCH STATUS set to TRUE for policy '{policy_number}'")
+                            logger.info(f"Successfully updated policy '{policy_number}' with child ID '{child_id}' - changes: {changed_fields}")
+                            logger.info(f"MATCH set to TRUE for policy '{policy_number}' with child ID '{child_id}'")
                         else:
                             stats.total_errors += 1
-                            stats.error_details.append(f"Failed to update policy '{policy_number}' in Google Sheets")
-                            logger.error(f"Failed to update policy '{policy_number}' in Google Sheets")
+                            stats.error_details.append(f"Failed to update policy '{policy_number}' with child ID '{child_id}' in Google Sheets")
+                            logger.error(f"Failed to update policy '{policy_number}' with child ID '{child_id}' in Google Sheets")
                         
                         # Track field changes
                         for field in changed_fields:
@@ -468,16 +480,16 @@ async def process_universal_record_csv(
                             new_values=record
                         ))
                     else:
-                        # No changes but still set MATCH STATUS to TRUE
-                        record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
+                        # No changes but still set MATCH to TRUE (both policy and child ID matched)
+                        record['MATCH'] = "TRUE"  # Changed from "MATCH STATUS" to "MATCH"
                         update_success = await update_master_sheet_record(policy_number, record)
                         
                         if update_success:
-                            logger.info(f"Policy '{policy_number}' had no changes, but MATCH STATUS updated to TRUE")
+                            logger.info(f"Policy '{policy_number}' with child ID '{child_id}' had no changes, but MATCH updated to TRUE")
                         else:
                             stats.total_errors += 1
-                            stats.error_details.append(f"Failed to update MATCH STATUS for policy '{policy_number}'")
-                            logger.error(f"Failed to update MATCH STATUS for policy '{policy_number}'")
+                            stats.error_details.append(f"Failed to update MATCH for policy '{policy_number}' with child ID '{child_id}'")
+                            logger.error(f"Failed to update MATCH for policy '{policy_number}' with child ID '{child_id}'")
                         
                         change_details.append(RecordChangeDetail(
                             policy_number=policy_number,
@@ -520,21 +532,21 @@ async def process_universal_record_csv(
                     
                     if not found_in_all:
                         # Add new record to master sheet
-                        logger.info(f"NO MATCH: Policy '{policy_number}' (normalized: '{normalized_policy}') not found in existing records, adding new record")
+                        logger.info(f"NO MATCH: Policy '{policy_number}' with child ID '{child_id}' not found in existing records, adding new record")
                         
                         # Debug: show some existing policy numbers for comparison
-                        if existing_records_by_policy:
-                            sample_existing = list(existing_records_by_policy.keys())[:3]
-                            logger.info(f"Sample existing normalized policies for comparison: {sample_existing}")
+                        if existing_records_by_composite_key:
+                            sample_existing = list(existing_records_by_composite_key.keys())[:3]
+                            logger.info(f"Sample existing composite keys for comparison: {sample_existing}")
                         
-                        record['MATCH STATUS'] = "TRUE"  # Use string "TRUE" instead of boolean
+                        record['MATCH'] = "FALSE"  # Changed from "MATCH STATUS" to "MATCH"
                         record['Insurer Name'] = insurer_name
                         
                         add_success = await add_master_sheet_record(record)
                         
                         if add_success:
                             stats.total_records_added += 1
-                            logger.info(f"Successfully added new policy '{policy_number}' with MATCH STATUS = TRUE")
+                            logger.info(f"Successfully added new policy '{policy_number}' with MATCH = FALSE")
                         else:
                             stats.total_errors += 1
                             stats.error_details.append(f"Failed to add new policy '{policy_number}' to Google Sheets")
@@ -668,7 +680,7 @@ async def generate_reconciliation_summary(
         # Calculate match statistics based on match_status field
         matched_records = []
         for record in master_sheet_data:
-            match_status = record.get('Match Status', '')
+            match_status = record.get('MATCH', '')
             # Check for both string "TRUE" and boolean True
             if match_status == "TRUE" or match_status == True or str(match_status).upper() == "TRUE":
                 matched_records.append(record)

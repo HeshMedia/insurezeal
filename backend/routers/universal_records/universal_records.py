@@ -28,7 +28,6 @@ from .schemas import (
 )
 
 #TODO: universal record select krte hue b quarter(s) select krne pdenge taki unhi quarters me compare kre faltu sare nhi and isko b test krna hai fir
-#TODO: policy number ke sath sath ab child id b comapre hogi and dono match honge tab b records update krne hai i.e MATCH STATUS true krnehe compare krke warna kuch na krna
 
 router = APIRouter(prefix="/universal-records", tags=["Universal Records"])
 logger = logging.getLogger(__name__)
@@ -153,7 +152,7 @@ async def upload_universal_record(
     
     1. **Update existing records** in Google master sheet where data mismatches are found
     2. **Add missing records** that exist in universal record but not in master sheet
-    3. **Set MATCH STATUS to TRUE** for all updated/added records
+    3. **Set MATCH to TRUE** for all updated/added records
     4. **Generate detailed report** of all changes made
     
     **Process Flow:**
@@ -163,8 +162,8 @@ async def upload_universal_record(
     4. For each record in uploaded sheet:
        - Use mapping to align headers with master sheet format
        - Compare with master sheet records (by policy number)
-       - If present, update mapped fields and set MATCH STATUS to TRUE
-       - If not present, add to master sheet and set MATCH STATUS to TRUE
+       - If present, update mapped fields and set MATCH to TRUE
+       - If not present, add to master sheet and set MATCH to FALSE
     5. Generate comprehensive reconciliation report
     
     **Parameters:**
@@ -220,7 +219,7 @@ async def upload_universal_record(
                    f"updated {report.stats.total_records_updated}, "
                    f"added {report.stats.total_records_added} in "
                    f"{report.stats.processing_time_seconds:.2f} seconds. "
-                   f"All records marked with MATCH STATUS = TRUE.",
+                   f"All records marked with MATCH = TRUE/FALSE based on matching status.",
             report=report,
             processing_time_seconds=report.stats.processing_time_seconds
         )

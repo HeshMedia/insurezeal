@@ -717,6 +717,7 @@ async def list_agent_configs(
 # tho ho skta hai ki quarter alag b ho rtaher than whatver date there to frontend ko wahan dikhana b pdega phele to autofecth krke kya quarter hai
 # if user want he can change that but haan hame backend pe both policy number and quarter chaiye rhega PAR AB qo quarter jab pass krnege jo jo b tera quarter sheets ka logic hai ye manager
 # wo use handle kr rha hai ache se ke nhi wo dkehna ppdega aisa to nhi wo sare quarter check krega
+
 @router.get("/{cutpay_id}", response_model=CutPayResponse)
 async def get_cutpay_transaction(
     cutpay_id: int,

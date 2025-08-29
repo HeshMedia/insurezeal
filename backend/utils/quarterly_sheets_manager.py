@@ -6,7 +6,7 @@ with proper balance carryover functionality for the InsureZeal Google Sheets sys
 
 Features:
 - Automatic quarterly sheet creation with proper naming (Q1-2025, Q2-2025, etc.)
-- Balance carryover from previous quarter where match status = true
+- Balance carryover from previous quarter where match = true
 - Formula replication from master sheet template
 - Data routing to current quarter sheet
 """
@@ -915,7 +915,7 @@ class QuarterlySheetManager:
             worksheet = self.spreadsheet.worksheet(sheet_name)
             all_records = worksheet.get_all_records()
             
-            # Count records by match status
+            # Count records by match
             true_match_count = sum(1 for record in all_records if str(record.get('Match', '')).strip().lower() == 'true')
             false_match_count = sum(1 for record in all_records if str(record.get('Match', '')).strip().lower() == 'false')
             total_records = len(all_records)

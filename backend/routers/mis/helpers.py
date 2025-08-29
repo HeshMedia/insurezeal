@@ -480,7 +480,7 @@ class MISHelpers:
     ) -> Dict[str, Any]:
         """
         Get filtered master sheet data for specific agent with removed sensitive fields
-        Only returns records where MATCH STATUS = TRUE
+        Only returns records where MATCH = TRUE
         
         Args:
             agent_code: Agent code to filter by
@@ -529,8 +529,8 @@ class MISHelpers:
                 # Check if agent code matches (try both possible field names)
                 record_agent_code = str(record.get('Agent Code', record.get('agent_code', ''))).strip()
                 
-                # Check if MATCH STATUS is TRUE (try different possible field names)
-                match_status = str(record.get('MATCH STATUS', record.get('Match Status', record.get('match_status', 'TRUE')))).upper().strip()
+                # Check if MATCH is TRUE (try different possible field names)
+                match_status = str(record.get('MATCH', record.get('Match Status', record.get('match_status', 'TRUE')))).upper().strip()
                 
                 logger.info(f"Record agent code: '{record_agent_code}', Match status: '{match_status}', Target: '{agent_code}'")
                 
