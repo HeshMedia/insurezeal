@@ -30,7 +30,7 @@ from .helpers import AdminHelpers
 from routers.child.helpers import ChildHelpers
 from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
 from utils.google_sheets import google_sheets_sync
-from models import UserProfile
+from models import UserProfile, Users
 from typing import Optional
 import logging
 import io
@@ -720,7 +720,6 @@ async def promote_agent_to_admin(
     Updates both database and Supabase metadata.
     """
     from config import get_supabase_admin_client
-    from models import UserProfile
     from uuid import UUID
     
     try:
@@ -734,15 +733,19 @@ async def promote_agent_to_admin(
             )
 
         result = await db.execute(
-            select(UserProfile).where(UserProfile.user_id == user_uuid)
+            select(UserProfile, Users)
+            .join(Users, UserProfile.user_id == Users.id)
+            .where(UserProfile.user_id == user_uuid)
         )
-        user_profile = result.scalar_one_or_none()
+        user_data = result.first()
         
-        if not user_profile:
+        if not user_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User with ID {user_id} not found in database"
             )
+        
+        user_profile, user_record = user_data
         
         if user_profile.user_role != "agent":
             raise HTTPException(
@@ -750,8 +753,18 @@ async def promote_agent_to_admin(
                 detail=f"User is currently {user_profile.user_role}. Only agents can be promoted to admin."
             )
 
+        # Update UserProfile role
         user_profile.user_role = "admin"
+        
+        # Update Users table metadata to mirror what should be in Supabase
+        if user_record.raw_user_meta_data:
+            user_record.raw_user_meta_data["role"] = "admin"
+        else:
+            user_record.raw_user_meta_data = {"role": "admin"}
+        
         await db.commit()
+        
+        logger.info(f"Updated role in both UserProfile and Users tables for user {user_id} to admin")
         
         supabase_admin = get_supabase_admin_client()
         supabase_response = supabase_admin.auth.admin.update_user_by_id(
@@ -759,12 +772,14 @@ async def promote_agent_to_admin(
             attributes={"user_metadata": {"role": "admin"}}
         )
         
+        supabase_updated = bool(supabase_response.user)
+        
         return schemas.UserRoleUpdateResponse(
             success=True,
-            message="Successfully promoted agent to admin",
+            message="Successfully promoted agent to admin in both local database and Supabase auth" if supabase_updated else "Promoted to admin in local database, but failed to sync with Supabase auth. User can still access admin features.",
             user_id=user_uuid,
             new_role="admin",
-            updated_in_supabase=bool(supabase_response.user),
+            updated_in_supabase=supabase_updated,
             updated_in_database=True
         )
         
