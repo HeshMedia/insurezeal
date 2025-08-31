@@ -88,6 +88,7 @@ async def register(
     db: AsyncSession = Depends(get_db)
 ):
     try:
+        # Check if username is already taken
         existing_user = await db.execute(
             select(UserProfile).where(UserProfile.username == user_data.username)
         )
@@ -96,6 +97,8 @@ async def register(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already taken"
             )      
+        
+        # Create user in Supabase
         auth_response = supabase.auth.sign_up({
             "email": user_data.email,
             "password": user_data.password,
@@ -114,24 +117,55 @@ async def register(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to create user account"
             )       
+        
         supabase_user_id = auth_response.user.id
         
-        # Generate automatic agent code for new user
+        # TEMPORARY: Manual creation until webhook is configured
+        # TODO: Remove this when webhook is properly set up
+        
+        # 1. Create Users record (mirror of Supabase auth.users)
+        new_user = Users(
+            id=supabase_user_id,
+            email=auth_response.user.email,
+            phone=auth_response.user.phone,
+            role="agent",
+            email_confirmed_at=auth_response.user.email_confirmed_at,
+            phone_confirmed_at=auth_response.user.phone_confirmed_at,
+            last_sign_in_at=auth_response.user.last_sign_in_at,
+            raw_app_meta_data=auth_response.user.app_metadata or {},
+            raw_user_meta_data=auth_response.user.user_metadata or {},
+            is_super_admin=False,
+            is_sso_user=False,
+            is_anonymous=False,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        
+        logger.info(f"Creating Users record with ID: {supabase_user_id}")
+        db.add(new_user)
+        await db.flush()  # Ensure Users record is created first
+        logger.info(f"Users record created successfully")
+        
+        # 2. Generate automatic agent code for new user
         agent_code = await user_helpers.generate_agent_code(db)
         logger.info(f"Generated agent code {agent_code} for new user {user_data.username}")
         
+        # 3. Create UserProfile (with proper foreign key reference)
         new_user_profile = UserProfile(
             user_id=supabase_user_id,  
             username=user_data.username,
             first_name=user_data.first_name,
             last_name=user_data.last_name,
             user_role="agent",
-            agent_code=agent_code  # Assign the generated agent code
+            agent_code=agent_code  
         )
         
+        logger.info(f"Creating UserProfile record with user_id: {supabase_user_id}")
         db.add(new_user_profile)
         await db.commit()
         await db.refresh(new_user_profile)      
+        
+        # Return response
         profile_data = model_data_from_orm(new_user_profile, {"email": auth_response.user.email})
         user_response = UserResponse.model_validate(profile_data)
         
@@ -346,62 +380,73 @@ async def supabase_webhook(
     """
     Supabase webhook to replicate auth.users into our local database
     Handles user creation, updates, and deletion events from Supabase Auth
+    
+    TODO: Enable this when VPS is configured and webhook URL is set up in Supabase
+    Currently using manual user creation in register route as temporary solution
     """
-    try:
-        # Verify webhook security
-        webhook_secret = os.getenv("SUPABASE_WEBHOOK_SECRET")
-        if not webhook_secret:
-            logger.error("SUPABASE_WEBHOOK_SECRET not configured")
-            raise HTTPException(status_code=500, detail="Webhook not configured")
-        
-        # Verify the webhook signature if provided
-        if x_hook_signature:
-            body = await request.body()
-            expected_signature = hmac.new(
-                webhook_secret.encode(),
-                body,
-                hashlib.sha256
-            ).hexdigest()
-            
-            if not hmac.compare_digest(f"sha256={expected_signature}", x_hook_signature):
-                logger.warning("Invalid webhook signature")
-                raise HTTPException(status_code=401, detail="Invalid signature")
-        
-        # Verify Bearer token if provided (alternative security method)
-        elif authorization:
-            if not authorization.startswith("Bearer "):
-                raise HTTPException(status_code=401, detail="Invalid authorization header")
-            
-            token = authorization.split(" ")[1]
-            if token != webhook_secret:
-                raise HTTPException(status_code=401, detail="Invalid token")
-        else:
-            logger.warning("No security headers provided for webhook")
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        
-        event_type = webhook_data.type
-        user_data = webhook_data.record
-        
-        logger.info(f"Processing Supabase webhook: {event_type} for user {user_data.id}")
-        
-        if event_type in ["INSERT", "UPDATE"]:
-            # Create or update user in local database
-            await upsert_user_from_supabase(db, user_data)
-            
-        elif event_type == "DELETE":
-            # Soft delete user in local database
-            await soft_delete_user(db, user_data.id)
-        
-        else:
-            logger.warning(f"Unhandled webhook event type: {event_type}")
-        
-        return {"status": "success", "message": f"Processed {event_type} event for user {user_data.id}"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Webhook processing failed")
+    
+    # FUTURE: Enable this when webhook is properly configured
+    # For now, return basic response since we're manually creating users in register route
+    return {"status": "webhook_disabled", "message": "Webhook functionality disabled - using manual user creation"}
+    
+    # TODO: Uncomment and implement below when webhook is configured on VPS
+    # This is the full webhook implementation ready for production use:
+    #
+    # try:
+    #     # Verify webhook security
+    #     webhook_secret = os.getenv("SUPABASE_WEBHOOK_SECRET")
+    #     if not webhook_secret:
+    #         logger.error("SUPABASE_WEBHOOK_SECRET not configured")
+    #         raise HTTPException(status_code=500, detail="Webhook not configured")
+    #     
+    #     # Verify the webhook signature if provided
+    #     if x_hook_signature:
+    #         body = await request.body()
+    #         expected_signature = hmac.new(
+    #             webhook_secret.encode(),
+    #             body,
+    #             hashlib.sha256
+    #         ).hexdigest()
+    #         
+    #         if not hmac.compare_digest(f"sha256={expected_signature}", x_hook_signature):
+    #             logger.warning("Invalid webhook signature")
+    #             raise HTTPException(status_code=401, detail="Invalid signature")
+    #     
+    #     # Verify Bearer token if provided (alternative security method)
+    #     elif authorization:
+    #         if not authorization.startswith("Bearer "):
+    #             raise HTTPException(status_code=401, detail="Invalid authorization header")
+    #         
+    #         token = authorization.split(" ")[1]
+    #         if token != webhook_secret:
+    #             raise HTTPException(status_code=401, detail="Invalid token")
+    #     else:
+    #         logger.warning("No security headers provided for webhook")
+    #         raise HTTPException(status_code=401, detail="Unauthorized")
+    #     
+    #     event_type = webhook_data.type
+    #     user_data = webhook_data.record
+    #     
+    #     logger.info(f"Processing Supabase webhook: {event_type} for user {user_data.id}")
+    #     
+    #     if event_type in ["INSERT", "UPDATE"]:
+    #         # Create or update user and profile in local database
+    #         await upsert_user_from_supabase(db, user_data)
+    #         
+    #     elif event_type == "DELETE":
+    #         # Soft delete user in local database
+    #         await soft_delete_user(db, user_data.id)
+    #     
+    #     else:
+    #         logger.warning(f"Unhandled webhook event type: {event_type}")
+    #     
+    #     return {"status": "success", "message": f"Processed {event_type} event for user {user_data.id}"}
+    #     
+    # except HTTPException:
+    #     raise
+    # except Exception as e:
+    #     logger.error(f"Webhook processing failed: {str(e)}", exc_info=True)
+    #     raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 
 async def upsert_user_from_supabase(db: AsyncSession, user_data):

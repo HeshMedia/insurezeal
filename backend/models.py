@@ -335,9 +335,8 @@ class CutPay(Base):
     admin_child_id: Mapped[Optional[str]] = mapped_column(ForeignKey("admin_child_ids.child_id"), nullable=True)
     
     # Document URLs
-    customer_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    vehicle_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    policy_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    additional_documents: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    policy_pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Important dates
     booking_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
@@ -379,9 +378,8 @@ class Policy(Base):
     agent_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     
     # Document URLs
-    customer_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    vehicle_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    policy_documents_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    additional_documents: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    policy_pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Important dates
     booking_date: Mapped[Optional[Date]] = mapped_column(Date, nullable=True)
