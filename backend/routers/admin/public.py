@@ -36,7 +36,7 @@ async def promote_to_superadmin(
 
         try:
             result = await db.execute(
-                select(UserProfile, Users.email)
+                select(UserProfile, Users.email, Users)
                 .join(Users, UserProfile.user_id == Users.id)
                 .where(UserProfile.user_id == promotion_request.user_id)
             )
@@ -48,7 +48,7 @@ async def promote_to_superadmin(
                     detail=f"User with ID {promotion_request.user_id} not found in database"
                 )
             
-            user_profile, user_email = user_data
+            user_profile, user_email, user_record = user_data
             
             if user_email != promotion_request.email:
                 raise HTTPException(
@@ -56,10 +56,18 @@ async def promote_to_superadmin(
                     detail="Email does not match the user record. Cannot promote to superadmin."
                 )
 
+            # Update UserProfile role
             user_profile.user_role = "superadmin"
+            
+            # Update Users table metadata to mirror what should be in Supabase
+            if user_record.raw_user_meta_data:
+                user_record.raw_user_meta_data["role"] = "superadmin"
+            else:
+                user_record.raw_user_meta_data = {"role": "superadmin"}
+            
             await db.commit()
             updated_in_database = True
-            logger.info(f"Updated role in database for user {promotion_request.user_id} to superadmin")
+            logger.info(f"Updated role in both UserProfile and Users tables for user {promotion_request.user_id} to superadmin")
             
         except HTTPException:
             raise
@@ -70,8 +78,9 @@ async def promote_to_superadmin(
         try:
             supabase_admin = get_supabase_admin_client()
             
-            logger.info(f"Attempting to update user {promotion_request.user_id} in Supabase")
+            logger.info(f"Attempting to update user {promotion_request.user_id} in Supabase auth.users")
             
+            # Try to update Supabase auth.users metadata
             response = supabase_admin.auth.admin.update_user_by_id(
                 uid=str(promotion_request.user_id),
                 attributes={
@@ -81,34 +90,36 @@ async def promote_to_superadmin(
                 }
             )
             
-            logger.info(f"Supabase response: {response}")
+            logger.info(f"Supabase update response received")
             
-            if response.user:
+            if response and response.user:
                 updated_in_supabase = True
-                logger.info(f"Updated role in Supabase for user {promotion_request.user_id} to superadmin")
+                logger.info(f"Successfully updated role in Supabase auth.users for user {promotion_request.user_id} to superadmin")
             else:
                 logger.error(f"Failed to update role in Supabase for user {promotion_request.user_id}: No user in response")
                 
         except Exception as e:
-            logger.error(f"Failed to update role in Supabase: {str(e)}")
+            logger.error(f"Failed to update role in Supabase auth.users: {str(e)}")
             logger.error(f"Exception type: {type(e)}")
             if hasattr(e, 'details'):
                 logger.error(f"Supabase error details: {e.details}")
             if hasattr(e, 'message'):
                 logger.error(f"Supabase error message: {e.message}")
+            # Don't fail the entire operation if Supabase update fails
+            # The user can still work with the local database role
         
         if updated_in_database and updated_in_supabase:
             success = True
-            message = f"Successfully promoted user to superadmin in both database and Supabase"
+            message = f"Successfully promoted user to superadmin in both local database and Supabase auth"
         elif updated_in_database:
-            success = True
-            message = f"Promoted to superadmin in database, but failed to update Supabase metadata. User may need to log in again."
+            success = True  # Still successful since local database is primary
+            message = f"Promoted to superadmin in local database (UserProfile + Users tables), but failed to sync with Supabase auth. User can still access superadmin features."
         elif updated_in_supabase:
             success = False
-            message = f"Updated role in Supabase to superadmin, but failed to update database. This is an inconsistent state."
+            message = f"Updated role in Supabase auth but failed to update local database. This creates inconsistent state - please try again."
         else:
             success = False
-            message = "Failed to promote user to superadmin in both database and Supabase"
+            message = "Failed to promote user to superadmin in both local database and Supabase auth"
         
         return UserRoleUpdateResponse(
             success=success,
