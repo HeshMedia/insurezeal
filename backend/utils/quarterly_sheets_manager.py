@@ -316,7 +316,7 @@ class QuarterlySheetManager:
             logger.warning(f"Error copying template validations: {str(e)}")
     
     def _get_default_headers(self) -> List[str]:
-        """Default headers based on the template analysis"""
+        """Default headers based on the complete template analysis"""
         return [
             "Reporting Month (mmm'yy)", "Child ID/ User ID [Provided by Insure Zeal]", "Insurer /broker code",
             "Policy Start Date", "Policy End Date", "Booking Date(Click to select Date)", "Broker Name", 
@@ -328,11 +328,12 @@ class QuarterlySheetManager:
             "Veh_Wheels", "Customer Name", "Customer Number", "Commissionable Premium", "Incoming Grid %", 
             "Receivable from Broker", "Extra Grid", "Extra Amount Receivable from Broker", 
             "Total Receivable from Broker", "Claimed By", "Payment by", "Payment Mode", 
-            "Cut Pay Amount Received From Agent", "Already Given to agent", "Match", "Agent_PO%", 
+            "Cut Pay Amount Received From Agent", "Already Given to agent", "Actual", "Agent_PO%", 
             "Agent_PO_AMT", "Agent_Extra%", "Agent_Extr_Amount", "Total_Agent_PO_AMT", "Payment By Office", 
             "PO Paid To Agent", "Running Bal", "Total Receivable from Broker Include 18% GST", "IZ Total PO%", 
-            "According to Agent Payout%", "According to Agent Payout Amount", "Broker PO%", "Broker PO AMT", 
-            "Invoice Status", "Invoice Number", "Remarks"
+            "As per Broker PO%", "As per Broker PO AMT", "PO% Diff", "Broker PO AMT Diff", "Broker", 
+            "As per Agent Payout%", "As per Agent Payout Amount", "PO% Diff Agent", "PO AMT Diff Agent", 
+            "Invoice Status", "Invoice Number", "Remarks", "Match", "Agent Code"
         ]
     
     def create_quarterly_sheet_headers(self) -> List[str]:
@@ -470,6 +471,64 @@ class QuarterlySheetManager:
         adjusted_formula = re.sub(pattern, replace_func, formula)
         
         return adjusted_formula
+    
+    def _adapt_template_formulas_for_target(self, template_combined_row: List[str], template_headers: List[str], quarterly_headers: List[str], target_quarter: int, target_year: int) -> List[str]:
+        """
+        Adapt template formulas and values for the target quarterly sheet structure
+        
+        Args:
+            template_combined_row: Combined formulas and values from template row 2
+            template_headers: Headers from the master template
+            quarterly_headers: Headers for the quarterly sheet (may include additional columns)
+            target_quarter: Target quarter number (1-4)
+            target_year: Target year
+            
+        Returns:
+            List of adapted formulas/values matching quarterly_headers structure
+        """
+        try:
+            adapted_formulas = []
+            
+            # Map template data to quarterly headers
+            for i, quarterly_header in enumerate(quarterly_headers):
+                adapted_value = ""
+                
+                # Try to find matching column in template
+                if i < len(template_combined_row):
+                    template_value = template_combined_row[i]
+                    
+                    # If it's a formula, decode it for the target quarter
+                    if template_value and str(template_value).startswith('='):
+                        try:
+                            adapted_value = self._decode_master_template_formulas(
+                                template_value, target_quarter, target_year, 2
+                            )
+                        except Exception as formula_error:
+                            logger.warning(f"Could not decode formula for {quarterly_header}: {formula_error}")
+                            adapted_value = template_value  # Use original if decoding fails
+                    else:
+                        # Regular value, use as-is
+                        adapted_value = template_value
+                else:
+                    # This is an additional column not in template, leave empty
+                    adapted_value = ""
+                
+                adapted_formulas.append(adapted_value)
+            
+            logger.info(f"Adapted {len(adapted_formulas)} formulas/values for quarterly sheet structure")
+            
+            # Count formulas vs values for logging
+            formula_count = len([f for f in adapted_formulas if f and str(f).startswith('=')])
+            value_count = len([f for f in adapted_formulas if f and not str(f).startswith('=') and f])
+            empty_count = len([f for f in adapted_formulas if not f])
+            
+            logger.info(f"Adaptation result: {formula_count} formulas, {value_count} values, {empty_count} empty cells")
+            
+            return adapted_formulas
+            
+        except Exception as e:
+            logger.error(f"Error adapting template formulas for target: {str(e)}")
+            return []
     
     def _decode_master_template_formulas(self, formula: str, target_quarter: int, target_year: int, target_row: int) -> str:
         """
@@ -861,6 +920,162 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error finding next empty row: {str(e)}")
             return 2
+
+    def _apply_balance_carryover(self, worksheet: gspread.Worksheet, quarter: int, year: int, headers: List[str]):
+        """
+        Apply balance carryover from previous quarter to current quarter worksheet
+        
+        Args:
+            worksheet: Target worksheet to apply carryover to
+            quarter: Target quarter number (1-4)
+            year: Target year
+            headers: Column headers for the worksheet
+        """
+        try:
+            # Get previous quarter info
+            prev_quarter_name, prev_quarter, prev_year = self.get_previous_quarter_info(quarter, year)
+            
+            # Check if previous quarter sheet exists
+            if not self.sheet_exists(prev_quarter_name):
+                logger.info(f"No previous quarter sheet found ({prev_quarter_name}) - skipping carryover")
+                return
+            
+            # Get previous quarter data
+            prev_sheet = self.spreadsheet.worksheet(prev_quarter_name)
+            prev_data = prev_sheet.get_all_records()
+            
+            # Process carryover data
+            carryover_records = self._process_balance_carryover(prev_data, headers)
+            
+            if not carryover_records:
+                logger.info(f"No carryover records found from {prev_quarter_name}")
+                return
+            
+            # Find starting row for carryover data (after header and template row)
+            current_row = 3  # Start from row 3 (after header row 1 and template row 2)
+            
+            # Add carryover records to the worksheet
+            for record in carryover_records:
+                try:
+                    # Prepare row data based on headers
+                    row_data = []
+                    for header in headers:
+                        value = record.get(header, '')
+                        row_data.append(str(value) if value else '')
+                    
+                    # Write the row data
+                    range_notation = f"A{current_row}:{self._col_to_a1(len(headers))}{current_row}"
+                    worksheet.update(range_notation, [row_data], value_input_option='USER_ENTERED')
+                    
+                    # Copy formulas from template row to this row
+                    self._copy_formulas_only_to_row(worksheet, current_row)
+                    
+                    current_row += 1
+                    
+                except Exception as row_error:
+                    logger.error(f"Error adding carryover record at row {current_row}: {row_error}")
+                    continue
+            
+            logger.info(f"Successfully applied {len(carryover_records)} carryover records from {prev_quarter_name} to Q{quarter}-{year}")
+            
+        except Exception as e:
+            logger.error(f"Error applying balance carryover: {str(e)}")
+
+    def _process_balance_carryover(self, prev_data: List[Dict[str, Any]], headers: List[str]) -> List[Dict[str, Any]]:
+        """
+        Process records from previous quarter and return those that should be carried over
+        
+        Args:
+            prev_data: Records from previous quarter
+            headers: Headers for the new quarter sheet
+            
+        Returns:
+            List of records to carry over (where Match = True and Running Bal > 0)
+        """
+        try:
+            carryover_records = []
+            
+            for record in prev_data:
+                # Check if this record should be carried over
+                # Criteria: Match = True and Running Bal > 0
+                match_value = str(record.get('Match', '')).strip().lower()
+                running_bal = record.get('Running Bal', 0)
+                
+                # Convert running balance to float for comparison
+                try:
+                    running_bal_float = float(running_bal) if running_bal else 0
+                except (ValueError, TypeError):
+                    running_bal_float = 0
+                
+                # Carryover if Match is True and Running Balance is greater than 0
+                if match_value == 'true' and running_bal_float > 0:
+                    # Create a new record for carryover
+                    carryover_record = {}
+                    
+                    # Copy relevant fields that should be carried over
+                    fields_to_carry = [
+                        'Policy Number', 'Product', 'Insured Name', 'Mobile', 'Agent Name',
+                        'Agent Code', 'Insurer', 'Policy Premium', 'Brokerage %', 'Brokerage',
+                        'TDS', 'TDS %', 'GST', 'Total Receivable from Broker',
+                        'Total Receivable from Broker (Include 18% GST)', 'Match'
+                    ]
+                    
+                    for field in fields_to_carry:
+                        if field in record:
+                            carryover_record[field] = record[field]
+                    
+                    # Set the carried over running balance as the new "carried forward" amount
+                    carryover_record['Running Bal'] = running_bal_float
+                    
+                    # Mark this as carried over data
+                    carryover_record['Notes'] = f"Carried over from previous quarter (Original Bal: {running_bal_float})"
+                    
+                    carryover_records.append(carryover_record)
+            
+            logger.info(f"Processed {len(carryover_records)} records for carryover out of {len(prev_data)} total records")
+            return carryover_records
+            
+        except Exception as e:
+            logger.error(f"Error processing balance carryover: {str(e)}")
+            return []
+
+    def _clear_carryover_data_only(self, worksheet: gspread.Worksheet, headers: List[str]):
+        """
+        Clear only carryover data from worksheet, preserving header and new records
+        
+        Args:
+            worksheet: Worksheet to clear carryover data from
+            headers: Column headers
+        """
+        try:
+            # Get all records to identify carryover vs new records
+            all_records = worksheet.get_all_records()
+            
+            # Find rows that are carryover records (have notes about being carried over)
+            rows_to_clear = []
+            
+            for i, record in enumerate(all_records):
+                notes = str(record.get('Notes', '')).lower()
+                if 'carried over' in notes or 'carryover' in notes:
+                    # This is a carryover record - mark for clearing
+                    # Row number is i + 2 (1 for header, 1 for 0-based index)
+                    rows_to_clear.append(i + 2)
+            
+            # Clear the identified carryover rows
+            if rows_to_clear:
+                for row_num in sorted(rows_to_clear, reverse=True):  # Clear from bottom up
+                    try:
+                        range_to_clear = f"A{row_num}:{self._col_to_a1(len(headers))}{row_num}"
+                        worksheet.batch_clear([range_to_clear])
+                    except Exception as clear_error:
+                        logger.warning(f"Could not clear row {row_num}: {clear_error}")
+                
+                logger.info(f"Cleared {len(rows_to_clear)} carryover rows")
+            else:
+                logger.info("No carryover rows found to clear")
+                
+        except Exception as e:
+            logger.error(f"Error clearing carryover data: {str(e)}")
     
     def check_quarter_transition(self) -> Dict[str, Any]:
         """

@@ -166,6 +166,7 @@ class CutPayCreate(BaseModel):
     claimed_by: Optional[str] = Field(None, description="Who claimed the commission")
     running_bal: Optional[float] = Field(None, description="Remaining balance")
     cutpay_received: Optional[float] = Field(None, description="CutPay amount received")
+    cluster: Optional[str] = Field(None, max_length=100, description="Business cluster/region")
     
     # Notes
     notes: Optional[str] = Field(None, description="Additional notes")
@@ -364,6 +365,7 @@ class CutPayResponse(BaseModel):
     claimed_by: Optional[str]
     running_bal: Optional[float]
     cutpay_received: Optional[float]
+    cluster: Optional[str]
     
     # =============================================================================
     # POST-CUTPAY DETAILS FIELDS

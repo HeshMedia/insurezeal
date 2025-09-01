@@ -17,6 +17,7 @@ import csv
 import traceback
 import uuid
 import os
+import json
 
 from config import get_db, AWS_S3_BUCKET
 from ..auth.auth import get_current_user
@@ -50,8 +51,11 @@ from .cutpay_helpers import (
     auto_populate_relationship_data,
     validate_cutpay_data,
     validate_and_resolve_codes,
+    validate_and_resolve_codes_with_names,
     resolve_broker_code_to_id,
-    resolve_insurer_code_to_id
+    resolve_insurer_code_to_id,
+    prepare_complete_sheets_data,
+    prepare_complete_sheets_data_for_update
 )
 
 logger = logging.getLogger(__name__)
@@ -67,16 +71,43 @@ def safe_cutpay_response(cutpay_obj) -> CutPayResponse:
         cutpay_dict = {}
         for field_name in CutPayResponse.model_fields.keys():
             try:
-                cutpay_dict[field_name] = getattr(cutpay_obj, field_name)
+                value = getattr(cutpay_obj, field_name)
+                
+                # Handle special field conversions
+                if field_name == "additional_documents" and isinstance(value, str):
+                    # Convert JSON string back to dict
+                    try:
+                        cutpay_dict[field_name] = json.loads(value) if value else {}
+                    except (json.JSONDecodeError, TypeError):
+                        cutpay_dict[field_name] = {}
+                elif field_name in ["synced_to_cutpay_sheet", "synced_to_master_sheet"] and value is None:
+                    # Set default boolean values for sync fields
+                    cutpay_dict[field_name] = False
+                elif field_name in ["created_at", "updated_at"] and value is None:
+                    # Set default datetime values for audit fields
+                    from datetime import datetime
+                    cutpay_dict[field_name] = datetime.utcnow()
+                else:
+                    cutpay_dict[field_name] = value
+                    
             except Exception:
-                cutpay_dict[field_name] = None
+                # Set appropriate defaults for missing fields
+                if field_name == "additional_documents":
+                    cutpay_dict[field_name] = {}
+                elif field_name in ["synced_to_cutpay_sheet", "synced_to_master_sheet"]:
+                    cutpay_dict[field_name] = False
+                elif field_name in ["created_at", "updated_at"]:
+                    from datetime import datetime
+                    cutpay_dict[field_name] = datetime.utcnow()
+                else:
+                    cutpay_dict[field_name] = None
+                    
         return CutPayResponse(**cutpay_dict)
 
 # =============================================================================
 # CORE CUTPAY OPERATIONS
 # =============================================================================
 
-#TODO: only saving the few selected fields in DB, need to sync all fields to Google Sheets though (check)
 @router.post("/", response_model=CutPayResponse)
 async def create_cutpay_transaction(
     cutpay_data: CutPayCreate,
@@ -85,11 +116,12 @@ async def create_cutpay_transaction(
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    Create new CutPay transaction with a robust, two-phase commit process.
+    Create new CutPay transaction with selective DB storage and complete Google Sheets sync.
+    Database stores only essential fields, Google Sheets stores all fields.
     """
     cutpay = None
     try:
-        logger.info("Step 1: Beginning core data transaction for new CutPay.")
+        logger.info("Step 1: Beginning core data transaction for new CutPay (selective fields only).")
         async with db.begin():
             validation_errors = validate_cutpay_data(cutpay_data.dict())
             if validation_errors:
@@ -115,54 +147,69 @@ async def create_cutpay_transaction(
                     )
                 logger.info(f"Policy number '{policy_number}' is unique - proceeding with creation")
 
-            cutpay_dict = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
+            # Prepare selective data for database storage (only essential fields)
+            db_fields = {}
+            
+            # Initialize broker and insurer names for Google Sheets
+            broker_name = ""
+            insurer_name = ""
+            
+            # Essential document fields
+            db_fields['policy_pdf_url'] = cutpay_data.policy_pdf_url
+            if cutpay_data.additional_documents:
+                import json
+                db_fields['additional_documents'] = json.dumps(cutpay_data.additional_documents)
+            
+            # Essential extracted data fields
             if cutpay_data.extracted_data:
-                extracted_dict = cutpay_data.extracted_data.dict(exclude_unset=True)
-                # Fix field mapping: schema uses start_date/end_date but model uses policy_start_date/policy_end_date
-                if 'start_date' in extracted_dict:
-                    start_date_str = extracted_dict.pop('start_date')
-                    if start_date_str:
-                        try:
-                            from datetime import datetime
-                            extracted_dict['policy_start_date'] = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-                        except (ValueError, TypeError):
-                            logger.warning(f"Invalid start_date format: {start_date_str}")
-                if 'end_date' in extracted_dict:
-                    end_date_str = extracted_dict.pop('end_date')
-                    if end_date_str:
-                        try:
-                            from datetime import datetime
-                            extracted_dict['policy_end_date'] = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-                        except (ValueError, TypeError):
-                            logger.warning(f"Invalid end_date format: {end_date_str}")
-                cutpay_dict.update(extracted_dict)
-            if cutpay_data.admin_input:
-                admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
-                broker_code = admin_fields.pop('broker_code', None)
-                insurer_code = admin_fields.pop('insurer_code', None)
-                if broker_code or insurer_code:
+                extracted = cutpay_data.extracted_data
+                db_fields['policy_number'] = extracted.policy_number
+                
+                # Handle date conversion for database
+                if extracted.start_date:
                     try:
-                        broker_id, insurer_id = await validate_and_resolve_codes(db, broker_code, insurer_code)
-                        if broker_id: admin_fields['broker_id'] = broker_id
-                        if insurer_id: admin_fields['insurer_id'] = insurer_id
+                        db_fields['policy_start_date'] = datetime.strptime(extracted.start_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid start_date format: {extracted.start_date}")
+                if extracted.end_date:
+                    try:
+                        db_fields['policy_end_date'] = datetime.strptime(extracted.end_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid end_date format: {extracted.end_date}")
+            
+            # Essential admin input fields
+            if cutpay_data.admin_input:
+                admin = cutpay_data.admin_input
+                db_fields['agent_code'] = admin.agent_code
+                db_fields['booking_date'] = admin.booking_date
+                db_fields['admin_child_id'] = admin.admin_child_id
+                
+                # Resolve broker and insurer codes to IDs and names for database relationships and sheets
+                broker_name = ""
+                insurer_name = ""
+                if admin.broker_code or admin.insurer_code:
+                    try:
+                        broker_id, insurer_id, broker_name, insurer_name = await validate_and_resolve_codes_with_names(
+                            db, admin.broker_code, admin.insurer_code
+                        )
+                        if broker_id: db_fields['broker_id'] = broker_id
+                        if insurer_id: db_fields['insurer_id'] = insurer_id
                     except HTTPException as e:
-                        logger.error(f"Code resolution failed for broker '{broker_code}' or insurer '{insurer_code}': {e.detail}")
+                        logger.error(f"Code resolution failed: {e.detail}")
                         raise e
-                cutpay_dict.update(admin_fields)
-            if cutpay_data.calculations:
-                cutpay_dict.update(cutpay_data.calculations.dict(exclude_unset=True))
             
-            cutpay_dict["created_by"] = current_user["user_id"]
+            # Remove None values
+            db_fields = {k: v for k, v in db_fields.items() if v is not None}
             
-            cutpay_dict = {k: v for k, v in cutpay_dict.items() if v is not None}
+            logger.info(f"Storing {len(db_fields)} essential fields in database: {list(db_fields.keys())}")
 
-            cutpay = CutPay(**cutpay_dict)
+            cutpay = CutPay(**db_fields)
             auto_populate_relationship_data(cutpay, db)
             
             db.add(cutpay)
 
         await db.refresh(cutpay)
-        logger.info(f"Step 1 SUCCESS: Successfully created CutPay ID {cutpay.id}.")
+        logger.info(f"Step 1 SUCCESS: Successfully created CutPay ID {cutpay.id} with selective fields.")
 
     except Exception as e:
         logger.critical(f"Step 1 FAILED: Database creation failed. Traceback:\n{traceback.format_exc()}")
@@ -170,16 +217,16 @@ async def create_cutpay_transaction(
 
     sync_results = None
     try:
-        logger.info(f"Step 2: Starting Google Sheets sync for new CutPay ID {cutpay.id}.")
+        logger.info(f"Step 2: Starting Google Sheets sync for new CutPay ID {cutpay.id} with ALL fields.")
         from utils.quarterly_sheets_manager import quarterly_manager
         
-        cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
-        for key, value in cutpay_dict.items():
-            if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
-            elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+        # Prepare complete data for Google Sheets (all fields from request)
+        complete_sheets_data = prepare_complete_sheets_data(cutpay_data, cutpay, broker_name, insurer_name)
+        
+        logger.info(f"Syncing {len(complete_sheets_data)} fields to Google Sheets: {list(complete_sheets_data.keys())}")
 
-        # Route to quarterly sheet instead of dedicated cutpay sheet
-        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict)
+        # Route to quarterly sheet with complete data
+        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, complete_sheets_data)
         sync_results = {"cutpay": quarterly_result}
         logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
         
@@ -718,6 +765,7 @@ async def get_cutpay_transaction(
     await db.refresh(cutpay)
     return safe_cutpay_response(cutpay)
 
+
 #TODO: test hi krna basically to in a way limited fields hi nayi wali db me update hori na and ki quartely me b aram se chal rha
 #idr b get cutpay route jaise pass hoga hampe policy number and quarter so its easier for us and ham us quarter sheet ko hi dekhnge pr wo upar wali problem abhi b hai
 @router.put("/{cutpay_id}", response_model=CutPayResponse)
@@ -729,11 +777,12 @@ async def update_cutpay_transaction(
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    Update CutPay transaction - simplified to mirror the working create route
+    Update CutPay transaction with selective DB storage and complete Google Sheets sync.
+    Database updates only essential fields, Google Sheets updates all fields.
     """
     cutpay = None
     try:
-        logger.info(f"Step 1: Beginning database update for CutPay ID {cutpay_id}.")
+        logger.info(f"Step 1: Beginning database update for CutPay ID {cutpay_id} (selective fields only).")
         async with db.begin():
             # Get the existing record
             result = await db.execute(select(CutPay).filter(CutPay.id == cutpay_id))
@@ -742,105 +791,136 @@ async def update_cutpay_transaction(
             if not cutpay:
                 raise HTTPException(status_code=404, detail=f"CutPay transaction with ID {cutpay_id} not found")
 
-            # Get update data - handle nested structure like create route
-            update_data = cutpay_data.dict(exclude={"extracted_data", "admin_input", "calculations"}, exclude_unset=True)
+            # Prepare selective data for database update (only essential fields)
+            db_update_fields = {}
             
-            # Add extracted_data fields if present
+            # Initialize broker and insurer names for Google Sheets
+            broker_name = ""
+            insurer_name = ""
+            
+            # Essential document fields
+            if cutpay_data.policy_pdf_url is not None:
+                db_update_fields['policy_pdf_url'] = cutpay_data.policy_pdf_url
+            if cutpay_data.additional_documents is not None:
+                import json
+                db_update_fields['additional_documents'] = json.dumps(cutpay_data.additional_documents)
+            
+            # Essential extracted data fields (check both nested and direct)
+            policy_number = None
             if hasattr(cutpay_data, 'extracted_data') and cutpay_data.extracted_data:
-                extracted_fields = cutpay_data.extracted_data.dict(exclude_unset=True)
-                update_data.update(extracted_fields)
-                logger.info(f"Added {len(extracted_fields)} extracted_data fields: {list(extracted_fields.keys())}")
+                extracted = cutpay_data.extracted_data
+                if extracted.policy_number is not None:
+                    db_update_fields['policy_number'] = extracted.policy_number
+                    policy_number = extracted.policy_number
+                if extracted.start_date:
+                    try:
+                        db_update_fields['policy_start_date'] = datetime.strptime(extracted.start_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid start_date format: {extracted.start_date}")
+                if extracted.end_date:
+                    try:
+                        db_update_fields['policy_end_date'] = datetime.strptime(extracted.end_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid end_date format: {extracted.end_date}")
             
-            # Add admin_input fields if present
+            # Check direct fields for policy number too
+            if hasattr(cutpay_data, 'policy_number') and cutpay_data.policy_number is not None:
+                db_update_fields['policy_number'] = cutpay_data.policy_number
+                policy_number = cutpay_data.policy_number
+            
+            # Essential admin input fields (check both nested and direct)
             if hasattr(cutpay_data, 'admin_input') and cutpay_data.admin_input:
-                admin_fields = cutpay_data.admin_input.dict(exclude_unset=True)
-                # Remove broker/insurer codes from admin fields (handle separately)
-                broker_code = admin_fields.pop('broker_code', None)
-                insurer_code = admin_fields.pop('insurer_code', None)
-                update_data.update(admin_fields)
-                logger.info(f"Added {len(admin_fields)} admin_input fields: {list(admin_fields.keys())}")
-                # Add codes back for processing
-                if broker_code: update_data['broker_code'] = broker_code
-                if insurer_code: update_data['insurer_code'] = insurer_code
+                admin = cutpay_data.admin_input
+                if admin.agent_code is not None:
+                    db_update_fields['agent_code'] = admin.agent_code
+                if admin.booking_date is not None:
+                    db_update_fields['booking_date'] = admin.booking_date
+                if admin.admin_child_id is not None:
+                    db_update_fields['admin_child_id'] = admin.admin_child_id
                 
-            # Add calculations fields if present
-            if hasattr(cutpay_data, 'calculations') and cutpay_data.calculations:
-                calc_fields = cutpay_data.calculations.dict(exclude_unset=True)
-                update_data.update(calc_fields)
-                logger.info(f"Added {len(calc_fields)} calculations fields: {list(calc_fields.keys())}")
+                # Resolve broker and insurer codes to IDs and names for database relationships and sheets
+                if admin.broker_code or admin.insurer_code:
+                    try:
+                        broker_id, insurer_id, broker_name, insurer_name = await validate_and_resolve_codes_with_names(
+                            db, admin.broker_code, admin.insurer_code
+                        )
+                        if broker_id: db_update_fields['broker_id'] = broker_id
+                        if insurer_id: db_update_fields['insurer_id'] = insurer_id
+                    except HTTPException as e:
+                        logger.error(f"Code resolution failed: {e.detail}")
+                        raise e
             
-            logger.info(f"Raw cutpay_data.dict(): {cutpay_data.dict()}")
-            logger.info(f"Final update_data after processing nested fields: {update_data}")
-            logger.info(f"Updating {len(update_data)} fields: {list(update_data.keys())}")
+            # Check direct fields for admin input too
+            direct_admin_fields = ['agent_code', 'booking_date', 'admin_child_id']
+            for field in direct_admin_fields:
+                if hasattr(cutpay_data, field) and getattr(cutpay_data, field) is not None:
+                    db_update_fields[field] = getattr(cutpay_data, field)
+            
+            # Handle broker/insurer codes from direct fields (if not already resolved from admin_input)
+            if hasattr(cutpay_data, 'insurer_code') or hasattr(cutpay_data, 'broker_code'):
+                broker_code = getattr(cutpay_data, 'broker_code', None)
+                insurer_code = getattr(cutpay_data, 'insurer_code', None)
+                if (broker_code or insurer_code) and not broker_name and not insurer_name:
+                    try:
+                        broker_id, insurer_id, broker_name, insurer_name = await validate_and_resolve_codes_with_names(
+                            db, broker_code, insurer_code
+                        )
+                        if broker_id: db_update_fields['broker_id'] = broker_id
+                        if insurer_id: db_update_fields['insurer_id'] = insurer_id
+                    except HTTPException as e:
+                        logger.error(f"Code resolution failed: {e.detail}")
+                        raise e
+            
+            logger.info(f"Updating {len(db_update_fields)} essential fields in database: {list(db_update_fields.keys())}")
             
             # Check for policy number uniqueness if policy number is being updated
-            if 'policy_number' in update_data and update_data['policy_number']:
-                new_policy_number = update_data['policy_number']
-                current_policy_number = cutpay.policy_number
-                
-                # Only check uniqueness if policy number is actually changing
-                if new_policy_number != current_policy_number:
-                    existing_policy = await db.execute(
-                        select(CutPay).where(
-                            (CutPay.policy_number == new_policy_number) &
-                            (CutPay.id != cutpay_id)  # Exclude current record
-                        )
+            if policy_number and policy_number != cutpay.policy_number:
+                existing_policy = await db.execute(
+                    select(CutPay).where(
+                        (CutPay.policy_number == policy_number) &
+                        (CutPay.id != cutpay_id)  # Exclude current record
                     )
-                    if existing_policy.scalar_one_or_none():
-                        raise HTTPException(
-                            status_code=400, 
-                            detail=f"Policy number '{new_policy_number}' already exists in the database. Please use a unique policy number."
-                        )
-                    logger.info(f"Policy number change from '{current_policy_number}' to '{new_policy_number}' is valid - proceeding with update")
+                )
+                if existing_policy.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Policy number '{policy_number}' already exists in the database. Please use a unique policy number."
+                    )
+                logger.info(f"Policy number change to '{policy_number}' is valid - proceeding with update")
             
-            # Handle broker/insurer code resolution if provided
-            if 'broker_code' in update_data or 'insurer_code' in update_data:
-                broker_code = update_data.pop('broker_code', None)
-                insurer_code = update_data.pop('insurer_code', None)
-                if broker_code or insurer_code:
-                    broker_id, insurer_id = await validate_and_resolve_codes(db, broker_code, insurer_code)
-                    if broker_id: update_data['broker_id'] = broker_id
-                    if insurer_id: update_data['insurer_id'] = insurer_id
-            
-            # Apply updates
-            for field, value in update_data.items():
+            # Apply updates to database
+            for field, value in db_update_fields.items():
                 if hasattr(cutpay, field):
                     old_value = getattr(cutpay, field)
                     setattr(cutpay, field, value)
-                    logger.info(f"Updated {field}: {old_value} -> {value}")
+                    logger.info(f"DB Update {field}: {old_value} -> {value}")
                 else:
                     logger.warning(f"Field '{field}' not found on CutPay model - skipping")
-            
-            # Check if customer_name was in the original request
-            if 'customer_name' not in update_data:
-                logger.warning("customer_name was NOT in the update_data - check frontend request")
-            else:
-                logger.info("customer_name WAS included in update_data")
             
             # Auto-populate relationship data
             auto_populate_relationship_data(cutpay, db)
                         
         # Refresh to get committed data
         await db.refresh(cutpay)
-        logger.info(f"Step 1 SUCCESS: Successfully updated CutPay ID {cutpay.id}.")
+        logger.info(f"Step 1 SUCCESS: Successfully updated CutPay ID {cutpay.id} with selective fields.")
 
     except Exception as e:
         logger.critical(f"Step 1 FAILED: Database update failed. Traceback:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to update CutPay transaction in the database: {str(e)}")
 
-    # Google Sheets sync - exactly like create route
+    # Google Sheets sync with complete data
     sync_results = None
     try:
-        logger.info(f"Step 2: Starting Google Sheets sync for updated CutPay ID {cutpay.id}.")
+        logger.info(f"Step 2: Starting Google Sheets sync for updated CutPay ID {cutpay.id} with ALL fields.")
         from utils.quarterly_sheets_manager import quarterly_manager
         
-        cutpay_dict = {c.name: getattr(cutpay, c.name) for c in cutpay.__table__.columns}
-        for key, value in cutpay_dict.items():
-            if isinstance(value, (datetime, date)): cutpay_dict[key] = value.isoformat()
-            elif isinstance(value, UUID): cutpay_dict[key] = str(value)
+        # Prepare complete data for Google Sheets (all fields from request)
+        complete_sheets_data = prepare_complete_sheets_data_for_update(cutpay_data, cutpay, broker_name, insurer_name)
+        
+        logger.info(f"Syncing {len(complete_sheets_data)} fields to Google Sheets: {list(complete_sheets_data.keys())}")
 
-        # Route to quarterly sheet instead of dedicated cutpay sheet
-        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, cutpay_dict, "UPDATE")
+        # Route to quarterly sheet with complete data
+        quarterly_result = await run_in_threadpool(quarterly_manager.route_new_record_to_current_quarter, complete_sheets_data, "UPDATE")
         sync_results = {"cutpay": quarterly_result}
         logger.info(f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}.")
         

@@ -65,6 +65,71 @@ async def resolve_insurer_code_to_id(db: AsyncSession, insurer_code: str) -> Opt
     
     return insurer
 
+async def resolve_broker_code_to_details(db: AsyncSession, broker_code: str) -> Optional[tuple[int, str]]:
+    """Resolve broker code to broker ID and name"""
+    if not broker_code:
+        return None, None
+    
+    result = await db.execute(
+        select(Broker.id, Broker.name).where(
+            and_(
+                Broker.broker_code == broker_code,
+                Broker.is_active == True
+            )
+        )
+    )
+    broker = result.first()
+    
+    if not broker:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Broker with code '{broker_code}' not found or inactive"
+        )
+    
+    return broker.id, broker.name
+
+async def resolve_insurer_code_to_details(db: AsyncSession, insurer_code: str) -> Optional[tuple[int, str]]:
+    """Resolve insurer code to insurer ID and name"""
+    if not insurer_code:
+        return None, None
+    
+    result = await db.execute(
+        select(Insurer.id, Insurer.name).where(
+            and_(
+                Insurer.insurer_code == insurer_code,
+                Insurer.is_active == True
+            )
+        )
+    )
+    insurer = result.first()
+    
+    if not insurer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Insurer with code '{insurer_code}' not found or inactive"
+        )
+    
+    return insurer.id, insurer.name
+
+async def validate_and_resolve_codes_with_names(
+    db: AsyncSession,
+    broker_code: Optional[str],
+    insurer_code: Optional[str]
+) -> tuple[Optional[int], Optional[int], Optional[str], Optional[str]]:
+    """Validate and resolve both broker and insurer codes to IDs and names"""
+    broker_id = None
+    insurer_id = None
+    broker_name = None
+    insurer_name = None
+    
+    if broker_code:
+        broker_id, broker_name = await resolve_broker_code_to_details(db, broker_code)
+        
+    if insurer_code:
+        insurer_id, insurer_name = await resolve_insurer_code_to_details(db, insurer_code)
+    
+    return broker_id, insurer_id, broker_name, insurer_name
+
 async def validate_and_resolve_codes(
     db: AsyncSession,
     broker_code: Optional[str],
@@ -746,6 +811,306 @@ def validate_cutpay_data(cutpay_data: Dict[str, Any]) -> List[str]:
             errors.append("Agent commission percent must be between 0 and 100")
     
     return errors
+
+
+# =============================================================================
+# GOOGLE SHEETS DATA PREPARATION HELPERS
+# =============================================================================
+
+def prepare_complete_sheets_data(cutpay_data: Any, cutpay_db_record: Any = None, broker_name: str = "", insurer_name: str = "") -> Dict[str, Any]:
+    """
+    Prepare complete data for Google Sheets including all fields from the request.
+    This function maps all possible fields to the Google Sheets column headers.
+    
+    Args:
+        cutpay_data: CutPayCreate object with all the form data
+        cutpay_db_record: CutPay database record (optional)
+    
+    Returns:
+        Dictionary with Google Sheets column headers as keys and data as values
+    """
+    sheets_data = {}
+    
+    # If we have a database record, get basic info from it
+    if cutpay_db_record:
+        sheets_data.update({
+            "Child ID/ User ID [Provided by Insure Zeal]": str(cutpay_db_record.id) if cutpay_db_record.id else "",
+            "Agent Code": cutpay_db_record.agent_code or "",
+        })
+    
+    # Extract data from extracted_data section
+    if hasattr(cutpay_data, 'extracted_data') and cutpay_data.extracted_data:
+        extracted = cutpay_data.extracted_data
+        sheets_data.update({
+            "Policy number": extracted.policy_number or "",
+            "Formatted Policy number": extracted.formatted_policy_number or "",
+            "Major Categorisation( Motor/Life/ Health)": extracted.major_categorisation or "",
+            "Product (Insurer Report)": extracted.product_insurer_report or "",
+            "Product Type": extracted.product_type or "",
+            "Plan type (Comp/STP/SAOD)": extracted.plan_type or "",
+            "Customer Name": extracted.customer_name or "",
+            "Customer Number": extracted.customer_phone_number or "",
+            "Gross premium": extracted.gross_premium or 0,
+            "Net premium": extracted.net_premium or 0,
+            "OD Preimium": extracted.od_premium or 0,
+            "TP Premium": extracted.tp_premium or 0,
+            "GST Amount": extracted.gst_amount or 0,
+            "Registration.no": extracted.registration_number or "",
+            "Make_Model": extracted.make_model or "",
+            "Model": extracted.model or "",
+            "Vehicle_Variant": extracted.vehicle_variant or "",
+            "GVW": extracted.gvw or 0,
+            "RTO": extracted.rto or "",
+            "State": extracted.state or "",
+            "Fuel Type": extracted.fuel_type or "",
+            "CC": extracted.cc or 0,
+            "Age(Year)": extracted.age_year or 0,
+            "NCB (YES/NO)": extracted.ncb or "",
+            "Discount %": extracted.discount_percent or 0,
+            "Business Type": extracted.business_type or "",
+            "Seating Capacity": extracted.seating_capacity or 0,
+            "Veh_Wheels": extracted.veh_wheels or 0,
+            "Policy Start Date": extracted.start_date or "",
+            "Policy End Date": extracted.end_date or "",
+        })
+    
+    # Extract data from admin_input section
+    if hasattr(cutpay_data, 'admin_input') and cutpay_data.admin_input:
+        admin = cutpay_data.admin_input
+        sheets_data.update({
+            "Reporting Month (mmm'yy)": admin.reporting_month or "",
+            "Booking Date(Click to select Date)": admin.booking_date.isoformat() if admin.booking_date else "",
+            "Insurer /broker code": (admin.insurer_code or admin.broker_code or ""),
+            "Broker Name": broker_name,  # Populated from database lookup
+            "Insurer name": insurer_name,  # Populated from database lookup
+            "Commissionable Premium": admin.commissionable_premium or 0,
+            "Incoming Grid %": admin.incoming_grid_percent or 0,
+            "Extra Grid": admin.extra_grid or 0,
+            "Payment by": admin.payment_by or "",
+            "Payment Mode": admin.payment_method or "",
+            "Agent_PO%": admin.agent_commission_given_percent or 0,
+            "Agent_Extra%": admin.agent_extra_percent or 0,
+            "Payment By Office": admin.payment_by_office or 0,
+        })
+    
+    # Extract data from calculations section
+    if hasattr(cutpay_data, 'calculations') and cutpay_data.calculations:
+        calc = cutpay_data.calculations
+        sheets_data.update({
+            "Receivable from Broker": calc.receivable_from_broker or 0,
+            "Extra Amount Receivable from Broker": calc.extra_amount_receivable_from_broker or 0,
+            "Total Receivable from Broker": calc.total_receivable_from_broker or 0,
+            "Total Receivable from Broker Include 18% GST": calc.total_receivable_from_broker_with_gst or 0,
+            "Cut Pay Amount Received From Agent": calc.cut_pay_amount or 0,
+            "Agent_PO_AMT": calc.agent_po_amt or 0,
+            "Agent_Extr_Amount": calc.agent_extra_amount or 0,
+            "Total_Agent_PO_AMT": calc.total_agent_po_amt or 0,
+            "IZ Total PO%": calc.iz_total_po_percent or 0,
+            "Already Given to agent": calc.already_given_to_agent or 0,
+            "Broker PO AMT": calc.broker_payout_amount or 0,
+        })
+    
+    # Extract top-level fields and add additional fields from template
+    sheets_data.update({
+        "Claimed By": getattr(cutpay_data, 'claimed_by', "") or "",
+        "Running Bal": getattr(cutpay_data, 'running_bal', 0) or 0,
+        "Remarks": getattr(cutpay_data, 'notes', "") or "",
+        "Match": "FALSE",  # Default to FALSE for new records
+        "Actual": "",  # Default empty
+        "PO Paid To Agent": "",  # Will be calculated
+        "As per Broker PO%": "",  # Additional field from template
+        "As per Broker PO AMT": "",  # Additional field from template
+        "PO% Diff": "",  # Additional field from template
+        "Broker PO AMT Diff": "",  # Additional field from template
+        "Broker": "",  # Additional field from template
+        "As per Agent Payout%": "",  # Additional field from template
+        "As per Agent Payout Amount": "",  # Additional field from template
+        "PO% Diff Agent": "",  # Additional field from template
+        "PO AMT Diff Agent": "",  # Additional field from template
+        "Invoice Status": "",  # Additional field from template
+        "Invoice Number": "",  # Additional field from template
+        "Cluster": getattr(cutpay_data, 'cluster', "") or (getattr(cutpay_db_record, 'cluster', "") if cutpay_db_record else ""),
+    })
+    
+    return sheets_data
+
+
+def prepare_complete_sheets_data_for_update(cutpay_data: Any, cutpay_db_record: Any, broker_name: str = "", insurer_name: str = "") -> Dict[str, Any]:
+    """
+    Prepare complete data for Google Sheets update including all fields from the request.
+    This function maps all possible fields to the Google Sheets column headers for updates.
+    
+    Args:
+        cutpay_data: CutPayUpdate object with the update data
+        cutpay_db_record: CutPay database record
+    
+    Returns:
+        Dictionary with Google Sheets column headers as keys and updated data as values
+    """
+    sheets_data = {}
+    
+    # Always include the database record ID
+    sheets_data["Child ID/ User ID [Provided by Insure Zeal]"] = str(cutpay_db_record.id)
+    sheets_data["Agent Code"] = cutpay_db_record.agent_code or ""
+    
+    # Handle nested extracted_data section
+    if hasattr(cutpay_data, 'extracted_data') and cutpay_data.extracted_data:
+        extracted = cutpay_data.extracted_data
+        sheets_data.update({
+            "Policy number": extracted.policy_number or "",
+            "Formatted Policy number": extracted.formatted_policy_number or "",
+            "Major Categorisation( Motor/Life/ Health)": extracted.major_categorisation or "",
+            "Product (Insurer Report)": extracted.product_insurer_report or "",
+            "Product Type": extracted.product_type or "",
+            "Plan type (Comp/STP/SAOD)": extracted.plan_type or "",
+            "Customer Name": extracted.customer_name or "",
+            "Customer Number": extracted.customer_phone_number or "",
+            "Gross premium": extracted.gross_premium or 0,
+            "Net premium": extracted.net_premium or 0,
+            "OD Preimium": extracted.od_premium or 0,
+            "TP Premium": extracted.tp_premium or 0,
+            "GST Amount": extracted.gst_amount or 0,
+            "Registration.no": extracted.registration_number or "",
+            "Make_Model": extracted.make_model or "",
+            "Model": extracted.model or "",
+            "Vehicle_Variant": extracted.vehicle_variant or "",
+            "GVW": extracted.gvw or 0,
+            "RTO": extracted.rto or "",
+            "State": extracted.state or "",
+            "Fuel Type": extracted.fuel_type or "",
+            "CC": extracted.cc or 0,
+            "Age(Year)": extracted.age_year or 0,
+            "NCB (YES/NO)": extracted.ncb or "",
+            "Discount %": extracted.discount_percent or 0,
+            "Business Type": extracted.business_type or "",
+            "Seating Capacity": extracted.seating_capacity or 0,
+            "Veh_Wheels": extracted.veh_wheels or 0,
+            "Policy Start Date": extracted.start_date or "",
+            "Policy End Date": extracted.end_date or "",
+        })
+    
+    # Handle nested admin_input section
+    if hasattr(cutpay_data, 'admin_input') and cutpay_data.admin_input:
+        admin = cutpay_data.admin_input
+        sheets_data.update({
+            "Reporting Month (mmm'yy)": admin.reporting_month or "",
+            "Booking Date(Click to select Date)": admin.booking_date.isoformat() if admin.booking_date else "",
+            "Insurer /broker code": (admin.insurer_code or admin.broker_code or ""),
+            "Broker Name": broker_name,  # Populated from database lookup
+            "Insurer name": insurer_name,  # Populated from database lookup
+            "Commissionable Premium": admin.commissionable_premium or 0,
+            "Incoming Grid %": admin.incoming_grid_percent or 0,
+            "Extra Grid": admin.extra_grid or 0,
+            "Payment by": admin.payment_by or "",
+            "Payment Mode": admin.payment_method or "",
+            "Agent_PO%": admin.agent_commission_given_percent or 0,
+            "Agent_Extra%": admin.agent_extra_percent or 0,
+            "Payment By Office": admin.payment_by_office or 0,
+        })
+    
+    # Handle nested calculations section
+    if hasattr(cutpay_data, 'calculations') and cutpay_data.calculations:
+        calc = cutpay_data.calculations
+        sheets_data.update({
+            "Receivable from Broker": calc.receivable_from_broker or 0,
+            "Extra Amount Receivable from Broker": calc.extra_amount_receivable_from_broker or 0,
+            "Total Receivable from Broker": calc.total_receivable_from_broker or 0,
+            "Total Receivable from Broker Include 18% GST": calc.total_receivable_from_broker_with_gst or 0,
+            "Cut Pay Amount Received From Agent": calc.cut_pay_amount or 0,
+            "Agent_PO_AMT": calc.agent_po_amt or 0,
+            "Agent_Extr_Amount": calc.agent_extra_amount or 0,
+            "Total_Agent_PO_AMT": calc.total_agent_po_amt or 0,
+            "IZ Total PO%": calc.iz_total_po_percent or 0,
+            "Already Given to agent": calc.already_given_to_agent or 0,
+            "Broker PO AMT": calc.broker_payout_amount or 0,
+        })
+    
+    # Handle direct field updates (for flat structure updates)
+    direct_field_mappings = {
+        "policy_number": "Policy number",
+        "formatted_policy_number": "Formatted Policy number",
+        "major_categorisation": "Major Categorisation( Motor/Life/ Health)",
+        "product_insurer_report": "Product (Insurer Report)",
+        "product_type": "Product Type",
+        "plan_type": "Plan type (Comp/STP/SAOD)",
+        "customer_name": "Customer Name",
+        "customer_phone_number": "Customer Number",
+        "gross_premium": "Gross premium",
+        "net_premium": "Net premium",
+        "od_premium": "OD Preimium",
+        "tp_premium": "TP Premium",
+        "gst_amount": "GST Amount",
+        "registration_number": "Registration.no",
+        "make_model": "Make_Model",
+        "model": "Model",
+        "vehicle_variant": "Vehicle_Variant",
+        "gvw": "GVW",
+        "rto": "RTO",
+        "state": "State",
+        "fuel_type": "Fuel Type",
+        "cc": "CC",
+        "age_year": "Age(Year)",
+        "ncb": "NCB (YES/NO)",
+        "discount_percent": "Discount %",
+        "business_type": "Business Type",
+        "seating_capacity": "Seating Capacity",
+        "veh_wheels": "Veh_Wheels",
+        "reporting_month": "Reporting Month (mmm'yy)",
+        "booking_date": "Booking Date(Click to select Date)",
+        "commissionable_premium": "Commissionable Premium",
+        "incoming_grid_percent": "Incoming Grid %",
+        "extra_grid": "Extra Grid",
+        "payment_by": "Payment by",
+        "payment_method": "Payment Mode",
+        "agent_commission_given_percent": "Agent_PO%",
+        "agent_extra_percent": "Agent_Extra%",
+        "payment_by_office": "Payment By Office",
+        "claimed_by": "Claimed By",
+        "running_bal": "Running Bal",
+        "notes": "Remarks",
+    }
+    
+    # Map direct fields from the update request
+    try:
+        update_dict = cutpay_data.dict(exclude_unset=True) if hasattr(cutpay_data, 'dict') else {}
+    except:
+        update_dict = {}
+        
+    for field_name, sheet_column in direct_field_mappings.items():
+        if field_name in update_dict:
+            value = update_dict[field_name]
+            if field_name == "booking_date" and value:
+                sheets_data[sheet_column] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+            else:
+                sheets_data[sheet_column] = value or ""
+    
+    # Handle top-level fields
+    if hasattr(cutpay_data, 'claimed_by') and cutpay_data.claimed_by is not None:
+        sheets_data["Claimed By"] = cutpay_data.claimed_by
+    if hasattr(cutpay_data, 'running_bal') and cutpay_data.running_bal is not None:
+        sheets_data["Running Bal"] = cutpay_data.running_bal
+    if hasattr(cutpay_data, 'notes') and cutpay_data.notes is not None:
+        sheets_data["Remarks"] = cutpay_data.notes
+    
+    # Always set Match to FALSE for records
+    sheets_data["Match"] = "FALSE"
+    
+    # Add additional template fields that might be updated
+    additional_fields = {
+        "invoice_status": "Invoice Status",
+        "invoice_number": "Invoice Number", 
+        "cluster": "Cluster",
+        "company": "Company",
+    }
+    
+    for field_name, sheet_column in additional_fields.items():
+        if field_name in update_dict:
+            sheets_data[sheet_column] = update_dict[field_name] or ""
+    
+    # Remove any None or empty values to avoid overwriting existing data with blanks
+    sheets_data = {k: v for k, v in sheets_data.items() if v not in [None, ""]}
+    
+    return sheets_data
 
 
 

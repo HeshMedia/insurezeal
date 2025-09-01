@@ -92,9 +92,10 @@ async def extract_pdf_data_endpoint(
         )
 
 @router.post("/upload", response_model=PolicyUploadResponse)
-async def upload_policy_pdf(
+async def upload_policy_document(
     file: UploadFile | None = File(None, description="Policy PDF file (if presign=false)"),
     policy_id: str = Form(..., description="Policy ID to associate with the uploaded PDF"),
+    document_type: str = Form("policy_pdf", description="Type of document: 'policy_pdf' or 'additional'"),
     presign: bool = Form(False),
     filename: str | None = Form(None),
     content_type: str | None = Form(None),
@@ -103,15 +104,23 @@ async def upload_policy_pdf(
     _rbac_check = Depends(require_policy_write)
 ):
     """
-    Upload policy PDF file and associate it with a specific policy
+    Upload policy PDF file or additional documents and associate with a specific policy
     
     **Requires policy write permission**
     
-    - **file**: Policy PDF file to upload
-    - **policy_id**: Policy ID to associate the PDF with
+    - **file**: PDF file to upload
+    - **policy_id**: Policy ID to associate the file with
+    - **document_type**: Type of document ('policy_pdf' for main policy PDF, 'additional' for additional documents)
     Returns file upload information
     """
     try:
+        # Validate document type
+        if document_type not in ["policy_pdf", "additional"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="document_type must be either 'policy_pdf' or 'additional'"
+            )
+            
         if presign or not file:
             user_id = current_user["user_id"]
             user_role = current_user.get("role", "agent")
@@ -129,10 +138,19 @@ async def upload_policy_pdf(
             upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
             file_path = build_cloudfront_url(key)
 
+            # Update appropriate field based on document type
+            update_data = {}
+            if document_type == "policy_pdf":
+                update_data["policy_pdf_url"] = file_path
+            else:  # additional documents
+                # For additional documents, we could store multiple URLs (comma-separated or JSON)
+                # For now, let's store as a single URL (can be enhanced later for multiple files)
+                update_data["additional_documents"] = file_path
+
             await PolicyHelpers.update_policy(
                 db,
                 policy_id,
-                {"pdf_file_path": file_path, "pdf_file_name": filename},
+                update_data,
                 filter_user_id,
             )
 
@@ -167,14 +185,19 @@ async def upload_policy_pdf(
             file_content, file.filename, user_id
         )
         
-        # Update the policy record with the new PDF file information
+        # Update the policy record with the new file information based on document type
+        update_data = {}
+        if document_type == "policy_pdf":
+            update_data["policy_pdf_url"] = file_path
+        else:  # additional documents
+            # For additional documents, we could store multiple URLs (comma-separated or JSON)
+            # For now, let's store as a single URL (can be enhanced later for multiple files)
+            update_data["additional_documents"] = file_path
+            
         await PolicyHelpers.update_policy(
             db, 
             policy_id, 
-            {
-                "pdf_file_path": file_path,
-                "pdf_file_name": original_filename
-            }, 
+            update_data, 
             filter_user_id
         )
         
@@ -184,7 +207,7 @@ async def upload_policy_pdf(
             confidence_score=None,
             pdf_file_path=file_path,
             pdf_file_name=original_filename,
-            message=f"Policy PDF uploaded successfully and associated with policy {policy_id}. Use /extract-pdf-data to extract data."
+            message=f"Document uploaded successfully and associated with policy {policy_id}. Use /extract-pdf-data to extract data if needed."
         )
         
     except HTTPException:

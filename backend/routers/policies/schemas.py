@@ -325,8 +325,8 @@ class PolicyUploadResponse(BaseModel):
     policy_id: Optional[UUID] = None  
     extracted_data: dict
     confidence_score: Optional[float] = None
-    pdf_file_path: str 
-    pdf_file_name: str  
+    pdf_file_path: str  # Keep for backward compatibility in API response
+    pdf_file_name: str  # Keep for backward compatibility in API response
     message: str
     upload_url: Optional[str] = None
 
