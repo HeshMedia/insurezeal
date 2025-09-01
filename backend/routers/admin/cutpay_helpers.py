@@ -3,7 +3,7 @@ from sqlalchemy import select, func, and_, extract, or_, desc
 from sqlalchemy.orm import selectinload, joinedload
 from models import CutPay, Insurer, Broker, ChildIdRequest, AdminChildID, UserProfile
 from .cutpay_schemas import (
-    CutPayCreate, CutPayUpdate, ExtractedPolicyData, InsurerDropdown, BrokerDropdown, ChildIdDropdown, CutPayStats
+    CutPayCreate, CutPayUpdate, ExtractedPolicyData, InsurerDropdown, BrokerDropdown, ChildIdDropdown, CutPayStats, CutPayDatabaseResponse
 )
 
 from fastapi import HTTPException, status
@@ -12,8 +12,70 @@ from datetime import datetime, date
 import logging
 import csv
 import io
+import json
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# RESPONSE HELPER FUNCTIONS
+# =============================================================================
+
+def database_cutpay_response(cutpay_obj) -> CutPayDatabaseResponse:
+    """
+    Convert SQLAlchemy CutPay object to CutPayDatabaseResponse with only database fields
+    This is the clean response for list endpoints showing only stored data
+    """
+    try:
+        # Extract only database fields that exist in the model
+        db_data = {}
+        
+        # Map database fields directly
+        db_field_mapping = {
+            'id': 'id',
+            'policy_pdf_url': 'policy_pdf_url', 
+            'additional_documents': 'additional_documents',
+            'policy_number': 'policy_number',
+            'agent_code': 'agent_code',
+            'booking_date': 'booking_date',
+            'admin_child_id': 'admin_child_id',
+            'insurer_id': 'insurer_id',
+            'broker_id': 'broker_id',
+            'child_id_request_id': 'child_id_request_id',
+            'policy_start_date': 'policy_start_date',
+            'policy_end_date': 'policy_end_date',
+            'created_at': 'created_at',
+            'updated_at': 'updated_at'
+        }
+        
+        for db_field, response_field in db_field_mapping.items():
+            try:
+                value = getattr(cutpay_obj, db_field)
+                
+                # Handle special field conversions
+                if db_field == "additional_documents" and isinstance(value, str):
+                    # Convert JSON string back to dict
+                    try:
+                        db_data[response_field] = json.loads(value) if value else {}
+                    except (json.JSONDecodeError, TypeError):
+                        db_data[response_field] = {}
+                else:
+                    db_data[response_field] = value
+                    
+            except Exception:
+                # Set appropriate defaults for missing fields
+                if db_field == "additional_documents":
+                    db_data[response_field] = {}
+                elif db_field in ["created_at", "updated_at"]:
+                    from datetime import datetime
+                    db_data[response_field] = datetime.utcnow()
+                else:
+                    db_data[response_field] = None
+        
+        return CutPayDatabaseResponse(**db_data)
+        
+    except Exception as e:
+        logger.warning(f"database_cutpay_response failed: {str(e)}")
+        raise e
 
 # =============================================================================
 # CODE LOOKUP HELPER FUNCTIONS

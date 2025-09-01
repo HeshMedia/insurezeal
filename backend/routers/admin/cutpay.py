@@ -11,6 +11,10 @@ from sqlalchemy.orm import selectinload, attributes
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from uuid import UUID
+import json
+import logging
+import traceback
+import os
 import logging
 import io
 import csv
@@ -28,6 +32,7 @@ from .cutpay_schemas import (
     CutPayCreate,
     CutPayUpdate,
     CutPayResponse,
+    CutPayDatabaseResponse,
     ExtractedPolicyData,
     CalculationRequest,
     CalculationResult,
@@ -55,60 +60,19 @@ from .cutpay_helpers import (
     resolve_broker_code_to_id,
     resolve_insurer_code_to_id,
     prepare_complete_sheets_data,
-    prepare_complete_sheets_data_for_update
+    prepare_complete_sheets_data_for_update,
+    database_cutpay_response
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cutpay", tags=["CutPay"])
 
-def safe_cutpay_response(cutpay_obj) -> CutPayResponse:
-    """Safely convert SQLAlchemy CutPay object to Pydantic CutPayResponse"""
-    try:
-        return CutPayResponse.model_validate(cutpay_obj)
-    except Exception as e:
-        logger.warning(f"model_validate failed, using manual conversion: {str(e)}")
-        cutpay_dict = {}
-        for field_name in CutPayResponse.model_fields.keys():
-            try:
-                value = getattr(cutpay_obj, field_name)
-                
-                # Handle special field conversions
-                if field_name == "additional_documents" and isinstance(value, str):
-                    # Convert JSON string back to dict
-                    try:
-                        cutpay_dict[field_name] = json.loads(value) if value else {}
-                    except (json.JSONDecodeError, TypeError):
-                        cutpay_dict[field_name] = {}
-                elif field_name in ["synced_to_cutpay_sheet", "synced_to_master_sheet"] and value is None:
-                    # Set default boolean values for sync fields
-                    cutpay_dict[field_name] = False
-                elif field_name in ["created_at", "updated_at"] and value is None:
-                    # Set default datetime values for audit fields
-                    from datetime import datetime
-                    cutpay_dict[field_name] = datetime.utcnow()
-                else:
-                    cutpay_dict[field_name] = value
-                    
-            except Exception:
-                # Set appropriate defaults for missing fields
-                if field_name == "additional_documents":
-                    cutpay_dict[field_name] = {}
-                elif field_name in ["synced_to_cutpay_sheet", "synced_to_master_sheet"]:
-                    cutpay_dict[field_name] = False
-                elif field_name in ["created_at", "updated_at"]:
-                    from datetime import datetime
-                    cutpay_dict[field_name] = datetime.utcnow()
-                else:
-                    cutpay_dict[field_name] = None
-                    
-        return CutPayResponse(**cutpay_dict)
-
 # =============================================================================
 # CORE CUTPAY OPERATIONS
 # =============================================================================
 
-@router.post("/", response_model=CutPayResponse)
+@router.post("/", response_model=CutPayDatabaseResponse)
 async def create_cutpay_transaction(
     cutpay_data: CutPayCreate,
     db: AsyncSession = Depends(get_db),
@@ -232,11 +196,11 @@ async def create_cutpay_transaction(
         
     except Exception as e:
         logger.critical(f"Step 2 FAILED: Google Sheets sync failed for CutPay ID {cutpay.id}, but database changes are saved. Traceback:\n{traceback.format_exc()}")
-        return safe_cutpay_response(cutpay)
+        return database_cutpay_response(cutpay)
 
     if not sync_results:
         logger.warning("Step 3 SKIPPED: No sync results to update flags.")
-        return safe_cutpay_response(cutpay)
+        return database_cutpay_response(cutpay)
 
     try:
         logger.info("Step 3: Beginning transaction to update sync flags with a new session.")
@@ -253,14 +217,13 @@ async def create_cutpay_transaction(
             await final_db_session.refresh(final_cutpay)
             logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
             logger.info(f"--- Create for CutPay ID: {cutpay.id} finished successfully. ---")
-            return safe_cutpay_response(final_cutpay)
+            return database_cutpay_response(final_cutpay)
             
     except Exception as e:
         logger.critical(f"Step 3 FAILED: Updating sync flags failed for CutPay ID {cutpay.id}. Traceback:\n{traceback.format_exc()}")
-        return safe_cutpay_response(cutpay)
+        return database_cutpay_response(cutpay)
 
-#TODO: should return the list of all cutpays from db, the limited number of columns that we are now storing
-@router.get("/", response_model=List[CutPayResponse])
+@router.get("/", response_model=List[CutPayDatabaseResponse])
 async def list_cutpay_transactions(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -274,12 +237,15 @@ async def list_cutpay_transactions(
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    List CutPay transactions with comprehensive filtering
+    List CutPay transactions with filtering - returns only essential fields stored in database
+    
+    Uses CutPayDatabaseResponse schema which contains only the fields actually stored in the database.
+    All detailed data (customer info, premiums, calculations) is stored in Google Sheets only.
     
     Supports filtering by:
     - Insurer and Broker (using codes)
-    - Date range
-    - Search in policy numbers and customer names
+    - Date range (booking_date)
+    - Search in policy numbers and agent codes (only fields available in DB)
     """
     try:
         query = select(CutPay)
@@ -300,9 +266,9 @@ async def list_cutpay_transactions(
             
         if search:
             search_filter = f"%{search}%"
+            # Only search in fields that actually exist in the database
             query = query.where(
                 (CutPay.policy_number.ilike(search_filter)) |
-                (CutPay.customer_name.ilike(search_filter)) |
                 (CutPay.agent_code.ilike(search_filter))
             )
         
@@ -310,7 +276,7 @@ async def list_cutpay_transactions(
         result = await db.execute(query)
         transactions = result.scalars().all()
         
-        return [safe_cutpay_response(txn) for txn in transactions]
+        return [database_cutpay_response(txn) for txn in transactions]
         
     except Exception as e:
         logger.error(f"Failed to list CutPay transactions: {str(e)}")
@@ -609,7 +575,7 @@ async def bulk_update_cutpay_transactions(
                 # Don't fail the whole operation for sync errors
 
             successful_ids.append(cutpay_id)
-            updated_records.append(safe_cutpay_response(cutpay))
+            updated_records.append(database_cutpay_response(cutpay))
             logger.info(f"Successfully processed bulk update for CutPay ID {cutpay_id}")
             
         except Exception as e:
@@ -744,8 +710,8 @@ async def list_agent_configs(
 # tho ho skta hai ki quarter alag b ho rtaher than whatver date there to frontend ko wahan dikhana b pdega phele to autofecth krke kya quarter hai
 # if user want he can change that but haan hame backend pe both policy number and quarter chaiye rhega PAR AB qo quarter jab pass krnege jo jo b tera quarter sheets ka logic hai ye manager
 # wo use handle kr rha hai ache se ke nhi wo dkehna ppdega aisa to nhi wo sare quarter check krega
-
-@router.get("/{cutpay_id}", response_model=CutPayResponse)
+#yahan pe keep in mind ki saare details fetch hongi db aur master sheet se and cutpay id ke saath input mein quarter+saal puchhli (most imp aage ke liye bhi dhyaan rakhi ki har jagah quarter saal puchhna) to make it easier to find out...
+@router.get("/{cutpay_id}", response_model=CutPayDatabaseResponse)
 async def get_cutpay_transaction(
     cutpay_id: int,
     current_user = Depends(get_current_user),
@@ -763,12 +729,12 @@ async def get_cutpay_transaction(
         )
 
     await db.refresh(cutpay)
-    return safe_cutpay_response(cutpay)
+    return database_cutpay_response(cutpay)
 
 
 #TODO: test hi krna basically to in a way limited fields hi nayi wali db me update hori na and ki quartely me b aram se chal rha
 #idr b get cutpay route jaise pass hoga hampe policy number and quarter so its easier for us and ham us quarter sheet ko hi dekhnge pr wo upar wali problem abhi b hai
-@router.put("/{cutpay_id}", response_model=CutPayResponse)
+@router.put("/{cutpay_id}", response_model=CutPayDatabaseResponse)
 async def update_cutpay_transaction(
     cutpay_id: int,
     cutpay_data: CutPayUpdate,
@@ -926,11 +892,11 @@ async def update_cutpay_transaction(
         
     except Exception as e:
         logger.critical(f"Step 2 FAILED: Google Sheets sync failed for CutPay ID {cutpay.id}, but database changes are saved. Traceback:\n{traceback.format_exc()}")
-        return safe_cutpay_response(cutpay)
+        return database_cutpay_response(cutpay)
 
     if not sync_results:
         logger.warning("Step 3 SKIPPED: No sync results to update flags.")
-        return safe_cutpay_response(cutpay)
+        return database_cutpay_response(cutpay)
 
     # Update sync flags - exactly like create route
     try:
@@ -948,11 +914,11 @@ async def update_cutpay_transaction(
             await final_db_session.refresh(final_cutpay)
             logger.info(f"Step 3 SUCCESS: Successfully updated sync flags for CutPay ID {final_cutpay.id}.")
             logger.info(f"--- Update for CutPay ID: {cutpay.id} finished successfully. ---")
-            return safe_cutpay_response(final_cutpay)
+            return database_cutpay_response(final_cutpay)
             
     except Exception as e:
         logger.critical(f"Step 3 FAILED: Updating sync flags failed for CutPay ID {cutpay.id}. Traceback:\n{traceback.format_exc()}")
-        return safe_cutpay_response(cutpay)
+        return database_cutpay_response(cutpay)
 
 #TODO: same shit as above 2 routes
 @router.delete("/{cutpay_id}")

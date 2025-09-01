@@ -400,7 +400,49 @@ class CutPayResponse(BaseModel):
         arbitrary_types_allowed = True
 
 # =============================================================================
-# DROPDOWN & UTILITY SCHEMAS
+# DATABASE-ONLY RESPONSE SCHEMA
+# =============================================================================
+
+class CutPayDatabaseResponse(BaseModel):
+    """
+    Simplified schema for CutPay responses - contains only fields stored in database
+    This schema reflects the selective storage strategy where only essential fields are in DB
+    """
+    
+    # Database primary key
+    id: int
+    
+    # Essential document fields (stored in DB)
+    policy_pdf_url: Optional[str] = Field(None, description="Main policy PDF URL")
+    additional_documents: Optional[Dict[str, Any]] = Field(None, description="Additional document URLs as JSON")
+    
+    # Essential policy fields (stored in DB)
+    policy_number: Optional[str] = Field(None, description="Policy number")
+    
+    # Essential admin fields (stored in DB)
+    agent_code: Optional[str] = Field(None, description="Agent identifier code")
+    booking_date: Optional[date] = Field(None, description="Transaction booking date")
+    admin_child_id: Optional[str] = Field(None, description="Selected admin child ID")
+    
+    # Essential relationship fields (stored in DB)
+    insurer_id: Optional[int] = Field(None, description="Insurer foreign key")
+    broker_id: Optional[int] = Field(None, description="Broker foreign key") 
+    child_id_request_id: Optional[UUID] = Field(None, description="Child ID request foreign key")
+    
+    # Essential date fields (stored in DB)
+    policy_start_date: Optional[date] = Field(None, description="Policy start date")
+    policy_end_date: Optional[date] = Field(None, description="Policy end date")
+    
+    # System audit fields (stored in DB)
+    created_at: datetime = Field(..., description="Record creation timestamp")
+    updated_at: datetime = Field(..., description="Record last update timestamp")
+    
+    class Config:
+        from_attributes = True
+        arbitrary_types_allowed = True
+
+# =============================================================================
+# DROPDOWN & UTILITY SCHEMAS  
 # =============================================================================
 
 class InsurerOption(BaseModel):
@@ -627,7 +669,7 @@ class BulkUpdateResponse(BaseModel):
     failed_count: int
     successful_ids: List[int]
     failed_updates: List[Dict[str, Any]]
-    updated_records: List[CutPayResponse]
+    updated_records: List[CutPayDatabaseResponse]
 
 # =============================================================================
 # CUTPAY AGENT CONFIG SCHEMAS
