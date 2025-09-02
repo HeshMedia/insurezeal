@@ -1015,11 +1015,22 @@ def prepare_complete_sheets_data_for_update(cutpay_data: Any, cutpay_db_record: 
     sheets_data["Child ID/ User ID [Provided by Insure Zeal]"] = str(cutpay_db_record.id)
     sheets_data["Agent Code"] = cutpay_db_record.agent_code or ""
     
+    # Always include policy number from database record first
+    print(f"🔍 DEBUG Helper: Database record policy_number = {repr(cutpay_db_record.policy_number)}")
+    sheets_data["Policy number"] = cutpay_db_record.policy_number or ""
+    print(f"🔍 DEBUG Helper: Set Policy number in sheets_data = {repr(sheets_data['Policy number'])}")
+    
     # Handle nested extracted_data section
     if hasattr(cutpay_data, 'extracted_data') and cutpay_data.extracted_data:
         extracted = cutpay_data.extracted_data
+        print(f"🔍 DEBUG Helper: extracted.policy_number = {repr(getattr(extracted, 'policy_number', None))}")
+        # Override policy number if provided in extracted data AND it's not empty
+        if extracted.policy_number and extracted.policy_number.strip():
+            print(f"🔍 DEBUG Helper: Overriding with extracted policy_number = {repr(extracted.policy_number)}")
+            sheets_data["Policy number"] = extracted.policy_number
+        else:
+            print(f"🔍 DEBUG Helper: Keeping database policy_number = {repr(sheets_data['Policy number'])}")
         sheets_data.update({
-            "Policy number": extracted.policy_number or "",
             "Formatted Policy number": extracted.formatted_policy_number or "",
             "Major Categorisation( Motor/Life/ Health)": extracted.major_categorisation or "",
             "Product (Insurer Report)": extracted.product_insurer_report or "",
@@ -1137,6 +1148,10 @@ def prepare_complete_sheets_data_for_update(cutpay_data: Any, cutpay_db_record: 
         update_dict = cutpay_data.dict(exclude_unset=True) if hasattr(cutpay_data, 'dict') else {}
     except:
         update_dict = {}
+    
+    # Special handling for policy_number - ensure it's always present
+    if "policy_number" in update_dict and update_dict["policy_number"]:
+        sheets_data["Policy number"] = update_dict["policy_number"]
         
     for field_name, sheet_column in direct_field_mappings.items():
         if field_name in update_dict:
@@ -1170,7 +1185,11 @@ def prepare_complete_sheets_data_for_update(cutpay_data: Any, cutpay_db_record: 
             sheets_data[sheet_column] = update_dict[field_name] or ""
     
     # Remove any None or empty values to avoid overwriting existing data with blanks
-    sheets_data = {k: v for k, v in sheets_data.items() if v not in [None, ""]}
+    # BUT keep essential fields like Policy number even if empty for tracking
+    essential_fields = ["Policy number", "Child ID/ User ID [Provided by Insure Zeal]", "Agent Code"]
+    print(f"🔍 DEBUG Helper: Before filtering - Policy number = {repr(sheets_data.get('Policy number'))}")
+    sheets_data = {k: v for k, v in sheets_data.items() if v not in [None, ""] or k in essential_fields}
+    print(f"🔍 DEBUG Helper: After filtering - Policy number = {repr(sheets_data.get('Policy number'))}")
     
     return sheets_data
 

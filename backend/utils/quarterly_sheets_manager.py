@@ -895,6 +895,67 @@ class QuarterlySheetManager:
             logger.error(f"Error routing record to current quarter: {str(e)}")
             return {"success": False, "error": str(e)}
     
+    def route_new_record_to_specific_quarter(self, record_data: Dict[str, Any], quarter: int, year: int, operation_type: str = "CREATE") -> Dict[str, Any]:
+        """
+        Route new record to a specific quarter's sheet
+        
+        Args:
+            record_data: The record data to add
+            quarter: Target quarter (1-4)
+            year: Target year
+            operation_type: "CREATE" for new records, "UPDATE" for existing records
+            
+        Returns:
+            Success status and details
+        """
+        try:
+            # Get specific quarter sheet
+            quarter_name = f"Q{quarter}-{year}"
+            try:
+                target_sheet = self.spreadsheet.worksheet(quarter_name)
+                logger.info(f"Found target quarter sheet: {quarter_name}")
+            except gspread.WorksheetNotFound:
+                logger.info(f"Quarter sheet {quarter_name} not found, creating it")
+                target_sheet = self.create_quarterly_sheet(quarter, year)
+                if not target_sheet:
+                    return {"success": False, "error": f"Could not create quarter sheet {quarter_name}"}
+            
+            # Get headers
+            headers = self.create_quarterly_sheet_headers()
+            
+            # Prepare row data
+            row_data = []
+            for header in headers:
+                value = record_data.get(header, '') or record_data.get(header.replace(' ', '_').lower(), '')
+                row_data.append(str(value) if value else '')
+            
+            # Find next empty row
+            next_row = self._find_next_empty_row(target_sheet)
+            
+            # First, add the actual record data
+            range_notation = f"A{next_row}:{self._col_to_a1(len(headers))}{next_row}"
+            target_sheet.update(range_notation, [row_data], value_input_option='USER_ENTERED')
+            
+            # Then, copy ONLY the formulas from row 2 to the new row (preserving our data)
+            logger.info(f"DEBUG: About to copy formulas to new record at row {next_row} in {quarter_name}")
+            formula_copy_success = self._copy_formulas_only_to_row(target_sheet, next_row)
+            logger.info(f"DEBUG: Formula copy to new record row {next_row} in {quarter_name} success: {formula_copy_success}")
+            
+            logger.info(f"Successfully {operation_type.lower()}d record to {quarter_name} at row {next_row} with formulas")
+            
+            # Auto-refresh dependent quarters when new data is added
+            self.auto_refresh_dependent_quarters(quarter, year)
+            
+            return {
+                "success": True,
+                "sheet_name": quarter_name,
+                "row_number": next_row
+            }
+            
+        except Exception as e:
+            logger.error(f"Error routing record to specific quarter {quarter}-{year}: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
     def _find_next_empty_row(self, worksheet: gspread.Worksheet) -> int:
         """Find the next empty row in the worksheet"""
         try:
@@ -1147,6 +1208,95 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error getting quarter summary: {str(e)}")
             return {"exists": False, "error": str(e)}
+
+    def update_existing_record_by_policy_number(self, record_data: Dict[str, Any], policy_number: str, quarter: Optional[int] = None, year: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Find and update an existing record by policy number in a specific or current quarter sheet
+        
+        Args:
+            record_data: The updated record data
+            policy_number: Policy number to search for
+            quarter: Optional specific quarter (1-4) to search in
+            year: Optional specific year to search in
+            
+        Returns:
+            Success status and details
+        """
+        try:
+            # Get target quarter sheet
+            if quarter and year:
+                quarter_name = f"Q{quarter}-{year}"
+                try:
+                    target_sheet = self.spreadsheet.worksheet(quarter_name)
+                    logger.info(f"Targeting specific quarter sheet: {quarter_name}")
+                except gspread.WorksheetNotFound:
+                    logger.warning(f"Quarter sheet {quarter_name} not found, falling back to current quarter")
+                    target_sheet = self.get_current_quarter_sheet()
+            else:
+                target_sheet = self.get_current_quarter_sheet()
+                quarter_name, quarter, year = self.get_current_quarter_info()
+                logger.info(f"Using current quarter sheet: {quarter_name}")
+            
+            if not target_sheet:
+                return {"success": False, "error": "Could not access target quarter sheet"}
+            
+            # Get all records to find the one with matching policy number
+            all_values = target_sheet.get_all_values()
+            headers = all_values[0] if all_values else []
+            
+            # Find policy number column index
+            policy_col_index = -1
+            for i, header in enumerate(headers):
+                if header.lower().strip() in ['policy number', 'policy_number']:
+                    policy_col_index = i
+                    break
+            
+            if policy_col_index == -1:
+                return {"success": False, "error": "Policy number column not found in sheet"}
+            
+            # Find the row with matching policy number
+            target_row = -1
+            for row_index, row_data in enumerate(all_values[1:], start=2):  # Skip header row
+                if policy_col_index < len(row_data):
+                    if row_data[policy_col_index].strip() == policy_number.strip():
+                        target_row = row_index
+                        break
+            
+            if target_row == -1:
+                # Policy number not found, fall back to creating new record
+                logger.warning(f"Policy number '{policy_number}' not found in current quarter sheet, creating new record")
+                return self.route_new_record_to_current_quarter(record_data, "CREATE")
+            
+            # Prepare updated row data
+            quarterly_headers = self.create_quarterly_sheet_headers()
+            updated_row_data = []
+            for header in quarterly_headers:
+                value = record_data.get(header, '') or record_data.get(header.replace(' ', '_').lower(), '')
+                updated_row_data.append(str(value) if value else '')
+            
+            # Update the existing row
+            range_notation = f"A{target_row}:{self._col_to_a1(len(quarterly_headers))}{target_row}"
+            target_sheet.update(range_notation, [updated_row_data], value_input_option='USER_ENTERED')
+            
+            # Copy formulas to the updated row (preserving our data but updating calculated fields)
+            formula_copy_success = self._copy_formulas_only_to_row(target_sheet, target_row)
+            
+            # Use the determined quarter info (either specified or current)
+            final_quarter_name = f"Q{quarter}-{year}"
+            
+            logger.info(f"Successfully updated existing record with policy number '{policy_number}' in {final_quarter_name} at row {target_row}")
+            
+            return {
+                "success": True,
+                "sheet_name": final_quarter_name,
+                "row_number": target_row,
+                "operation": "UPDATE",
+                "policy_number": policy_number
+            }
+            
+        except Exception as e:
+            logger.error(f"Error updating existing record by policy number: {str(e)}")
+            return {"success": False, "error": str(e)}
 
 
 # Global instance

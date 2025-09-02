@@ -228,7 +228,7 @@ class CutPayUpdate(BaseModel):
     # Foreign keys - now using codes instead of IDs
     insurer_code: Optional[str] = Field(None)
     broker_code: Optional[str] = Field(None)
-    admin_child_id: Optional[int] = Field(None)
+    admin_child_id: Optional[str] = Field(None)
     cluster: Optional[str] = Field(None)
     
     # Tracking fields
