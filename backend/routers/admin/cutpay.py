@@ -1254,36 +1254,175 @@ async def update_cutpay_transaction_by_policy(
         return database_cutpay_response(cutpay)
 
 
-#TODO: same shit as above 2 routes
-@router.delete("/{cutpay_id}")
-async def delete_cutpay_transaction(
-    cutpay_id: int,
+# New delete route - delete by policy number and quarter (same concept as get/update routes)
+@router.delete("/policy-delete")
+async def delete_cutpay_transaction_by_policy(
+    policy_number: str = Query(..., description="Policy number to delete"),
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4) where the policy is located"),
+    year: int = Query(..., ge=2020, le=2030, description="Year where the policy is located"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_cutpay)
 ):
-    """Delete CutPay transaction"""
+    """
+    Delete CutPay transaction by policy number from both database and specific quarterly Google Sheet
     
-    result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id)); cutpay = result.scalar_one_or_none()
-    if not cutpay:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"CutPay transaction {cutpay_id} not found"
+    This endpoint:
+    1. Combines quarter and year into sheet name format (Q3-2025)
+    2. Finds the policy in database by policy number
+    3. Deletes the record from database
+    4. Deletes the record from the specific quarterly Google Sheet
+    
+    Parameters:
+    - policy_number: The policy number to delete
+    - quarter: Quarter number (1-4) where the policy is located
+    - year: Year where the policy is located
+    
+    Returns deletion status for both database and Google Sheets
+    """
+    quarter_sheet_name = f"Q{quarter}-{year}"
+    cutpay = None
+    
+    try:
+        logger.info(f"Step 1: Finding and deleting policy '{policy_number}' from database")
+        
+        # Get the existing record by policy number
+        result = await db.execute(
+            select(CutPay)
+            .where(CutPay.policy_number == policy_number)
+            .order_by(desc(CutPay.id))  # Get the most recent one if multiple exist
         )
+        cutpay = result.first()
+        
+        if cutpay:
+            cutpay = cutpay[0]  # Extract the CutPay object from the Row
+        else:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"CutPay transaction with policy number '{policy_number}' not found in database"
+            )
+        
+        # Store cutpay_id for logging before deletion
+        cutpay_id = cutpay.id
+        logger.info(f"Found policy '{policy_number}' in database with ID: {cutpay_id}")
+        
+        # Delete from database
+        await db.delete(cutpay)
+        await db.commit()
+        
+        logger.info(f"Step 1 SUCCESS: Deleted policy '{policy_number}' (CutPay ID {cutpay_id}) from database")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Step 1 FAILED: Database deletion failed for policy '{policy_number}': {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to delete CutPay transaction from database: {str(e)}"
+        )
+
+    # Delete from specific quarterly Google Sheet
+    sheets_deletion_success = False
+    sheets_deletion_message = ""
     
-    await db.delete(cutpay)
-    await db.commit()
+    try:
+        logger.info(f"Step 2: Deleting policy '{policy_number}' from quarterly sheet '{quarter_sheet_name}'")
+        from utils.quarterly_sheets_manager import quarterly_manager
+        
+        # Get the specific quarter sheet
+        target_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+        
+        if not target_sheet:
+            logger.warning(f"Quarter sheet '{quarter_sheet_name}' not found in Google Sheets")
+            sheets_deletion_message = f"Quarter sheet '{quarter_sheet_name}' not found - no Google Sheets deletion performed"
+        else:
+            logger.info(f"Found quarter sheet '{quarter_sheet_name}', searching for policy to delete...")
+            
+            # Get all data from the sheet to find the policy row
+            all_values = target_sheet.get_all_values()
+            if not all_values:
+                sheets_deletion_message = f"No data found in quarter sheet '{quarter_sheet_name}'"
+            else:
+                headers = all_values[0] if all_values else []
+                
+                # Find policy number column
+                policy_col_index = -1
+                for i, header in enumerate(headers):
+                    if header.lower().strip() in ['policy number', 'policy_number']:
+                        policy_col_index = i
+                        logger.info(f"Found policy number column at index {i}: '{header}'")
+                        break
+                
+                if policy_col_index == -1:
+                    sheets_deletion_message = f"Policy number column not found in quarter sheet '{quarter_sheet_name}'"
+                    logger.warning("Policy number column not found in sheet headers")
+                else:
+                    # Find the row with matching policy number
+                    found_row_index = -1
+                    
+                    for row_index, row_data in enumerate(all_values[1:], start=2):
+                        if policy_col_index < len(row_data):
+                            cell_value = row_data[policy_col_index].strip()
+                            if cell_value == policy_number.strip():
+                                found_row_index = row_index
+                                logger.info(f"Found policy '{policy_number}' in quarter sheet at row {row_index}")
+                                break
+                    
+                    if found_row_index == -1:
+                        sheets_deletion_message = f"Policy '{policy_number}' not found in quarter sheet '{quarter_sheet_name}'"
+                        logger.info(f"Policy '{policy_number}' not found in {len(all_values)-1} data rows")
+                    else:
+                        # Delete the row from Google Sheets
+                        target_sheet.delete_rows(found_row_index)
+                        sheets_deletion_success = True
+                        sheets_deletion_message = f"Successfully deleted policy '{policy_number}' from quarter sheet '{quarter_sheet_name}' at row {found_row_index}"
+                        logger.info(f"Step 2 SUCCESS: Deleted policy '{policy_number}' from quarter sheet row {found_row_index}")
+                        
+    except Exception as sheets_error:
+        logger.error(f"Step 2 FAILED: Quarterly Google Sheets deletion failed for policy '{policy_number}': {str(sheets_error)}")
+        logger.error(f"Sheets deletion error details: {traceback.format_exc()}")
+        sheets_deletion_message = f"Failed to delete from quarterly sheets: {str(sheets_error)}"
+
+    # Return deletion status
+    response_data = {
+        "message": f"Policy '{policy_number}' deletion completed",
+        "policy_number": policy_number,
+        "quarter": quarter,
+        "year": year,
+        "quarter_sheet_name": quarter_sheet_name,
+        "database_deletion": {
+            "success": True,
+            "cutpay_id": cutpay_id if cutpay else None,
+            "message": f"Successfully deleted from database"
+        },
+        "sheets_deletion": {
+            "success": sheets_deletion_success,
+            "message": sheets_deletion_message
+        },
+        "overall_success": sheets_deletion_success,  # Both database and sheets must succeed
+        "metadata": {
+            "deleted_at": datetime.now().isoformat(),
+            "deleted_by": current_user.get('user_id', 'unknown'),
+            "target_quarter": quarter_sheet_name
+        }
+    }
     
-    logger.info(f"Deleted CutPay transaction {cutpay_id} by user {current_user['user_id']}")
-    return {"message": f"CutPay transaction {cutpay_id} deleted successfully"}
+    if sheets_deletion_success:
+        logger.info(f"--- Deletion for policy '{policy_number}' in '{quarter_sheet_name}' completed successfully ---")
+    else:
+        logger.warning(f"--- Deletion for policy '{policy_number}' completed with sheets deletion issues ---")
+    
+    return response_data
+
+
 
 # =============================================================================
 # DOCUMENT PROCESSING ENDPOINTS
 # =============================================================================
 
-@router.post("/{cutpay_id}/upload-document", response_model=DocumentUploadResponse)
+@router.post("/upload-document", response_model=DocumentUploadResponse)
 async def upload_policy_document(
-    cutpay_id: int,
+    policy_number: str = Query(..., description="Policy number to upload document for"),
     file: UploadFile = File(None),
     document_type: str = Form("policy_pdf"),
     presign: bool = Form(False),
@@ -1294,20 +1433,36 @@ async def upload_policy_document(
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    Upload policy PDF or additional documents
+    Upload policy PDF or additional documents using policy number
     
     Supported document types:
     - policy_pdf: Main policy document
     - kyc_documents: KYC documents
     - rc_document: Registration Certificate
     - previous_policy: Previous policy PDF
+    
+    Parameters:
+    - policy_number: The policy number to upload document for
+    - file: Document file to upload (optional for presigned uploads)
+    - document_type: Type of document being uploaded
+    - presign: Whether to generate presigned URL instead of direct upload
     """
     try:
-        result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id)); cutpay = result.scalar_one_or_none()
-        if not cutpay:
+        # Find CutPay record by policy number
+        result = await db.execute(
+            select(CutPay)
+            .where(CutPay.policy_number == policy_number)
+            .order_by(desc(CutPay.id))  # Get the most recent one if multiple exist
+        )
+        cutpay = result.first()
+        
+        if cutpay:
+            cutpay = cutpay[0]  # Extract the CutPay object from the Row
+            cutpay_id = cutpay.id
+        else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"CutPay transaction {cutpay_id} not found"
+                detail=f"CutPay transaction with policy number '{policy_number}' not found"
             )
         
         from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
@@ -1320,7 +1475,7 @@ async def upload_policy_document(
             document_url = build_cloudfront_url(key)
 
             # ✅ COMPREHENSIVE DEBUGGING FOR PRESIGNED UPLOADS
-            logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' for CutPay {cutpay_id}")
+            logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' for policy '{policy_number}' (CutPay ID {cutpay_id})")
             logger.info(f"🔵 PRESIGNED: Document URL generated: {document_url}")
             logger.info(f"🔵 PRESIGNED: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
             logger.info(f"🔵 PRESIGNED: Before update - additional_documents: {cutpay.additional_documents}")
@@ -1360,7 +1515,7 @@ async def upload_policy_document(
             
             logger.info(f"🔵 PRESIGNED: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
             logger.info(f"🔵 PRESIGNED: After commit/refresh - additional_documents: {cutpay.additional_documents}")
-            logger.info(f"Generated presigned URL for CutPay {cutpay_id}, key: {key}")
+            logger.info(f"Generated presigned URL for policy '{policy_number}' (CutPay ID {cutpay_id}), key: {key}")
 
             return DocumentUploadResponse(
                 document_url=document_url, 
@@ -1391,7 +1546,7 @@ async def upload_policy_document(
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload PDF: {str(upload_error)}")
 
         # ✅ COMPREHENSIVE DEBUGGING FOR DIRECT UPLOADS
-        logger.info(f"🟢 DIRECT: Processing document_type='{document_type}' for CutPay {cutpay_id}")
+        logger.info(f"🟢 DIRECT: Processing document_type='{document_type}' for policy '{policy_number}' (CutPay ID {cutpay_id})")
         logger.info(f"🟢 DIRECT: Document URL generated: {document_url}")
         logger.info(f"🟢 DIRECT: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
         logger.info(f"🟢 DIRECT: Before update - additional_documents: {cutpay.additional_documents}")
@@ -1430,12 +1585,12 @@ async def upload_policy_document(
         
         logger.info(f"🟢 DIRECT: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
         logger.info(f"🟢 DIRECT: After commit/refresh - additional_documents: {cutpay.additional_documents}")
-        logger.info(f"Uploaded {document_type} for CutPay {cutpay_id}")
+        logger.info(f"Uploaded {document_type} for policy '{policy_number}' (CutPay ID {cutpay_id})")
         
         return DocumentUploadResponse(document_url=document_url, document_type=document_type, upload_status="success", message=f"Document uploaded successfully")
         
     except Exception as e:
-        logger.error(f"Failed to upload document for CutPay {cutpay_id}: {str(e)}")
+        logger.error(f"Failed to upload document for policy '{policy_number}': {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Document upload failed: {str(e)}"
@@ -1500,12 +1655,204 @@ async def extract_pdf_data_endpoint(
 # AGENT FINANCIAL TRACKING ENDPOINTS
 # =============================================================================
 
-#TODO: throughout all cutpay routes ye finance details upgrade krna agent ki isko hatana hai as wo db me sotre hongi hi nhi ab, infact agent ke model se b hata do and ab ye details ham wo summary sheet se lenge to route ko refactor krdo uske hisaab se
-@router.get("/agent/{agent_code}/financial-summary",)
-async def get_agent_financial_summary_endpoint():
-    #MENE YE SARE MODEL SE HATA DIYE NA TO YE ERROR DERA THA TO YAHAN KA CODE HATA DIYA WAISE B YE SAB REPLACE HONA HI HAI
-    #WITH DATA FROM GOOGLE SHEET
-    pass
+@router.get("/agent/{agent_code}/financial-summary", response_model=Dict[str, Any])
+async def get_agent_financial_summary_endpoint(
+    agent_code: str,
+    current_user = Depends(get_current_user),
+    _rbac_check = Depends(require_admin_cutpay)
+):
+    """
+    Get agent financial summary from Google Sheets Summary tab
+    
+    Returns financial data for the specified agent including:
+    - Running Balance (True and True&False)
+    - Net Premium (True and True&False) 
+    - Commissionable Premium (True and True&False)
+    - Policy Count (True)
+    
+    Parameters:
+    - agent_code: The agent code to fetch summary for (e.g., IZ0001)
+    
+    Returns data from the Summary sheet for both "True" and "True&False" categories
+    """
+    try:
+        logger.info(f"Fetching financial summary for agent: {agent_code}")
+        
+        from utils.quarterly_sheets_manager import quarterly_manager
+        
+        # Get the summary sheet from Google Sheets
+        try:
+            # Access the summary sheet (assuming it's named "Summary" in the quarterly workbook)
+            summary_sheet = quarterly_manager.get_summary_sheet()
+            
+            if not summary_sheet:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Summary sheet not found in Google Sheets"
+                )
+                
+            logger.info("Successfully accessed Summary sheet")
+            
+        except Exception as sheet_error:
+            logger.error(f"Failed to access Summary sheet: {str(sheet_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to access Summary sheet: {str(sheet_error)}"
+            )
+        
+        # Get all data from the summary sheet
+        try:
+            all_values = summary_sheet.get_all_values()
+            
+            if not all_values or len(all_values) < 2:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No data found in Summary sheet"
+                )
+                
+            headers = all_values[0]
+            data_rows = all_values[1:]
+            
+            logger.info(f"Summary sheet has {len(headers)} columns and {len(data_rows)} data rows")
+            logger.info(f"Headers: {headers}")
+            
+        except Exception as data_error:
+            logger.error(f"Failed to read Summary sheet data: {str(data_error)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to read Summary sheet data: {str(data_error)}"
+            )
+        
+        # Find the agent code column and the agent's row
+        agent_code_col_index = -1
+        for i, header in enumerate(headers):
+            if header.lower().strip() in ['agent code', 'agent_code']:
+                agent_code_col_index = i
+                logger.info(f"Found agent code column at index {i}: '{header}'")
+                break
+        
+        if agent_code_col_index == -1:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent Code column not found in Summary sheet"
+            )
+        
+        # Find the agent's data row
+        agent_row = None
+        agent_row_index = -1
+        
+        for row_index, row_data in enumerate(data_rows):
+            if agent_code_col_index < len(row_data):
+                cell_value = row_data[agent_code_col_index].strip()
+                if cell_value.upper() == agent_code.upper():
+                    agent_row = row_data
+                    agent_row_index = row_index + 2  # +2 because we start from data_rows (skipped header) and sheets are 1-indexed
+                    logger.info(f"Found agent '{agent_code}' at row {agent_row_index}")
+                    break
+        
+        if not agent_row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent code '{agent_code}' not found in Summary sheet"
+            )
+        
+        # Extract financial data based on expected column structure
+        # Expected columns: Agent Code, Running Balance (True), Net Premium (True), Commissionable Premium (True), 
+        # Policy Count (True), Running Balance (True&False), Net Premium (True&False), Commissionable Premium (True&False)
+        
+        financial_data = {
+            "agent_code": agent_code,
+            "true_category": {},
+            "true_and_false_category": {},
+            "metadata": {
+                "sheet_row": agent_row_index,
+                "fetched_at": datetime.now().isoformat(),
+                "total_columns": len(headers),
+                "available_columns": headers
+            }
+        }
+        
+        # Create a mapping of header names to values for easier access
+        header_value_map = {}
+        for i, header in enumerate(headers):
+            if i < len(agent_row):
+                value = agent_row[i].strip()
+                header_value_map[header.strip()] = value
+                logger.info(f"Column '{header}': '{value}'")
+        
+        # Extract "True" category data
+        true_data = {}
+        if "Running Balance (True)" in header_value_map:
+            try:
+                true_data["running_balance"] = float(header_value_map["Running Balance (True)"]) if header_value_map["Running Balance (True)"] else 0.0
+            except (ValueError, TypeError):
+                true_data["running_balance"] = 0.0
+                
+        if "Net Premium (True)" in header_value_map:
+            try:
+                true_data["net_premium"] = float(header_value_map["Net Premium (True)"]) if header_value_map["Net Premium (True)"] else 0.0
+            except (ValueError, TypeError):
+                true_data["net_premium"] = 0.0
+                
+        if "Commissionable Premium (True)" in header_value_map:
+            try:
+                true_data["commissionable_premium"] = float(header_value_map["Commissionable Premium (True)"]) if header_value_map["Commissionable Premium (True)"] else 0.0
+            except (ValueError, TypeError):
+                true_data["commissionable_premium"] = 0.0
+                
+        if "Policy Count (True)" in header_value_map:
+            try:
+                true_data["policy_count"] = int(header_value_map["Policy Count (True)"]) if header_value_map["Policy Count (True)"] else 0
+            except (ValueError, TypeError):
+                true_data["policy_count"] = 0
+        
+        financial_data["true_category"] = true_data
+        
+        # Extract "True&False" category data
+        true_false_data = {}
+        if "Running Balance (True&False)" in header_value_map:
+            try:
+                true_false_data["running_balance"] = float(header_value_map["Running Balance (True&False)"]) if header_value_map["Running Balance (True&False)"] else 0.0
+            except (ValueError, TypeError):
+                true_false_data["running_balance"] = 0.0
+                
+        if "Net Premium (True&False)" in header_value_map:
+            try:
+                true_false_data["net_premium"] = float(header_value_map["Net Premium (True&False)"]) if header_value_map["Net Premium (True&False)"] else 0.0
+            except (ValueError, TypeError):
+                true_false_data["net_premium"] = 0.0
+                
+        if "Commissionable Premium (True&False)" in header_value_map:
+            try:
+                true_false_data["commissionable_premium"] = float(header_value_map["Commissionable Premium (True&False)"]) if header_value_map["Commissionable Premium (True&False)"] else 0.0
+            except (ValueError, TypeError):
+                true_false_data["commissionable_premium"] = 0.0
+        
+        financial_data["true_and_false_category"] = true_false_data
+        
+        # Add summary calculations
+        financial_data["summary"] = {
+            "difference_running_balance": true_false_data.get("running_balance", 0.0) - true_data.get("running_balance", 0.0),
+            "difference_net_premium": true_false_data.get("net_premium", 0.0) - true_data.get("net_premium", 0.0),
+            "difference_commissionable_premium": true_false_data.get("commissionable_premium", 0.0) - true_data.get("commissionable_premium", 0.0),
+            "total_policy_count": true_data.get("policy_count", 0)
+        }
+        
+        logger.info(f"Successfully fetched financial summary for agent '{agent_code}':")
+        logger.info(f"True category: {true_data}")
+        logger.info(f"True&False category: {true_false_data}")
+        
+        return financial_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch financial summary for agent '{agent_code}': {str(e)}")
+        logger.error(f"Error details: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch agent financial summary: {str(e)}"
+        )
 
 # =============================================================================
 # CUTPAY AGENT CONFIG ENDPOINTS

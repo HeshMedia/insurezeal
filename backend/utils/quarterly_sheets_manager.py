@@ -145,6 +145,38 @@ class QuarterlySheetManager:
             logger.error(f"Error getting master template sheet: {str(e)}")
             return None
     
+    def get_summary_sheet(self) -> Optional[gspread.Worksheet]:
+        """Get the Summary sheet from Google Sheets"""
+        try:
+            if not self.spreadsheet:
+                logger.error("Spreadsheet not initialized")
+                return None
+            
+            # Try to get the Summary sheet
+            try:
+                summary_sheet = self.spreadsheet.worksheet("Summary")
+                logger.info("Found Summary sheet")
+                return summary_sheet
+            except gspread.WorksheetNotFound:
+                logger.warning("Summary sheet not found")
+                
+                # Try alternative names for summary sheet
+                alternative_names = ["SUMMARY", "Summary Report", "Agent Summary", "Financial Summary"]
+                for alt_name in alternative_names:
+                    try:
+                        summary_sheet = self.spreadsheet.worksheet(alt_name)
+                        logger.info(f"Found Summary sheet with alternative name: {alt_name}")
+                        return summary_sheet
+                    except gspread.WorksheetNotFound:
+                        continue
+                
+                logger.error("No Summary sheet found with any expected name")
+                return None
+                    
+        except Exception as e:
+            logger.error(f"Error getting summary sheet: {str(e)}")
+            return None
+    
     def load_master_template_headers(self) -> List[str]:
         """Load headers from Master Template sheet in Google Sheets"""
         try:
