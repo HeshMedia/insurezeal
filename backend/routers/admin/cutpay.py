@@ -453,7 +453,7 @@ async def get_dashboard_stats(
 # BULK UPDATE ENDPOINT
 # =============================================================================
 
-#TODO: quartely sheet ka mention hai waise idr to ki hana krta hai update usme pr have to check and normally db me kya update krta hai wo b dkehna
+
 @router.put("/bulk-update", response_model=BulkUpdateResponse)
 async def bulk_update_cutpay_transactions(
     request: BulkUpdateRequest,
@@ -820,31 +820,183 @@ async def list_agent_configs(
             detail=f"Failed to fetch agent configurations: {str(e)}"
         )
 
-#TODO: cutpay id ka to nhi pta ab wo db me alag hoyegi master sheet me hoyegi hi nhi to idr jo b better ho url param yaan normally policy number hi pass krwao wo return kro fir
-#also ye policy number milega hame get all cutpay wale routes se right so wahan se frontend bhejga hame quarter b date se nikal ke fir ham usi quarter me check krnege time bachane ko
-# tho ho skta hai ki quarter alag b ho rtaher than whatver date there to frontend ko wahan dikhana b pdega phele to autofecth krke kya quarter hai
-# if user want he can change that but haan hame backend pe both policy number and quarter chaiye rhega PAR AB qo quarter jab pass krnege jo jo b tera quarter sheets ka logic hai ye manager
-# wo use handle kr rha hai ache se ke nhi wo dkehna ppdega aisa to nhi wo sare quarter check krega
-#yahan pe keep in mind ki saare details fetch hongi db aur master sheet se and cutpay id ke saath input mein quarter+saal puchhli (most imp aage ke liye bhi dhyaan rakhi ki har jagah quarter saal puchhna) to make it easier to find out...
-@router.get("/{cutpay_id}", response_model=CutPayDatabaseResponse)
-async def get_cutpay_transaction(
-    cutpay_id: int,
+
+@router.get("/policy-details", response_model=Dict[str, Any])
+async def get_cutpay_transaction_by_policy(
+    policy_number: str = Query(..., description="Policy number to search for"),
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4) where the policy is located"),
+    year: int = Query(..., ge=2020, le=2030, description="Year where the policy is located"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_cutpay)
 ):
-    """Get specific CutPay transaction by ID"""
+    """
+    Get complete CutPay transaction details by policy number from both database and specific quarterly Google Sheet
     
-    result = await db.execute(select(CutPay).where(CutPay.id == cutpay_id))
-    cutpay = result.scalar_one_or_none()
-    if not cutpay:
+    This endpoint:
+    1. Combines quarter and year into sheet name format (Q3-2025)
+    2. Searches for the specific quarterly Google Sheet
+    3. Fetches data from both the specific sheet AND database for the same policy number
+    4. Returns combined results from both sources
+    
+    Parameters:
+    - policy_number: The policy number to search for  
+    - quarter: Quarter number (1-4)
+    - year: Year
+    
+    Returns combined data from both database and the specific quarterly sheet
+    """
+    try:
+        # Step 1: Create quarter sheet name from quarter and year
+        quarter_sheet_name = f"Q{quarter}-{year}"
+        logger.info(f"Searching for policy '{policy_number}' in quarter sheet '{quarter_sheet_name}' and database")
+        
+        # Step 2: Get record from database
+        database_record = None
+        broker_name = ""
+        insurer_name = ""
+        
+        try:
+            result = await db.execute(
+                select(CutPay)
+                .where(CutPay.policy_number == policy_number)
+                .order_by(desc(CutPay.id))  # Get the most recent one if multiple exist
+            )
+            cutpay = result.first()  # Use first() instead of scalar_one_or_none()
+            
+            if cutpay:
+                cutpay = cutpay[0]  # Extract the CutPay object from the Row
+                await db.refresh(cutpay)
+                database_record = database_cutpay_response(cutpay).__dict__
+                
+                # Get broker and insurer names from database IDs
+                if cutpay.broker_id:
+                    try:
+                        broker_result = await db.execute(select(Broker).where(Broker.id == cutpay.broker_id))
+                        broker = broker_result.scalar_one_or_none()
+                        if broker:
+                            broker_name = broker.name
+                    except Exception as e:
+                        logger.warning(f"Could not fetch broker name: {e}")
+                
+                if cutpay.insurer_id:
+                    try:
+                        insurer_result = await db.execute(select(Insurer).where(Insurer.id == cutpay.insurer_id))
+                        insurer = insurer_result.scalar_one_or_none()
+                        if insurer:
+                            insurer_name = insurer.name
+                    except Exception as e:
+                        logger.warning(f"Could not fetch insurer name: {e}")
+                        
+                logger.info(f"Found policy '{policy_number}' in database with ID: {cutpay.id}")
+            else:
+                logger.info(f"Policy '{policy_number}' not found in database")
+                
+        except Exception as db_error:
+            logger.error(f"Database search error: {str(db_error)}")
+            database_record = {"error": f"Database search failed: {str(db_error)}"}
+        
+        # Step 3: Search for the specific quarterly Google Sheet and get data
+        sheets_data = {}
+        sheet_found = False
+        
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the specific quarter sheet by name
+            target_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+            
+            if not target_sheet:
+                logger.warning(f"Quarter sheet '{quarter_sheet_name}' not found in Google Sheets")
+                sheets_data = {"error": f"Quarter sheet '{quarter_sheet_name}' not found"}
+            else:
+                logger.info(f"Found quarter sheet '{quarter_sheet_name}' in Google Sheets")
+                sheet_found = True
+                
+                # Get all data from the specific sheet
+                all_values = target_sheet.get_all_values()
+                if not all_values:
+                    sheets_data = {"error": f"No data found in sheet '{quarter_sheet_name}'"}
+                else:
+                    headers = all_values[0] if all_values else []
+                    logger.info(f"Sheet has {len(headers)} columns and {len(all_values)-1} data rows")
+                    
+                    # Find policy number column
+                    policy_col_index = -1
+                    for i, header in enumerate(headers):
+                        if header.lower().strip() in ['policy number', 'policy_number']:
+                            policy_col_index = i
+                            logger.info(f"Found policy number column at index {i}: '{header}'")
+                            break
+                    
+                    if policy_col_index == -1:
+                        sheets_data = {"error": f"Policy number column not found in sheet '{quarter_sheet_name}'"}
+                        logger.warning("Policy number column not found in sheet headers")
+                    else:
+                        # Search for the policy number in the sheet
+                        policy_row_data = None
+                        found_row_index = -1
+                        
+                        for row_index, row_data in enumerate(all_values[1:], start=2):
+                            if policy_col_index < len(row_data):
+                                cell_value = row_data[policy_col_index].strip()
+                                if cell_value == policy_number.strip():
+                                    policy_row_data = row_data
+                                    found_row_index = row_index
+                                    logger.info(f"Found policy '{policy_number}' in sheet row {row_index}")
+                                    break
+                        
+                        if not policy_row_data:
+                            sheets_data = {"error": f"Policy number '{policy_number}' not found in sheet '{quarter_sheet_name}'"}
+                            logger.info(f"Policy '{policy_number}' not found in {len(all_values)-1} data rows")
+                        else:
+                            # Map headers to values for the found row
+                            sheets_data = {}
+                            for i, header in enumerate(headers):
+                                if i < len(policy_row_data):
+                                    sheets_data[header] = policy_row_data[i]
+                                else:
+                                    sheets_data[header] = ""
+                            
+                            logger.info(f"Successfully retrieved {len(sheets_data)} fields from sheet '{quarter_sheet_name}' row {found_row_index}")
+                            
+        except Exception as sheets_error:
+            logger.error(f"Failed to fetch from Google Sheets: {str(sheets_error)}")
+            logger.error(traceback.format_exc())
+            sheets_data = {"error": f"Failed to fetch from Google Sheets: {str(sheets_error)}"}
+        
+        # Step 4: Combine results from both sources
+        response_data = {
+            "policy_number": policy_number,
+            "quarter": quarter,
+            "year": year,
+            "quarter_sheet_name": quarter_sheet_name,
+            "database_record": database_record,
+            "google_sheets_data": sheets_data,
+            "broker_name": broker_name,
+            "insurer_name": insurer_name,
+            "found_in_database": database_record is not None and "error" not in str(database_record),
+            "found_in_sheets": sheet_found and "error" not in sheets_data,
+            "quarter_sheet_exists": sheet_found,
+            "metadata": {
+                "fetched_at": datetime.now().isoformat(),
+                "search_quarter": quarter_sheet_name,
+                "database_search_completed": True,
+                "sheets_search_completed": True
+            }
+        }
+        
+        logger.info(f"Search completed - DB: {response_data['found_in_database']}, Sheets: {response_data['found_in_sheets']}")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Error in policy search: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"CutPay transaction {cutpay_id} not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch transaction: {str(e)}"
         )
 
-    await db.refresh(cutpay)
-    return database_cutpay_response(cutpay)
 
 
 #TODO: test hi krna basically to in a way limited fields hi nayi wali db me update hori na and ki quartely me b aram se chal rha

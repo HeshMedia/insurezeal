@@ -437,6 +437,11 @@ class CutPayDatabaseResponse(BaseModel):
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
     
+    # Google Sheets quarter information (calculated fields)
+    quarter: Optional[int] = Field(None, description="Quarter number (1-4) where record is located in Google Sheets")
+    year: Optional[int] = Field(None, description="Year where record is located in Google Sheets") 
+    quarter_sheet_name: Optional[str] = Field(None, description="Google Sheets quarter name (e.g., 'Q3-2025')")
+    
     class Config:
         from_attributes = True
         arbitrary_types_allowed = True

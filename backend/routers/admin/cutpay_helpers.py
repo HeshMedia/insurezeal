@@ -71,11 +71,54 @@ def database_cutpay_response(cutpay_obj) -> CutPayDatabaseResponse:
                 else:
                     db_data[response_field] = None
         
+        # Calculate quarter information based on booking_date
+        quarter, year, quarter_sheet_name = calculate_quarter_info(cutpay_obj.booking_date)
+        db_data['quarter'] = quarter
+        db_data['year'] = year
+        db_data['quarter_sheet_name'] = quarter_sheet_name
+        
         return CutPayDatabaseResponse(**db_data)
         
     except Exception as e:
         logger.warning(f"database_cutpay_response failed: {str(e)}")
         raise e
+
+def calculate_quarter_info(booking_date):
+    """
+    Calculate quarter information based on booking date
+    
+    Args:
+        booking_date: Date object representing the booking date
+        
+    Returns:
+        tuple: (quarter, year, quarter_sheet_name)
+    """
+    if not booking_date:
+        return None, None, None
+    
+    try:
+        # Extract year from booking date
+        year = booking_date.year
+        
+        # Calculate quarter based on month
+        month = booking_date.month
+        if month in [1, 2, 3]:
+            quarter = 1
+        elif month in [4, 5, 6]:
+            quarter = 2
+        elif month in [7, 8, 9]:
+            quarter = 3
+        else:  # months 10, 11, 12
+            quarter = 4
+        
+        # Create quarter sheet name
+        quarter_sheet_name = f"Q{quarter}-{year}"
+        
+        return quarter, year, quarter_sheet_name
+        
+    except Exception as e:
+        logger.warning(f"Failed to calculate quarter info for date {booking_date}: {e}")
+        return None, None, None
 
 # =============================================================================
 # CODE LOOKUP HELPER FUNCTIONS

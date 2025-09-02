@@ -790,6 +790,22 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error getting current quarter sheet: {str(e)}")
             return None
+
+    def get_quarterly_sheet(self, quarter: int, year: int) -> Optional[gspread.Worksheet]:
+        """Get a specific quarter's sheet by quarter and year"""
+        try:
+            quarter_name = self.get_quarterly_sheet_name(quarter, year)
+            
+            # Check if the specified quarter sheet exists
+            if self.sheet_exists(quarter_name):
+                return self.spreadsheet.worksheet(quarter_name)
+            else:
+                logger.warning(f"Quarter sheet {quarter_name} does not exist")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting quarter sheet Q{quarter}-{year}: {str(e)}")
+            return None
     
     def auto_refresh_dependent_quarters(self, source_quarter: int, source_year: int):
         """
