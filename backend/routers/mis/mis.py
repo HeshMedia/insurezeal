@@ -364,7 +364,7 @@ async def get_master_sheet_statistics(
             detail="Failed to generate master sheet statistics"
         )
 
-#TODO: ab ye nayi updated quarterly sheet ke header bhejega
+
 @router.get("/master-sheet/fields")
 async def get_master_sheet_fields(
     quarter: Optional[int] = Query(None, ge=1, le=4, description="Quarter number (1-4) to get quarterly sheet fields"),
@@ -374,24 +374,27 @@ async def get_master_sheet_fields(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Get list of all available fields in Master Google Sheet or Quarterly Sheet
+    Get list of all available fields in Quarterly Sheets or specific Quarterly Sheet
     
     **Admin/SuperAdmin only endpoint**
     
-    Returns the complete list of field names (headers) available in the specified sheet.
+    Returns the complete list of field names (headers) available in quarterly sheets.
     This is useful for building dynamic UIs and validating field names for updates.
     
     **Parameters:**
     - **quarter**: Optional quarter number (1-4). If provided, year must also be specified
     - **year**: Optional year (2020-2030). If provided, quarter must also be specified
     - When both quarter and year are provided, fields are fetched from Q{quarter}-{year} sheet
-    - When neither is provided, fields are fetched from Master sheet
+    - When neither is provided, fields are fetched from current quarterly sheet standard headers
     
     **Returns:**
-    - List of all sheet column headers
+    - List of all quarterly sheet column headers (70+ fields)
     - Field descriptions where available
     - Data type hints for each field
     - Sheet name being queried
+    
+    **Note:** This route now returns quarterly sheet headers by default instead of master sheet headers,
+    as quarterly sheets are the current standard for data management.
     """
     
     try:
@@ -414,16 +417,20 @@ async def get_master_sheet_fields(
                     detail=f"Quarterly sheet {sheet_name} not found"
                 )
             
+            # Get headers from the actual quarterly sheet
             headers = quarterly_sheet.row_values(1)
             sheet_type = "Quarterly Sheet"
             
-        else:
-            # Get master sheet fields
-            from utils.google_sheets import google_sheets_sync
+            logger.info(f"Retrieved {len(headers)} headers from quarterly sheet {sheet_name}")
             
-            headers = google_sheets_sync._get_master_sheet_headers()
-            sheet_name = "Master"
-            sheet_type = "Master Sheet"
+        else:
+            # Get quarterly sheet headers from quarterly manager (current standard headers)
+            from utils.quarterly_sheets_manager import quarterly_manager
+            headers = quarterly_manager.create_quarterly_sheet_headers()
+            sheet_name = "Current Quarterly Sheet Standard"
+            sheet_type = "Quarterly Sheet Standard Headers"
+            
+            logger.info(f"Retrieved {len(headers)} standard quarterly sheet headers")
         
         # Add field descriptions and types
         field_info = []
