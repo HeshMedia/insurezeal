@@ -626,10 +626,11 @@ async def get_agent_mis_data(
             detail=f"Failed to fetch agent MIS data for agent {agent_code} in Q{quarter}-{year}"
         )
 
-#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme se bs limited fields milngei (jo current schema hai wohi fields) pr ofc unke naam changed hai to wo dekhna pdega
-#secodnly sath me wo calcualtion sheet ka bs agent wala (TRUE) wala part return krna hai idr that too for the agent code being passed
+
 @router.get("/my-mis", response_model=AgentMISResponse)
 async def get_my_mis_data(
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4)"),
+    year: int = Query(..., ge=2020, le=2030, description="Year"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=500, description="Items per page"),
     current_user = Depends(get_current_user),
@@ -637,26 +638,40 @@ async def get_my_mis_data(
     _rbac_check = Depends(require_permission("policies", "read"))
 ):
     """
-    Get agent's own MIS data
+    Get agent's own quarterly MIS data with summary
     
     **Agent endpoint**
     
-    Returns the authenticated agent's own master sheet data with:
-    - Only records where MATCH = TRUE
-    - Sensitive broker commission fields removed
+    Returns the authenticated agent's own quarterly sheet data with:
+    - Data from specified quarterly sheet (Q{quarter}-{year})
+    - Only records where MATCH = TRUE from quarterly sheet
+    - Agent's summary data from Summary sheet (MATCH = TRUE only)
+    - Filtered fields using AgentMISRecord schema
     - Calculated statistics (number of policies, running balance, total net premium)
     - Agent can only see their own data based on their user profile
+    
+    **Parameters:**
+    - **quarter**: Quarter number (1-4) for the quarterly sheet
+    - **year**: Year for the quarterly sheet
+    - **page**: Page number for pagination
+    - **page_size**: Items per page
     
     **Security:**
     - Uses authenticated user's ID to lookup agent code from UserProfile
     - Agent cannot access other agents' data
     - Filtered data excludes sensitive broker information
     
-    Fields excluded for privacy:
-    - Detailed broker commission structure
-    - Internal broker payout percentages
-    - Broker financial details
-    - CutPay internal calculations
+    **Returns:**
+    - Quarterly sheet records for the agent (filtered fields)
+    - Agent's summary data from Summary sheet
+    - Statistics and pagination info
+    
+    Fields included in AgentMISRecord:
+    - Core transaction data: id, reporting_month, booking_date, insurer_name, broker_name
+    - Policy information: policy_number
+    - Premium details: gross_premium, net_premium (excluding sensitive broker data)
+    - Agent commission data: agent_commission_perc, agent_po_amount, total_agent_po, running_balance
+    - Timestamps: created_at, updated_at
     """
     try:
         user_id = current_user["user_id"]
@@ -684,16 +699,20 @@ async def get_my_mis_data(
                 total_pages=0
             )
         
-        logger.info(f"Fetching MIS data for agent: {agent_code} (user: {user_id})")
+        logger.info(f"Fetching quarterly MIS data for agent: {agent_code} (user: {user_id}) from Q{quarter}-{year}")
         
-        result = await mis_helpers.get_agent_mis_data(
+        # Get quarterly sheet data for the agent (MATCH = TRUE only)
+        quarterly_result = await mis_helpers.get_quarterly_sheet_agent_filtered_data(
             agent_code=agent_code,
+            quarter=quarter,
+            year=year,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            match_only=True  # Only MATCH = TRUE records
         )
         
-        if not result:
-            logger.warning(f"No MIS data found for agent: {agent_code}")
+        if not quarterly_result:
+            logger.warning(f"No quarterly MIS data found for agent: {agent_code} in Q{quarter}-{year}")
             return AgentMISResponse(
                 records=[],
                 stats=AgentMISStats(
@@ -707,25 +726,53 @@ async def get_my_mis_data(
                 total_pages=0
             )
             
-        # Convert records to AgentMISRecord objects
+        # Convert records to AgentMISRecord objects with field mapping
         agent_records = []
-        for record_dict in result["records"]:
-            agent_records.append(AgentMISRecord(**record_dict))
+        for record_dict in quarterly_result["records"]:
+            # Helper function to safely convert to string
+            def safe_str(value):
+                return str(value).strip() if value is not None and str(value).strip() else None
             
-        stats = AgentMISStats(**result["stats"])
+            # Map quarterly sheet fields to AgentMISRecord fields with string conversion
+            mapped_record = {
+                "id": safe_str(record_dict.get("Child ID/ User ID [Provided by Insure Zeal]") or record_dict.get("id")),
+                "reporting_month": safe_str(record_dict.get("Reporting Month (mmm'yy)") or record_dict.get("reporting_month")),
+                "booking_date": safe_str(record_dict.get("Booking Date(Click to select Date)") or record_dict.get("booking_date")),
+                "insurer_name": safe_str(record_dict.get("Insurer name") or record_dict.get("insurer_name")),
+                "broker_name": safe_str(record_dict.get("Broker Name") or record_dict.get("broker_name")),
+                "policy_number": safe_str(record_dict.get("Policy number") or record_dict.get("policy_number")),
+                "gross_premium": safe_str(record_dict.get("Gross premium") or record_dict.get("gross_premium")),
+                "net_premium": safe_str(record_dict.get("Net premium") or record_dict.get("net_premium")),
+                "agent_commission_perc": safe_str(record_dict.get("Actual Agent_PO%") or record_dict.get("agent_commission_perc")),
+                "agent_po_amount": safe_str(record_dict.get("Agent_PO_AMT") or record_dict.get("agent_po_amount")),
+                "total_agent_po": safe_str(record_dict.get("PO Paid To Agent") or record_dict.get("total_agent_po")),
+                "running_balance": safe_str(record_dict.get("Running Bal") or record_dict.get("running_balance")),
+                "already_given_to_agent": safe_str(record_dict.get("Already Given to agent") or record_dict.get("already_given_to_agent")),
+                "created_at": safe_str(record_dict.get("created_at")),  # This field may not exist in quarterly sheets
+                "updated_at": safe_str(record_dict.get("updated_at"))   # This field may not exist in quarterly sheets
+            }
+            agent_records.append(AgentMISRecord(**mapped_record))
+            
+        # Calculate stats from the quarterly data
+        stats = AgentMISStats(
+            number_of_policies=quarterly_result.get("total_count", 0),
+            running_balance=quarterly_result.get("stats", {}).get("running_balance", 0.0),
+            total_net_premium=quarterly_result.get("stats", {}).get("total_net_premium", 0.0),
+            commissionable_premium=quarterly_result.get("stats", {}).get("commissionable_premium", 0.0)
+        )
         
         return AgentMISResponse(
             records=agent_records,
             stats=stats,
-            total_count=result["total_count"],
-            page=result["page"],
-            page_size=result["page_size"],
-            total_pages=result["total_pages"]
+            total_count=quarterly_result["total_count"],
+            page=quarterly_result["page"],
+            page_size=quarterly_result["page_size"],
+            total_pages=quarterly_result["total_pages"]
         )
         
     except Exception as e:
-        logger.error(f"Error in get_my_mis_data for user {user_id}: {str(e)}")
+        logger.error(f"Error in get_my_mis_data for user {user_id}, Q{quarter}-{year}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch your MIS data"
+            detail=f"Failed to fetch your MIS data for Q{quarter}-{year}"
         )

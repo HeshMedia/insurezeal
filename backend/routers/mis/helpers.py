@@ -1108,3 +1108,118 @@ class MISHelpers:
         except Exception as e:
             logger.error(f"Error fetching agent summary data: {str(e)}")
             return {}
+
+    async def get_quarterly_sheet_agent_filtered_data(
+        self,
+        agent_code: str,
+        quarter: int,
+        year: int,
+        page: int = 1,
+        page_size: int = 50,
+        match_only: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Get filtered quarterly sheet data for specific agent with AgentMISRecord compatible fields
+        
+        Args:
+            agent_code: Agent code to filter by
+            quarter: Quarter number (1-4)
+            year: Year (e.g., 2025)
+            page: Page number (1-based)
+            page_size: Number of records per page
+            match_only: If True, only return records where MATCH = TRUE
+            
+        Returns:
+            Dictionary with filtered records, statistics, and pagination info
+        """
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get quarterly sheet
+            quarterly_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+            if not quarterly_sheet:
+                logger.error(f"Quarterly sheet Q{quarter}-{year} not found")
+                return {
+                    "records": [],
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0,
+                    "stats": {"running_balance": 0.0, "total_net_premium": 0.0, "commissionable_premium": 0.0}
+                }
+
+            # Get all data from the quarterly sheet as dictionaries
+            all_data = quarterly_sheet.get_all_records()
+            logger.info(f"Retrieved {len(all_data)} total records from Q{quarter}-{year}")
+            
+            # Filter records for this agent
+            filtered_records = []
+            total_running_balance = 0.0
+            total_net_premium = 0.0
+            total_commissionable_premium = 0.0
+            
+            for record in all_data:
+                # Check if agent code matches
+                record_agent_code = str(record.get('Agent Code', '')).strip()
+                
+                # Check MATCH status if match_only is True
+                match_status = str(record.get('Match', record.get('MATCH', 'TRUE'))).upper().strip()
+                
+                if record_agent_code == agent_code:
+                    if not match_only or match_status == 'TRUE':
+                        filtered_records.append(record)
+                        
+                        # Calculate statistics
+                        try:
+                            running_bal = float(str(record.get('Running Bal', record.get('Running Balance', 0))).replace(',', '') or 0)
+                            total_running_balance += running_bal
+                        except (ValueError, TypeError):
+                            pass
+                            
+                        try:
+                            net_premium = float(str(record.get('Net premium', record.get('Net Premium', 0))).replace(',', '') or 0)
+                            total_net_premium += net_premium
+                        except (ValueError, TypeError):
+                            pass
+                            
+                        try:
+                            commissionable_premium = float(str(record.get('Commissionable Premium', record.get('commissionable_premium', 0))).replace(',', '') or 0)
+                            total_commissionable_premium += commissionable_premium
+                        except (ValueError, TypeError):
+                            pass
+            
+            logger.info(f"Found {len(filtered_records)} filtered records for agent {agent_code} in Q{quarter}-{year}")
+            
+            # Pagination
+            total_count = len(filtered_records)
+            total_pages = (total_count + page_size - 1) // page_size
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_records = filtered_records[start_idx:end_idx]
+            
+            # Statistics
+            stats = {
+                "running_balance": total_running_balance,
+                "total_net_premium": total_net_premium,
+                "commissionable_premium": total_commissionable_premium
+            }
+            
+            return {
+                "records": paginated_records,
+                "total_count": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "stats": stats
+            }
+            
+        except Exception as e:
+            logger.error(f"Error fetching quarterly sheet agent filtered data: {str(e)}")
+            return {
+                "records": [],
+                "total_count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0,
+                "stats": {"running_balance": 0.0, "total_net_premium": 0.0, "commissionable_premium": 0.0}
+            }
