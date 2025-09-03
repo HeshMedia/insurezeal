@@ -305,7 +305,6 @@ async def update_quarterly_sheet_records(
             detail=f"Failed to update quarterly sheet Q{quarter}-{year}: {str(e)}"
         )
 
-#TODO: ye route me wo summary/calcualtion sheet jo hai uska sara data bhejdo idr
 @router.get("/master-sheet/stats", response_model=MasterSheetStatsResponse)
 async def get_master_sheet_statistics(
     current_user = Depends(get_current_user),
@@ -313,25 +312,31 @@ async def get_master_sheet_statistics(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Get comprehensive statistics from Master Google Sheet
+    Get complete data from Summary Google Sheet
     
     **Admin/SuperAdmin only endpoint**
     
-    This endpoint provides analytical insights and summary statistics derived
-    from the Master Google Sheet data.
+    This endpoint returns the entire contents of the Summary sheet from Google Sheets,
+    which contains calculated agent summaries, financial data, and performance metrics.
     
-    **Statistics Included:**
-    - Total record counts (policies, CutPay transactions)
-    - Financial summaries (total premiums, CutPay amounts)
-    - Top performing agents by premium volume
-    - Top insurers by premium volume  
-    - Monthly breakdown and trends
+    **Returns:**
+    - Complete Summary sheet data as structured JSON
+    - All columns and rows from the Summary sheet
+    - Headers and data in easy-to-process format
+    - Real-time data directly from Google Sheets
+    
+    **Data Includes:**
+    - Agent financial summaries
+    - Performance calculations
+    - Commission details
+    - Balance information
+    - All other calculated fields from Summary sheet
     
     **Use Cases:**
     - Dashboard overview widgets
-    - Performance reporting
-    - Business intelligence
-    - Data quality monitoring
+    - Complete financial reporting
+    - Agent performance analysis
+    - Summary data export
     """
     
     try:

@@ -118,16 +118,13 @@ class BulkUpdateResponse(BaseModel):
     processing_time_seconds: float
 
 class MasterSheetStatsResponse(BaseModel):
-    """Statistics about master sheet data"""
-    total_records: int
-    total_policies: int
-    total_cutpay_transactions: int
-    total_gross_premium: float
-    total_net_premium: float
-    total_cutpay_amount: float
-    top_agents: List[Dict[str, Any]]
-    top_insurers: List[Dict[str, Any]]
-    monthly_summary: List[Dict[str, Any]]
+    """Complete data from Summary sheet"""
+    sheet_name: str = Field(..., description="Name of the sheet (Summary)")
+    total_rows: int = Field(..., description="Total number of data rows in Summary sheet")
+    total_columns: int = Field(..., description="Total number of columns in Summary sheet")
+    headers: List[str] = Field(..., description="All column headers from Summary sheet")
+    data: List[Dict[str, Any]] = Field(..., description="All data from Summary sheet as list of dictionaries")
+    last_updated: str = Field(..., description="Last update timestamp")
 
 class AgentMISRecord(BaseModel):
     """Filtered master sheet record for agent MIS with specific fields removed"""

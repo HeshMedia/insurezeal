@@ -704,125 +704,65 @@ class MISHelpers:
             }
 
     async def get_master_sheet_stats(self) -> Dict[str, Any]:
-        """Get statistics and summary data from master sheet"""
+        """Get complete data from Summary sheet"""
         try:
             if not self.sheets_client.client:
                 return {"error": "Google Sheets not available"}
             
-            # Get Master sheet
-            master_sheet = self.sheets_client._get_or_create_worksheet(
-                "Master", 
-                self.sheets_client._get_master_sheet_headers()
-            )
+            # Import quarterly manager to access Summary sheet
+            from utils.quarterly_sheets_manager import quarterly_manager
             
-            if not master_sheet:
-                return {"error": "Master sheet not accessible"}
+            # Get the Summary sheet
+            summary_sheet = quarterly_manager.get_summary_sheet()
             
-            # Get all data
-            all_data = master_sheet.get_all_records()
+            if not summary_sheet:
+                logger.error("Summary sheet not found")
+                return {"error": "Summary sheet not accessible"}
             
-            # Calculate statistics
-            total_records = len(all_data)
-            total_policies = len([r for r in all_data if r.get('Policy Number')])
-            total_cutpay_transactions = len([r for r in all_data if r.get('CutPay Amount')])
+            logger.info("Successfully accessed Summary sheet")
             
-            # Calculate financial totals
-            total_gross_premium = 0
-            total_net_premium = 0
-            total_cutpay_amount = 0
+            # Get all data from the Summary sheet
+            all_values = summary_sheet.get_all_values()
             
-            agent_stats = {}
-            insurer_stats = {}
-            monthly_stats = {}
+            if not all_values or len(all_values) < 2:
+                logger.warning("No data found in Summary sheet")
+                return {"error": "No data found in Summary sheet"}
             
-            for record in all_data:
-                # Financial totals
-                try:
-                    if record.get('Gross Premium'):
-                        total_gross_premium += float(record['Gross Premium'] or 0)
-                except:
-                    pass
+            # Extract headers and data rows
+            headers = all_values[0]
+            data_rows = all_values[1:]
+            
+            logger.info(f"Summary sheet has {len(headers)} columns and {len(data_rows)} data rows")
+            
+            # Convert to list of dictionaries
+            summary_data = []
+            for row in data_rows:
+                # Ensure row has the same length as headers
+                while len(row) < len(headers):
+                    row.append("")
                 
-                try:
-                    if record.get('Net Premium'):
-                        total_net_premium += float(record['Net Premium'] or 0)
-                except:
-                    pass
+                row_dict = {}
+                for i, header in enumerate(headers):
+                    row_dict[header] = row[i] if i < len(row) else ""
                 
-                try:
-                    if record.get('CutPay Amount'):
-                        total_cutpay_amount += float(record['CutPay Amount'] or 0)
-                except:
-                    pass
-                
-                # Agent statistics
-                agent_code = record.get('Agent Code')
-                if agent_code:
-                    if agent_code not in agent_stats:
-                        agent_stats[agent_code] = {'count': 0, 'total_premium': 0}
-                    agent_stats[agent_code]['count'] += 1
-                    try:
-                        agent_stats[agent_code]['total_premium'] += float(record.get('Gross Premium', 0) or 0)
-                    except:
-                        pass
-                
-                # Insurer statistics
-                insurer_name = record.get('Insurer Name')
-                if insurer_name:
-                    if insurer_name not in insurer_stats:
-                        insurer_stats[insurer_name] = {'count': 0, 'total_premium': 0}
-                    insurer_stats[insurer_name]['count'] += 1
-                    try:
-                        insurer_stats[insurer_name]['total_premium'] += float(record.get('Gross Premium', 0) or 0)
-                    except:
-                        pass
-                
-                # Monthly statistics
-                reporting_month = record.get('Reporting Month')
-                if reporting_month:
-                    if reporting_month not in monthly_stats:
-                        monthly_stats[reporting_month] = {'count': 0, 'total_premium': 0}
-                    monthly_stats[reporting_month]['count'] += 1
-                    try:
-                        monthly_stats[reporting_month]['total_premium'] += float(record.get('Gross Premium', 0) or 0)
-                    except:
-                        pass
+                summary_data.append(row_dict)
             
-            # Top agents (by premium)
-            top_agents = sorted(
-                [{'agent_code': k, **v} for k, v in agent_stats.items()],
-                key=lambda x: x['total_premium'],
-                reverse=True
-            )[:10]
-            
-            # Top insurers (by premium)
-            top_insurers = sorted(
-                [{'insurer_name': k, **v} for k, v in insurer_stats.items()],
-                key=lambda x: x['total_premium'],
-                reverse=True
-            )[:10]
-            
-            # Monthly summary
-            monthly_summary = sorted(
-                [{'month': k, **v} for k, v in monthly_stats.items()],
-                key=lambda x: x['month']
-            )
-            
-            return {
-                "total_records": total_records,
-                "total_policies": total_policies,
-                "total_cutpay_transactions": total_cutpay_transactions,
-                "total_gross_premium": total_gross_premium,
-                "total_net_premium": total_net_premium,
-                "total_cutpay_amount": total_cutpay_amount,
-                "top_agents": top_agents,
-                "top_insurers": top_insurers,
-                "monthly_summary": monthly_summary
+            # Prepare response with complete Summary sheet data
+            response = {
+                "sheet_name": "Summary",
+                "total_rows": len(data_rows),
+                "total_columns": len(headers),
+                "headers": headers,
+                "data": summary_data,
+                "last_updated": "Real-time data from Google Sheets"
             }
             
+            logger.info(f"Successfully retrieved {len(summary_data)} records from Summary sheet")
+            return response
+            
         except Exception as e:
-            logger.error(f"Error getting master sheet stats: {str(e)}")
-            return {"error": str(e)}
+            logger.error(f"Error accessing Summary sheet: {str(e)}")
+            return {"error": f"Failed to access Summary sheet: {str(e)}"}
     
     def _convert_row_to_record(self, row_data: Dict[str, Any], row_number: int) -> MasterSheetRecord:
         """Convert a sheet row dictionary to MasterSheetRecord using new header structure"""
