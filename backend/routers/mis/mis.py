@@ -20,7 +20,8 @@ from .schemas import (
     AgentMISRecord,
     AgentMISStats,
     QuarterlySheetUpdateRequest,
-    QuarterlySheetUpdateResponse
+    QuarterlySheetUpdateResponse,
+    PolicyDocumentsResponse
 )
 from .helpers import MISHelpers
 from typing import Optional, Dict, Any
@@ -175,7 +176,7 @@ async def get_master_sheet_data(
             detail=f"Failed to fetch {data_source_text} data"
         )
 
-#TODO: ASK ASH KI MATCH BHI UPDATE HO SAKTA KI NAHI?
+
 @router.put("/quarterly-sheet/update", response_model=QuarterlySheetUpdateResponse)
 async def update_quarterly_sheet_records(
     update_request: QuarterlySheetUpdateRequest,
@@ -229,7 +230,11 @@ async def update_quarterly_sheet_records(
     - Insurance: "Broker Name", "Insurer name", "Product Type"
     - Financial: "Gross premium", "Net premium", "Running Bal"
     - Vehicle: "Registration.no", "Make_Model", "Fuel Type"
-    - Status: "Invoice Status", "Match", "Remarks"
+    - Status: "Invoice Status", "Remarks"
+    
+    **Restricted Fields:**
+    - "Match" field is read-only and cannot be updated via API
+    - The Match status is managed by the system based on data validation rules
     
     **Note:** The policy_number field is required to identify which record to update.
     It should match the "Policy number" value in the quarterly sheet.
@@ -248,6 +253,8 @@ async def update_quarterly_sheet_records(
         
         # Convert the new format to the existing bulk update format
         bulk_updates = []
+        blocked_fields = []
+        
         for record in update_request.records:
             policy_number = record.policy_number
             
@@ -257,12 +264,24 @@ async def update_quarterly_sheet_records(
             
             # Convert each field to bulk update format
             for field_name, new_value in record_dict.items():
+                # Block updates to Match field (case-insensitive check)
+                if field_name.lower().strip() in ['match', 'match status']:
+                    blocked_fields.append(f"Field '{field_name}' is read-only and cannot be updated")
+                    continue
+                
                 if new_value is not None:  # Only update fields that have values
                     bulk_updates.append({
                         "record_id": policy_number,  # Use policy_number as record_id for bulk update
                         "field_name": field_name,
                         "new_value": str(new_value) if new_value is not None else ""
                     })
+        
+        # If there are blocked fields, return error
+        if blocked_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Update blocked: {'; '.join(blocked_fields)}. The Match field is read-only and managed by the system."
+            )
         
         if not bulk_updates:
             return QuarterlySheetUpdateResponse(
@@ -775,4 +794,86 @@ async def get_my_mis_data(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch your MIS data for Q{quarter}-{year}"
+        )
+
+
+@router.get("/policy-documents", response_model=PolicyDocumentsResponse)
+async def get_policy_documents(
+    policy_number: str = Query(..., description="Policy number to search for (supports special characters like HDFC/TW/2025/CUT128)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_admin_read)
+):
+    """
+    Get policy PDF URL and additional documents URLs for a specific policy number.
+    
+    Searches both the Policy and CutPay tables for document URLs associated with the policy number.
+    Returns information from both tables if found, with preference given to Policy table data.
+    
+    **Parameters:**
+    - **policy_number**: The policy number to search for (query parameter)
+    
+    **Returns:**
+    - Policy PDF URL and additional documents URL
+    - Source information indicating which table(s) contained the data
+    - Boolean flags indicating presence in each table
+    
+    **Usage Example:**
+    - GET /mis/policy-documents?policy_number=HDFC/TW/2025/CUT128
+    
+    **Access:** Requires admin read permissions
+    """
+    try:
+        from models import Policy, CutPay
+        
+        # Search in Policy table
+        policy_stmt = select(Policy.policy_pdf_url, Policy.additional_documents).where(
+            Policy.policy_number == policy_number
+        )
+        policy_result = await db.execute(policy_stmt)
+        policy_data = policy_result.first()
+        
+        # Search in CutPay table
+        cutpay_stmt = select(CutPay.policy_pdf_url, CutPay.additional_documents).where(
+            CutPay.policy_number == policy_number
+        )
+        cutpay_result = await db.execute(cutpay_stmt)
+        cutpay_data = cutpay_result.first()
+        
+        # Determine response data
+        found_in_policy = policy_data is not None
+        found_in_cutpay = cutpay_data is not None
+        
+        if not found_in_policy and not found_in_cutpay:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Policy number '{policy_number}' not found in Policy or CutPay tables"
+            )
+        
+        # Prefer Policy table data if available, otherwise use CutPay data
+        if found_in_policy:
+            policy_pdf_url = policy_data.policy_pdf_url
+            additional_documents = policy_data.additional_documents
+            source = "policy"
+        else:
+            policy_pdf_url = cutpay_data.policy_pdf_url
+            additional_documents = cutpay_data.additional_documents
+            source = "cutpay"
+        
+        return PolicyDocumentsResponse(
+            policy_number=policy_number,
+            policy_pdf_url=policy_pdf_url,
+            additional_documents=additional_documents,
+            source=source,
+            found_in_policy_table=found_in_policy,
+            found_in_cutpay_table=found_in_cutpay
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching policy documents for policy {policy_number}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch policy documents for policy number: {policy_number}"
         )

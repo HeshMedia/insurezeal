@@ -261,3 +261,12 @@ class QuarterlySheetUpdateResponse(BaseModel):
     successful_updates: int
     failed_updates: int
     processing_time_seconds: float
+
+class PolicyDocumentsResponse(BaseModel):
+    """Response schema for policy documents retrieval"""
+    policy_number: str
+    policy_pdf_url: Optional[str] = None
+    additional_documents: Optional[str] = None
+    source: str = Field(..., description="Source table: 'policy' or 'cutpay'")
+    found_in_policy_table: bool
+    found_in_cutpay_table: bool
