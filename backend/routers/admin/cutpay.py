@@ -386,68 +386,6 @@ async def get_filtered_dropdown_options(
             detail=f"Failed to fetch filtered dropdowns: {str(e)}"
         )
 
-# =============================================================================
-# EXPORT AND STATISTICS ENDPOINTS (must be before parameterized routes)
-# =============================================================================
-
-
-#TODO: ye hata do bc sab ye MIS me ayega bs ab as ham ye sab db me store thodi kr rhe udr hi ajaye seedha
-@router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats(
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    _rbac_check = Depends(require_admin_cutpay)
-):
-    """Get dashboard statistics for CutPay"""
-    try:
-        total_transactions = await db.scalar(select(func.count(CutPay.id)))
-        total_gross_premium = await db.scalar(select(func.sum(CutPay.gross_premium))) or 0
-        total_cutpay_amount = await db.scalar(select(func.sum(CutPay.cut_pay_amount))) or 0
-        commission_sum_result = await db.execute(select(func.coalesce(func.sum(CutPay.total_receivable_from_broker), 0)))
-        total_commission = commission_sum_result.scalar() or 0
-        
-        # Calculate agent payouts
-        agent_payout_result = await db.execute(select(func.coalesce(func.sum(CutPay.total_agent_payout), 0)))
-        total_agent_payouts = agent_payout_result.scalar() or 0
-        
-        # Get completed and draft transactions counts
-        completed_transactions = await db.scalar(
-            select(func.count(CutPay.id)).where(CutPay.synced_to_cutpay_sheet == True)
-        ) or 0
-        draft_transactions = await db.scalar(
-            select(func.count(CutPay.id)).where(CutPay.synced_to_cutpay_sheet == False)
-        ) or 0
-        
-        pending_sync_result = await db.execute(
-            select(func.count(CutPay.id)).where(
-                (CutPay.synced_to_cutpay_sheet == False)
-            )
-        )
-        pending_sync = pending_sync_result.scalar()
-
-        monthly_stats = {}
-        top_agents = []
-        top_insurers = []
-        
-        return DashboardStats(
-            total_transactions=total_transactions,
-            completed_transactions=completed_transactions,
-            draft_transactions=draft_transactions,
-            total_cut_pay_amount=float(total_cutpay_amount),
-            total_agent_payouts=float(total_agent_payouts),
-            total_commission_receivable=float(total_commission),
-            pending_sync_count=pending_sync,
-            monthly_stats=monthly_stats,
-            top_agents=top_agents,
-            top_insurers=top_insurers
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to fetch dashboard stats: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch statistics: {str(e)}"
-        )
 
 # =============================================================================
 # BULK UPDATE ENDPOINT
