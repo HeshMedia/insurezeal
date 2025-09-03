@@ -18,7 +18,9 @@ from .schemas import (
     MasterSheetStatsResponse,
     AgentMISResponse,
     AgentMISRecord,
-    AgentMISStats
+    AgentMISStats,
+    QuarterlySheetUpdateRequest,
+    QuarterlySheetUpdateResponse
 )
 from .helpers import MISHelpers
 from typing import Optional, Dict, Any
@@ -34,7 +36,7 @@ security = HTTPBearer()
 mis_helpers = MISHelpers()
 
 #TODO: SARE MIS ROUTES ME ABHI B MASTER SHEET HI CHLR HAI QUARTELY SHEET NHI YAHAN PE ABHI
-
+#TODO: policy and cutpay ke documents show karne ko ek route bana
 
 @router.get("/master-sheet", response_model=MasterSheetResponse)
 async def get_master_sheet_data(
@@ -173,95 +175,134 @@ async def get_master_sheet_data(
             detail=f"Failed to fetch {data_source_text} data"
         )
 
-#TODO: isme bhi quarter(s) pass krnege to wo quarter ki sheet pe update hoga
-@router.put("/master-sheet/bulk-update", response_model=BulkUpdateResponse)
-async def bulk_update_master_sheet(
-    update_request: BulkUpdateRequest,
+#TODO: ASK ASH KI MATCH BHI UPDATE HO SAKTA KI NAHI?
+@router.put("/quarterly-sheet/update", response_model=QuarterlySheetUpdateResponse)
+async def update_quarterly_sheet_records(
+    update_request: QuarterlySheetUpdateRequest,
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4)"),
+    year: int = Query(..., ge=2020, le=2030, description="Year"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_write)
 ):
     """
-    Perform bulk updates on Master Google Sheet
+    Update quarterly sheet records using direct field mapping
     
     **Admin/SuperAdmin only endpoint**
     
-    This endpoint allows updating multiple fields across multiple records in the Master 
-    Google Sheet in a single operation. Changes are applied directly to the sheet.
+    This endpoint allows updating quarterly sheet records using the actual field names
+    as keys in the request body, providing a more intuitive API for quarterly sheet updates.
+    Records are identified by their policy number.
     
     **Features:**
-    - Update multiple fields per record
+    - Direct field mapping using quarterly sheet headers as keys
     - Update multiple records in one request
-    - Atomic updates per record (all fields for a record succeed or fail together)
-    - Detailed results for each update operation
-    - Performance tracking
+    - Records identified by policy number
+    - All quarterly sheet fields supported
+    - Automatic field name to header mapping
+    - Detailed success/failure tracking
     
     **Request Format:**
     ```json
     {
-      "updates": [
+      "records": [
         {
-          "record_id": "123",
-          "field_name": "Payment By",
-          "new_value": "John Doe"
-        },
-        {
-          "record_id": "123", 
-          "field_name": "Remarks",
-          "new_value": "Updated via MIS"
-        },
-        {
-          "record_id": "456",
-          "field_name": "Invoice Status",
-          "new_value": "Paid"
+          "policy_number": "POL123456789",
+          "Reporting Month (mmm'yy)": "Sep'25",
+          "Child ID/ User ID [Provided by Insure Zeal]": "IZ001234",
+          "Agent Code": "AG001",
+          "Customer Name": "John Doe",
+          "Broker Name": "ABC Insurance",
+          "Insurer name": "XYZ Insurance",
+          "Gross premium": "15000",
+          "Net premium": "12711",
+          "Running Bal": "1016",
+          "Match": "TRUE"
         }
       ]
     }
     ```
     
     **Field Names:**
-    Use exact header names from the Master sheet. Common fields include:
-    - Agent Code, Policy Number, Customer Name
-    - Gross Premium, Net Premium, CutPay Amount
-    - Payment By, Payment Method, Invoice Status
-    - Remarks, Notes, Company
-    - And all other master sheet columns
+    Use the exact quarterly sheet header names. All 70 fields are supported including:
+    - Basic Info: "Agent Code", "Policy number", "Customer Name"
+    - Insurance: "Broker Name", "Insurer name", "Product Type"
+    - Financial: "Gross premium", "Net premium", "Running Bal"
+    - Vehicle: "Registration.no", "Make_Model", "Fuel Type"
+    - Status: "Invoice Status", "Match", "Remarks"
+    
+    **Note:** The policy_number field is required to identify which record to update.
+    It should match the "Policy number" value in the quarterly sheet.
     
     **Returns:**
-    - Detailed results for each update operation
-    - Success/failure status per field update
-    - Old and new values for successful updates
-    - Error messages for failed updates
-    - Performance metrics
+    - Update success/failure summary
+    - Processing time
+    - Error details for failed updates
     """
     
     try:
         admin_user_id = current_user["user_id"]
+        sheet_name = f"Q{quarter}-{year}"
         
-        logger.info(f"Starting bulk update for {len(update_request.updates)} field updates by admin {admin_user_id}")
+        logger.info(f"Starting quarterly sheet update for {len(update_request.records)} records by admin {admin_user_id} on {sheet_name}")
         
-        # Perform bulk update
-        result = await mis_helpers.bulk_update_master_sheet(
-            updates=update_request.updates,
+        # Convert the new format to the existing bulk update format
+        bulk_updates = []
+        for record in update_request.records:
+            policy_number = record.policy_number
+            
+            # Get all field updates for this record (excluding policy_number)
+            record_dict = record.dict(by_alias=True, exclude_unset=True)
+            record_dict.pop('policy_number', None)  # Remove policy_number from updates
+            
+            # Convert each field to bulk update format
+            for field_name, new_value in record_dict.items():
+                if new_value is not None:  # Only update fields that have values
+                    bulk_updates.append({
+                        "record_id": policy_number,  # Use policy_number as record_id for bulk update
+                        "field_name": field_name,
+                        "new_value": str(new_value) if new_value is not None else ""
+                    })
+        
+        if not bulk_updates:
+            return QuarterlySheetUpdateResponse(
+                message=f"No fields to update in {sheet_name}",
+                total_records=len(update_request.records),
+                successful_updates=0,
+                failed_updates=0,
+                processing_time_seconds=0.0
+            )
+        
+        logger.info(f"Converted {len(update_request.records)} records to {len(bulk_updates)} field updates")
+        
+        # Use existing bulk update helper with converted data
+        from .schemas import BulkUpdateField
+        bulk_update_fields = [BulkUpdateField(**update) for update in bulk_updates]
+        
+        result = await mis_helpers.bulk_update_quarterly_sheet(
+            updates=bulk_update_fields,
+            quarter=quarter,
+            year=year,
             admin_user_id=admin_user_id
         )
         
-        logger.info(f"Bulk update completed: {result['successful_updates']} successful, {result['failed_updates']} failed")
+        logger.info(f"Quarterly sheet update completed on {sheet_name}: {result['successful_updates']} successful, {result['failed_updates']} failed")
         
-        return BulkUpdateResponse(
-            message=result["message"],
-            total_updates=result["total_updates"],
+        return QuarterlySheetUpdateResponse(
+            message=f"Quarterly sheet {sheet_name} update completed: {result['successful_updates']} successful, {result['failed_updates']} failed",
+            total_records=len(update_request.records),
             successful_updates=result["successful_updates"],
             failed_updates=result["failed_updates"],
-            results=result["results"],
             processing_time_seconds=result["processing_time_seconds"]
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in bulk_update_master_sheet: {str(e)}")
+        logger.error(f"Error in update_quarterly_sheet_records for Q{quarter}-{year}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to perform bulk update: {str(e)}"
+            detail=f"Failed to update quarterly sheet Q{quarter}-{year}: {str(e)}"
         )
 
 #TODO: ye route me wo summary/calcualtion sheet jo hai uska sara data bhejdo idr
@@ -321,50 +362,90 @@ async def get_master_sheet_statistics(
 #TODO: ab ye nayi updated quarterly sheet ke header bhejega
 @router.get("/master-sheet/fields")
 async def get_master_sheet_fields(
+    quarter: Optional[int] = Query(None, ge=1, le=4, description="Quarter number (1-4) to get quarterly sheet fields"),
+    year: Optional[int] = Query(None, ge=2020, le=2030, description="Year to get quarterly sheet fields"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Get list of all available fields in Master Google Sheet
+    Get list of all available fields in Master Google Sheet or Quarterly Sheet
     
     **Admin/SuperAdmin only endpoint**
     
-    Returns the complete list of field names (headers) available in the Master sheet.
+    Returns the complete list of field names (headers) available in the specified sheet.
     This is useful for building dynamic UIs and validating field names for updates.
     
+    **Parameters:**
+    - **quarter**: Optional quarter number (1-4). If provided, year must also be specified
+    - **year**: Optional year (2020-2030). If provided, quarter must also be specified
+    - When both quarter and year are provided, fields are fetched from Q{quarter}-{year} sheet
+    - When neither is provided, fields are fetched from Master sheet
+    
     **Returns:**
-    - List of all master sheet column headers
+    - List of all sheet column headers
     - Field descriptions where available
     - Data type hints for each field
+    - Sheet name being queried
     """
     
     try:
-        from utils.google_sheets import google_sheets_sync
+        # Validate quarter and year parameters
+        if (quarter is not None and year is None) or (quarter is None and year is not None):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Both quarter and year must be provided together, or neither should be provided"
+            )
         
-        headers = google_sheets_sync._get_master_sheet_headers()
+        if quarter is not None and year is not None:
+            # Get quarterly sheet fields
+            sheet_name = f"Q{quarter}-{year}"
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            quarterly_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+            if not quarterly_sheet:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Quarterly sheet {sheet_name} not found"
+                )
+            
+            headers = quarterly_sheet.row_values(1)
+            sheet_type = "Quarterly Sheet"
+            
+        else:
+            # Get master sheet fields
+            from utils.google_sheets import google_sheets_sync
+            
+            headers = google_sheets_sync._get_master_sheet_headers()
+            sheet_name = "Master"
+            sheet_type = "Master Sheet"
         
         # Add field descriptions and types
         field_info = []
         for header in headers:
             field_info.append({
                 "field_name": header,
-                "description": f"Master sheet field: {header}",
+                "description": f"{sheet_type} field: {header}",
                 "data_type": "string",  # Most fields are strings in sheets
                 "updatable": True
             })
         
         return {
+            "sheet_name": sheet_name,
+            "sheet_type": sheet_type,
             "total_fields": len(headers),
             "fields": field_info,
-            "note": "Use exact field names for bulk update operations"
+            "note": f"Use exact field names for bulk update operations on {sheet_name}"
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting master sheet fields: {str(e)}")
+        sheet_text = f"quarterly sheet Q{quarter}-{year}" if quarter and year else "master sheet"
+        logger.error(f"Error getting {sheet_text} fields: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get master sheet fields"
+            detail=f"Failed to get {sheet_text} fields"
         )
 
 #TODO: have to make this work for quartely sheets now to ham quarter and year pass kre (even multiple possible) and uski combined sheet return ho,
@@ -448,7 +529,7 @@ async def export_master_sheet_data(
             detail="Failed to export master sheet data"
         )
 
-#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme yahan pe abhi limited fields pass hori but ham sari fields pass krenge as ye to admin ko dikhana hai na plus yahan both match true and false hoga
+#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme yahan pe abhi limited fields pass hori but ham sari fields pass krenge as ye to admin ko dikhana hai na plus yahan both match true and false hoga + uss agent ki calculation/summary sheet
 @router.get("/agent-mis/{agent_code}", response_model=AgentMISResponse)
 async def get_agent_mis_data(
     agent_code: str,

@@ -472,6 +472,237 @@ class MISHelpers:
                 "processing_time_seconds": processing_time
             }
     
+    async def bulk_update_quarterly_sheet(
+        self,
+        updates: List[BulkUpdateField],
+        quarter: int,
+        year: int,
+        admin_user_id: str
+    ) -> Dict[str, Any]:
+        """
+        Perform bulk updates on quarterly sheet
+        
+        Args:
+            updates: List of field updates to apply
+            quarter: Quarter number (1-4)
+            year: Year (e.g., 2025)
+            admin_user_id: ID of admin performing the update
+            
+        Returns:
+            Dictionary with update results and statistics
+        """
+        start_time = time.time()
+        results = []
+        successful_updates = 0
+        failed_updates = 0
+        
+        try:
+            if not self.sheets_client.client:
+                logger.error("Google Sheets client not initialized")
+                return {
+                    "message": "Google Sheets not available",
+                    "total_updates": len(updates),
+                    "successful_updates": 0,
+                    "failed_updates": len(updates),
+                    "results": [],
+                    "processing_time_seconds": time.time() - start_time
+                }
+            
+            # Construct quarterly sheet name
+            sheet_name = f"Q{quarter}-{year}"
+            logger.info(f"Performing bulk update on quarterly sheet: {sheet_name}")
+            
+            # Use quarterly_sheets_manager to access the sheet
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the quarterly sheet directly using quarterly manager
+            quarterly_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+            
+            if not quarterly_sheet:
+                error_msg = f"Quarterly sheet {sheet_name} not found or not accessible"
+                logger.error(error_msg)
+                return {
+                    "message": error_msg,
+                    "total_updates": len(updates),
+                    "successful_updates": 0,
+                    "failed_updates": len(updates),
+                    "results": [],
+                    "processing_time_seconds": time.time() - start_time
+                }
+            
+            # Get headers from the quarterly sheet
+            headers = quarterly_sheet.row_values(1)
+            logger.info(f"Quarterly sheet {sheet_name} headers: {headers}")
+            
+            # Get all data (skipping header row and dummy row)
+            all_data = quarterly_sheet.get_all_values()
+            
+            if len(all_data) <= 2:  # Only header and dummy row, no actual data
+                logger.warning(f"No data rows found in quarterly sheet {sheet_name}")
+                return {
+                    "message": f"No data rows found in quarterly sheet {sheet_name}",
+                    "total_updates": len(updates),
+                    "successful_updates": 0,
+                    "failed_updates": len(updates),
+                    "results": [],
+                    "processing_time_seconds": time.time() - start_time
+                }
+            
+            # Skip header row (index 0) and dummy row (index 1), start from actual data (index 2)
+            data_rows = all_data[2:]  # Start from row 3 (index 2)
+            
+            # Find the Policy Number column index
+            policy_number_col_index = None
+            for idx, header in enumerate(headers):
+                if header.lower().strip() == "policy number":
+                    policy_number_col_index = idx
+                    break
+            
+            if policy_number_col_index is None:
+                error_msg = f"Policy Number column not found in quarterly sheet {sheet_name}"
+                logger.error(error_msg)
+                return {
+                    "message": error_msg,
+                    "total_updates": len(updates),
+                    "successful_updates": 0,
+                    "failed_updates": len(updates),
+                    "results": [],
+                    "processing_time_seconds": time.time() - start_time
+                }
+            
+            # Group updates by record_id for batch processing
+            updates_by_record = {}
+            for update in updates:
+                if update.record_id not in updates_by_record:
+                    updates_by_record[update.record_id] = []
+                updates_by_record[update.record_id].append(update)
+            
+            # Process each record (using policy number as record_id)
+            for policy_number, record_updates in updates_by_record.items():
+                try:
+                    # Find the row for this policy number
+                    row_found = False
+                    row_index = -1
+                    row_number = -1
+                    
+                    for idx, row in enumerate(data_rows):
+                        if idx < len(data_rows) and policy_number_col_index < len(row):
+                            if str(row[policy_number_col_index]).strip() == str(policy_number).strip():
+                                row_index = idx
+                                row_number = idx + 3  # Actual row number in sheet (1-based, +3 because we skip header and dummy row)
+                                row_found = True
+                                break
+                    
+                    if not row_found:
+                        logger.error(f"Policy number {policy_number} not found in quarterly sheet {sheet_name}")
+                        for update in record_updates:
+                            results.append(BulkUpdateResult(
+                                record_id=policy_number,
+                                field_name=update.field_name,
+                                old_value=None,
+                                new_value=update.new_value,
+                                success=False,
+                                error_message=f"Policy number {policy_number} not found in quarterly sheet"
+                            ))
+                            failed_updates += 1
+                        continue
+                    
+                    current_row = data_rows[row_index][:]  # Copy the row
+                    
+                    # Ensure the row has enough columns
+                    while len(current_row) < len(headers):
+                        current_row.append("")
+                    
+                    updated_row = current_row[:]
+                    
+                    # Apply all field updates for this record
+                    for update in record_updates:
+                        try:
+                            # Validate field name exists in headers
+                            if update.field_name not in headers:
+                                results.append(BulkUpdateResult(
+                                    record_id=policy_number,
+                                    field_name=update.field_name,
+                                    old_value=None,
+                                    new_value=update.new_value,
+                                    success=False,
+                                    error_message=f"Field '{update.field_name}' not found in quarterly sheet {sheet_name}. Available fields: {headers}"
+                                ))
+                                failed_updates += 1
+                                continue
+                            
+                            col_index = headers.index(update.field_name)
+                            old_value = current_row[col_index] if col_index < len(current_row) else ""
+                            
+                            # Update the value
+                            updated_row[col_index] = update.new_value or ""
+                            
+                            results.append(BulkUpdateResult(
+                                record_id=policy_number,
+                                field_name=update.field_name,
+                                old_value=old_value,
+                                new_value=update.new_value,
+                                success=True
+                            ))
+                            successful_updates += 1
+                            
+                        except Exception as field_error:
+                            results.append(BulkUpdateResult(
+                                record_id=policy_number,
+                                field_name=update.field_name,
+                                old_value=None,
+                                new_value=update.new_value,
+                                success=False,
+                                error_message=str(field_error)
+                            ))
+                            failed_updates += 1
+                    
+                    # Update the entire row in the quarterly sheet
+                    if updated_row != current_row:
+                        last_col = self.sheets_client._col_to_a1(len(headers))
+                        update_range = f"A{row_number}:{last_col}{row_number}"
+                        quarterly_sheet.update(update_range, [updated_row], value_input_option='USER_ENTERED')
+                        logger.info(f"Updated row {row_number} for policy {policy_number} in quarterly sheet {sheet_name}")
+                
+                except Exception as record_error:
+                    logger.error(f"Error updating policy {policy_number} in quarterly sheet {sheet_name}: {str(record_error)}")
+                    for update in record_updates:
+                        results.append(BulkUpdateResult(
+                            record_id=policy_number,
+                            field_name=update.field_name,
+                            old_value=None,
+                            new_value=update.new_value,
+                            success=False,
+                            error_message=str(record_error)
+                        ))
+                        failed_updates += 1
+            
+            processing_time = time.time() - start_time
+            
+            logger.info(f"Quarterly sheet {sheet_name} bulk update completed: {successful_updates} successful, {failed_updates} failed in {processing_time:.2f}s")
+            
+            return {
+                "message": f"Quarterly sheet {sheet_name} bulk update completed: {successful_updates} successful, {failed_updates} failed",
+                "total_updates": len(updates),
+                "successful_updates": successful_updates,
+                "failed_updates": failed_updates,
+                "results": results,
+                "processing_time_seconds": processing_time
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in quarterly sheet {quarter}-{year} bulk update: {str(e)}")
+            processing_time = time.time() - start_time
+            
+            return {
+                "message": f"Quarterly sheet Q{quarter}-{year} bulk update failed: {str(e)}",
+                "total_updates": len(updates),
+                "successful_updates": successful_updates,
+                "failed_updates": len(updates) - successful_updates,
+                "results": results,
+                "processing_time_seconds": processing_time
+            }
+
     async def get_master_sheet_stats(self) -> Dict[str, Any]:
         """Get statistics and summary data from master sheet"""
         try:
