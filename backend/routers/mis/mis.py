@@ -28,6 +28,8 @@ from typing import Optional, Dict, Any
 import logging
 import csv
 import io
+import zipfile
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +38,6 @@ security = HTTPBearer()
 
 mis_helpers = MISHelpers()
 
-#TODO: SARE MIS ROUTES ME ABHI B MASTER SHEET HI CHLR HAI QUARTELY SHEET NHI YAHAN PE ABHI
-#TODO: policy and cutpay ke documents show karne ko ek route bana
 
 @router.get("/master-sheet", response_model=MasterSheetResponse)
 async def get_master_sheet_data(
@@ -479,10 +479,410 @@ async def get_master_sheet_fields(
             detail=f"Failed to get {sheet_text} fields"
         )
 
-#TODO: have to make this work for quartely sheets now to ham quarter and year pass kre (even multiple possible) and uski combined sheet return ho,
-# frontend se CSV yaan XLSX ka parameter b aye to us format me return krdo
-# also ho sake to maybe baad ke liye hi sahi wo sab running balance etc b for those quarter(s) calc hoke ajaye to basically 2 sheets return ho jayegi
-# ye ham dekh skte hai agar zyada heavy task hai to maybe if we use app scripts wo b sahi reh skta
+
+@router.get("/quarterly-sheet/export")
+async def export_quarterly_sheet_data(
+    quarters: str = Query(..., description="Comma-separated quarters (e.g., '1,2' or '1'). Each quarter requires corresponding year."),
+    years: str = Query(..., description="Comma-separated years (e.g., '2025,2025' or '2025'). Must match the number of quarters."),
+    format: str = Query("csv", description="Export format: csv, xlsx, or json"),
+    search: Optional[str] = Query(None, description="Filter data before export"),
+    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
+    current_user = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check = Depends(require_admin_read)
+):
+    """
+    Export Quarterly Google Sheet data with Summary sheets in various formats
+    
+    **Admin/SuperAdmin only endpoint**
+    
+    Export quarterly sheet data along with corresponding summary sheets for specified quarters.
+    Supports multiple quarters and returns both quarterly data and summary calculations.
+    
+    **Parameters:**
+    - **quarters**: Comma-separated quarter numbers (1-4) e.g., "1,2" or "1"
+    - **years**: Comma-separated years (2020-2030) e.g., "2025,2025" or "2025"
+    - **format**: Export format - csv, xlsx, or json
+    - **search**: Filter data before export
+    - **agent_code**: Filter by specific agent code
+    
+    **Formats:**
+    - **csv**: Returns ZIP file with separate CSV files for each quarter's data and summary
+    - **xlsx**: Returns Excel file with multiple sheets (quarterly data + summary for each quarter)
+    - **json**: Returns JSON with quarterly data and summary data for all quarters
+    
+    **Returns:**
+    For each quarter, two datasets are included:
+    1. **Quarterly Sheet Data**: Complete quarterly sheet with all fields and records
+    2. **Summary Sheet Data**: Calculated summaries, running balances, and agent statistics
+    
+    **Examples:**
+    - Single quarter: quarters=1&years=2025 (Q1-2025 data + summary)
+    - Multiple quarters: quarters=1,2&years=2025,2025 (Q1-2025 and Q2-2025 data + summaries)
+    - Cross-year: quarters=4,1&years=2024,2025 (Q4-2024 and Q1-2025 data + summaries)
+    
+    **Note:** Large datasets are automatically handled. XLSX format recommended for multiple quarters.
+    """
+    
+    try:
+        # Parse and validate quarters and years
+        quarter_list = [int(q.strip()) for q in quarters.split(',')]
+        year_list = [int(y.strip()) for y in years.split(',')]
+        
+        if len(quarter_list) != len(year_list):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Number of quarters must match number of years"
+            )
+        
+        # Validate quarter and year ranges
+        for quarter in quarter_list:
+            if quarter < 1 or quarter > 4:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid quarter: {quarter}. Must be between 1 and 4"
+                )
+        
+        for year in year_list:
+            if year < 2020 or year > 2030:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid year: {year}. Must be between 2020 and 2030"
+                )
+        
+        if format not in ["csv", "xlsx", "json"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid format. Supported formats: csv, xlsx, json"
+            )
+        
+        logger.info(f"Exporting quarterly data for quarters: {quarter_list}, years: {year_list}, format: {format}")
+        
+        # Collect data for all requested quarters
+        all_quarterly_data = {}
+        all_summary_data = {}
+        
+        filters = {}
+        if agent_code:
+            filters['agent_code'] = agent_code
+        
+        for quarter, year in zip(quarter_list, year_list):
+            sheet_name = f"Q{quarter}-{year}"
+            
+            try:
+                # Get quarterly sheet data
+                quarterly_result = await mis_helpers.get_quarterly_sheet_data(
+                    quarter=quarter,
+                    year=year,
+                    page=1,
+                    page_size=1000000,  # Large number to get all records
+                    search=search,
+                    filter_by=filters if filters else None
+                )
+                
+                # Convert records to dict format for export
+                quarterly_records = []
+                if hasattr(quarterly_result, 'records') and quarterly_result.records:
+                    for record in quarterly_result.records:
+                        if hasattr(record, 'dict'):
+                            # Pydantic model - convert to dict
+                            quarterly_records.append(record.dict(by_alias=True))
+                        elif isinstance(record, dict):
+                            # Already a dict
+                            quarterly_records.append(record)
+                        else:
+                            # Try to convert to dict using vars()
+                            quarterly_records.append(vars(record) if hasattr(record, '__dict__') else str(record))
+                elif isinstance(quarterly_result, dict) and quarterly_result.get("records"):
+                    quarterly_records = quarterly_result["records"]
+                
+                # Get summary data for this quarter
+                try:
+                    summary_result = await mis_helpers.get_quarterly_summary_data(
+                        quarter=quarter,
+                        year=year,
+                        agent_code=agent_code
+                    )
+                except AttributeError:
+                    # Fallback if method doesn't exist - create basic summary from quarterly data
+                    logger.info(f"get_quarterly_summary_data not available, creating basic summary from quarterly data")
+                    summary_result = []
+                    
+                    # Create basic summary from quarterly records if we have data
+                    if quarterly_records:
+                        # Calculate basic statistics for the quarter
+                        total_policies = len(quarterly_records)
+                        total_gross_premium = 0.0
+                        total_net_premium = 0.0
+                        total_running_balance = 0.0
+                        total_commissionable_premium = 0.0
+                        
+                        agents_summary = {}
+                        
+                        for record in quarterly_records:
+                            # Skip if agent_code filter is applied and doesn't match
+                            record_agent_code = record.get("Agent Code", "")
+                            if agent_code and record_agent_code != agent_code:
+                                continue
+                                
+                            # Initialize agent summary if not exists
+                            if record_agent_code not in agents_summary:
+                                agents_summary[record_agent_code] = {
+                                    "Agent Code": record_agent_code,
+                                    "Total Policies": 0,
+                                    "Total Gross Premium": 0.0,
+                                    "Total Net Premium": 0.0,
+                                    "Total Running Balance": 0.0,
+                                    "Total Commissionable Premium": 0.0,
+                                    "Quarter": f"Q{quarter}-{year}"
+                                }
+                            
+                            # Add to agent summary
+                            agent_summary = agents_summary[record_agent_code]
+                            agent_summary["Total Policies"] += 1
+                            
+                            # Safely convert and add financial values
+                            try:
+                                gross_premium = float(str(record.get("Gross premium", "0")).replace(",", "").replace("₹", "")) if record.get("Gross premium") else 0.0
+                                net_premium = float(str(record.get("Net premium", "0")).replace(",", "").replace("₹", "")) if record.get("Net premium") else 0.0
+                                running_balance = float(str(record.get("Running Bal", "0")).replace(",", "").replace("₹", "")) if record.get("Running Bal") else 0.0
+                                commissionable_premium = float(str(record.get("Commissionable Premium", "0")).replace(",", "").replace("₹", "")) if record.get("Commissionable Premium") else 0.0
+                                
+                                agent_summary["Total Gross Premium"] += gross_premium
+                                agent_summary["Total Net Premium"] += net_premium
+                                agent_summary["Total Running Balance"] += running_balance
+                                agent_summary["Total Commissionable Premium"] += commissionable_premium
+                                
+                                total_gross_premium += gross_premium
+                                total_net_premium += net_premium
+                                total_running_balance += running_balance
+                                total_commissionable_premium += commissionable_premium
+                                
+                            except (ValueError, TypeError) as e:
+                                logger.debug(f"Error converting financial values for record: {e}")
+                                continue
+                        
+                        # Convert agents summary to list
+                        summary_result = list(agents_summary.values())
+                        
+                        # Add overall summary if no agent filter
+                        if not agent_code and summary_result:
+                            summary_result.append({
+                                "Agent Code": "TOTAL",
+                                "Total Policies": total_policies,
+                                "Total Gross Premium": total_gross_premium,
+                                "Total Net Premium": total_net_premium,
+                                "Total Running Balance": total_running_balance,
+                                "Total Commissionable Premium": total_commissionable_premium,
+                                "Quarter": f"Q{quarter}-{year}"
+                            })
+                        
+                        logger.info(f"Created basic summary for {len(summary_result)} agents in {sheet_name}")
+                    else:
+                        logger.info(f"No quarterly records found to create summary for {sheet_name}")
+                        summary_result = []
+                
+                all_quarterly_data[sheet_name] = quarterly_records
+                all_summary_data[f"{sheet_name}_Summary"] = summary_result if summary_result else []
+                
+                logger.info(f"Retrieved {len(quarterly_records)} records from {sheet_name}")
+                
+            except Exception as e:
+                logger.warning(f"Could not retrieve data for {sheet_name}: {str(e)}")
+                all_quarterly_data[sheet_name] = []
+                all_summary_data[f"{sheet_name}_Summary"] = []
+        
+        # Handle different export formats
+        if format == "json":
+            return JSONResponse(content={
+                "quarterly_data": all_quarterly_data,
+                "summary_data": all_summary_data,
+                "export_info": {
+                    "quarters_requested": quarter_list,
+                    "years_requested": year_list,
+                    "total_sheets": len(quarter_list) * 2,  # quarterly + summary for each
+                    "filters_applied": filters,
+                    "search_term": search
+                }
+            }, headers={
+                "Content-Disposition": f"attachment; filename=quarterly_export_Q{'-'.join(map(str, quarter_list))}_{'-'.join(map(str, year_list))}.json"
+            })
+        
+        elif format == "csv":
+            import zipfile
+            import tempfile
+            
+            # Create a temporary zip file with CSV files for each sheet
+            temp_dir = tempfile.mkdtemp()
+            zip_path = f"{temp_dir}/quarterly_export.zip"
+            
+            with zipfile.ZipFile(zip_path, 'w') as zip_file:
+                # Add quarterly data CSV files
+                for sheet_name, records in all_quarterly_data.items():
+                    if records:
+                        csv_content = io.StringIO()
+                        headers = list(records[0].keys()) if isinstance(records[0], dict) else [f"col_{i}" for i in range(len(records[0]))]
+                        writer = csv.DictWriter(csv_content, fieldnames=headers)
+                        writer.writeheader()
+                        for record in records:
+                            writer.writerow(record if isinstance(record, dict) else dict(zip(headers, record)))
+                        
+                        zip_file.writestr(f"{sheet_name}_quarterly_data.csv", csv_content.getvalue())
+                
+                # Add summary data CSV files
+                for summary_name, summary_records in all_summary_data.items():
+                    if summary_records:
+                        csv_content = io.StringIO()
+                        headers = list(summary_records[0].keys()) if isinstance(summary_records[0], dict) else [f"col_{i}" for i in range(len(summary_records[0]))]
+                        writer = csv.DictWriter(csv_content, fieldnames=headers)
+                        writer.writeheader()
+                        for record in summary_records:
+                            writer.writerow(record if isinstance(record, dict) else dict(zip(headers, record)))
+                        
+                        zip_file.writestr(f"{summary_name}.csv", csv_content.getvalue())
+            
+            # Return the zip file
+            def zip_generator():
+                with open(zip_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(8192)
+                        if not chunk:
+                            break
+                        yield chunk
+            
+            return StreamingResponse(
+                zip_generator(),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f"attachment; filename=quarterly_export_Q{'-'.join(map(str, quarter_list))}_{'-'.join(map(str, year_list))}.zip"
+                }
+            )
+        
+        elif format == "xlsx":
+            try:
+                import pandas as pd
+                import tempfile
+                
+                # Create temporary Excel file
+                temp_dir = tempfile.mkdtemp()
+                excel_path = f"{temp_dir}/quarterly_export.xlsx"
+                
+                with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                    # Add quarterly data sheets
+                    for sheet_name, records in all_quarterly_data.items():
+                        if records:
+                            df = pd.DataFrame(records)
+                            # Truncate sheet name if too long (Excel limit is 31 characters)
+                            safe_sheet_name = sheet_name[:28] + "..." if len(sheet_name) > 31 else sheet_name
+                            df.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+                    
+                    # Add summary data sheets
+                    for summary_name, summary_records in all_summary_data.items():
+                        if summary_records:
+                            df = pd.DataFrame(summary_records)
+                            # Truncate sheet name if too long
+                            safe_sheet_name = summary_name[:28] + "..." if len(summary_name) > 31 else summary_name
+                            df.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+                
+                # Return the Excel file
+                def excel_generator():
+                    with open(excel_path, 'rb') as f:
+                        while True:
+                            chunk = f.read(8192)
+                            if not chunk:
+                                break
+                            yield chunk
+                
+                return StreamingResponse(
+                    excel_generator(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={
+                        "Content-Disposition": f"attachment; filename=quarterly_export_Q{'-'.join(map(str, quarter_list))}_{'-'.join(map(str, year_list))}.xlsx"
+                    }
+                )
+                
+            except ImportError as e:
+                logger.warning(f"Pandas/openpyxl not available for XLSX export: {str(e)}")
+                # Fallback to simple XLSX using openpyxl directly
+                try:
+                    from openpyxl import Workbook
+                    import tempfile
+                    
+                    # Create temporary Excel file using openpyxl directly
+                    temp_dir = tempfile.mkdtemp()
+                    excel_path = f"{temp_dir}/quarterly_export.xlsx"
+                    
+                    wb = Workbook()
+                    # Remove default sheet
+                    wb.remove(wb.active)
+                    
+                    # Add quarterly data sheets
+                    for sheet_name, records in all_quarterly_data.items():
+                        if records:
+                            safe_sheet_name = sheet_name[:28] + "..." if len(sheet_name) > 31 else sheet_name
+                            ws = wb.create_sheet(title=safe_sheet_name)
+                            
+                            # Add headers
+                            headers = list(records[0].keys()) if records else []
+                            for col, header in enumerate(headers, 1):
+                                ws.cell(row=1, column=col, value=header)
+                            
+                            # Add data
+                            for row_idx, record in enumerate(records, 2):
+                                for col_idx, header in enumerate(headers, 1):
+                                    ws.cell(row=row_idx, column=col_idx, value=str(record.get(header, "")))
+                    
+                    # Add summary data sheets
+                    for summary_name, summary_records in all_summary_data.items():
+                        if summary_records:
+                            safe_sheet_name = summary_name[:28] + "..." if len(summary_name) > 31 else summary_name
+                            ws = wb.create_sheet(title=safe_sheet_name)
+                            
+                            # Add headers
+                            headers = list(summary_records[0].keys()) if summary_records else []
+                            for col, header in enumerate(headers, 1):
+                                ws.cell(row=1, column=col, value=header)
+                            
+                            # Add data
+                            for row_idx, record in enumerate(summary_records, 2):
+                                for col_idx, header in enumerate(headers, 1):
+                                    ws.cell(row=row_idx, column=col_idx, value=str(record.get(header, "")))
+                    
+                    # Save workbook
+                    wb.save(excel_path)
+                    
+                    # Return the Excel file
+                    def excel_generator():
+                        with open(excel_path, 'rb') as f:
+                            while True:
+                                chunk = f.read(8192)
+                                if not chunk:
+                                    break
+                                yield chunk
+                    
+                    return StreamingResponse(
+                        excel_generator(),
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={
+                            "Content-Disposition": f"attachment; filename=quarterly_export_Q{'-'.join(map(str, quarter_list))}_{'-'.join(map(str, year_list))}.xlsx"
+                        }
+                    )
+                    
+                except ImportError:
+                    raise HTTPException(
+                        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                        detail="XLSX export requires pandas and openpyxl packages. Please use CSV or JSON format instead."
+                    )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in export_quarterly_sheet_data: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export quarterly sheet data: {str(e)}"
+        )
+
 
 @router.get("/master-sheet/export")
 async def export_master_sheet_data(
@@ -494,17 +894,19 @@ async def export_master_sheet_data(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Export Master Google Sheet data in various formats
+    Export Master Google Sheet data in various formats (Legacy)
     
     **Admin/SuperAdmin only endpoint**
     
     Export filtered master sheet data for external analysis or backup purposes.
+    This is the legacy master sheet export. For quarterly data, use /quarterly-sheet/export
     
     **Formats:**
     - **csv**: Comma-separated values for Excel/analysis tools
     - **json**: JSON format for programmatic processing
     
     **Note:** Large datasets are automatically paginated to prevent timeouts.
+    **Recommendation:** Use /quarterly-sheet/export for current quarterly data exports.
     """
     
     try:
