@@ -8,6 +8,39 @@ from utils.pdf_utils import PDFProcessor
 
 logger = logging.getLogger(__name__)
 
+# Insurer names list for AI matching
+INSURER_NAMES = [
+    "Bajaj Allianz General Insurance Company Ltd",
+    "Chola Mandlam MS General Insurance Company LTD",
+    "Future Generali India Insurance Company Limited",
+    "Go Digit General Insurance Ltd",
+    "HDFC ERGO General Insurance Company Limited",
+    "ICICI Lombard General Insurance Company Limited",
+    "LIBERTY GENERAL INSURANCE LIMITED",
+    "MAGMA GENERAL INSURANCE LIMITED",
+    "National Insurance limited",
+    "Reliance General Insurance Company Limited",
+    "Royal Sundaram General Insurance Co. Limited",
+    "SBI GENERAL INSURANCE",
+    "SHRIRAM GENERAL INSURANCE COMPANY LIMITED",
+    "Tata Aig General Insurance Company Limited",
+    "The Oriental Insurance Company Limited",
+    "UNITED INDIA INSURANCE COMPANY LIMITED",
+    "Universal Sompo General Insurance",
+    "Zuno General Insurance Limited",
+    "Zurich Kotak General Insurance Company"
+]
+
+# Broker names list for AI matching
+BROKER_NAMES = [
+    "Invictus Insurance Broking Services Pvt. Ltd",
+    "Nirmal Bang Insurance Broking Pvt Ltd",
+    "TURTLEMINT INSURANCE BROKING SERVICES PRIVATE LIMITED",
+    "PROSALES FINANCIAL SERVICES PVT.LTD.",
+    "JIO INSURANCE BROKING LIMITED",
+    "VITRAK INSURANCE BROKING PVT. LTD"
+]
+
 class GeminiPolicyExtractor:
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
@@ -99,6 +132,17 @@ class GeminiPolicyExtractor:
         - start_date: Policy start date, effective date, from date (format: YYYY-MM-DD)
         - end_date: Policy end date, expiry date, to date (format: YYYY-MM-DD)
 
+        INSURER & BROKER IDENTIFICATION:
+        - ai_detected_insurer_name: Find the insurance company name in the document and match it to one from this list:
+          {', '.join(INSURER_NAMES)}
+          Return the EXACT name from the list that best matches what you find in the document.
+          This field is REQUIRED - there should always be an insurer.
+        
+        - ai_detected_broker_name: Find the broker/intermediary name in the document and match it to one from this list:
+          {', '.join(BROKER_NAMES)}
+          Return the EXACT name from the list that best matches what you find in the document.
+          This field is OPTIONAL - return null if no broker is mentioned or if the broker is not in the list.
+
         Required JSON format:
         {{
             "policy_number": "string or null",
@@ -131,6 +175,8 @@ class GeminiPolicyExtractor:
             "veh_wheels": number or null,
             "start_date": "string or null",
             "end_date": "string or null",
+            "ai_detected_insurer_name": "string or null",
+            "ai_detected_broker_name": "string or null",
             "confidence_score": number
         }}
 
@@ -294,80 +340,21 @@ class GeminiPolicyExtractor:
 async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
     """Extract comprehensive policy data from PDF using the Gemini extractor"""
     try:
-        if not gemini_extractor:
-            logger.error("Gemini extractor not available")
-            return {}
-        
-        # Download PDF from URL and extract text
+        # Download PDF from URL and delegate to the bytes function
         logger.info(f"Downloading PDF from URL: {pdf_url}")
         try:
             response = requests.get(pdf_url, timeout=30)
             response.raise_for_status()
             pdf_bytes = response.content
             
-            # Extract text from PDF bytes
-            pdf_text = PDFProcessor.extract_text_from_bytes(pdf_bytes)
-            if not pdf_text or len(pdf_text.strip()) < 50:
-                logger.warning("No meaningful text extracted from PDF")
-                return {}
+            # Delegate to the bytes function (no policy flow for legacy function)
+            return await extract_policy_data_from_pdf_bytes(pdf_bytes)
                 
         except requests.RequestException as e:
             logger.error(f"Failed to download PDF from {pdf_url}: {str(e)}")
             return {}
         except Exception as e:
             logger.error(f"Failed to extract text from PDF: {str(e)}")
-            return {}
-        
-        logger.info(f"Extracting comprehensive policy data from PDF: {pdf_url}")
-        logger.info(f"Extracted text length: {len(pdf_text)} characters")
-        
-        extracted_data = gemini_extractor.extract_policy_data(pdf_text)
-        
-        if extracted_data:
-            # Return data matching our ExtractedPolicyData schema
-            return {
-                # Basic Policy Information
-                "policy_number": extracted_data.get("policy_number"),
-                "formatted_policy_number": extracted_data.get("formatted_policy_number"),
-                "major_categorisation": extracted_data.get("major_categorisation"),
-                "product_insurer_report": extracted_data.get("product_insurer_report"),
-                "product_type": extracted_data.get("product_type"),
-                "plan_type": extracted_data.get("plan_type"),
-                "customer_name": extracted_data.get("customer_name"),
-                "customer_phone_number": extracted_data.get("customer_phone_number"),
-                
-                # Premium & Financial Details
-                "gross_premium": extracted_data.get("gross_premium"),
-                "net_premium": extracted_data.get("net_premium"),
-                "od_premium": extracted_data.get("od_premium"),
-                "tp_premium": extracted_data.get("tp_premium"),
-                "gst_amount": extracted_data.get("gst_amount"),
-                
-                # Vehicle Details
-                "registration_number": extracted_data.get("registration_number"),
-                "make_model": extracted_data.get("make_model"),
-                "model": extracted_data.get("model"),
-                "vehicle_variant": extracted_data.get("vehicle_variant"),
-                "gvw": extracted_data.get("gvw"),
-                "rto": extracted_data.get("rto"),
-                "state": extracted_data.get("state"),
-                "fuel_type": extracted_data.get("fuel_type"),
-                "cc": extracted_data.get("cc"),
-                "age_year": extracted_data.get("age_year"),
-                "ncb": extracted_data.get("ncb"),
-                "discount_percent": extracted_data.get("discount_percent"),
-                "business_type": extracted_data.get("business_type"),
-                "seating_capacity": extracted_data.get("seating_capacity"),
-                "veh_wheels": extracted_data.get("veh_wheels"),
-                
-                # Policy Dates
-                "start_date": extracted_data.get("start_date"),
-                "end_date": extracted_data.get("end_date"),
-                
-                "confidence_score": extracted_data.get("confidence_score", 0.0)
-            }
-        else:
-            logger.warning("No data extracted from Gemini")
             return {}
             
     except Exception as e:
@@ -389,12 +376,13 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
         
         logger.info(f"Extracting comprehensive policy data from PDF bytes ({len(pdf_bytes)} bytes)")
         logger.info(f"Extracted text length: {len(pdf_text)} characters")
+        logger.info(f"Policy flow: Always includes insurer/broker detection")
         
         extracted_data = gemini_extractor.extract_policy_data(pdf_text)
         
         if extracted_data:
-            # Return data matching our ExtractedPolicyData schema
-            return {
+            # Base data that's always returned
+            result = {
                 # Basic Policy Information
                 "policy_number": extracted_data.get("policy_number"),
                 "formatted_policy_number": extracted_data.get("formatted_policy_number"),
@@ -433,8 +421,17 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "start_date": extracted_data.get("start_date"),
                 "end_date": extracted_data.get("end_date"),
                 
+                # Insurer/Broker Detection (always included)
+                "ai_detected_insurer_name": extracted_data.get("ai_detected_insurer_name"),
+                "ai_detected_broker_name": extracted_data.get("ai_detected_broker_name"),
+                
                 "confidence_score": extracted_data.get("confidence_score", 0.0)
             }
+            
+            logger.info(f"Detected insurer: {result.get('ai_detected_insurer_name')}")
+            logger.info(f"Detected broker: {result.get('ai_detected_broker_name')}")
+            
+            return result
         else:
             logger.warning("No data extracted from Gemini")
             return {}
