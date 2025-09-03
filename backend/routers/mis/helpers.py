@@ -980,3 +980,131 @@ class MISHelpers:
         except Exception as e:
             logger.error(f"Error converting record to agent MIS record: {str(e)}")
             return None
+
+    async def get_quarterly_sheet_agent_data(
+        self,
+        agent_code: str,
+        quarter: int,
+        year: int,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get complete quarterly sheet data for a specific agent
+        
+        Args:
+            agent_code: Agent code to filter by
+            quarter: Quarter number (1-4)
+            year: Year (e.g., 2025)
+            page: Page number (1-based)
+            page_size: Number of records per page
+            
+        Returns:
+            Dictionary with complete quarterly records for the agent
+        """
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the quarterly sheet
+            quarterly_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+            if not quarterly_sheet:
+                logger.error(f"Quarterly sheet Q{quarter}-{year} not found")
+                return {
+                    "records": [],
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+
+            # Get all data from the quarterly sheet as dictionaries
+            all_data = quarterly_sheet.get_all_records()
+            logger.info(f"Retrieved {len(all_data)} total records from Q{quarter}-{year} sheet")
+            
+            # Filter records for this agent (both MATCH = TRUE and FALSE)
+            filtered_records = []
+            for record in all_data:
+                # Check if agent code matches
+                record_agent_code = str(record.get('Agent Code', record.get('agent_code', ''))).strip()
+                
+                if record_agent_code == agent_code:
+                    # Convert all values to strings for consistency
+                    clean_record = {}
+                    for key, value in record.items():
+                        clean_record[key] = str(value) if value is not None else ""
+                    filtered_records.append(clean_record)
+            
+            logger.info(f"Found {len(filtered_records)} records for agent {agent_code} in Q{quarter}-{year}")
+            
+            # Calculate pagination
+            total_count = len(filtered_records)
+            total_pages = (total_count + page_size - 1) // page_size
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_records = filtered_records[start_idx:end_idx]
+            
+            return {
+                "records": paginated_records,
+                "total_count": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+            
+        except Exception as e:
+            logger.error(f"Error fetching quarterly sheet agent data: {str(e)}")
+            return {
+                "records": [],
+                "total_count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+
+    async def get_agent_summary_data(self, agent_code: str) -> Dict[str, Any]:
+        """
+        Get agent summary data from Summary sheet
+        
+        Args:
+            agent_code: Agent code to get summary for
+            
+        Returns:
+            Dictionary with agent's summary data
+        """
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the Summary sheet
+            summary_sheet = quarterly_manager.get_summary_sheet()
+            if not summary_sheet:
+                logger.error("Summary sheet not found")
+                return {}
+
+            # Get all data from the summary sheet as dictionaries
+            all_data = summary_sheet.get_all_records()
+            logger.info(f"Retrieved {len(all_data)} total records from Summary sheet")
+            
+            # Filter records for this agent
+            agent_summary = None
+            for record in all_data:
+                # Check if agent code matches (try different possible field names)
+                record_agent_code = str(record.get('Agent Code', record.get('agent_code', record.get('Agent_Code', '')))).strip()
+                
+                if record_agent_code == agent_code:
+                    # Convert all values to strings for consistency
+                    clean_record = {}
+                    for key, value in record.items():
+                        clean_record[key] = str(value) if value is not None else ""
+                    agent_summary = clean_record
+                    break
+            
+            if agent_summary:
+                logger.info(f"Found summary data for agent {agent_code}")
+                return agent_summary
+            else:
+                logger.warning(f"No summary data found for agent {agent_code}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"Error fetching agent summary data: {str(e)}")
+            return {}

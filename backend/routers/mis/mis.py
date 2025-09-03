@@ -541,10 +541,12 @@ async def export_master_sheet_data(
             detail="Failed to export master sheet data"
         )
 
-#TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme yahan pe abhi limited fields pass hori but ham sari fields pass krenge as ye to admin ko dikhana hai na plus yahan both match true and false hoga + uss agent ki calculation/summary sheet
-@router.get("/agent-mis/{agent_code}", response_model=AgentMISResponse)
+
+@router.get("/agent-mis/{agent_code}")
 async def get_agent_mis_data(
     agent_code: str,
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4)"),
+    year: int = Query(..., ge=2020, le=2030, description="Year"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=500, description="Items per page"),
     current_user = Depends(get_current_user),
@@ -552,66 +554,76 @@ async def get_agent_mis_data(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Get filtered MIS data for a specific agent
+    Get complete quarterly MIS data for a specific agent including summary
     
     **Admin/SuperAdmin only endpoint**
     
-    Returns master sheet data filtered for the specified agent with:
-    - Only records where MATCH = TRUE
-    - Sensitive broker commission fields removed
-    - Calculated statistics (number of policies, running balance, total net premium)
+    Returns quarterly sheet data filtered for the specified agent with:
+    - Complete quarterly sheet data (all fields) for the agent
+    - Both MATCH = TRUE and MATCH = FALSE records
+    - Agent's summary sheet data with calculations
+    - All quarterly sheet fields included (70+ fields)
     
-    Fields excluded for agent privacy:
-    - Detailed broker commission structure
-    - Internal broker payout percentages
-    - Broker financial details
-    - CutPay internal calculations
+    **Parameters:**
+    - **agent_code**: Agent code to filter data for
+    - **quarter**: Quarter number (1-4) for the quarterly sheet
+    - **year**: Year for the quarterly sheet
+    
+    **Returns:**
+    - Complete quarterly sheet records for the agent
+    - Agent's summary data from Summary sheet
+    - Statistics and calculations
+    - All fields from quarterly sheets (not filtered)
     """
     try:
-        logger.info(f"Fetching agent MIS data for agent: {agent_code}")
+        logger.info(f"Fetching quarterly MIS data for agent: {agent_code}, Q{quarter}-{year}")
         
-        result = await mis_helpers.get_agent_mis_data(
+        # Get quarterly sheet data for the agent
+        quarterly_result = await mis_helpers.get_quarterly_sheet_agent_data(
             agent_code=agent_code,
+            quarter=quarter,
+            year=year,
             page=page,
             page_size=page_size
         )
         
-        if not result:
-            logger.warning(f"No data found for agent: {agent_code}")
-            return AgentMISResponse(
-                records=[],
-                stats=AgentMISStats(
-                    number_of_policies=0,
-                    running_balance=0.0,
-                    total_net_premium=0.0
-                ),
-                total_count=0,
-                page=page,
-                page_size=page_size,
-                total_pages=0
-            )
-            
-        # Convert records to AgentMISRecord objects
-        agent_records = []
-        for record_dict in result["records"]:
-            agent_records.append(AgentMISRecord(**record_dict))
-            
-        stats = AgentMISStats(**result["stats"])
+        # Get summary sheet data for the agent
+        summary_result = await mis_helpers.get_agent_summary_data(agent_code=agent_code)
         
-        return AgentMISResponse(
-            records=agent_records,
-            stats=stats,
-            total_count=result["total_count"],
-            page=result["page"],
-            page_size=result["page_size"],
-            total_pages=result["total_pages"]
-        )
+        if not quarterly_result:
+            logger.warning(f"No quarterly data found for agent: {agent_code} in Q{quarter}-{year}")
+            quarterly_result = {
+                "records": [],
+                "total_count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0
+            }
+        
+        if not summary_result:
+            logger.warning(f"No summary data found for agent: {agent_code}")
+            summary_result = {}
+        
+        return {
+            "agent_code": agent_code,
+            "quarter": quarter,
+            "year": year,
+            "quarterly_data": {
+                "records": quarterly_result["records"],
+                "total_count": quarterly_result["total_count"],
+                "page": quarterly_result["page"],
+                "page_size": quarterly_result["page_size"],
+                "total_pages": quarterly_result["total_pages"]
+            },
+            "summary_data": summary_result,
+            "sheet_name": f"Q{quarter}-{year}"
+        }
         
     except Exception as e:
         logger.error(f"Error in get_agent_mis_data: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch agent MIS data for agent {agent_code}"
+            detail=f"Failed to fetch agent MIS data for agent {agent_code} in Q{quarter}-{year}"
         )
 
 #TODO: isme bhi quarter(s) pass honge to wo wala data niklega jisme se bs limited fields milngei (jo current schema hai wohi fields) pr ofc unke naam changed hai to wo dekhna pdega
