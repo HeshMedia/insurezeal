@@ -36,7 +36,7 @@ require_policy_write = require_permission("policies", "write")
 require_policy_manage = require_permission("policies", "manage")
 
 
-#TODO: give the AI the list of all insurers and brokers full name and ofc unko khudke db me b dalo, ask AI to extract if they are avail so to cross check agent gaalt to nhi dal rha, agar null aye by any chance agent ki manlo nhi to forntend pe hoga ki agent ko allow nhi krnege jane ko age agar same na hua to
+
 @router.post("/extract-pdf-data", response_model=AIExtractionResponse)
 async def extract_pdf_data_endpoint(
     file: UploadFile = File(..., description="Policy PDF file for extraction"),
@@ -221,7 +221,7 @@ async def upload_policy_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
             detail="Failed to upload policy PDF"        )
 
-#TODO: line number 245 onwards kuch to dikkat hai yahan aise manusally sab kyu pass kre and mujhe lgra hai ye sahi b pass nhi kr rhe hai ham yaan pta nhi pr ye cutpay nhi tha atleast to dkehna hai yahan aisa kyu hai
+
 @router.post("/submit", response_model=PolicyCreateResponse)
 async def submit_policy(
     policy_data: PolicyCreateRequest,
@@ -316,7 +316,6 @@ async def submit_policy(
             detail="Failed to submit policy"
         )
 
-#TODO: same jaisa cutpay me tha ki yahan wo limited fields return krdo sari
 @router.get("/", response_model=List[PolicySummaryResponse])
 async def list_policies(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
