@@ -33,7 +33,6 @@ require_policy_write = require_permission("policies", "write")
 require_policy_manage = require_permission("policies", "manage")
 
 
-#TODO: give the AI the list of all insurers and brokers full name and ofc unko khudke db me b dalo, ask AI to extract if they are avail so to cross check agent gaalt to nhi dal rha, agar null aye by any chance agent ki manlo nhi to forntend pe hoga ki agent ko allow nhi krnege jane ko age agar same na hua to
 @router.post("/extract-pdf-data", response_model=AIExtractionResponse)
 async def extract_pdf_data_endpoint(
     file: UploadFile = File(..., description="Policy PDF file for extraction"),
