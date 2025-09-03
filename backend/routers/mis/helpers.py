@@ -2,7 +2,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any, List, Optional
 import logging
 from utils.google_sheets import google_sheets_sync
-from .schemas import MasterSheetRecord, BulkUpdateField, BulkUpdateResult
+from .schemas import (
+    MasterSheetRecord, 
+    MasterSheetResponse, 
+    AgentMISRecord, 
+    AgentMISResponse, 
+    AgentMISStats,
+    BulkUpdateField,
+    BulkUpdateResult,
+    BulkUpdateResponse
+)
 import time
 from datetime import datetime
 
@@ -142,6 +151,152 @@ class MISHelpers:
                 "error": str(e)
             }
     
+    async def get_quarterly_sheet_data(
+        self,
+        quarter: int,
+        year: int,
+        page: int = 1,
+        page_size: int = 50,
+        search: Optional[str] = None,
+        filter_by: Optional[Dict[str, str]] = None
+    ) -> MasterSheetResponse:
+        """
+        Get paginated data from specific quarterly Google sheet
+        
+        Args:
+            quarter: Quarter number (1-4)
+            year: Year (e.g., 2025)
+            page: Page number (1-based)
+            page_size: Number of records per page
+            search: Search term to filter records
+            filter_by: Dictionary of field:value filters
+            
+        Returns:
+            MasterSheetResponse with records, pagination info, and metadata
+        """
+        try:
+            if not self.sheets_client.client:
+                logger.error("Google Sheets client not initialized")
+                return MasterSheetResponse(
+                    records=[],
+                    total_count=0,
+                    page=page,
+                    page_size=page_size,
+                    total_pages=0
+                )
+            
+            # Construct quarterly sheet name
+            sheet_name = f"Q{quarter}-{year}"
+            logger.info(f"Fetching data from quarterly sheet: {sheet_name}")
+            
+            # Use quarterly_sheets_manager to get data from specific quarterly sheet
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get all records from the quarterly sheet
+            quarterly_records = quarterly_manager.get_all_records_from_quarter_sheet(quarter, year)
+            
+            if not quarterly_records:
+                logger.warning(f"No data found in quarterly sheet: {sheet_name}")
+                return MasterSheetResponse(
+                    records=[],
+                    total_count=0,
+                    page=page,
+                    page_size=page_size,
+                    total_pages=0
+                )
+            
+            # Convert to record objects (similar to master sheet processing)
+            all_records = []
+            for record_dict in quarterly_records:
+                try:
+                    # Convert all values to strings to match MasterSheetRecord schema expectations
+                    converted_record = {}
+                    for key, value in record_dict.items():
+                        # Convert all values to strings, handling None values
+                        if value is None:
+                            converted_record[key] = ""
+                        elif isinstance(value, (int, float)):
+                            converted_record[key] = str(value)
+                        else:
+                            converted_record[key] = str(value) if value else ""
+                    
+                    # Log field names for debugging
+                    if len(all_records) == 0:  # Log only for first record to avoid spam
+                        logger.info(f"Debug: Available fields in {sheet_name}: {list(converted_record.keys())}")
+                    
+                    # Convert to MasterSheetRecord with string values
+                    record_obj = MasterSheetRecord(**converted_record)
+                    all_records.append(record_obj)
+                except Exception as e:
+                    logger.warning(f"Skipping invalid record in {sheet_name}: {e}")
+                    # Log the first few characters of problematic record for debugging
+                    if len(all_records) < 3:  # Only log first few failed records
+                        sample_fields = {k: v for i, (k, v) in enumerate(record_dict.items()) if i < 5}
+                        logger.debug(f"Failed record sample: {sample_fields}")
+                    continue
+            
+            # Apply search filter if provided
+            if search and search.strip():
+                search_term = search.strip().lower()
+                filtered_records = []
+                for record in all_records:
+                    # Search across key fields
+                    searchable_text = " ".join([
+                        str(getattr(record, 'policy_number', '') or ''),
+                        str(getattr(record, 'agent_code', '') or ''),
+                        str(getattr(record, 'customer_name', '') or ''),
+                        str(getattr(record, 'insurer_name', '') or ''),
+                        str(getattr(record, 'broker_name', '') or ''),
+                        str(getattr(record, 'registration_number', '') or '')
+                    ]).lower()
+                    
+                    if search_term in searchable_text:
+                        filtered_records.append(record)
+                
+                all_records = filtered_records
+                logger.info(f"Search '{search}' filtered to {len(all_records)} records in {sheet_name}")
+            
+            # Apply field filters if provided
+            if filter_by:
+                for field_name, filter_value in filter_by.items():
+                    if filter_value and filter_value.strip():
+                        filter_val = filter_value.strip().lower()
+                        all_records = [
+                            record for record in all_records
+                            if hasattr(record, field_name) and 
+                            getattr(record, field_name) and
+                            filter_val in str(getattr(record, field_name)).lower()
+                        ]
+                logger.info(f"Field filters applied to {sheet_name}, {len(all_records)} records remaining")
+            
+            total_count = len(all_records)
+            total_pages = (total_count + page_size - 1) // page_size
+            
+            # Apply pagination
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paginated_records = all_records[start_idx:end_idx]
+            
+            logger.info(f"Returning page {page} with {len(paginated_records)} records from {sheet_name}")
+            
+            return MasterSheetResponse(
+                records=paginated_records,
+                total_count=total_count,
+                page=page,
+                page_size=page_size,
+                total_pages=total_pages
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting quarterly sheet data for Q{quarter}-{year}: {str(e)}")
+            return MasterSheetResponse(
+                records=[],
+                total_count=0,
+                page=page,
+                page_size=page_size,
+                total_pages=0
+            )
+
     async def bulk_update_master_sheet(
         self,
         updates: List[BulkUpdateField],

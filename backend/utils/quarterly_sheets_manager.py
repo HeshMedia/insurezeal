@@ -1311,9 +1311,11 @@ class QuarterlySheetManager:
                         break
             
             if target_row == -1:
-                # Policy number not found, fall back to creating new record
-                logger.warning(f"Policy number '{policy_number}' not found in current quarter sheet, creating new record")
-                return self.route_new_record_to_current_quarter(record_data, "CREATE")
+                # Policy number not found - do NOT create new record, return error instead
+                logger.error(f"Policy number '{policy_number}' not found in quarter sheet '{quarter_name}'. Available policy numbers in sheet: {[row[policy_col_index] for row in all_values[1:] if policy_col_index < len(row)][:10]}")  # Show first 10 for debugging
+                return {"success": False, "error": f"Policy number '{policy_number}' not found in quarter sheet '{quarter_name}' for update. Use create endpoint to add new policies."}
+            
+            logger.info(f"Found policy '{policy_number}' at row {target_row} in quarter sheet '{quarter_name}'")
             
             # Prepare updated row data
             quarterly_headers = self.create_quarterly_sheet_headers()
@@ -1345,6 +1347,62 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error updating existing record by policy number: {str(e)}")
             return {"success": False, "error": str(e)}
+
+    def get_all_records_from_quarter_sheet(self, quarter: int, year: int) -> List[Dict[str, Any]]:
+        """
+        Get all records from a specific quarterly sheet
+        
+        Args:
+            quarter: Quarter number (1-4)
+            year: Year (e.g., 2025)
+            
+        Returns:
+            List of dictionaries representing all records in the sheet (starting from row 3)
+        """
+        try:
+            sheet_name = self.get_quarterly_sheet_name(quarter, year)
+            
+            # Check if quarter sheet exists
+            if not self.sheet_exists(sheet_name):
+                logger.warning(f"Quarter sheet {sheet_name} does not exist")
+                return []
+            
+            # Get the worksheet
+            worksheet = self.spreadsheet.worksheet(sheet_name)
+            
+            # Get all records as dictionaries, but skip the first data row (row 2 - dummy data)
+            # Row 1 = headers, Row 2 = dummy data with formulas, Row 3+ = actual data
+            all_values = worksheet.get_all_values()
+            
+            if len(all_values) < 3:  # Need at least header + dummy + 1 data row
+                logger.info(f"No data rows found in {sheet_name} (only header and/or dummy row)")
+                return []
+            
+            # Extract headers from row 1 and data from row 3 onwards
+            headers = all_values[0]  # Row 1 - headers
+            data_rows = all_values[2:]  # Row 3 onwards - actual data (skip row 2 dummy data)
+            
+            # Convert to list of dictionaries
+            all_records = []
+            for row in data_rows:
+                # Skip completely empty rows
+                if all(cell.strip() == '' for cell in row):
+                    continue
+                    
+                record = {}
+                for i, header in enumerate(headers):
+                    if i < len(row):
+                        record[header] = row[i]
+                    else:
+                        record[header] = ""  # Fill missing columns with empty string
+                all_records.append(record)
+            
+            logger.info(f"Retrieved {len(all_records)} records from {sheet_name} (skipped dummy row)")
+            return all_records
+            
+        except Exception as e:
+            logger.error(f"Error getting all records from quarter sheet Q{quarter}-{year}: {str(e)}")
+            return []
 
 
 # Global instance

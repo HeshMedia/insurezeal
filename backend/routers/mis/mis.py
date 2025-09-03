@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from config import get_db
 from routers.auth.auth import get_current_user
 from dependencies.rbac import (
@@ -34,11 +35,13 @@ mis_helpers = MISHelpers()
 
 #TODO: SARE MIS ROUTES ME ABHI B MASTER SHEET HI CHLR HAI QUARTELY SHEET NHI YAHAN PE ABHI
 
-#TODO: idr ham quarter(s) pass krnege to wo wala data return hoga and iske sath me wo dusri calculation sheet (yahan pe total wala hi return hoga calculation sheet me)
+
 @router.get("/master-sheet", response_model=MasterSheetResponse)
 async def get_master_sheet_data(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=1000, description="Items per page"),
+    quarter: Optional[int] = Query(None, ge=1, le=4, description="Quarter number (1-4) to fetch data from specific quarterly sheet"),
+    year: Optional[int] = Query(None, ge=2020, le=2030, description="Year to fetch data from specific quarterly sheet"),
     search: Optional[str] = Query(None, description="Search across key fields"),
     agent_code: Optional[str] = Query(None, description="Filter by agent code"),
     insurer_name: Optional[str] = Query(None, description="Filter by insurer name"),
@@ -49,18 +52,26 @@ async def get_master_sheet_data(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Get paginated data from Master Google Sheet
+    Get paginated data from Master Google Sheet or specific Quarterly Sheet
     
     **Admin/SuperAdmin only endpoint**
     
-    This endpoint fetches data directly from the Master Google Sheet which serves as
-    the single source of truth for all policy and CutPay transaction data.
+    This endpoint fetches data from either:
+    - Master Google Sheet (when quarter/year not specified) - single source of truth for all data
+    - Specific Quarterly Sheet (when quarter and year specified) - Q{quarter}-{year} format
     
     **Features:**
     - Paginated results for large datasets
     - Search across multiple key fields
     - Filter by specific fields
-    - All master sheet columns included
+    - All sheet columns included
+    - Quarterly sheet targeting for specific periods
+    
+    **Parameters:**
+    - **quarter**: Optional quarter number (1-4). If provided, year must also be specified
+    - **year**: Optional year (2020-2030). If provided, quarter must also be specified
+    - When both quarter and year are provided, data is fetched from Q{quarter}-{year} sheet
+    - When neither is provided, data is fetched from Master sheet
     
     **Search & Filters:**
     - **search**: Searches across policy number, agent code, customer name, insurer name, broker name, registration number
@@ -70,12 +81,28 @@ async def get_master_sheet_data(
     - **reporting_month**: Filter by specific reporting month
     
     **Returns:**
-    - Complete record data with all master sheet fields
+    - Complete record data with all sheet fields
     - Pagination metadata
     - Row numbers for update operations
+    - Sheet name being accessed
     """
     
     try:
+        # Validate quarter and year parameters
+        if (quarter is not None and year is None) or (quarter is None and year is not None):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Both quarter and year must be provided together, or neither should be provided"
+            )
+        
+        # Determine sheet name and data source
+        if quarter is not None and year is not None:
+            sheet_name = f"Q{quarter}-{year}"
+            data_source = f"quarterly sheet '{sheet_name}'"
+        else:
+            sheet_name = "Master"
+            data_source = "Master sheet"
+        
         # Build filters dictionary
         filters = {}
         if agent_code:
@@ -87,39 +114,63 @@ async def get_master_sheet_data(
         if reporting_month:
             filters['reporting_month'] = reporting_month
         
-        logger.info(f"Fetching master sheet data - Page: {page}, Size: {page_size}, Search: '{search}', Filters: {filters}")
+        logger.info(f"Fetching {data_source} data - Page: {page}, Size: {page_size}, Search: '{search}', Filters: {filters}")
         
-        # Get data from master sheet
-        result = await mis_helpers.get_master_sheet_data(
-            page=page,
-            page_size=page_size,
-            search=search,
-            filter_by=filters if filters else None
-        )
-        
-        if "error" in result:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Master sheet access error: {result['error']}"
+        # Get data from appropriate sheet
+        if quarter is not None and year is not None:
+            # Fetch from specific quarterly sheet
+            result = await mis_helpers.get_quarterly_sheet_data(
+                quarter=quarter,
+                year=year,
+                page=page,
+                page_size=page_size,
+                search=search,
+                filter_by=filters if filters else None
             )
-        
-        logger.info(f"Successfully retrieved {len(result['records'])} records from master sheet")
-        
-        return MasterSheetResponse(
-            records=result["records"],
-            total_count=result["total_count"],
-            page=result["page"],
-            page_size=result["page_size"],
-            total_pages=result["total_pages"]
-        )
+            
+            logger.info(f"Successfully retrieved {len(result.records)} records from {data_source}")
+            logger.info(f"Returning data from {data_source}")
+            
+            # Return quarterly sheet response directly
+            return result
+        else:
+            # Fetch from master sheet (existing logic)
+            result = await mis_helpers.get_master_sheet_data(
+                page=page,
+                page_size=page_size,
+                search=search,
+                filter_by=filters if filters else None
+            )
+            
+            if "error" in result:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"{data_source.capitalize()} access error: {result['error']}"
+                )
+            
+            logger.info(f"Successfully retrieved {len(result['records'])} records from {data_source}")
+            
+            # Add sheet name to response for clarity
+            response_data = MasterSheetResponse(
+                records=result["records"],
+                total_count=result["total_count"],
+                page=result["page"],
+                page_size=result["page_size"],
+                total_pages=result["total_pages"]
+            )
+            
+            # Add sheet information to the response (if the schema supports it)
+            logger.info(f"Returning data from {data_source}")
+            return response_data
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in get_master_sheet_data: {str(e)}")
+        data_source_text = f"quarterly sheet Q{quarter}-{year}" if quarter and year else "master sheet"
+        logger.error(f"Error in get_master_sheet_data for {data_source_text}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch master sheet data"
+            detail=f"Failed to fetch {data_source_text} data"
         )
 
 #TODO: isme bhi quarter(s) pass krnege to wo quarter ki sheet pe update hoga
