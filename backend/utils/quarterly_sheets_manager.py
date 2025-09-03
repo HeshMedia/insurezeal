@@ -1311,9 +1311,11 @@ class QuarterlySheetManager:
                         break
             
             if target_row == -1:
-                # Policy number not found, fall back to creating new record
-                logger.warning(f"Policy number '{policy_number}' not found in current quarter sheet, creating new record")
-                return self.route_new_record_to_current_quarter(record_data, "CREATE")
+                # Policy number not found - do NOT create new record, return error instead
+                logger.error(f"Policy number '{policy_number}' not found in quarter sheet '{quarter_name}'. Available policy numbers in sheet: {[row[policy_col_index] for row in all_values[1:] if policy_col_index < len(row)][:10]}")  # Show first 10 for debugging
+                return {"success": False, "error": f"Policy number '{policy_number}' not found in quarter sheet '{quarter_name}' for update. Use create endpoint to add new policies."}
+            
+            logger.info(f"Found policy '{policy_number}' at row {target_row} in quarter sheet '{quarter_name}'")
             
             # Prepare updated row data
             quarterly_headers = self.create_quarterly_sheet_headers()

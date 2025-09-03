@@ -1,12 +1,15 @@
 from typing import Dict, Any, List, Optional
 from fastapi import Depends, HTTPException, APIRouter, status, Query, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
+from fastapi.concurrency import run_in_threadpool
 from pydantic import Field
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 import uuid
+import traceback
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
+from sqlalchemy import select, desc
+from datetime import date, datetime
 import io
 
 from config import get_db
@@ -15,7 +18,7 @@ from routers.policies.helpers import PolicyHelpers
 from routers.policies.schemas import (
     PolicyResponse, PolicyCreateRequest, PolicyUpdate, PolicySummary, PolicyListResponse,
     PolicyUploadResponse, AIExtractionResponse, ChildIdOption, AgentOption,
-    PolicyNumberCheckResponse, PolicySummaryResponse, PolicyCreateResponse
+    PolicyNumberCheckResponse, PolicySummaryResponse, PolicyCreateResponse, PolicyDatabaseResponse
 )
 from dependencies.rbac import require_permission
 from utils.google_sheets import google_sheets_sync
@@ -239,19 +242,16 @@ async def submit_policy(
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
     
-        policy_dict = policy_data.model_dump()
-        
-        # Extract essential fields for database storage
+        # Extract essential fields for database storage (only fields that exist in Policy model)
         essential_fields = {
-            "policy_number": policy_dict.get("policy_number"),
-            "child_id": policy_dict.get("child_id"),
-            "agent_code": policy_dict.get("agent_code"),
-            "customer_documents_url": policy_dict.get("customer_documents_url"),
-            "vehicle_documents_url": policy_dict.get("vehicle_documents_url"),
-            "policy_documents_url": policy_dict.get("policy_documents_url"),
-            "booking_date": policy_dict.get("booking_date"),
-            "policy_start_date": policy_dict.get("start_date"),
-            "policy_end_date": policy_dict.get("end_date")
+            "policy_number": policy_data.policy_number,
+            "child_id": policy_data.child_id,
+            "agent_code": policy_data.agent_code,
+            "additional_documents": getattr(policy_data, 'additional_documents', None),
+            "policy_pdf_url": getattr(policy_data, 'pdf_file_path', None),  # Map from pdf_file_path
+            "booking_date": getattr(policy_data, 'booking_date', None),
+            "policy_start_date": policy_data.start_date,
+            "policy_end_date": policy_data.end_date
         }
         
         # Save to database with only essential fields
@@ -260,67 +260,46 @@ async def submit_policy(
             essential_data=essential_fields
         )
         
-        # Save full data to Google Sheets
+        logger.info(f"Created policy {policy.id} with essential fields in database")
+        
+        # Save full data to Google Sheets using our helper function
         try:
-            # Route to quarterly sheet instead of master sheet
             from utils.quarterly_sheets_manager import quarterly_manager
+            from routers.policies.helpers import prepare_complete_policy_sheets_data, validate_and_resolve_codes_with_names
             
-            # Prepare data for quarterly sheet with the new headers structure
-            policy_dict_for_quarterly = {
-                'Reporting Month (mmm\'yy)': policy_dict_for_sheets.get('reporting_month', ''),
-                'Child ID/ User ID [Provided by Insure Zeal]': policy_dict_for_sheets.get('child_id', ''),
-                'Insurer /broker code': policy_dict_for_sheets.get('agent_code', ''),
-                'Policy Start Date': policy_dict_for_sheets.get('start_date', ''),
-                'Policy End Date': policy_dict_for_sheets.get('end_date', ''),
-                'Booking Date(Click to select Date)': '',
-                'Broker Name': policy_dict_for_sheets.get('broker_name', ''),
-                'Insurer name': policy_dict_for_sheets.get('insurance_company', ''),
-                'Major Categorisation( Motor/Life/ Health)': policy_dict_for_sheets.get('major_categorisation', ''),
-                'Product (Insurer Report)': policy_dict_for_sheets.get('product_insurer_report', ''),
-                'Product Type': policy_dict_for_sheets.get('product_type', ''),
-                'Plan type (Comp/STP/SAOD)': policy_dict_for_sheets.get('plan_type', ''),
-                'Gross premium': policy_dict_for_sheets.get('gross_premium', ''),
-                'GST Amount': policy_dict_for_sheets.get('gst_amount', ''),
-                'Net premium': policy_dict_for_sheets.get('net_premium', ''),
-                'OD Preimium': policy_dict_for_sheets.get('od_premium', ''),
-                'TP Premium': policy_dict_for_sheets.get('tp_premium', ''),
-                'Policy number': policy_dict_for_sheets.get('policy_number', ''),
-                'Formatted Policy number': policy_dict_for_sheets.get('formatted_policy_number', ''),
-                'Registration.no': policy_dict_for_sheets.get('registration_number', ''),
-                'Make_Model': policy_dict_for_sheets.get('make_model', ''),
-                'Model': policy_dict_for_sheets.get('model', ''),
-                'Vehicle_Variant': policy_dict_for_sheets.get('vehicle_variant', ''),
-                'GVW': policy_dict_for_sheets.get('gvw', ''),
-                'RTO': policy_dict_for_sheets.get('rto', ''),
-                'State': policy_dict_for_sheets.get('state', ''),
-                'Cluster': policy_dict_for_sheets.get('cluster', ''),
-                'Fuel Type': policy_dict_for_sheets.get('fuel_type', ''),
-                'CC': policy_dict_for_sheets.get('cc', ''),
-                'Age(Year)': policy_dict_for_sheets.get('age_year', ''),
-                'NCB (YES/NO)': policy_dict_for_sheets.get('ncb', ''),
-                'Discount %': policy_dict_for_sheets.get('discount_percent', ''),
-                'Business Type': policy_dict_for_sheets.get('business_type', ''),
-                'Seating Capacity': policy_dict_for_sheets.get('seating_capacity', ''),
-                'Veh_Wheels': policy_dict_for_sheets.get('veh_wheels', ''),
-                'Customer Name': policy_dict_for_sheets.get('customer_name', ''),
-                'Customer Number': policy_dict_for_sheets.get('customer_phone_number', ''),
-                'Payment By Office': policy_dict_for_sheets.get('payment_by_office', ''),
-                'PO Paid To Agent': policy_dict_for_sheets.get('total_agent_payout_amount', ''),
-                'Running Bal': policy_dict_for_sheets.get('running_bal', ''),
-                '  Invoice Number  ': policy_dict_for_sheets.get('invoice_number', ''),
-                'Match': 'False'
-            }
+            # Resolve broker and insurer names from codes
+            broker_id, insurer_id, broker_name, insurer_name = await validate_and_resolve_codes_with_names(
+                db=db,
+                broker_code=policy_data.broker_code,
+                insurer_code=policy_data.insurer_code
+            )
+            
+            logger.info(f"Resolved broker: {broker_name} (ID: {broker_id}), insurer: {insurer_name} (ID: {insurer_id})")
+            
+            # Prepare complete data for Google Sheets using our helper function
+            complete_sheets_data = prepare_complete_policy_sheets_data(
+                policy_data=policy_data,
+                policy_db_record=policy,
+                broker_name=broker_name or "",
+                insurer_name=insurer_name or ""
+            )
+            
+            logger.info(f"Prepared {len(complete_sheets_data)} fields for quarterly Google Sheets")
             
             # Route to current quarterly sheet
-            quarterly_result = quarterly_manager.route_new_record_to_current_quarter(policy_dict_for_quarterly)
+            quarterly_result = await run_in_threadpool(
+                quarterly_manager.route_new_record_to_current_quarter, 
+                complete_sheets_data
+            )
             
-            if quarterly_result.get('success'):
-                logger.info(f"Policy {policy.id} routed to quarterly sheet: {quarterly_result.get('sheet_name')}")
+            if quarterly_result and quarterly_result.get('success'):
+                logger.info(f"Policy {policy.id} successfully routed to quarterly sheet: {quarterly_result.get('sheet_name')}")
             else:
-                logger.error(f"Failed to route policy {policy.id} to quarterly sheet: {quarterly_result.get('error')}")
+                logger.error(f"Failed to route policy {policy.id} to quarterly sheet: {quarterly_result.get('error') if quarterly_result else 'No result'}")
                 
         except Exception as sync_error:
             logger.error(f"Failed to route policy {policy.id} to quarterly sheet: {str(sync_error)}")
+            # Don't fail the main operation if Google Sheets sync fails
         
         return PolicyCreateResponse(
             id=policy.id,
@@ -351,11 +330,12 @@ async def list_policies(
     
     **Requires policy read permission**
     
-    Returns simplified policy summaries stored in database
+    Returns simplified policy summaries stored in database with only essential fields
     """
     try:
         from sqlalchemy import select
         from models import Policy
+        from routers.policies.helpers import database_policy_response
         
         # Get simplified policies from database
         result = await db.execute(
@@ -366,7 +346,14 @@ async def list_policies(
         )
         policies = result.scalars().all()
         
-        return [PolicySummaryResponse.model_validate(policy) for policy in policies]
+        # Use helper function to return only database fields
+        policy_responses = []
+        for policy in policies:
+            policy_data = database_policy_response(policy)
+            policy_responses.append(PolicySummaryResponse(**policy_data))
+        
+        logger.info(f"Returned {len(policy_responses)} policies with essential database fields only")
+        return policy_responses
         
     except HTTPException:
         raise
@@ -378,215 +365,506 @@ async def list_policies(
         )
 
 
-#TODO: same jaisa cutoay me tha ki policy number pass kro and quarter(s) and uske hisab se return kro
-@router.get("/{policy_id}", response_model=PolicyResponse)
-async def get_policy_details(
-    policy_id: str,
+
+# =============================================================================
+# NEW POLICY ROUTES USING POLICY NUMBER + QUARTER/YEAR PATTERN (LIKE CUTPAY)
+# =============================================================================
+
+@router.get("/policy-details", response_model=Dict[str, Any])
+async def get_policy_transaction_by_policy_number(
+    policy_number: str = Query(..., description="Policy number to search for"),
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4) where the policy is located"),
+    year: int = Query(..., ge=2020, le=2030, description="Year where the policy is located"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_read)
 ):
     """
-    Get detailed policy information
+    Get complete Policy details by policy number from both database and specific quarterly Google Sheet
     
-    **Requires policy read permission**
+    This endpoint:
+    1. Combines quarter and year into sheet name format (Q3-2025)
+    2. Searches for the specific quarterly Google Sheet
+    3. Fetches data from both the specific sheet AND database for the same policy number
+    4. Returns combined results from both sources
     
-    Agents can only access their own policies, admins can access any
+    Parameters:
+    - policy_number: The policy number to search for  
+    - quarter: Quarter number (1-4)
+    - year: Year
+    
+    Returns combined data from both database and the specific quarterly sheet
     """
     try:
-        user_id = current_user["user_id"]
-        user_role = current_user.get("role", "agent")
+        # Step 1: Create quarter sheet name from quarter and year
+        quarter_sheet_name = f"Q{quarter}-{year}"
+        logger.info(f"Searching for policy '{policy_number}' in quarter sheet '{quarter_sheet_name}' and database")
         
-        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
+        # Step 2: Get record from database
+        database_record = None
+        broker_name = ""
+        insurer_name = ""
         
-        policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
-        if not policy:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Policy not found"
+        try:
+            from sqlalchemy import select, desc
+            from models import Policy
+            from routers.policies.helpers import database_policy_response
+            
+            result = await db.execute(
+                select(Policy)
+                .where(Policy.policy_number == policy_number)
+                .order_by(desc(Policy.created_at))  # Get the most recent one if multiple exist
             )
+            policy = result.first()  # Use first() instead of scalar_one_or_none()
+            
+            if policy:
+                policy = policy[0]  # Extract the Policy object from the Row
+                await db.refresh(policy)
+                database_record = database_policy_response(policy)
+                        
+                logger.info(f"Found policy '{policy_number}' in database with ID: {policy.id}")
+            else:
+                logger.info(f"Policy '{policy_number}' not found in database")
+                
+        except Exception as db_error:
+            logger.error(f"Database search error: {str(db_error)}")
+            database_record = {"error": f"Database search failed: {str(db_error)}"}
         
-        return PolicyResponse.model_validate(policy)
+        # Step 3: Search for the specific quarterly Google Sheet and get data
+        sheets_data = {}
+        sheet_found = False
         
-    except HTTPException:
-        raise
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the specific quarter sheet by name
+            target_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+            
+            if not target_sheet:
+                logger.warning(f"Quarter sheet '{quarter_sheet_name}' not found in Google Sheets")
+                sheets_data = {"error": f"Quarter sheet '{quarter_sheet_name}' not found"}
+            else:
+                logger.info(f"Found quarter sheet '{quarter_sheet_name}' in Google Sheets")
+                sheet_found = True
+                
+                # Get all data from the specific sheet
+                all_values = target_sheet.get_all_values()
+                if not all_values:
+                    sheets_data = {"error": "No data found in quarter sheet"}
+                else:
+                    headers = all_values[0] if all_values else []
+                    
+                    # Find policy number column
+                    policy_col_index = -1
+                    for i, header in enumerate(headers):
+                        if header.lower().strip() in ['policy number', 'policy_number']:
+                            policy_col_index = i
+                            logger.info(f"Found policy number column at index {i}: '{header}'")
+                            break
+                    
+                    if policy_col_index == -1:
+                        sheets_data = {"error": "Policy number column not found in quarter sheet"}
+                        logger.warning("Policy number column not found in sheet headers")
+                    else:
+                        # Find the row with matching policy number
+                        found_policy_data = None
+                        
+                        for row_data in all_values[1:]:
+                            if policy_col_index < len(row_data):
+                                cell_value = row_data[policy_col_index].strip()
+                                if cell_value == policy_number.strip():
+                                    # Create a dictionary from headers and row data
+                                    found_policy_data = {}
+                                    for j, header in enumerate(headers):
+                                        if j < len(row_data):
+                                            found_policy_data[header] = row_data[j]
+                                    break
+                        
+                        if found_policy_data:
+                            sheets_data = found_policy_data
+                            logger.info(f"Found policy '{policy_number}' in quarter sheet with {len(found_policy_data)} fields")
+                        else:
+                            sheets_data = {"error": f"Policy '{policy_number}' not found in quarter sheet"}
+                            logger.info(f"Policy '{policy_number}' not found in {len(all_values)-1} data rows")
+                            
+        except Exception as sheets_error:
+            logger.error(f"Failed to fetch from Google Sheets: {str(sheets_error)}")
+            logger.error(f"Sheets error details: {traceback.format_exc()}")
+            sheets_data = {"error": f"Failed to fetch from Google Sheets: {str(sheets_error)}"}
+        
+        # Step 4: Combine results from both sources
+        response_data = {
+            "policy_number": policy_number,
+            "quarter": quarter,
+            "year": year,
+            "quarter_sheet_name": quarter_sheet_name,
+            "database_record": database_record,
+            "google_sheets_data": sheets_data,
+            "broker_name": broker_name,
+            "insurer_name": insurer_name,
+            "found_in_database": database_record is not None and "error" not in str(database_record),
+            "found_in_sheets": sheet_found and "error" not in sheets_data,
+            "quarter_sheet_exists": sheet_found,
+            "metadata": {
+                "fetched_at": datetime.now().isoformat(),
+                "search_quarter": quarter_sheet_name,
+                "database_search_completed": True,
+                "sheets_search_completed": True
+            }
+        }
+        
+        logger.info(f"Search completed - DB: {response_data['found_in_database']}, Sheets: {response_data['found_in_sheets']}")
+        return response_data
+        
     except Exception as e:
-        logger.error(f"Error fetching policy details: {str(e)}")
+        logger.error(f"Error in policy search: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch policy details"
+            detail=f"Failed to fetch policy: {str(e)}"
         )
 
-#TODO: same shit as above pr yahan pe wapis se koi jhol hai wo quartely sheet wale part me line 431 and ye to sahi me kuch aur hi lg rha and haan db me b update kro wo limited fields ko
-@router.put("/{policy_id}", response_model=PolicyResponse)
-async def update_policy(
-    policy_id: str,
-    policy_data: PolicyUpdate,
-    current_user = Depends(get_current_user),
+@router.put("/policy-update", response_model=PolicyDatabaseResponse)
+async def update_policy_transaction_by_policy_number(
+    policy_number: str = Query(..., description="Policy number to update"),
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4) where the policy is located"),
+    year: int = Query(..., ge=2020, le=2030, description="Year where the policy is located"),
+    policy_data: PolicyUpdate = ...,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
     _rbac_check = Depends(require_policy_write)
 ):
     """
-    Update policy information
+    Update Policy by policy number with selective DB storage and complete quarterly Google Sheets sync.
     
-    **Requires policy write permission**
+    This endpoint:
+    1. Combines quarter and year into sheet name format (Q3-2025)
+    2. Finds the policy in database by policy number
+    3. Updates selective fields in database (essential fields only)
+    4. Updates all fields in the specific quarterly Google Sheet
     
-    Agents can only update their own policies, admins can update any
+    Parameters:
+    - policy_number: The policy number to update
+    - quarter: Quarter number (1-4) where the policy is located
+    - year: Year where the policy is located
+    - policy_data: Update data for the policy
+    
+    Database updates only essential fields, Google Sheets updates all fields.
     """
+    policy = None
+    quarter_sheet_name = f"Q{quarter}-{year}"
+    
     try:
-        user_id = current_user["user_id"]
-        user_role = current_user.get("role", "agent")
-        
-        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
-
-        update_data = policy_data.model_dump(exclude_unset=True)        
-        # Note: child_id validation removed since frontend gets child_id from our own endpoint
-        
-        policy = await PolicyHelpers.update_policy(db, policy_id, update_data, filter_user_id)
-        if not policy:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Policy not found"
-            )
-        # Sync to quarterly Google Sheets
-        try:
-            # Map policy data to quarterly sheet format
-            quarterly_data = {
-                'date': policy.created_at.strftime('%d-%m-%Y') if policy.created_at else "",
-                'insurer_name': policy.insurance_company or "",
-                'product': "Motor",
-                'client_name': policy.client_name or "",
-                'policy_holder_mobile': "",
-                'vehicle_make': "",
-                'vehicle_model': "",
-                'variant': "",
-                'fuel_type': "",
-                'vehicle_reg_no': policy.registration_number or "",
-                'manufacturing_year': "",
-                'vehicle_age': "",
-                'rto': "",
-                'policy_no': policy.policy_number or "",
-                'invoice_no': policy.invoice_number or "",
-                'policy_start_date': policy.start_date.strftime('%d-%m-%Y') if policy.start_date else "",
-                'policy_end_date': policy.end_date.strftime('%d-%m-%Y') if policy.end_date else "",
-                'policy_tenure': "",
-                'idv': "",
-                'net_premium': policy.net_premium or 0,
-                'od_premium': policy.od_premium or 0,
-                'tp_premium': policy.tp_premium or 0,
-                'commission_percentage': "",
-                'commission_amount': "",
-                'discount_amount': "",
-                'final_premium': policy.net_premium or 0,
-                'payment_mode': "",
-                'payment_type': "",
-                'payment_reference': "",
-                'bank_name': "",
-                'branch_name': "",
-                'cheque_number': "",
-                'cheque_date': "",
-                'transaction_date': "",
-                'transaction_status': "",
-                'payment_status': "",
-                'receipt_no': "",
-                'receipt_date': "",
-                'gstin': "",
-                'pan_number': "",
-                'adhaar_number': "",
-                'email_id': "",
-                'agent_code': policy.agent_code or "",
-                'agent_name': "",
-                'agent_mobile': "",
-                'agent_email': "",
-                'team_leader': "",
-                'regional_manager': "",
-                'zonal_head': "",
-                'branch_office': "",
-                'state': "",
-                'region': "",
-                'zone': "",
-                'business_source': "",
-                'lead_source': "",
-                'campaign_name': "",
-                'utm_source': "",
-                'utm_medium': "",
-                'utm_campaign': "",
-                'referral_code': "",
-                'promo_code': "",
-                'discount_code': "",
-                'coupon_code': "",
-                'loyalty_points_used': "",
-                'loyalty_points_earned': "",
-                'customer_segment': "",
-                'policy_type': "",
-                'cover_type': "",
-                'previous_policy_number': "",
-                'previous_insurer': "",
-                'claim_history': "",
-                'no_claim_bonus': "",
-                'remarks': "",
-                'special_instructions': "",
-                'uploaded_by': policy.uploaded_by or "",
-                'uploaded_date': policy.created_at.strftime('%d-%m-%Y') if policy.created_at else "",
-                'last_updated_by': "",
-                'last_updated_date': policy.updated_at.strftime('%d-%m-%Y') if policy.updated_at else ""
-            }
+        logger.info(f"Step 1: Beginning database update for policy '{policy_number}' in quarter '{quarter_sheet_name}' (selective fields only).")
+        async with db.begin():
+            # Get the existing record by policy number
+            from sqlalchemy import select, desc
+            from models import Policy
             
-            quarterly_manager.route_new_record_to_current_quarter(quarterly_data, "UPDATE")
-            logger.info(f"Updated policy {policy.id} synced to quarterly Google Sheets")
-        except Exception as sync_error:
-            logger.error(f"Failed to sync updated policy {policy.id} to quarterly Google Sheets: {str(sync_error)}")
-            # Don't fail the main operation if Google Sheets sync fails
-        
-        return PolicyResponse.model_validate(policy)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating policy: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update policy"
-        )
+            result = await db.execute(
+                select(Policy)
+                .where(Policy.policy_number == policy_number)
+                .order_by(desc(Policy.created_at))  # Get the most recent one if multiple exist
+            )
+            policy = result.first()
+            
+            if policy:
+                policy = policy[0]  # Extract the Policy object from the Row
+            else:
+                raise HTTPException(
+                    status_code=404, 
+                    detail=f"Policy with policy number '{policy_number}' not found in database"
+                )
 
-#TODO: same shit pr isko lodh pdegi nhi shyad anyways db se b udha do
-@router.delete("/{policy_id}")
-async def delete_policy(
-    policy_id: str,
+            # Prepare selective data for database update (only essential fields)
+            db_update_fields = {}
+            
+            # Essential document fields
+            if policy_data.policy_pdf_url is not None:
+                db_update_fields['policy_pdf_url'] = policy_data.policy_pdf_url
+            if policy_data.additional_documents is not None:
+                db_update_fields['additional_documents'] = policy_data.additional_documents
+            
+            # Essential policy fields
+            updated_policy_number = None
+            if policy_data.policy_number is not None:
+                db_update_fields['policy_number'] = policy_data.policy_number
+                updated_policy_number = policy_data.policy_number
+            
+            # Essential dates
+            if policy_data.start_date is not None:
+                db_update_fields['policy_start_date'] = policy_data.start_date
+            if policy_data.end_date is not None:
+                db_update_fields['policy_end_date'] = policy_data.end_date
+            
+            # Essential identifiers
+            if policy_data.agent_code is not None:
+                db_update_fields['agent_code'] = policy_data.agent_code
+            if policy_data.child_id is not None:
+                db_update_fields['child_id'] = policy_data.child_id
+            
+            logger.info(f"Updating {len(db_update_fields)} essential fields in database: {list(db_update_fields.keys())}")
+            
+            # Check for policy number uniqueness if policy number is being updated
+            if updated_policy_number and updated_policy_number != policy.policy_number:
+                existing_policy = await db.execute(
+                    select(Policy).where(
+                        (Policy.policy_number == updated_policy_number) &
+                        (Policy.id != policy.id)  # Exclude current record
+                    )
+                )
+                if existing_policy.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"Policy number '{updated_policy_number}' already exists in the database. Please use a unique policy number."
+                    )
+                logger.info(f"Policy number change to '{updated_policy_number}' is valid - proceeding with update")
+            
+            # Apply updates to database
+            for field, value in db_update_fields.items():
+                if hasattr(policy, field):
+                    old_value = getattr(policy, field)
+                    setattr(policy, field, value)
+                    logger.info(f"DB Update {field}: {old_value} -> {value}")
+                else:
+                    logger.warning(f"Field '{field}' not found on Policy model - skipping")
+                        
+        # Refresh to get committed data
+        await db.refresh(policy)
+        logger.info(f"Step 1 SUCCESS: Successfully updated policy '{policy_number}' (Policy ID {policy.id}) with selective fields.")
+
+    except Exception as e:
+        logger.critical(f"Step 1 FAILED: Database update failed for policy '{policy_number}'. Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update Policy in the database: {str(e)}")
+
+    # Google Sheets sync with complete data to specific quarterly sheet
+    sync_results = None
+    try:
+        logger.info(f"Step 2: Starting quarterly Google Sheets sync for policy '{policy_number}' in '{quarter_sheet_name}' with ALL fields.")
+        from utils.quarterly_sheets_manager import quarterly_manager
+        from routers.policies.helpers import prepare_complete_policy_sheets_data_for_update, validate_and_resolve_codes_with_names
+        
+        # Resolve broker and insurer names from codes if provided in update data
+        broker_id, insurer_id, broker_name, insurer_name = await validate_and_resolve_codes_with_names(
+            db=db,
+            broker_code=getattr(policy_data, 'broker_code', None),
+            insurer_code=getattr(policy_data, 'insurer_code', None)
+        )
+        
+        logger.info(f"Final names for quarterly Google Sheets - Broker: '{broker_name or ''}', Insurer: '{insurer_name or ''}'")
+        
+        # Prepare complete data for Google Sheets (all fields from request)
+        complete_sheets_data = prepare_complete_policy_sheets_data_for_update(
+            policy_data, policy, broker_name or "", insurer_name or ""
+        )
+        
+        logger.info(f"Syncing {len(complete_sheets_data)} fields to quarterly sheet '{quarter_sheet_name}': {list(complete_sheets_data.keys())}")
+
+        # Use the update method that targets specific quarterly sheet by policy number
+        target_policy_number = updated_policy_number if updated_policy_number else policy_number
+        logger.info(f"🔍 QUARTERLY SHEETS UPDATE DEBUG for policy '{target_policy_number}' in '{quarter_sheet_name}':")
+        logger.info(f"   - Original policy number: '{policy_number}'")
+        logger.info(f"   - Updated policy number: '{updated_policy_number}'")
+        logger.info(f"   - Target policy number: '{target_policy_number}'")
+        logger.info(f"   - Quarter: {quarter}, Year: {year}")
+        
+        # Update the specific quarterly sheet with quarter and year parameters
+        quarterly_result = await run_in_threadpool(
+            quarterly_manager.update_existing_record_by_policy_number, 
+            complete_sheets_data, 
+            target_policy_number,
+            quarter,  # Specify quarter
+            year      # Specify year
+        )
+        
+        sync_results = {"policy": quarterly_result}
+        logger.info(f"Step 2 SUCCESS: Quarterly Google Sheets sync finished for policy '{target_policy_number}' in '{quarter_sheet_name}': {quarterly_result.get('operation', 'UPDATE')}")
+        
+    except Exception as e:
+        logger.critical(f"Step 2 FAILED: Quarterly Google Sheets sync failed for policy '{policy_number}', but database changes are saved. Error: {str(e)}")
+        from routers.policies.helpers import database_policy_response
+        return database_policy_response(policy)
+
+    if not sync_results:
+        logger.warning("Step 3 SKIPPED: No sync results to update flags.")
+        from routers.policies.helpers import database_policy_response
+        return database_policy_response(policy)
+
+    # Policy updates don't have sync flags like CutPay, so we just return the updated policy
+    try:
+        logger.info(f"Step 3 SUCCESS: Successfully updated policy '{policy_number}' (Policy ID {policy.id}).")
+        logger.info(f"--- Update for policy '{policy_number}' in '{quarter_sheet_name}' finished successfully. ---")
+        from routers.policies.helpers import database_policy_response
+        return database_policy_response(policy)
+            
+    except Exception as e:
+        logger.critical(f"Step 3 FAILED: Finalizing update failed for policy '{policy_number}' (Policy ID {policy.id}). Error: {str(e)}")
+        from routers.policies.helpers import database_policy_response
+        return database_policy_response(policy)
+
+@router.delete("/policy-delete")
+async def delete_policy_transaction_by_policy_number(
+    policy_number: str = Query(..., description="Policy number to delete"),
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4) where the policy is located"),
+    year: int = Query(..., ge=2020, le=2030, description="Year where the policy is located"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_manage)
 ):
     """
-    Delete policy
+    Delete Policy by policy number from both database and specific quarterly Google Sheet
     
-    **Requires policy manage permission**
+    This endpoint:
+    1. Combines quarter and year into sheet name format (Q3-2025)
+    2. Finds the policy in database by policy number
+    3. Deletes the record from database
+    4. Deletes the record from the specific quarterly Google Sheet
     
-    Agents can only delete their own policies, admins can delete any
+    Parameters:
+    - policy_number: The policy number to delete
+    - quarter: Quarter number (1-4) where the policy is located
+    - year: Year where the policy is located
+    
+    Returns deletion status for both database and Google Sheets
     """
+    quarter_sheet_name = f"Q{quarter}-{year}"
+    policy = None
+    
     try:
-        user_id = current_user["user_id"]
-        user_role = current_user.get("role", "agent")
+        logger.info(f"Step 1: Finding and deleting policy '{policy_number}' from database")
         
-        filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
+        # Get the existing record by policy number
+        from sqlalchemy import select, desc
+        from models import Policy
         
-        success = await PolicyHelpers.delete_policy(db, policy_id, filter_user_id)
-        if not success:
+        result = await db.execute(
+            select(Policy)
+            .where(Policy.policy_number == policy_number)
+            .order_by(desc(Policy.created_at))  # Get the most recent one if multiple exist
+        )
+        policy = result.first()
+        
+        if policy:
+            policy = policy[0]  # Extract the Policy object from the Row
+        else:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Policy not found"
+                status_code=404, 
+                detail=f"Policy with policy number '{policy_number}' not found in database"
             )
         
-        return {"message": "Policy deleted successfully"}
+        # Store policy_id for logging before deletion
+        policy_id = policy.id
+        logger.info(f"Found policy '{policy_number}' in database with ID: {policy_id}")
+        
+        # Delete from database
+        await db.delete(policy)
+        await db.commit()
+        
+        logger.info(f"Step 1 SUCCESS: Deleted policy '{policy_number}' (Policy ID {policy_id}) from database")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting policy: {str(e)}")
+        logger.error(f"Step 1 FAILED: Database deletion failed for policy '{policy_number}': {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete policy"
+            status_code=500, 
+            detail=f"Failed to delete Policy from database: {str(e)}"
         )
+
+    # Delete from specific quarterly Google Sheet
+    sheets_deletion_success = False
+    sheets_deletion_message = ""
+    
+    try:
+        logger.info(f"Step 2: Deleting policy '{policy_number}' from quarterly sheet '{quarter_sheet_name}'")
+        from utils.quarterly_sheets_manager import quarterly_manager
+        
+        # Get the specific quarter sheet
+        target_sheet = quarterly_manager.get_quarterly_sheet(quarter, year)
+        
+        if not target_sheet:
+            logger.warning(f"Quarter sheet '{quarter_sheet_name}' not found in Google Sheets")
+            sheets_deletion_message = f"Quarter sheet '{quarter_sheet_name}' not found - no Google Sheets deletion performed"
+        else:
+            logger.info(f"Found quarter sheet '{quarter_sheet_name}', searching for policy to delete...")
+            
+            # Get all data from the sheet to find the policy row
+            all_values = target_sheet.get_all_values()
+            if not all_values:
+                sheets_deletion_message = f"No data found in quarter sheet '{quarter_sheet_name}'"
+            else:
+                headers = all_values[0] if all_values else []
+                
+                # Find policy number column
+                policy_col_index = -1
+                for i, header in enumerate(headers):
+                    if header.lower().strip() in ['policy number', 'policy_number']:
+                        policy_col_index = i
+                        logger.info(f"Found policy number column at index {i}: '{header}'")
+                        break
+                
+                if policy_col_index == -1:
+                    sheets_deletion_message = f"Policy number column not found in quarter sheet '{quarter_sheet_name}'"
+                    logger.warning("Policy number column not found in sheet headers")
+                else:
+                    # Find the row with matching policy number
+                    found_row_index = -1
+                    
+                    for row_index, row_data in enumerate(all_values[1:], start=2):
+                        if policy_col_index < len(row_data):
+                            cell_value = row_data[policy_col_index].strip()
+                            if cell_value == policy_number.strip():
+                                found_row_index = row_index
+                                logger.info(f"Found policy '{policy_number}' at row {row_index}")
+                                break
+                    
+                    if found_row_index == -1:
+                        sheets_deletion_message = f"Policy '{policy_number}' not found in quarter sheet '{quarter_sheet_name}'"
+                        logger.info(f"Policy '{policy_number}' not found in {len(all_values)-1} data rows")
+                    else:
+                        # Delete the row from Google Sheets
+                        target_sheet.delete_rows(found_row_index)
+                        sheets_deletion_success = True
+                        sheets_deletion_message = f"Successfully deleted policy '{policy_number}' from quarter sheet '{quarter_sheet_name}' at row {found_row_index}"
+                        logger.info(f"Step 2 SUCCESS: Deleted policy '{policy_number}' from quarter sheet row {found_row_index}")
+                        
+    except Exception as sheets_error:
+        logger.error(f"Step 2 FAILED: Quarterly Google Sheets deletion failed for policy '{policy_number}': {str(sheets_error)}")
+        import traceback
+        logger.error(f"Sheets deletion error details: {traceback.format_exc()}")
+        sheets_deletion_message = f"Failed to delete from quarterly sheets: {str(sheets_error)}"
+
+    # Return deletion status
+    response_data = {
+        "message": f"Policy '{policy_number}' deletion completed",
+        "policy_number": policy_number,
+        "quarter": quarter,
+        "year": year,
+        "quarter_sheet_name": quarter_sheet_name,
+        "database_deletion": {
+            "success": True,
+            "policy_id": str(policy_id) if policy else None,
+            "message": f"Successfully deleted from database"
+        },
+        "sheets_deletion": {
+            "success": sheets_deletion_success,
+            "message": sheets_deletion_message
+        },
+        "overall_success": sheets_deletion_success,  # Both database and sheets must succeed
+        "metadata": {
+            "deleted_at": datetime.now().isoformat(),
+            "deleted_by": current_user.get('user_id', 'unknown'),
+            "target_quarter": quarter_sheet_name
+        }
+    }
+    
+    if sheets_deletion_success:
+        logger.info(f"--- Deletion for policy '{policy_number}' in '{quarter_sheet_name}' completed successfully ---")
+    else:
+        logger.warning(f"--- Deletion for policy '{policy_number}' completed with sheets deletion issues ---")
+    
+    return response_data
 
 
 @router.get("/helpers/check-policy-number", response_model=PolicyNumberCheckResponse)

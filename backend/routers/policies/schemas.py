@@ -14,9 +14,8 @@ class PolicySummaryResponse(BaseModel):
     policy_number: str
     child_id: Optional[str] = None
     agent_code: Optional[str] = None
-    customer_documents_url: Optional[str] = None
-    vehicle_documents_url: Optional[str] = None
-    policy_documents_url: Optional[str] = None
+    additional_documents: Optional[str] = None
+    policy_pdf_url: Optional[str] = None
     booking_date: Optional[date] = None
     policy_start_date: Optional[date] = None
     policy_end_date: Optional[date] = None
@@ -35,9 +34,8 @@ class CutPaySummaryResponse(BaseModel):
     insurer_id: Optional[int] = None
     broker_id: Optional[int] = None
     admin_child_id: Optional[str] = None
-    customer_documents_url: Optional[str] = None
-    vehicle_documents_url: Optional[str] = None
-    policy_documents_url: Optional[str] = None
+    additional_documents: Optional[str] = None
+    policy_pdf_url: Optional[str] = None
     booking_date: Optional[date] = None
     policy_start_date: Optional[date] = None
     policy_end_date: Optional[date] = None
@@ -68,7 +66,9 @@ class PolicyBase(BaseModel):
     agent_id: Optional[UUID] = None
     agent_code: Optional[str] = None
     child_id: Optional[str] = None
+    broker_code: Optional[str] = None  # Used to lookup broker_name from database
     broker_name: Optional[str] = None
+    insurer_code: Optional[str] = None  # Used to lookup insurance_company from database
     insurance_company: Optional[str] = None
     
     # Basic Policy Information
@@ -133,6 +133,41 @@ class PolicyBase(BaseModel):
     # Dates
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    booking_date: Optional[date] = None  # Added missing booking date field
+    
+    # Commission and Financial Calculation Fields (for Google Sheets)
+    commissionable_premium: Optional[float] = None
+    incoming_grid_percent: Optional[float] = None
+    receivable_from_broker: Optional[float] = None
+    extra_grid: Optional[float] = None
+    extra_amount_receivable_from_broker: Optional[float] = None
+    total_receivable_from_broker: Optional[float] = None
+    claimed_by: Optional[str] = None
+    cut_pay_amount_received_from_agent: Optional[float] = None
+    already_given_to_agent: Optional[float] = None
+    actual_agent_po_percent: Optional[float] = None
+    agent_po_amt: Optional[float] = None
+    agent_extra_percent: Optional[float] = None
+    agent_extra_amount: Optional[float] = None
+    po_paid_to_agent: Optional[float] = None
+    total_receivable_from_broker_include_18_gst: Optional[float] = None
+    iz_total_po_percent: Optional[float] = None
+    as_per_broker_po_percent: Optional[float] = None
+    as_per_broker_po_amt: Optional[float] = None
+    po_percent_diff_broker: Optional[float] = None
+    po_amt_diff_broker: Optional[float] = None
+    as_per_agent_payout_percent: Optional[float] = None
+    as_per_agent_payout_amount: Optional[float] = None
+    po_percent_diff_agent: Optional[float] = None
+    po_amt_diff_agent: Optional[float] = None
+    invoice_status: Optional[str] = None
+    invoice_number: Optional[str] = None
+    remarks: Optional[str] = None
+    match: Optional[str] = None
+    
+    # Reporting fields
+    reporting_month: Optional[str] = None  # mmm'yy format
+    payout_on: Optional[str] = None
 
 class PolicyCreateRequest(PolicyBase):
     """Schema for creating a new policy with all possible fields from frontend"""
@@ -146,14 +181,25 @@ class PolicyCreateRequest(PolicyBase):
         json_schema_extra = {
             "example": {
                 # Agent & Child Info (optional - auto-filled for agents, validated for admins)
-                "agent_id": "123e4567-e89b-12d3-a456-426614174000",  # Will be auto-filled for agents or validated for admins
-                "agent_code": "AGT001",  # Auto-filled based on agent_id
-                "child_id": "CHILD123",  # Must be a valid child_id from /policies/helpers/child-ids
-                "broker_name": "Sample Broker",  # Auto-filled based on child_id
-                "insurance_company": "Sample Insurance Co",  # Auto-filled based on child_id
+                "agent_id": "123e4567-e89b-12d3-a456-426614174000",
+                "agent_code": "AGT001",
+                "child_id": "CHILD123",
+                "broker_code": "BRK001",  # Used to lookup broker_name from database
+                "broker_name": "Sample Broker",
+                "insurer_code": "INS001",  # Used to lookup insurance_company from database
+                "insurance_company": "Sample Insurance Co",
                 
-                # Policy Details (required)
+                # Basic Policy Information (required)
                 "policy_number": "POL123456789",
+                "formatted_policy_number": "POL-123456789",
+                "major_categorisation": "Motor",
+                "product_insurer_report": "Private Car Package",
+                "product_type": "Private Car",
+                "plan_type": "Comprehensive",
+                "customer_name": "John Doe",
+                "customer_phone_number": "9876543210",
+                
+                # Legacy field names for backward compatibility (required)
                 "policy_type": "Motor",
                 "insurance_type": "Comprehensive",
                 
@@ -162,17 +208,61 @@ class PolicyCreateRequest(PolicyBase):
                 "registration_number": "MH01AB1234",
                 "vehicle_class": "M1",
                 "vehicle_segment": "Hatchback",
-
+                "make_model": "Maruti Suzuki Swift",
+                "model": "Swift",
+                "vehicle_variant": "VDI",
+                "gvw": 1200.5,
+                "rto": "MH01",
+                "state": "Maharashtra",
+                "fuel_type": "Diesel",
+                "cc": 1248,
+                "age_year": 3,
+                "ncb": "YES",
+                "discount_percent": 20.0,
+                "business_type": "Private",
+                "seating_capacity": 5,
+                "veh_wheels": 4,
+                
                 # Premium Details (optional)
                 "gross_premium": 15000.00,
                 "gst": 2700.00,
+                "gst_amount": 2700.00,
                 "net_premium": 12300.00,
                 "od_premium": 8500.00,
                 "tp_premium": 3800.00,
                 
+                # Agent Commission Fields
+                "agent_commission_given_percent": 15.0,
+                
+                # Agent Financial Tracking Fields
+                "payment_by_office": 5000.00,
+                "total_agent_payout_amount": 2000.00,
+                "running_bal": 1500.00,
+                
+                # Additional Policy Configuration
+                "code_type": "Child ID",
+                "payment_by": "Agent",
+                "payment_method": "Cash",
+                "cluster": "West",
+                
+                # Additional fields
+                "notes": "Customer preferred comprehensive coverage",
+                
                 # Dates (optional)
                 "start_date": "2025-01-01",
                 "end_date": "2026-01-01",
+                "booking_date": "2025-01-01",
+                
+                # Commission and Financial Fields (optional - for advanced users)
+                "commissionable_premium": 12300.00,
+                "incoming_grid_percent": 15.0,
+                "receivable_from_broker": 1845.00,
+                "extra_grid": 2.0,
+                "extra_amount_receivable_from_broker": 246.00,
+                "total_receivable_from_broker": 2091.00,
+                "claimed_by": "Agent",
+                "reporting_month": "Jan'25",
+                "payout_on": "Monthly",
 
                 # File Info (required)
                 "pdf_file_path": "https://supabase.url/path/to/file.pdf",
@@ -262,7 +352,9 @@ class PolicyUpdate(BaseModel):
     agent_id: Optional[UUID] = None
     agent_code: Optional[str] = None
     child_id: Optional[str] = None
+    broker_code: Optional[str] = None
     broker_name: Optional[str] = None
+    insurer_code: Optional[str] = None
     insurance_company: Optional[str] = None
     policy_number: Optional[str] = None
     policy_type: Optional[str] = None
@@ -348,6 +440,140 @@ class AgentOption(BaseModel):
     agent_id: UUID
     agent_code: str
     full_name: str
+
+class PolicyUpdate(BaseModel):
+    """Schema for updating an existing policy with selective fields"""
+    # Agent & Child Info
+    agent_id: Optional[UUID] = None
+    agent_code: Optional[str] = None
+    child_id: Optional[str] = None
+    broker_code: Optional[str] = None  # Used to lookup broker_name from database
+    broker_name: Optional[str] = None
+    insurer_code: Optional[str] = None  # Used to lookup insurance_company from database
+    insurance_company: Optional[str] = None
+    
+    # Basic Policy Information
+    policy_number: Optional[str] = None
+    formatted_policy_number: Optional[str] = None
+    major_categorisation: Optional[str] = None  # Motor, Life, Health
+    product_insurer_report: Optional[str] = None
+    product_type: Optional[str] = None  # Private Car, etc.
+    plan_type: Optional[str] = None  # Comp, STP, SAOD
+    customer_name: Optional[str] = None
+    customer_phone_number: Optional[str] = None
+    
+    # Legacy field names for backward compatibility
+    policy_type: Optional[str] = None
+    insurance_type: Optional[str] = None
+    
+    # Vehicle Details
+    vehicle_type: Optional[str] = None
+    registration_number: Optional[str] = None
+    vehicle_class: Optional[str] = None
+    vehicle_segment: Optional[str] = None
+    make_model: Optional[str] = None
+    model: Optional[str] = None
+    vehicle_variant: Optional[str] = None
+    gvw: Optional[float] = None  # Gross Vehicle Weight
+    rto: Optional[str] = None
+    state: Optional[str] = None
+    fuel_type: Optional[str] = None
+    cc: Optional[int] = None  # Engine capacity
+    age_year: Optional[int] = None
+    ncb: Optional[str] = None  # YES/NO
+    discount_percent: Optional[float] = None
+    business_type: Optional[str] = None
+    seating_capacity: Optional[int] = None
+    veh_wheels: Optional[int] = None
+    
+    # Premium Details
+    gross_premium: Optional[float] = None
+    gst: Optional[float] = None
+    gst_amount: Optional[float] = None  # Alternative field name
+    net_premium: Optional[float] = None
+    od_premium: Optional[float] = None
+    tp_premium: Optional[float] = None
+    
+    # Agent Commission Fields (only one for policies now)
+    agent_commission_given_percent: Optional[float] = None
+    
+    # Agent Financial Tracking Fields
+    payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
+    total_agent_payout_amount: Optional[float] = Field(None, description="Total amount to be paid out to agent")
+    running_bal: Optional[float] = Field(None, description="Running balance for agent financial tracking (calculated by frontend)")
+    
+    # Additional Policy Configuration
+    code_type: Optional[str] = None  # Direct, Broker, Child ID
+    payment_by: Optional[str] = None  # Agent, InsureZeal
+    payment_method: Optional[str] = None
+    cluster: Optional[str] = None
+    
+    # Additional fields
+    notes: Optional[str] = None
+    
+    # Dates
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    booking_date: Optional[date] = None  # Added missing booking date field
+    
+    # Commission and Financial Calculation Fields (for Google Sheets)
+    commissionable_premium: Optional[float] = None
+    incoming_grid_percent: Optional[float] = None
+    receivable_from_broker: Optional[float] = None
+    extra_grid: Optional[float] = None
+    extra_amount_receivable_from_broker: Optional[float] = None
+    total_receivable_from_broker: Optional[float] = None
+    claimed_by: Optional[str] = None
+    cut_pay_amount_received_from_agent: Optional[float] = None
+    already_given_to_agent: Optional[float] = None
+    actual_agent_po_percent: Optional[float] = None
+    agent_po_amt: Optional[float] = None
+    agent_extra_percent: Optional[float] = None
+    agent_extra_amount: Optional[float] = None
+    po_paid_to_agent: Optional[float] = None
+    total_receivable_from_broker_include_18_gst: Optional[float] = None
+    iz_total_po_percent: Optional[float] = None
+    as_per_broker_po_percent: Optional[float] = None
+    as_per_broker_po_amt: Optional[float] = None
+    po_percent_diff_broker: Optional[float] = None
+    po_amt_diff_broker: Optional[float] = None
+    as_per_agent_payout_percent: Optional[float] = None
+    as_per_agent_payout_amount: Optional[float] = None
+    po_percent_diff_agent: Optional[float] = None
+    po_amt_diff_agent: Optional[float] = None
+    invoice_status: Optional[str] = None
+    invoice_number: Optional[str] = None
+    remarks: Optional[str] = None
+    match: Optional[str] = None
+    
+    # Reporting fields
+    reporting_month: Optional[str] = None  # mmm'yy format
+    payout_on: Optional[str] = None
+    
+    # Document URLs
+    policy_pdf_url: Optional[str] = None
+    additional_documents: Optional[str] = None
+    
+    # AI Metadata
+    ai_confidence_score: Optional[float] = None
+    manual_override: Optional[bool] = None
+
+class PolicyDatabaseResponse(BaseModel):
+    """Response model showing only database-stored fields for policies"""
+    id: str  # UUID converted to string
+    policy_number: str
+    child_id: Optional[str] = None
+    agent_code: Optional[str] = None
+    additional_documents: Optional[str] = None
+    policy_pdf_url: Optional[str] = None
+    booking_date: Optional[str] = None  # ISO date string
+    policy_start_date: Optional[str] = None  # ISO date string
+    policy_end_date: Optional[str] = None  # ISO date string
+    created_at: str  # ISO datetime string
+    updated_at: Optional[str] = None  # ISO datetime string
+    
+    class Config:
+        from_attributes = True
 
 class PolicyNumberCheckResponse(BaseModel):
     """Response for policy number duplicate check"""
