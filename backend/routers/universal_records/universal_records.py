@@ -9,10 +9,10 @@ import io
 import csv
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
+from sqlalchemy import func, select, desc
 
 from config import get_db
 from dependencies.rbac import require_admin_read, require_admin_write, get_current_user
@@ -27,7 +27,7 @@ from .schemas import (
     ReconciliationSummaryResponse
 )
 
-#TODO: universal record select krte hue b quarter(s) select krne pdenge taki unhi quarters me compare kre faltu sare nhi and isko b test krna hai fir
+#✅ COMPLETED: Universal record upload now supports quarter and year targeting for reconciliation
 
 router = APIRouter(prefix="/universal-records", tags=["Universal Records"])
 logger = logging.getLogger(__name__)
@@ -137,42 +137,57 @@ async def preview_csv_with_insurer_mapping(
 async def upload_universal_record(
     file: UploadFile = File(..., description="Universal record CSV file"),
     insurer_name: str = None,
+    quarters: str = Query(..., description="Comma-separated quarters (1-4) to target for upload. Example: '1,2' for Q1 and Q2"),
+    years: str = Query(..., description="Comma-separated years corresponding to quarters. Example: '2025,2025' for both quarters in 2025"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_write)
 ):
     """
-    Upload and process universal record CSV with insurer-specific mapping
+    Upload and process universal record CSV with insurer-specific mapping to specific quarterly sheets
     
     **Admin only endpoint**
     
     This endpoint processes a universal record CSV file from insurance companies
-    using insurer-specific header mappings. The universal record is considered 
-    the source of truth and will be used to:
+    using insurer-specific header mappings and routes the data to the specified quarterly sheets.
+    The universal record is considered the source of truth and will be used to:
     
-    1. **Update existing records** in Google master sheet where data mismatches are found
-    2. **Add missing records** that exist in universal record but not in master sheet
-    3. **Set MATCH to TRUE** for all updated/added records
-    4. **Generate detailed report** of all changes made
+    1. **Target specific quarters** based on provided quarter and year parameters
+    2. **Update existing records** in specified quarterly sheets where data mismatches are found
+    3. **Add missing records** that exist in universal record but not in quarterly sheets
+    4. **Set MATCH to TRUE** for all updated/added records
+    5. **Generate detailed report** of all changes made to each quarter
     
     **Process Flow:**
-    1. Apply insurer-specific header mapping to CSV data
-    2. Parse and validate mapped content
-    3. Get existing records from Google master sheet for the insurer
-    4. For each record in uploaded sheet:
-       - Use mapping to align headers with master sheet format
-       - Compare with master sheet records (by policy number)
+    1. Validate quarter and year parameters
+    2. Apply insurer-specific header mapping to CSV data
+    3. Parse and validate mapped content
+    4. For each specified quarter/year combination:
+       - Get existing records from quarterly Google Sheet
+       - Use mapping to align headers with quarterly sheet format
+       - Compare with quarterly sheet records (by policy number)
        - If present, update mapped fields and set MATCH to TRUE
-       - If not present, add to master sheet and set MATCH to FALSE
-    5. Generate comprehensive reconciliation report
+       - If not present, add to quarterly sheet and set MATCH to FALSE
+    5. Generate comprehensive reconciliation report per quarter
+    
+    **Headers Mapping:**
+    Universal record headers are mapped to quarterly sheet headers including:
+    - Reporting Month (mmm'yy), Child ID, Policy Number, Broker Name, Insurer name
+    - Premium fields: Gross premium, Net premium, OD Premium, TP Premium, GST Amount
+    - Vehicle details: Registration.no, Make_Model, Vehicle_Variant, CC, Age(Year)
+    - Commission fields: Commissionable Premium, Incoming Grid %, Agent_PO%, etc.
+    - Payment fields: Cut Pay Amount, Payment by, Payment Mode, Running Bal
+    - All 60+ quarterly sheet headers supported via record-mapper.csv
     
     **Parameters:**
     - `file`: CSV file containing universal records
     - `insurer_name`: Name of insurer mapping to use (required)
+    - `quarters`: Comma-separated quarters (1-4) to target. Example: "1,2" for Q1 and Q2
+    - `years`: Comma-separated years corresponding to quarters. Example: "2025,2025"
     
     **Returns:**
-    - Detailed report showing what was updated/added in master sheet
-    - Processing statistics and timing
+    - Detailed report showing what was updated/added in each quarterly sheet
+    - Processing statistics and timing per quarter
     - List of any errors encountered
     - Insurer-specific mapping information
     """
@@ -190,6 +205,37 @@ async def upload_universal_record(
                 detail="insurer_name parameter is required"
             )
 
+        # Parse and validate quarters and years
+        try:
+            quarter_list = [int(q.strip()) for q in quarters.split(',')]
+            year_list = [int(y.strip()) for y in years.split(',')]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quarters and years must be comma-separated integers"
+            )
+        
+        if len(quarter_list) != len(year_list):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Number of quarters must match number of years"
+            )
+        
+        # Validate quarter and year ranges
+        for quarter in quarter_list:
+            if quarter < 1 or quarter > 4:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Quarter must be between 1 and 4, got: {quarter}"
+                )
+        
+        for year in year_list:
+            if year < 2020 or year > 2030:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Year must be between 2020 and 2030, got: {year}"
+                )
+
         file_content = await file.read()
         csv_content = file_content.decode('utf-8')
         
@@ -201,20 +247,26 @@ async def upload_universal_record(
         
         admin_user_id = current_user["user_id"]
 
-        # Process universal record with insurer mapping
-        report = await helpers.process_universal_record_csv(
+        # Process universal record with insurer mapping and target quarterly sheets
+        report = await helpers.process_universal_record_csv_to_quarterly_sheets(
             db=db,
             csv_content=csv_content,
             insurer_name=insurer_name,
-            admin_user_id=admin_user_id
+            admin_user_id=admin_user_id,
+            quarter_list=quarter_list,
+            year_list=year_list
         )
         
         logger.info(f"Universal record processed by admin {admin_user_id}")
         logger.info(f"Insurer: {insurer_name}, File: {file.filename}, Size: {len(file_content)} bytes")
+        logger.info(f"Target quarters: {[f'Q{q}-{y}' for q, y in zip(quarter_list, year_list)]}")
         logger.info(f"Processed {report.stats.total_records_processed} records in {report.stats.processing_time_seconds:.2f} seconds")
         
+        quarter_names = [f"Q{q}-{y}" for q, y in zip(quarter_list, year_list)]
+        quarters_text = ", ".join(quarter_names)
+        
         return UniversalRecordUploadResponse(
-            message=f"Universal record processed successfully for {insurer_name}. "
+            message=f"Universal record processed successfully for {insurer_name} to quarterly sheets: {quarters_text}. "
                    f"Processed {report.stats.total_records_processed} records, "
                    f"updated {report.stats.total_records_updated}, "
                    f"added {report.stats.total_records_added} in "
@@ -400,7 +452,6 @@ async def get_reconciliation_summary(
     """
     
     try:
-        from sqlalchemy import select, desc
         # Fetch the latest reconciliation report for the insurer
         query = select(ReconciliationReport).order_by(desc(ReconciliationReport.created_at))
         if insurer_name:
