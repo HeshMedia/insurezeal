@@ -320,6 +320,8 @@ async def submit_policy(
 async def list_policies(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    quarter: Optional[int] = Query(None, ge=1, le=4, description="Filter by quarter (1-4)"),
+    year: Optional[int] = Query(None, ge=2020, le=2030, description="Filter by year"),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_read)
@@ -330,28 +332,90 @@ async def list_policies(
     **Requires policy read permission**
     
     Returns simplified policy summaries stored in database with only essential fields
+    Including calculated quarter and year based on created_at timestamp
+    
+    **Optional Filtering:**
+    - **quarter**: Filter policies by quarter (1-4) - Q1, Q2, Q3, Q4
+    - **year**: Filter policies by year 
+    - If both quarter and year are provided, returns policies from that specific quarter/year
+    - If only quarter is provided, returns policies from that quarter across all years
+    - If only year is provided, returns policies from that year across all quarters
+    - If neither is provided, returns all policies
     """
+    def calculate_quarter_and_year(created_at: datetime) -> tuple:
+        """Calculate quarter (Q1, Q2, Q3, Q4) and year from datetime"""
+        month = created_at.month
+        year = created_at.year
+        
+        if month in [1, 2, 3]:
+            quarter = "Q1"
+        elif month in [4, 5, 6]:
+            quarter = "Q2"
+        elif month in [7, 8, 9]:
+            quarter = "Q3"
+        else:  # month in [10, 11, 12]
+            quarter = "Q4"
+            
+        return quarter, year
+    
     try:
-        from sqlalchemy import select
+        from sqlalchemy import select, and_, extract
         from models import Policy
         from routers.policies.helpers import database_policy_response
         
-        # Get simplified policies from database
-        result = await db.execute(
-            select(Policy)
-            .offset(skip)
-            .limit(limit)
-            .order_by(Policy.created_at.desc())
-        )
+        # Build query with optional quarter/year filtering
+        query = select(Policy)
+        
+        # Apply date-based filtering if quarter/year are provided
+        if quarter is not None or year is not None:
+            filters = []
+            
+            if year is not None:
+                filters.append(extract('year', Policy.created_at) == year)
+            
+            if quarter is not None:
+                # Map quarter to months
+                if quarter == 1:
+                    filters.append(extract('month', Policy.created_at).in_([1, 2, 3]))
+                elif quarter == 2:
+                    filters.append(extract('month', Policy.created_at).in_([4, 5, 6]))
+                elif quarter == 3:
+                    filters.append(extract('month', Policy.created_at).in_([7, 8, 9]))
+                elif quarter == 4:
+                    filters.append(extract('month', Policy.created_at).in_([10, 11, 12]))
+            
+            if filters:
+                query = query.where(and_(*filters))
+        
+        # Apply pagination and ordering
+        query = query.offset(skip).limit(limit).order_by(Policy.created_at.desc())
+        
+        # Execute query
+        result = await db.execute(query)
         policies = result.scalars().all()
         
-        # Use helper function to return only database fields
+        # Use helper function to return only database fields and add quarter/year
         policy_responses = []
         for policy in policies:
             policy_data = database_policy_response(policy)
+            
+            # Calculate quarter and year from created_at
+            quarter_calc, year_calc = calculate_quarter_and_year(policy.created_at)
+            policy_data["quarter"] = quarter_calc
+            policy_data["year"] = year_calc
+            
             policy_responses.append(PolicySummaryResponse(**policy_data))
         
-        logger.info(f"Returned {len(policy_responses)} policies with essential database fields only")
+        # Log filtering information
+        filter_info = []
+        if quarter is not None:
+            filter_info.append(f"quarter=Q{quarter}")
+        if year is not None:
+            filter_info.append(f"year={year}")
+        
+        filter_description = f" (filtered by {', '.join(filter_info)})" if filter_info else ""
+        logger.info(f"Returned {len(policy_responses)} policies with essential database fields including quarter/year calculations{filter_description}")
+        
         return policy_responses
         
     except HTTPException:
