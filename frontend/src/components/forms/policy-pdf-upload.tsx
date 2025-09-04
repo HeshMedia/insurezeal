@@ -1,23 +1,23 @@
-'use client'
+"use client";
 
-import { useState, useCallback } from 'react'
-import { useAtom } from 'jotai'
-import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  Upload, 
-  FileText, 
-  CheckCircle, 
+import { useState, useCallback } from "react";
+import { useAtom } from "jotai";
+import { motion } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Upload,
+  FileText,
+  CheckCircle,
   AlertTriangle,
   Loader2,
   Database,
   Cloud,
-  X
-} from 'lucide-react'
+  X,
+} from "lucide-react";
 
 // Import atoms and utilities
 import {
@@ -27,157 +27,192 @@ import {
   cutpayLoadingStatesAtom,
   cutpaySuccessStatesAtom,
   cutpayErrorAtom,
-  cutpayFormCompletionAtom
-} from '@/lib/atoms/cutpay'
+  cutpayFormCompletionAtom,
+} from "@/lib/atoms/cutpay";
 
-import { saveToIndexedDB } from '@/lib/utils/indexeddb'
+import { saveToIndexedDB } from "@/lib/utils/indexeddb";
 
 interface PolicyPdfUploadProps {
-  onNext: () => void
+  onNext: () => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  useExtractionHook: () => { mutateAsync: (file: File) => Promise<any> }
+  useExtractionHook: () => { mutateAsync: (file: File) => Promise<any> };
 }
 
-const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) => {
-  const [file, setFile] = useAtom(policyPdfFileAtom)
-  const [pdfUrl, setPdfUrl] = useAtom(policyPdfUrlAtom)
-  const [extractionData, setExtractionData] = useAtom(pdfExtractionDataAtom)
-  const [loadingStates, setLoadingStates] = useAtom(cutpayLoadingStatesAtom)
-  const [successStates, setSuccessStates] = useAtom(cutpaySuccessStatesAtom)
-  const [error, setError] = useAtom(cutpayErrorAtom)
-  const [, setFormCompletion] = useAtom(cutpayFormCompletionAtom)
-  
-  const [uploadProgress, ] = useState(0)
-  const [isDragActive, setIsDragActive] = useState(false)
+const PolicyPdfUpload = ({
+  onNext,
+  useExtractionHook,
+}: PolicyPdfUploadProps) => {
+  const [file, setFile] = useAtom(policyPdfFileAtom);
+  const [pdfUrl, setPdfUrl] = useAtom(policyPdfUrlAtom);
+  const [extractionData, setExtractionData] = useAtom(pdfExtractionDataAtom);
+  const [loadingStates, setLoadingStates] = useAtom(cutpayLoadingStatesAtom);
+  const [successStates, setSuccessStates] = useAtom(cutpaySuccessStatesAtom);
+  const [error, setError] = useAtom(cutpayErrorAtom);
+  const [, setFormCompletion] = useAtom(cutpayFormCompletionAtom);
 
-  const extractPdfMutation = useExtractionHook()
+  const [uploadProgress] = useState(0);
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  const extractPdfMutation = useExtractionHook();
 
   // ... rest of the component remains exactly the same as your original code
-  const handleFileUpload = useCallback(async (selectedFile: File) => {
-    try {
-      setError(null)
-      setLoadingStates(prev => ({ ...prev, uploadingToIndexedDB: true }))
-      
-      // Validate file
-      if (selectedFile.type !== 'application/pdf') {
-        throw new Error('Please select a valid PDF file')
-      }
-      
-      if (selectedFile.size > 10 * 1024 * 1024) { // 10MB limit
-        throw new Error('File size must be less than 10MB')
-      }
+  const handleFileUpload = useCallback(
+    async (selectedFile: File) => {
+      try {
+        setError(null);
+        setLoadingStates((prev) => ({ ...prev, uploadingToIndexedDB: true }));
 
-      // Store in IndexedDB
-      console.log('📄 Storing PDF in IndexedDB:', selectedFile.name)
-      await saveToIndexedDB(selectedFile, 'policy_pdf')
-      
-      // Create object URL for preview
-      const url = URL.createObjectURL(selectedFile)
-      
-      // Update state
-      setFile(selectedFile)
-      setPdfUrl(url)
-      setLoadingStates(prev => ({ ...prev, uploadingToIndexedDB: false, extracting: true }))
-
-      // Extract PDF data
-      console.log('🔍 Starting PDF extraction...')
-      const result = await extractPdfMutation.mutateAsync(selectedFile)
-      
-      // Check if extraction was successful
-      if (result.extraction_status !== 'success' || !result.extracted_data) {
-        console.warn('⚠️ PDF extraction completed with warnings:', result.errors)
-        // Still set the data but show a warning
-        if (result.errors && result.errors.length > 0) {
-          setError(`Extraction completed with warnings: ${result.errors.join(', ')}`)
+        // Validate file
+        if (selectedFile.type !== "application/pdf") {
+          throw new Error("Please select a valid PDF file");
         }
-      }
-      
-      setExtractionData(result)
-      setSuccessStates(prev => ({ ...prev, pdfExtracted: true }))
-      setLoadingStates(prev => ({ ...prev, extracting: false }))
-      
-      console.log('✅ PDF extraction completed:', result)
 
-    } catch (err) {
-      console.error('❌ Error during PDF upload/extraction:', err)
-      setError(err instanceof Error ? err.message : 'Upload failed')
-      setLoadingStates(prev => ({ 
-        ...prev, 
-        uploadingToIndexedDB: false, 
-        extracting: false 
-      }))
-    }
-  }, [setFile, setPdfUrl, setError, setLoadingStates, setExtractionData, setSuccessStates, extractPdfMutation])
+        if (selectedFile.size > 10 * 1024 * 1024) {
+          // 10MB limit
+          throw new Error("File size must be less than 10MB");
+        }
+
+        // Store in IndexedDB
+        console.log("📄 Storing PDF in IndexedDB:", selectedFile.name);
+        await saveToIndexedDB(selectedFile, "policy_pdf");
+
+        // Create object URL for preview
+        const url = URL.createObjectURL(selectedFile);
+
+        // Update state
+        setFile(selectedFile);
+        setPdfUrl(url);
+        setLoadingStates((prev) => ({
+          ...prev,
+          uploadingToIndexedDB: false,
+          extracting: true,
+        }));
+
+        // Extract PDF data
+        console.log("🔍 Starting PDF extraction...");
+        const result = await extractPdfMutation.mutateAsync(selectedFile);
+
+        // Check if extraction was successful
+        if (result.extraction_status !== "success" || !result.extracted_data) {
+          console.warn(
+            "⚠️ PDF extraction completed with warnings:",
+            result.errors
+          );
+          // Still set the data but show a warning
+          if (result.errors && result.errors.length > 0) {
+            setError(
+              `Extraction completed with warnings: ${result.errors.join(", ")}`
+            );
+          }
+        }
+
+        setExtractionData(result);
+        setSuccessStates((prev) => ({ ...prev, pdfExtracted: true }));
+        setLoadingStates((prev) => ({ ...prev, extracting: false }));
+
+        console.log("✅ PDF extraction completed:", result);
+      } catch (err) {
+        console.error("❌ Error during PDF upload/extraction:", err);
+        setError(err instanceof Error ? err.message : "Upload failed");
+        setLoadingStates((prev) => ({
+          ...prev,
+          uploadingToIndexedDB: false,
+          extracting: false,
+        }));
+      }
+    },
+    [
+      setFile,
+      setPdfUrl,
+      setError,
+      setLoadingStates,
+      setExtractionData,
+      setSuccessStates,
+      extractPdfMutation,
+    ]
+  );
 
   const handleFileSelect = useCallback(() => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = '.pdf'
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf";
     input.onchange = (e) => {
-      const selectedFile = (e.target as HTMLInputElement).files?.[0]
+      const selectedFile = (e.target as HTMLInputElement).files?.[0];
       if (selectedFile) {
-        handleFileUpload(selectedFile)
+        handleFileUpload(selectedFile);
       }
-    }
-    input.click()
-  }, [handleFileUpload])
+    };
+    input.click();
+  }, [handleFileUpload]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragActive(true)
-  }, [])
+    e.preventDefault();
+    setIsDragActive(true);
+  }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragActive(false)
-  }, [])
+    e.preventDefault();
+    setIsDragActive(false);
+  }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragActive(false)
-    
-    const droppedFile = e.dataTransfer.files[0]
-    if (droppedFile) {
-      handleFileUpload(droppedFile)
-    }
-  }, [handleFileUpload])
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragActive(false);
+
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile) {
+        handleFileUpload(droppedFile);
+      }
+    },
+    [handleFileUpload]
+  );
 
   const handleRemoveFile = useCallback(() => {
     if (pdfUrl) {
-      URL.revokeObjectURL(pdfUrl)
+      URL.revokeObjectURL(pdfUrl);
     }
-    setFile(null)
-    setPdfUrl(null)
-    setExtractionData(null)
-    setSuccessStates(prev => ({ ...prev, pdfExtracted: false }))
-    setError(null)
-  }, [pdfUrl, setFile, setPdfUrl, setExtractionData, setSuccessStates, setError])
+    setFile(null);
+    setPdfUrl(null);
+    setExtractionData(null);
+    setSuccessStates((prev) => ({ ...prev, pdfExtracted: false }));
+    setError(null);
+  }, [
+    pdfUrl,
+    setFile,
+    setPdfUrl,
+    setExtractionData,
+    setSuccessStates,
+    setError,
+  ]);
 
   const handleContinue = useCallback(() => {
-    if (successStates.pdfExtracted && extractionData && extractionData.extracted_data) {
-      setFormCompletion(prev => ({ ...prev, step1Complete: true }))
-      onNext()
+    if (
+      successStates.pdfExtracted &&
+      extractionData &&
+      extractionData.extracted_data
+    ) {
+      setFormCompletion((prev) => ({ ...prev, step1Complete: true }));
+      onNext();
     }
-  }, [successStates.pdfExtracted, extractionData, setFormCompletion, onNext])
+  }, [successStates.pdfExtracted, extractionData, setFormCompletion, onNext]);
 
-  const isLoading = loadingStates.uploadingToIndexedDB || loadingStates.extracting
-  const isCompleted = successStates.pdfExtracted && extractionData && extractionData.extracted_data
+  const isLoading =
+    loadingStates.uploadingToIndexedDB || loadingStates.extracting;
+  const isCompleted =
+    successStates.pdfExtracted &&
+    extractionData &&
+    extractionData.extracted_data;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold text-gray-900">Upload Policy PDF</h2>
-        <p className="text-muted-foreground">
-          Upload your insurance policy document to extract key information automatically
-        </p>
-      </div>
+      
 
       {/* Error Display */}
       {error && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
+          animate={{ opacity: 1, height: "auto" }}
           exit={{ opacity: 0, height: 0 }}
         >
           <Alert variant="destructive">
@@ -209,10 +244,13 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-2">
                   {isCompleted && (
-                    <Badge variant="secondary" className="bg-green-100 text-green-700">
+                    <Badge
+                      variant="secondary"
+                      className="bg-green-100 text-green-700"
+                    >
                       <CheckCircle className="h-3 w-3 mr-1" />
                       Extracted
                     </Badge>
@@ -233,7 +271,9 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">
-                      {loadingStates.uploadingToIndexedDB ? 'Storing document...' : 'Extracting data...'}
+                      {loadingStates.uploadingToIndexedDB
+                        ? "Storing document..."
+                        : "Extracting data..."}
                     </span>
                     <span>{uploadProgress}%</span>
                   </div>
@@ -255,14 +295,13 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                   <Alert className="border-green-200 bg-green-50">
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-800">
-                      <strong>Data extracted successfully!</strong> 
-                      {extractionData.extraction_status === 'success' ? 
-                        ' Key information has been extracted from your policy document.' :
-                        ' Extraction completed with some issues.'
-                      }
+                      <strong>Data extracted successfully!</strong>
+                      {extractionData.extraction_status === "success"
+                        ? " Key information has been extracted from your policy document."
+                        : " Extraction completed with some issues."}
                     </AlertDescription>
                   </Alert>
-                  
+
                   {/* Extracted Data Preview */}
                   {extractionData && (
                     <Card className="bg-gray-50">
@@ -275,43 +314,83 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                       <CardContent className="space-y-2 text-sm">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <span className="font-medium text-gray-600">Policy Number:</span>
-                            <p className="text-gray-900">{extractionData.extracted_data?.policy_number || 'Not found'}</p>
+                            <span className="font-medium text-gray-600">
+                              Policy Number:
+                            </span>
+                            <p className="text-gray-900">
+                              {extractionData.extracted_data?.policy_number ||
+                                "Not found"}
+                            </p>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-600">Registration Number:</span>
-                            <p className="text-gray-900">{extractionData.extracted_data?.registration_number || 'Not found'}</p>
+                            <span className="font-medium text-gray-600">
+                              Registration Number:
+                            </span>
+                            <p className="text-gray-900">
+                              {extractionData.extracted_data
+                                ?.registration_number || "Not found"}
+                            </p>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-600">Gross Premium:</span>
-                            <p className="text-gray-900">₹{extractionData.extracted_data?.gross_premium || 'Not found'}</p>
+                            <span className="font-medium text-gray-600">
+                              Gross Premium:
+                            </span>
+                            <p className="text-gray-900">
+                              ₹
+                              {extractionData.extracted_data?.gross_premium ||
+                                "Not found"}
+                            </p>
                           </div>
                           <div>
-                            <span className="font-medium text-gray-600">Customer Name:</span>
-                            <p className="text-gray-900">{extractionData.extracted_data?.customer_name || 'Not found'}</p>
+                            <span className="font-medium text-gray-600">
+                              Customer Name:
+                            </span>
+                            <p className="text-gray-900">
+                              {extractionData.extracted_data?.customer_name ||
+                                "Not found"}
+                            </p>
                           </div>
                           {extractionData.extracted_data?.make_model && (
                             <div>
-                              <span className="font-medium text-gray-600">Vehicle Make/Model:</span>
-                              <p className="text-gray-900">{extractionData.extracted_data.make_model}</p>
+                              <span className="font-medium text-gray-600">
+                                Vehicle Make/Model:
+                              </span>
+                              <p className="text-gray-900">
+                                {extractionData.extracted_data.make_model}
+                              </p>
                             </div>
                           )}
                           {extractionData.extracted_data?.product_type && (
                             <div>
-                              <span className="font-medium text-gray-600">Product Type:</span>
-                              <p className="text-gray-900">{extractionData.extracted_data.product_type}</p>
+                              <span className="font-medium text-gray-600">
+                                Product Type:
+                              </span>
+                              <p className="text-gray-900">
+                                {extractionData.extracted_data.product_type}
+                              </p>
                             </div>
                           )}
                         </div>
-                        
+
                         {/* Show extraction confidence if available */}
-                        {extractionData.confidence_scores && Object.keys(extractionData.confidence_scores).length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <span className="text-xs text-gray-500">
-                              Extraction Confidence: {Math.round(Object.values(extractionData.confidence_scores).reduce((a, b) => a + b, 0) / Object.values(extractionData.confidence_scores).length)}%
-                            </span>
-                          </div>
-                        )}
+                        {extractionData.confidence_scores &&
+                          Object.keys(extractionData.confidence_scores).length >
+                            0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <span className="text-xs text-gray-500">
+                                Extraction Confidence:{" "}
+                                {Math.round(
+                                  Object.values(
+                                    extractionData.confidence_scores
+                                  ).reduce((a, b) => a + b, 0) /
+                                    Object.values(
+                                      extractionData.confidence_scores
+                                    ).length
+                                )}
+                                %
+                              </span>
+                            </div>
+                          )}
                       </CardContent>
                     </Card>
                   )}
@@ -321,7 +400,7 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
           ) : (
             <div
               className={`text-center space-y-4 transition-all duration-300 ${
-                isDragActive ? 'scale-105' : ''
+                isDragActive ? "scale-105" : ""
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -330,7 +409,7 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
               <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
                 <Upload className="h-8 w-8 text-blue-600" />
               </div>
-              
+
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
                   Drop your policy PDF here
@@ -338,8 +417,8 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                 <p className="text-muted-foreground mb-4">
                   or click to browse and select a file
                 </p>
-                
-                <Button 
+
+                <Button
                   onClick={handleFileSelect}
                   disabled={isLoading}
                   className="bg-blue-600 hover:bg-blue-700"
@@ -348,7 +427,7 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
                   Select PDF File
                 </Button>
               </div>
-              
+
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>• Supported format: PDF</p>
                 <p>• Maximum file size: 10MB</p>
@@ -366,7 +445,7 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
           animate={{ opacity: 1, y: 0 }}
           className="flex justify-end"
         >
-          <Button 
+          <Button
             onClick={handleContinue}
             disabled={!isCompleted}
             className="min-w-[120px] bg-green-600 hover:bg-green-700"
@@ -382,7 +461,7 @@ const PolicyPdfUpload = ({ onNext, useExtractionHook }: PolicyPdfUploadProps) =>
         <span>Documents are stored locally in your browser for security</span>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default PolicyPdfUpload
+export default PolicyPdfUpload;

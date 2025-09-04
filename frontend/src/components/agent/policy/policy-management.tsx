@@ -203,7 +203,7 @@ export function PolicyManagement() {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-600">{policiesResponse.policies.length}</div>
+             <div className="text-2xl font-bold text-green-600">{policiesResponse.policies?.length ?? 0}</div>
               <p className="text-sm text-gray-600">Current Page</p>
             </CardContent>
           </Card>
