@@ -39,8 +39,8 @@ security = HTTPBearer()
 mis_helpers = MISHelpers()
 
 
-@router.get("/master-sheet", response_model=MasterSheetResponse)
-async def get_master_sheet_data(
+@router.get("/quarter-sheet", response_model=MasterSheetResponse)
+async def get_quarter_sheet_data(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=1000, description="Items per page"),
     quarter: Optional[int] = Query(None, ge=1, le=4, description="Quarter number (1-4) to fetch data from specific quarterly sheet"),
