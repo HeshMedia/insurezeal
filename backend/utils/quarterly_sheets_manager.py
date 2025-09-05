@@ -491,8 +491,11 @@ class QuarterlySheetManager:
         """
         import re
         
-        # Pattern to match cell references like A2, B2, C2, etc.
-        # Use a more specific pattern to avoid issues with group references
+        if not formula or not formula.startswith('='):
+            return formula
+        
+        # More comprehensive pattern to match cell references like A2, B2, AA2, etc.
+        # This pattern will match column letters followed by the source row number
         pattern = r'([A-Z]+)' + str(source_row) + r'(?![0-9])'
         
         # Replace all occurrences of the source row with target row
@@ -501,6 +504,10 @@ class QuarterlySheetManager:
             return f"{column_part}{target_row}"
         
         adjusted_formula = re.sub(pattern, replace_func, formula)
+        
+        # Log the adjustment for debugging
+        if adjusted_formula != formula:
+            logger.debug(f"Formula adjusted from row {source_row} to {target_row}: {formula} -> {adjusted_formula}")
         
         return adjusted_formula
     
@@ -623,6 +630,14 @@ class QuarterlySheetManager:
             # Replace generic quarter sheet references with actual sheet names
             prev_quarter_name = f"Q{prev_quarter}-{prev_year}"
             decoded_formula = decoded_formula.replace("'Q{quarter-1}-{year}'!", f"'{prev_quarter_name}'!")
+            
+            # CRITICAL FIX: Adjust row references from row 2 to target_row
+            # This ensures formulas like =AY2*AL2 become =AY3*AL3 for row 3
+            formula_before_adjustment = decoded_formula
+            decoded_formula = self._adjust_formula_for_row(decoded_formula, 2, target_row)
+            
+            if formula_before_adjustment != decoded_formula:
+                logger.debug(f"Row adjustment applied for row {target_row}: {formula_before_adjustment} -> {decoded_formula}")
             
             # More careful quote fixing - only fix specific patterns that are clearly wrong
             # Fix double quotes in string literals BUT preserve empty string literals
