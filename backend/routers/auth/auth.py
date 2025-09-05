@@ -137,6 +137,13 @@ async def register(
             is_super_admin=False,
             is_sso_user=False,
             is_anonymous=False,
+            # Set token fields to None to avoid unique constraint violations
+            email_change_token_current=None,
+            email_change_token_new=None,
+            confirmation_token=None,
+            recovery_token=None,
+            phone_change_token=None,
+            reauthentication_token=None,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
         )
@@ -502,6 +509,13 @@ async def upsert_user_from_supabase(db: AsyncSession, user_data):
                 # Set defaults for required fields
                 is_sso_user=False,
                 is_anonymous=False,
+                # Set token fields to None to avoid unique constraint violations
+                email_change_token_current=None,
+                email_change_token_new=None,
+                confirmation_token=None,
+                recovery_token=None,
+                phone_change_token=None,
+                reauthentication_token=None,
             )
             
             db.add(new_user)
