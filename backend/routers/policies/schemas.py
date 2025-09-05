@@ -21,6 +21,8 @@ class PolicySummaryResponse(BaseModel):
     policy_end_date: Optional[date] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    quarter: Optional[str] = None  # Quarter calculated from created_at (Q1, Q2, Q3, Q4)
+    year: Optional[int] = None     # Year calculated from created_at
     
     class Config:
         from_attributes = True

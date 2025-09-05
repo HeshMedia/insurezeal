@@ -627,6 +627,247 @@ async def process_universal_record_csv(
         )
 
 
+async def process_universal_record_csv_to_quarterly_sheets(
+    db: AsyncSession,
+    csv_content: str,
+    insurer_name: str,
+    admin_user_id: int,
+    quarter_list: List[int],
+    year_list: List[int]
+) -> UniversalRecordProcessingReport:
+    """
+    Process universal record CSV with insurer-specific mapping to target quarterly sheets
+    
+    This function:
+    1. Applies insurer mapping to CSV data
+    2. For each quarter/year combination:
+       - Gets existing records from specific quarterly Google Sheet
+       - Compares and updates/adds records in quarterly sheet
+       - Uses quarterly sheet headers format
+       - Sets MATCH to TRUE for all updated/added records
+    3. Routes data to quarterly sheets instead of master sheet
+    """
+    
+    start_time = datetime.now()
+    stats = UniversalRecordProcessingStats()
+    change_details = []
+    
+    try:
+        # Get insurer mapping
+        insurer_mapping = get_insurer_mapping(insurer_name)
+        if not insurer_mapping:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No mapping found for insurer: {insurer_name}"
+            )
+        
+        # Parse CSV with mapping
+        mapped_records, original_headers, unmapped_headers = parse_csv_with_mapping(
+            csv_content, insurer_mapping
+        )
+        
+        if not mapped_records:
+            logger.warning("No valid records found in CSV after mapping")
+            stats.total_records_processed = 0
+            stats.processing_time_seconds = (datetime.now() - start_time).total_seconds()
+            
+            return UniversalRecordProcessingReport(
+                stats=stats,
+                change_details=[],
+                insurer_name=insurer_name,
+                file_info={
+                    "original_headers": original_headers,
+                    "unmapped_headers": unmapped_headers,
+                    "total_records": 0
+                },
+                processed_by_user_id=admin_user_id
+            )
+        
+        logger.info(f"Processing {len(mapped_records)} records for insurer {insurer_name} to quarterly sheets")
+        
+        # Import quarterly manager
+        from utils.quarterly_sheets_manager import quarterly_manager
+        
+        # Process each quarter/year combination
+        total_records_across_quarters = 0
+        total_updates_across_quarters = 0
+        total_additions_across_quarters = 0
+        quarter_processing_details = []
+        
+        for quarter, year in zip(quarter_list, year_list):
+            quarter_name = f"Q{quarter}-{year}"
+            logger.info(f"Processing records for quarter sheet: {quarter_name}")
+            
+            # Get all records from the specific quarterly sheet
+            try:
+                quarterly_records = quarterly_manager.get_all_records_from_quarter_sheet(quarter, year)
+                logger.info(f"Retrieved {len(quarterly_records)} existing records from {quarter_name}")
+            except Exception as e:
+                logger.error(f"Failed to get records from {quarter_name}: {str(e)}")
+                quarterly_records = []
+            
+            # Process each mapped record for this quarter
+            quarter_updates = 0
+            quarter_additions = 0
+            quarter_errors = 0
+            
+            for i, record in enumerate(mapped_records):
+                try:
+                    stats.total_records_processed += 1
+                    total_records_across_quarters += 1
+                    
+                    policy_number = record.get('Policy number', '').strip()
+                    if not policy_number:
+                        stats.total_records_skipped += 1
+                        continue
+                    
+                    # Transform record to quarterly sheet headers format
+                    quarterly_record = transform_to_quarterly_headers(record, insurer_name)
+                    
+                    # Find existing record in quarterly sheet by policy number
+                    existing_record = None
+                    for qr in quarterly_records:
+                        if qr.get('Policy number', '').strip() == policy_number:
+                            existing_record = qr
+                            break
+                    
+                    if existing_record:
+                        # Update existing record in quarterly sheet
+                        has_changes, changed_fields = await compare_quarterly_record(
+                            existing_record, quarterly_record, quarter, year
+                        )
+                        
+                        if has_changes:
+                            # Route updated record to specific quarterly sheet
+                            update_result = quarterly_manager.update_existing_record_by_policy_number(
+                                quarterly_record, policy_number, quarter, year
+                            )
+                            
+                            if update_result.get('success'):
+                                stats.total_records_updated += 1
+                                quarter_updates += 1
+                                total_updates_across_quarters += 1
+                                
+                                # Track field changes
+                                for field in changed_fields:
+                                    stats.field_changes[field] = stats.field_changes.get(field, 0) + 1
+                                
+                                change_details.append(RecordChangeDetail(
+                                    policy_number=policy_number,
+                                    operation="UPDATE",
+                                    quarter_sheet=quarter_name,
+                                    changed_fields=changed_fields,
+                                    previous_values={field: existing_record.get(field, '') for field in changed_fields},
+                                    new_values={field: quarterly_record.get(field, '') for field in changed_fields}
+                                ))
+                            else:
+                                stats.total_errors += 1
+                                quarter_errors += 1
+                                stats.error_details.append(f"Failed to update {policy_number} in {quarter_name}: {update_result.get('error', 'Unknown error')}")
+                        else:
+                            # No changes needed, but mark as processed
+                            stats.total_records_skipped += 1
+                    else:
+                        # Add new record to quarterly sheet
+                        addition_result = quarterly_manager.route_new_record_to_specific_quarter(
+                            quarterly_record, quarter, year, "CREATE"
+                        )
+                        
+                        if addition_result.get('success'):
+                            stats.total_records_added += 1
+                            quarter_additions += 1
+                            total_additions_across_quarters += 1
+                            
+                            change_details.append(RecordChangeDetail(
+                                policy_number=policy_number,
+                                operation="ADD",
+                                quarter_sheet=quarter_name,
+                                changed_fields=list(quarterly_record.keys()),
+                                previous_values={},
+                                new_values=quarterly_record
+                            ))
+                        else:
+                            stats.total_errors += 1
+                            quarter_errors += 1
+                            stats.error_details.append(f"Failed to add {policy_number} to {quarter_name}: {addition_result.get('error', 'Unknown error')}")
+                            
+                except Exception as e:
+                    stats.total_errors += 1
+                    quarter_errors += 1
+                    stats.error_details.append(f"Error processing {policy_number} for {quarter_name}: {str(e)}")
+                    logger.error(f"Error processing record {policy_number} for {quarter_name}: {str(e)}")
+            
+            quarter_processing_details.append({
+                "quarter": quarter_name,
+                "updates": quarter_updates,
+                "additions": quarter_additions,
+                "errors": quarter_errors
+            })
+            
+            logger.info(f"Completed {quarter_name}: {quarter_updates} updates, {quarter_additions} additions, {quarter_errors} errors")
+        
+        # Calculate processing time
+        end_time = datetime.now()
+        stats.processing_time_seconds = (end_time - start_time).total_seconds()
+        
+        # Create reconciliation report
+        report = UniversalRecordProcessingReport(
+            stats=stats,
+            change_details=change_details,
+            insurer_name=insurer_name,
+            file_info={
+                "original_headers": original_headers,
+                "unmapped_headers": unmapped_headers,
+                "total_records": len(mapped_records),
+                "target_quarters": [f"Q{q}-{y}" for q, y in zip(quarter_list, year_list)],
+                "quarter_processing_details": quarter_processing_details
+            },
+            processed_by_user_id=admin_user_id
+        )
+        
+        # Save reconciliation report to database for persistence
+        try:
+            # Calculate variance and coverage percentages
+            variance_percentage = (stats.total_errors / stats.total_records_processed * 100) if stats.total_records_processed > 0 else 0.0
+            coverage_percentage = ((stats.total_records_updated + stats.total_records_added) / stats.total_records_processed * 100) if stats.total_records_processed > 0 else 0.0
+            
+            db_report = ReconciliationReport(
+                insurer_name=insurer_name,
+                report_type="universal_record_quarterly",
+                total_records_processed=stats.total_records_processed,
+                total_records_updated=stats.total_records_updated,
+                total_records_added=stats.total_records_added,
+                total_records_skipped=stats.total_records_skipped,
+                total_errors=stats.total_errors,
+                processing_time_seconds=stats.processing_time_seconds,
+                data_variance_percentage=round(variance_percentage, 2),
+                coverage_percentage=round(coverage_percentage, 2),
+                field_changes=stats.field_changes,
+                error_details=stats.error_details,
+                change_details=[detail.dict() for detail in change_details],
+                file_info=report.file_info,
+                processed_by=admin_user_id,
+                status="completed" if stats.total_errors == 0 else "completed_with_errors"
+            )
+            
+            db.add(db_report)
+            await db.commit()
+            logger.info(f"Saved quarterly reconciliation report to database for insurer '{insurer_name}'")
+            
+        except Exception as e:
+            logger.error(f"Failed to save quarterly reconciliation report to database: {str(e)}")
+            await db.rollback()
+        
+        return report
+        
+    except Exception as e:
+        logger.error(f"Error in quarterly universal record processing: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process universal record to quarterly sheets: {str(e)}"
+        )
+
+
 async def compare_and_update_master_record(
     existing_record: Dict[str, Any],
     new_record: Dict[str, Any],
@@ -795,3 +1036,163 @@ def normalize_field_value(field_name: str, value: Any) -> str:
             pass
     
     return normalized
+
+
+def transform_to_quarterly_headers(record: Dict[str, Any], insurer_name: str) -> Dict[str, Any]:
+    """
+    Transform mapped record to quarterly sheet headers format
+    
+    This function maps the insurer-specific record (already mapped via record-mapper.csv)
+    to the exact quarterly sheet headers format using the standard quarterly sheet headers.
+    """
+    quarterly_record = {}
+    
+    # Get the standard quarterly sheet headers from quarterly manager
+    from utils.quarterly_sheets_manager import quarterly_manager
+    standard_headers = quarterly_manager._get_default_headers()
+    
+    # Direct mapping to quarterly sheet headers
+    quarterly_header_mapping = {
+        # Core identification fields
+        'Child ID/ User ID [Provided by Insure Zeal]': record.get('Child ID/ User ID [Provided by Insure Zeal]', ''),
+        'Insurer /broker code': record.get('Insurer /broker code', ''),
+        'Agent Code': record.get('Agent Code', ''),
+        'Policy number': record.get('Policy number', ''),
+        'Formatted Policy number': record.get('Formatted Policy number', ''),
+        'Broker Name': record.get('Broker Name', ''),
+        'Insurer name': record.get('Insurer Name', record.get('Insurer name', '')),
+        
+        # Dates
+        'Reporting Month (mmm\'yy)': record.get('Reporting Month (mmm\'yy)', ''),
+        'Policy Start Date': record.get('Policy Start Date', ''),
+        'Policy End Date': record.get('Policy End Date', ''),
+        'Booking Date(Click to select Date)': record.get('Booking Date(Click to select Date)', ''),
+        
+        # Product details
+        'Major Categorisation( Motor/Life/ Health)': record.get('Major Categorisation( Motor/Life/ Health)', ''),
+        'Product (Insurer Report)': record.get('Product (Insurer Report)', ''),
+        'Product Type': record.get('Product Type', ''),
+        'Plan type (Comp/STP/SAOD)': record.get('Plan type (Comp/STP/SAOD)', ''),
+        
+        # Premium fields
+        'Gross premium': record.get('Gross Premium', record.get('Gross premium', '')),
+        'Net premium': record.get('Net Premium', record.get('Net premium', '')),
+        'OD Preimium': record.get('OD Premium', record.get('OD Preimium', '')),
+        'TP Premium': record.get('TP Premium', ''),
+        'GST Amount': record.get('GST Amount', ''),
+        
+        # Vehicle details
+        'Registration.no': record.get('Registration.no', ''),
+        'Make_Model': record.get('Make_Model', ''),
+        'Model': record.get('Model', ''),
+        'Vehicle_Variant': record.get('Vehicle_Variant', ''),
+        'GVW': record.get('GVW', ''),
+        'RTO': record.get('RTO', ''),
+        'State': record.get('State', ''),
+        'Cluster': record.get('Cluster', ''),
+        'Fuel Type': record.get('Fuel Type', ''),
+        'CC': record.get('CC', ''),
+        'Age(Year)': record.get('Age(Year)', ''),
+        'NCB (YES/NO)': record.get('NCB (YES/NO)', ''),
+        'Discount %': record.get('Discount %', ''),
+        'Business Type': record.get('Business Type', ''),
+        'Seating Capacity': record.get('Seating Capacity', ''),
+        'Veh_Wheels': record.get('Veh_Wheels', ''),
+        
+        # Customer details
+        'Customer Name': record.get('Customer Name', ''),
+        'Customer Number': record.get('Customer Number', ''),
+        
+        # Commission and payout fields
+        'Commissionable Premium': record.get('Commissionable Premium', ''),
+        'Incoming Grid %': record.get('Incoming Grid %', ''),
+        'Receivable from Broker': record.get('Receivable from Broker', ''),
+        'Extra Grid': record.get('Extra Grid', ''),
+        'Extra Amount Receivable from Broker': record.get('Extra Amount Receivable from Broker', ''),
+        'Total Receivable from Broker': record.get('Total Receivable from Broker', ''),
+        'Claimed By': record.get('Claimed By', ''),
+        'Payment by': record.get('Payment by', ''),
+        'Payment Mode': record.get('Payment Mode', ''),
+        'Cut Pay Amount Received From Agent': record.get('Cut Pay Amount Received From Agent', ''),
+        'Already Given to agent': record.get('Already Given to agent', ''),
+        'Actual': record.get('Actual', ''),
+        'Agent_PO%': record.get('Agent_PO%', ''),
+        'Agent_PO_AMT': record.get('Agent_PO_AMT', ''),
+        'Agent_Extra%': record.get('Agent_Extra%', ''),
+        'Agent_Extr_Amount': record.get('Agent_Extr_Amount', ''),
+        'Total_Agent_PO_AMT': record.get('Total_Agent_PO_AMT', ''),
+        'Payment By Office': record.get('Payment By Office', ''),
+        'PO Paid To Agent': record.get('PO Paid To Agent', ''),
+        'Running Bal': record.get('Running Bal', ''),
+        'Total Receivable from Broker Include 18% GST': record.get('Total Receivable from Broker Include 18% GST', ''),
+        'IZ Total PO%': record.get('IZ Total PO%', ''),
+        'As per Broker PO%': record.get('As per Broker PO%', ''),
+        'As per Broker PO AMT': record.get('As per Broker PO AMT', ''),
+        'PO% Diff': record.get('PO% Diff', ''),
+        'Broker PO AMT Diff': record.get('Broker PO AMT Diff', ''),
+        'Broker': record.get('Broker', ''),
+        'As per Agent Payout%': record.get('As per Agent Payout%', ''),
+        'As per Agent Payout Amount': record.get('As per Agent Payout Amount', ''),
+        'PO% Diff Agent': record.get('PO% Diff Agent', ''),
+        'PO AMT Diff Agent': record.get('PO AMT Diff Agent', ''),
+        'Invoice Status': record.get('Invoice Status', ''),
+        'Invoice Number': record.get('Invoice Number', ''),
+        'Remarks': record.get('Remarks', ''),
+        'Match': 'TRUE'  # Set to TRUE for universal record uploads
+    }
+    
+    # Initialize quarterly_record with all standard headers
+    for header in standard_headers:
+        quarterly_record[header] = ''
+    
+    # Apply the mapped values to quarterly_record
+    for quarterly_header, value in quarterly_header_mapping.items():
+        if quarterly_header in quarterly_record:
+            quarterly_record[quarterly_header] = str(value) if value else ''
+    
+    return quarterly_record
+
+
+async def compare_quarterly_record(
+    existing_record: Dict[str, Any],
+    new_record: Dict[str, Any],
+    quarter: int,
+    year: int
+) -> Tuple[bool, List[str]]:
+    """
+    Compare existing quarterly sheet record with new universal record
+    
+    Returns:
+        - has_changes: bool
+        - changed_fields: list of field names that changed
+    """
+    
+    has_changes = False
+    changed_fields = []
+    
+    # Important fields to compare (subset of quarterly headers)
+    important_fields = [
+        'Policy number', 'Broker Name', 'Insurer name', 'Gross premium', 
+        'Net premium', 'OD Preimium', 'TP Premium', 'GST Amount',
+        'Customer Name', 'Customer Number', 'Registration.no',
+        'Commissionable Premium', 'Agent Code', 'Child ID/ User ID [Provided by Insure Zeal]'
+    ]
+    
+    # Compare each important field in the new record
+    for field_name in important_fields:
+        if field_name in new_record:
+            new_value = normalize_field_value(field_name, new_record[field_name])
+            existing_value = normalize_field_value(field_name, existing_record.get(field_name, ''))
+            
+            if new_value != existing_value:
+                has_changes = True
+                changed_fields.append(field_name)
+                logger.debug(f"Q{quarter}-{year} Field '{field_name}' changed: '{existing_value}' -> '{new_value}'")
+    
+    # Always set Match to TRUE for universal records
+    if existing_record.get('Match', '').upper() != 'TRUE':
+        has_changes = True
+        if 'Match' not in changed_fields:
+            changed_fields.append('Match')
+    
+    return has_changes, changed_fields
