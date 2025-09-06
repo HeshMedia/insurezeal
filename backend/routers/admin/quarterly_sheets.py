@@ -58,7 +58,26 @@ async def create_quarter_sheet(
     current_user: Dict = Depends(get_current_user),
     _rbac_check = Depends(require_admin_quarterly_sheets_write)
 ):
-    """Create a new quarterly sheet with proper structure and balance carryover"""
+    """
+    Create a new quarterly sheet with proper structure and balance carryover
+    
+    Creates a new quarterly sheet with:
+    - Complete 70+ field structure including newly added fields:
+      * "Agent Total PO Amount": Total agent policy office amount
+      * "Actual Agent_PO%": Actual agent policy office percentage
+    - Proper header structure copied from Master Template
+    - Dynamic formula copying from Master Template (formulas adjust automatically to new rows)
+    - Balance carryover from previous quarter where MATCH = TRUE
+    - Proper formatting and data validation
+    
+    **Features:**
+    - Automatic formula adaptation for new quarterly sheet structure
+    - New fields are included with proper formula support
+    - All template formulas are dynamically adjusted for the new quarter
+    - Previous quarter balance carryover (when applicable)
+    
+    **Admin/SuperAdmin only endpoint**
+    """
     try:
         from utils.quarterly_sheets_manager import quarterly_manager
         
@@ -571,7 +590,25 @@ async def setup_initial_quarterly_sheet(
 async def create_master_template_sheet(
     current_user: Dict = Depends(require_admin_quarterly_sheets_write)
 ):
-    """Create Master Template sheet in Google Sheets if it doesn't exist"""
+    """
+    Create Master Template sheet in Google Sheets if it doesn't exist
+    
+    Creates the Master Template sheet with:
+    - Complete 70+ field structure including newly added fields:
+      * "Agent Total PO Amount": Total agent policy office amount
+      * "Actual Agent_PO%": Actual agent policy office percentage
+    - Sample formulas for calculated fields
+    - Proper header formatting
+    - Template structure used by quarterly sheet creation
+    
+    **Features:**
+    - Includes all quarterly sheet headers with new fields
+    - Sample formulas for common calculations
+    - Template serves as source for formula copying to new quarterly sheets
+    - New fields are included with proper structure for formula support
+    
+    **Admin/SuperAdmin only endpoint**
+    """
     try:
         from utils.quarterly_sheets_manager import quarterly_manager
         
