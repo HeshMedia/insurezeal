@@ -37,7 +37,9 @@ class MISHelpers:
         page: int = 1,
         page_size: int = 50,
         search: Optional[str] = None,
-        filter_by: Optional[Dict[str, str]] = None
+        filter_by: Optional[Dict[str, List[str]]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = 'asc'
     ) -> Dict[str, Any]:
         """
         Get paginated data from master Google sheet
@@ -46,7 +48,9 @@ class MISHelpers:
             page: Page number (1-based)
             page_size: Number of records per page
             search: Search term to filter records
-            filter_by: Dictionary of field:value filters
+            filter_by: Dictionary of field:list_of_values filters (supports multiple values per field)
+            sort_by: Field to sort by
+            sort_order: Sort order ('asc' or 'desc')
             
         Returns:
             Dictionary with records, pagination info, and metadata
@@ -109,18 +113,33 @@ class MISHelpers:
                 all_records = filtered_records
                 logger.info(f"Search '{search}' filtered to {len(all_records)} records")
             
-            # Apply field filters if provided
+            # Apply field filters if provided (supports multiple values per field)
             if filter_by:
-                for field_name, filter_value in filter_by.items():
-                    if filter_value and filter_value.strip():
-                        filter_val = filter_value.strip().lower()
-                        all_records = [
-                            record for record in all_records
-                            if hasattr(record, field_name) and 
-                            getattr(record, field_name) and
-                            filter_val in str(getattr(record, field_name)).lower()
-                        ]
+                for field_name, filter_values in filter_by.items():
+                    if filter_values:  # filter_values is now a list
+                        # Clean the filter values (remove empty/None values)
+                        clean_values = [v.strip().lower() for v in filter_values if v and v.strip()]
+                        if clean_values:
+                            all_records = [
+                                record for record in all_records
+                                if hasattr(record, field_name) and 
+                                getattr(record, field_name) and
+                                any(filter_val in str(getattr(record, field_name)).lower() 
+                                    for filter_val in clean_values)
+                            ]
                 logger.info(f"Field filters applied, {len(all_records)} records remaining")
+            
+            # Apply sorting if specified
+            if sort_by and hasattr(MasterSheetRecord, sort_by):
+                reverse_order = (sort_order.lower() == 'desc')
+                try:
+                    all_records.sort(
+                        key=lambda x: str(getattr(x, sort_by) or '').lower() if getattr(x, sort_by) else '',
+                        reverse=reverse_order
+                    )
+                    logger.info(f"Records sorted by {sort_by} ({sort_order})")
+                except Exception as e:
+                    logger.warning(f"Failed to sort by {sort_by}: {str(e)}")
             
             total_count = len(all_records)
             total_pages = (total_count + page_size - 1) // page_size
@@ -158,7 +177,9 @@ class MISHelpers:
         page: int = 1,
         page_size: int = 50,
         search: Optional[str] = None,
-        filter_by: Optional[Dict[str, str]] = None
+        filter_by: Optional[Dict[str, List[str]]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = 'asc'
     ) -> MasterSheetResponse:
         """
         Get paginated data from specific quarterly Google sheet
@@ -256,18 +277,33 @@ class MISHelpers:
                 all_records = filtered_records
                 logger.info(f"Search '{search}' filtered to {len(all_records)} records in {sheet_name}")
             
-            # Apply field filters if provided
+            # Apply field filters if provided (supports multiple values per field)
             if filter_by:
-                for field_name, filter_value in filter_by.items():
-                    if filter_value and filter_value.strip():
-                        filter_val = filter_value.strip().lower()
-                        all_records = [
-                            record for record in all_records
-                            if hasattr(record, field_name) and 
-                            getattr(record, field_name) and
-                            filter_val in str(getattr(record, field_name)).lower()
-                        ]
+                for field_name, filter_values in filter_by.items():
+                    if filter_values:  # filter_values is now a list
+                        # Clean the filter values (remove empty/None values)
+                        clean_values = [v.strip().lower() for v in filter_values if v and v.strip()]
+                        if clean_values:
+                            all_records = [
+                                record for record in all_records
+                                if hasattr(record, field_name) and 
+                                getattr(record, field_name) and
+                                any(filter_val in str(getattr(record, field_name)).lower() 
+                                    for filter_val in clean_values)
+                            ]
                 logger.info(f"Field filters applied to {sheet_name}, {len(all_records)} records remaining")
+            
+            # Apply sorting if specified
+            if sort_by and hasattr(MasterSheetRecord, sort_by):
+                reverse_order = (sort_order.lower() == 'desc')
+                try:
+                    all_records.sort(
+                        key=lambda x: str(getattr(x, sort_by) or '').lower() if getattr(x, sort_by) else '',
+                        reverse=reverse_order
+                    )
+                    logger.info(f"Records in {sheet_name} sorted by {sort_by} ({sort_order})")
+                except Exception as e:
+                    logger.warning(f"Failed to sort {sheet_name} by {sort_by}: {str(e)}")
             
             total_count = len(all_records)
             total_pages = (total_count + page_size - 1) // page_size

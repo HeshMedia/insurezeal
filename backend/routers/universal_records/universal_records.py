@@ -27,7 +27,7 @@ from .schemas import (
     ReconciliationSummaryResponse
 )
 
-#✅ COMPLETED: Universal record upload now supports quarter and year targeting for reconciliation
+
 
 router = APIRouter(prefix="/universal-records", tags=["Universal Records"])
 logger = logging.getLogger(__name__)

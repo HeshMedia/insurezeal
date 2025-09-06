@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import List, Optional
 from config import get_db
 from routers.auth.auth import get_current_user
 from dependencies.rbac import (
@@ -46,10 +47,29 @@ async def get_quarter_sheet_data(
     quarter: Optional[int] = Query(None, ge=1, le=4, description="Quarter number (1-4) to fetch data from specific quarterly sheet"),
     year: Optional[int] = Query(None, ge=2020, le=2030, description="Year to fetch data from specific quarterly sheet"),
     search: Optional[str] = Query(None, description="Search across key fields"),
-    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
-    insurer_name: Optional[str] = Query(None, description="Filter by insurer name"),
-    policy_number: Optional[str] = Query(None, description="Filter by policy number"),
-    reporting_month: Optional[str] = Query(None, description="Filter by reporting month"),
+    
+    # Multiple filtering options - support arrays
+    agent_code: Optional[List[str]] = Query(None, description="Filter by agent codes (can specify multiple)"),
+    insurer_name: Optional[List[str]] = Query(None, description="Filter by insurer names (can specify multiple)"),
+    policy_number: Optional[List[str]] = Query(None, description="Filter by policy numbers (can specify multiple)"),
+    reporting_month: Optional[List[str]] = Query(None, description="Filter by reporting months (can specify multiple)"),
+    child_id: Optional[List[str]] = Query(None, description="Filter by child IDs (can specify multiple)"),
+    broker_name: Optional[List[str]] = Query(None, description="Filter by broker names (can specify multiple)"),
+    product_type: Optional[List[str]] = Query(None, description="Filter by product types (can specify multiple)"),
+    plan_type: Optional[List[str]] = Query(None, description="Filter by plan types (can specify multiple)"),
+    make_model: Optional[List[str]] = Query(None, description="Filter by make/models (can specify multiple)"),
+    model: Optional[List[str]] = Query(None, description="Filter by models (can specify multiple)"),
+    gvw: Optional[List[str]] = Query(None, description="Filter by GVW values (can specify multiple)"),
+    rto: Optional[List[str]] = Query(None, description="Filter by RTO codes (can specify multiple)"),
+    state: Optional[List[str]] = Query(None, description="Filter by states (can specify multiple)"),
+    fuel_type: Optional[List[str]] = Query(None, description="Filter by fuel types (can specify multiple)"),
+    cc: Optional[List[str]] = Query(None, description="Filter by CC values (can specify multiple)"),
+    age_year: Optional[List[str]] = Query(None, description="Filter by age in years (can specify multiple)"),
+    
+    # Sorting options
+    sort_by: Optional[str] = Query(None, description="Field to sort by (e.g., reporting_month, agent_code, insurer_name, etc.)"),
+    sort_order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order: 'asc' for ascending, 'desc' for descending"),
+    
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_read)
@@ -66,7 +86,8 @@ async def get_quarter_sheet_data(
     **Features:**
     - Paginated results for large datasets
     - Search across multiple key fields
-    - Filter by specific fields
+    - Multiple value filtering (arrays supported)
+    - Sorting by any field with ascending/descending order
     - All sheet columns included
     - Quarterly sheet targeting for specific periods
     
@@ -76,12 +97,29 @@ async def get_quarter_sheet_data(
     - When both quarter and year are provided, data is fetched from Q{quarter}-{year} sheet
     - When neither is provided, data is fetched from Master sheet
     
-    **Search & Filters:**
+    **Search & Filtering:**
     - **search**: Searches across policy number, agent code, customer name, insurer name, broker name, registration number
-    - **agent_code**: Filter by specific agent code
-    - **insurer_name**: Filter by specific insurer name  
-    - **policy_number**: Filter by specific policy number
-    - **reporting_month**: Filter by specific reporting month
+    - **Multiple Filter Support**: All filter fields support multiple values (use multiple query parameters)
+      - **agent_code**: Filter by agent codes (can specify multiple: ?agent_code=A001&agent_code=A002)
+      - **insurer_name**: Filter by insurer names (can specify multiple)
+      - **policy_number**: Filter by policy numbers (can specify multiple)
+      - **reporting_month**: Filter by reporting months (can specify multiple)
+      - **child_id**: Filter by child IDs (can specify multiple)
+      - **broker_name**: Filter by broker names (can specify multiple)
+      - **product_type**: Filter by product types (can specify multiple)
+      - **plan_type**: Filter by plan types (can specify multiple)
+      - **make_model**: Filter by make/models (can specify multiple)
+      - **model**: Filter by models (can specify multiple)
+      - **gvw**: Filter by GVW values (can specify multiple)
+      - **rto**: Filter by RTO codes (can specify multiple)
+      - **state**: Filter by states (can specify multiple)
+      - **fuel_type**: Filter by fuel types (can specify multiple)
+      - **cc**: Filter by CC values (can specify multiple)
+      - **age_year**: Filter by age in years (can specify multiple)
+    
+    **Sorting:**
+    - **sort_by**: Field to sort by (any field from the data)
+    - **sort_order**: Sort order - 'asc' for ascending (default), 'desc' for descending
     
     **Returns:**
     - Complete record data with all sheet fields
@@ -106,18 +144,42 @@ async def get_quarter_sheet_data(
             sheet_name = "Master"
             data_source = "Master sheet"
         
-        # Build filters dictionary
+        # Build filters dictionary - handle multiple values
         filters = {}
-        if agent_code:
-            filters['agent_code'] = agent_code
-        if insurer_name:
-            filters['insurer_name'] = insurer_name
-        if policy_number:
-            filters['policy_number'] = policy_number
-        if reporting_month:
-            filters['reporting_month'] = reporting_month
         
-        logger.info(f"Fetching {data_source} data - Page: {page}, Size: {page_size}, Search: '{search}', Filters: {filters}")
+        # Helper function to process list filters
+        def add_filter(filter_name: str, filter_values: Optional[List[str]]):
+            if filter_values:
+                # Remove None values and empty strings
+                clean_values = [v for v in filter_values if v and v.strip()]
+                if clean_values:
+                    filters[filter_name] = clean_values
+        
+        # Process all filters
+        add_filter('agent_code', agent_code)
+        add_filter('insurer_name', insurer_name)
+        add_filter('policy_number', policy_number)
+        add_filter('reporting_month', reporting_month)
+        add_filter('child_id', child_id)
+        add_filter('broker_name', broker_name)
+        add_filter('product_type', product_type)
+        add_filter('plan_type', plan_type)
+        add_filter('make_model', make_model)
+        add_filter('model', model)
+        add_filter('gvw', gvw)
+        add_filter('rto', rto)
+        add_filter('state', state)
+        add_filter('fuel_type', fuel_type)
+        add_filter('cc', cc)
+        add_filter('age_year', age_year)
+        
+        # Build sorting parameters
+        sort_params = {}
+        if sort_by:
+            sort_params['sort_by'] = sort_by
+            sort_params['sort_order'] = sort_order or 'asc'
+        
+        logger.info(f"Fetching {data_source} data - Page: {page}, Size: {page_size}, Search: '{search}', Filters: {filters}, Sort: {sort_params}")
         
         # Get data from appropriate sheet
         if quarter is not None and year is not None:
@@ -128,7 +190,9 @@ async def get_quarter_sheet_data(
                 page=page,
                 page_size=page_size,
                 search=search,
-                filter_by=filters if filters else None
+                filter_by=filters if filters else None,
+                sort_by=sort_params.get('sort_by'),
+                sort_order=sort_params.get('sort_order', 'asc')
             )
             
             logger.info(f"Successfully retrieved {len(result.records)} records from {data_source}")
@@ -142,7 +206,9 @@ async def get_quarter_sheet_data(
                 page=page,
                 page_size=page_size,
                 search=search,
-                filter_by=filters if filters else None
+                filter_by=filters if filters else None,
+                sort_by=sort_params.get('sort_by'),
+                sort_order=sort_params.get('sort_order', 'asc')
             )
             
             if "error" in result:
@@ -881,85 +947,6 @@ async def export_quarterly_sheet_data(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to export quarterly sheet data: {str(e)}"
-        )
-
-
-@router.get("/master-sheet/export")
-async def export_master_sheet_data(
-    format: str = Query("csv", description="Export format: csv or json"),
-    search: Optional[str] = Query(None, description="Filter data before export"),
-    agent_code: Optional[str] = Query(None, description="Filter by agent code"),
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-    _rbac_check = Depends(require_admin_read)
-):
-    """
-    Export Master Google Sheet data in various formats (Legacy)
-    
-    **Admin/SuperAdmin only endpoint**
-    
-    Export filtered master sheet data for external analysis or backup purposes.
-    This is the legacy master sheet export. For quarterly data, use /quarterly-sheet/export
-    
-    **Formats:**
-    - **csv**: Comma-separated values for Excel/analysis tools
-    - **json**: JSON format for programmatic processing
-    
-    **Note:** Large datasets are automatically paginated to prevent timeouts.
-    **Recommendation:** Use /quarterly-sheet/export for current quarterly data exports.
-    """
-    
-    try:
-        # Fetch all data from master sheet using helper (no pagination)
-        filters = {}
-        if agent_code:
-            filters['agent_code'] = agent_code
-        result = await mis_helpers.get_master_sheet_data(
-            page=1,
-            page_size=10000000,  # Large number to get all records
-            search=search,
-            filter_by=filters if filters else None
-        )
-        records = result.get("records", [])
-        if not records:
-            return {"message": "No data found for export."}
-
-        # Ensure MATCH is present at the end
-        for rec in records:
-            if "MATCH" not in rec:
-                rec["MATCH"] = False
-        headers = list(records[0].keys())
-
-        if format == "csv":
-            def csv_generator():
-                output = io.StringIO()
-                writer = csv.DictWriter(output, fieldnames=headers)
-                writer.writeheader()
-                yield output.getvalue()
-                output.seek(0)
-                output.truncate(0)
-                for row in records:
-                    writer.writerow(row)
-                    yield output.getvalue()
-                    output.seek(0)
-                    output.truncate(0)
-            return StreamingResponse(csv_generator(), media_type="text/csv", headers={
-                "Content-Disposition": "attachment; filename=master_sheet_export.csv"
-            })
-        elif format == "json":
-            return JSONResponse(content=records, headers={
-                "Content-Disposition": "attachment; filename=master_sheet_export.json"
-            })
-        else:
-            return {
-                "error": "Invalid format. Supported formats: csv, json"
-            }
-        
-    except Exception as e:
-        logger.error(f"Error in export_master_sheet_data: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to export master sheet data"
         )
 
 

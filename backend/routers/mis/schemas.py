@@ -2,6 +2,36 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from uuid import UUID
+from enum import Enum
+
+class SortOrder(str, Enum):
+    """Sort order options"""
+    asc = "asc"
+    desc = "desc"
+
+class SortableFields(str, Enum):
+    """Fields that can be used for sorting"""
+    reporting_month = "reporting_month"
+    child_id = "child_id"
+    agent_code = "agent_code"
+    insurer_name = "insurer_name"
+    broker_name = "broker_name"
+    policy_number = "policy_number"
+    product_type = "product_type"
+    plan_type = "plan_type"
+    make_model = "make_model"
+    model = "model"
+    gvw = "gvw"
+    rto = "rto"
+    state = "state"
+    fuel_type = "fuel_type"
+    cc = "cc"
+    age_year = "age_year"
+    gross_premium = "gross_premium"
+    net_premium = "net_premium"
+    booking_date = "booking_date"
+    policy_start_date = "policy_start_date"
+    policy_end_date = "policy_end_date"
 
 class MasterSheetRecord(BaseModel):
     """Schema for a single record from Master sheet with updated headers"""
