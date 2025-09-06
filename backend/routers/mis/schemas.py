@@ -58,6 +58,7 @@ class MasterSheetRecord(BaseModel):
     agent_po_amt: Optional[str] = Field(None, alias="Agent_PO_AMT")
     agent_extra_percent: Optional[str] = Field(None, alias="Agent_Extra%")
     agent_extra_amount: Optional[str] = Field(None, alias="Agent_Extr_Amount")
+    agent_total_po_amount: Optional[str] = Field(None, alias="Agent Total PO Amount")
     payment_by_office: Optional[str] = Field(None, alias="Payment By Office")
     po_paid_to_agent: Optional[str] = Field(None, alias="PO Paid To Agent")
     running_bal: Optional[str] = Field(None, alias="Running Bal")
@@ -127,31 +128,19 @@ class MasterSheetStatsResponse(BaseModel):
     last_updated: str = Field(..., description="Last update timestamp")
 
 class AgentMISRecord(BaseModel):
-    """Filtered master sheet record for agent MIS with specific fields removed"""
-    # Core Transaction Data  
-    id: Optional[str] = None
-    reporting_month: Optional[str] = None
+    """Filtered quarterly sheet record for agent MIS with only specific required fields"""
+    # Core fields as requested
     booking_date: Optional[str] = None
+    policy_start_date: Optional[str] = None
+    policy_end_date: Optional[str] = None
+    policy_number: Optional[str] = None
     insurer_name: Optional[str] = None
     broker_name: Optional[str] = None
- 
-    # Policy Information
-    policy_number: Optional[str] = None
-
-    # Premium Details (excluding sensitive broker commission data)
     gross_premium: Optional[str] = None
     net_premium: Optional[str] = None
-  
-    # Agent relevant commission data only
-    agent_commission_perc: Optional[str] = None
-    agent_po_amount: Optional[str] = None
-    total_agent_po: Optional[str] = None
-    running_balance: Optional[str] = None
-    already_given_to_agent: Optional[str] = None
-
-    # Timestamps
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    commissionable_premium: Optional[str] = None
+    agent_total_po_amount: Optional[str] = None
+    actual_agent_po_percent: Optional[str] = None
 
 class AgentMISStats(BaseModel):
     """Statistics for agent MIS data"""
@@ -227,6 +216,7 @@ class QuarterlySheetUpdateRecord(BaseModel):
     agent_po_amt: Optional[str] = Field(None, alias="Agent_PO_AMT")
     agent_extra_percent: Optional[str] = Field(None, alias="Agent_Extra%")
     agent_extra_amount: Optional[str] = Field(None, alias="Agent_Extr_Amount")
+    agent_total_po_amount: Optional[str] = Field(None, alias="Agent Total PO Amount")
     payment_by_office: Optional[str] = Field(None, alias="Payment By Office")
     po_paid_to_agent: Optional[str] = Field(None, alias="PO Paid To Agent")
     running_bal: Optional[str] = Field(None, alias="Running Bal")

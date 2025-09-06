@@ -348,7 +348,7 @@ class QuarterlySheetManager:
             logger.warning(f"Error copying template validations: {str(e)}")
     
     def _get_default_headers(self) -> List[str]:
-        """Default headers based on the complete template analysis"""
+        """Default headers based on the complete template analysis - Updated to match current quarterly sheets"""
         return [
             "Reporting Month (mmm'yy)", "Child ID/ User ID [Provided by Insure Zeal]", "Insurer /broker code",
             "Policy Start Date", "Policy End Date", "Booking Date(Click to select Date)", "Broker Name", 
@@ -360,12 +360,12 @@ class QuarterlySheetManager:
             "Veh_Wheels", "Customer Name", "Customer Number", "Commissionable Premium", "Incoming Grid %", 
             "Receivable from Broker", "Extra Grid", "Extra Amount Receivable from Broker", 
             "Total Receivable from Broker", "Claimed By", "Payment by", "Payment Mode", 
-            "Cut Pay Amount Received From Agent", "Already Given to agent", "Actual", "Agent_PO%", 
-            "Agent_PO_AMT", "Agent_Extra%", "Agent_Extr_Amount", "Total_Agent_PO_AMT", "Payment By Office", 
+            "Cut Pay Amount Received From Agent", "Already Given to agent", "Actual Agent_PO%", 
+            "Agent_PO_AMT", "Agent_Extra%", "Agent_Extr_Amount", "Agent Total PO Amount", "Payment By Office", 
             "PO Paid To Agent", "Running Bal", "Total Receivable from Broker Include 18% GST", "IZ Total PO%", 
-            "As per Broker PO%", "As per Broker PO AMT", "PO% Diff", "Broker PO AMT Diff", "Broker", 
-            "As per Agent Payout%", "As per Agent Payout Amount", "PO% Diff Agent", "PO AMT Diff Agent", 
-            "Invoice Status", "Invoice Number", "Remarks", "Match", "Agent Code"
+            "As per Broker PO%", "As per Broker PO AMT", "PO% Diff Broker", "PO AMT Diff Broker", 
+            "Actual Agent PO%", "As per Agent Payout%", "As per Agent Payout Amount", "PO% Diff Agent", 
+            "PO AMT Diff Agent", "Invoice Status", "Invoice Number", "Remarks", "Match", "Agent Code"
         ]
     
     def create_quarterly_sheet_headers(self) -> List[str]:

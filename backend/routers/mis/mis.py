@@ -28,6 +28,8 @@ from typing import Optional, Dict, Any
 import logging
 import csv
 import io
+import tempfile
+import zipfile
 import zipfile
 import tempfile
 
@@ -218,6 +220,8 @@ async def update_quarterly_sheet_records(
           "Gross premium": "15000",
           "Net premium": "12711",
           "Running Bal": "1016",
+          "Agent Total PO Amount": "2500",
+          "Actual Agent_PO%": "15.5",
           "Match": "TRUE"
         }
       ]
@@ -225,10 +229,11 @@ async def update_quarterly_sheet_records(
     ```
     
     **Field Names:**
-    Use the exact quarterly sheet header names. All 70 fields are supported including:
+    Use the exact quarterly sheet header names. All 70+ fields are supported including:
     - Basic Info: "Agent Code", "Policy number", "Customer Name"
     - Insurance: "Broker Name", "Insurer name", "Product Type"
-    - Financial: "Gross premium", "Net premium", "Running Bal"
+    - Financial: "Gross premium", "Net premium", "Running Bal", "Agent Total PO Amount"
+    - Agent Performance: "Actual Agent_PO%", "Agent Commission %"
     - Vehicle: "Registration.no", "Make_Model", "Fuel Type"
     - Status: "Invoice Status", "Remarks"
     
@@ -238,6 +243,11 @@ async def update_quarterly_sheet_records(
     
     **Note:** The policy_number field is required to identify which record to update.
     It should match the "Policy number" value in the quarterly sheet.
+    
+    **New Fields Support:**
+    The endpoint now supports the newly added quarterly sheet fields:
+    - "Agent Total PO Amount": Total agent policy office amount
+    - "Actual Agent_PO%": Actual agent policy office percentage
     
     **Returns:**
     - Update success/failure summary
@@ -513,7 +523,7 @@ async def export_quarterly_sheet_data(
     
     **Returns:**
     For each quarter, two datasets are included:
-    1. **Quarterly Sheet Data**: Complete quarterly sheet with all fields and records
+    1. **Quarterly Sheet Data**: Complete quarterly sheet with all fields and records (including new fields: "Agent Total PO Amount", "Actual Agent_PO%")
     2. **Summary Sheet Data**: Calculated summaries, running balances, and agent statistics
     
     **Examples:**
@@ -522,6 +532,7 @@ async def export_quarterly_sheet_data(
     - Cross-year: quarters=4,1&years=2024,2025 (Q4-2024 and Q1-2025 data + summaries)
     
     **Note:** Large datasets are automatically handled. XLSX format recommended for multiple quarters.
+    All exports include the complete 70+ field quarterly sheet structure with newly added fields.
     """
     
     try:
@@ -980,7 +991,7 @@ async def get_agent_mis_data(
     **Admin/SuperAdmin only endpoint**
     
     Returns quarterly sheet data filtered for the specified agent with:
-    - Complete quarterly sheet data (all fields) for the agent
+    - Complete quarterly sheet data (all fields) for the agent including new fields
     - Both MATCH = TRUE and MATCH = FALSE records
     - Agent's summary sheet data with calculations
     - All quarterly sheet fields included (70+ fields)
@@ -994,7 +1005,10 @@ async def get_agent_mis_data(
     - Complete quarterly sheet records for the agent
     - Agent's summary data from Summary sheet
     - Statistics and calculations
-    - All fields from quarterly sheets (not filtered)
+    - All fields from quarterly sheets including new fields:
+      * "Agent Total PO Amount": Total agent policy office amount
+      * "Actual Agent_PO%": Actual agent policy office percentage
+    - All other 70+ quarterly sheet fields (not filtered)
     """
     try:
         logger.info(f"Fetching quarterly MIS data for agent: {agent_code}, Q{quarter}-{year}")
@@ -1067,7 +1081,7 @@ async def get_my_mis_data(
     - Data from specified quarterly sheet (Q{quarter}-{year})
     - Only records where MATCH = TRUE from quarterly sheet
     - Agent's summary data from Summary sheet (MATCH = TRUE only)
-    - Filtered fields using AgentMISRecord schema
+    - Limited filtered fields as per AgentMISRecord schema (only essential fields)
     - Calculated statistics (number of policies, running balance, total net premium)
     - Agent can only see their own data based on their user profile
     
@@ -1087,12 +1101,22 @@ async def get_my_mis_data(
     - Agent's summary data from Summary sheet
     - Statistics and pagination info
     
-    Fields included in AgentMISRecord:
-    - Core transaction data: id, reporting_month, booking_date, insurer_name, broker_name
-    - Policy information: policy_number
-    - Premium details: gross_premium, net_premium (excluding sensitive broker data)
-    - Agent commission data: agent_commission_perc, agent_po_amount, total_agent_po, running_balance
-    - Timestamps: created_at, updated_at
+    Fields included in AgentMISRecord (limited set as requested):
+    - Booking date: Policy booking date
+    - Policy start date: Policy start date
+    - Policy end date: Policy end date  
+    - Policy number: Policy number
+    - Insurer name: Insurance company name
+    - Broker name: Broker name
+    - Gross premium: Gross premium amount
+    - Net premium: Net premium amount
+    - Commissionable premium: Commissionable premium amount
+    - Agent Total PO Amount: Total agent policy office amount
+    - Actual Agent PO%: Actual agent policy office percentage
+    
+    **New Fields Support:**
+    - "Agent Total PO Amount" is now included as agent_total_po_amount field
+    - "Actual Agent_PO%" is now included as actual_agent_po_percent field
     """
     try:
         user_id = current_user["user_id"]
@@ -1154,23 +1178,19 @@ async def get_my_mis_data(
             def safe_str(value):
                 return str(value).strip() if value is not None and str(value).strip() else None
             
-            # Map quarterly sheet fields to AgentMISRecord fields with string conversion
+            # Map quarterly sheet fields to AgentMISRecord fields - only specific fields requested
             mapped_record = {
-                "id": safe_str(record_dict.get("Child ID/ User ID [Provided by Insure Zeal]") or record_dict.get("id")),
-                "reporting_month": safe_str(record_dict.get("Reporting Month (mmm'yy)") or record_dict.get("reporting_month")),
                 "booking_date": safe_str(record_dict.get("Booking Date(Click to select Date)") or record_dict.get("booking_date")),
+                "policy_start_date": safe_str(record_dict.get("Policy Start Date") or record_dict.get("policy_start_date")),
+                "policy_end_date": safe_str(record_dict.get("Policy End Date") or record_dict.get("policy_end_date")),
+                "policy_number": safe_str(record_dict.get("Policy number") or record_dict.get("policy_number")),
                 "insurer_name": safe_str(record_dict.get("Insurer name") or record_dict.get("insurer_name")),
                 "broker_name": safe_str(record_dict.get("Broker Name") or record_dict.get("broker_name")),
-                "policy_number": safe_str(record_dict.get("Policy number") or record_dict.get("policy_number")),
                 "gross_premium": safe_str(record_dict.get("Gross premium") or record_dict.get("gross_premium")),
                 "net_premium": safe_str(record_dict.get("Net premium") or record_dict.get("net_premium")),
-                "agent_commission_perc": safe_str(record_dict.get("Actual Agent_PO%") or record_dict.get("agent_commission_perc")),
-                "agent_po_amount": safe_str(record_dict.get("Agent_PO_AMT") or record_dict.get("agent_po_amount")),
-                "total_agent_po": safe_str(record_dict.get("PO Paid To Agent") or record_dict.get("total_agent_po")),
-                "running_balance": safe_str(record_dict.get("Running Bal") or record_dict.get("running_balance")),
-                "already_given_to_agent": safe_str(record_dict.get("Already Given to agent") or record_dict.get("already_given_to_agent")),
-                "created_at": safe_str(record_dict.get("created_at")),  # This field may not exist in quarterly sheets
-                "updated_at": safe_str(record_dict.get("updated_at"))   # This field may not exist in quarterly sheets
+                "commissionable_premium": safe_str(record_dict.get("Commissionable Premium") or record_dict.get("commissionable_premium")),
+                "agent_total_po_amount": safe_str(record_dict.get("Agent Total PO Amount") or record_dict.get("agent_total_po_amount")),
+                "actual_agent_po_percent": safe_str(record_dict.get("Actual Agent_PO%") or record_dict.get("actual_agent_po_percent"))
             }
             agent_records.append(AgentMISRecord(**mapped_record))
             
