@@ -60,6 +60,7 @@ import {
 import Calculations from "../admin/cutpay/calculations";
 import { Loader2 } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
+import { editModeFieldMappings, specialFieldMappings } from '@/components/admin/cutpay/form-config';
 
 // Props interface for the InputForm component (supports both cutpay and policy modes)
 interface InputFormProps {
@@ -263,225 +264,24 @@ const InputForm: React.FC<InputFormProps> = ({
   // Effect to populate form with existing cutpay data in edit mode
   useEffect(() => {
     if (editId && existingCutpayData && formType === "cutpay") {
-      console.log(
-        "Populating form with existing cutpay data:",
-        existingCutpayData
-      );
+      console.log("Populating form with existing cutpay data:", existingCutpayData);
 
-      // Populate extracted_data fields
-      if (existingCutpayData.policy_number)
-        setValue(
-          "extracted_data.policy_number",
-          existingCutpayData.policy_number,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.formatted_policy_number)
-        setValue(
-          "extracted_data.formatted_policy_number",
-          existingCutpayData.formatted_policy_number,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.major_categorisation)
-        setValue(
-          "extracted_data.major_categorisation",
-          existingCutpayData.major_categorisation,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.product_insurer_report)
-        setValue(
-          "extracted_data.product_insurer_report",
-          existingCutpayData.product_insurer_report,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.product_type)
-        setValue(
-          "extracted_data.product_type",
-          existingCutpayData.product_type,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.plan_type)
-        setValue("extracted_data.plan_type", existingCutpayData.plan_type, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.customer_name)
-        setValue(
-          "extracted_data.customer_name",
-          existingCutpayData.customer_name,
-          { shouldValidate: true }
-        );
+      // Populate regular fields using the auto-generated mapping
+      Object.entries(editModeFieldMappings).forEach(([apiField, formField]) => {
+        const value = existingCutpayData[apiField as keyof typeof existingCutpayData];
+        if (value !== null && value !== undefined) {
+          setValue(formField as any, value, { shouldValidate: true });
+        }
+      });
 
-      if (existingCutpayData.gross_premium)
-        setValue(
-          "extracted_data.gross_premium",
-          existingCutpayData.gross_premium,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.net_premium)
-        setValue("extracted_data.net_premium", existingCutpayData.net_premium, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.od_premium)
-        setValue("extracted_data.od_premium", existingCutpayData.od_premium, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.tp_premium)
-        setValue("extracted_data.tp_premium", existingCutpayData.tp_premium, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.gst_amount)
-        setValue("extracted_data.gst_amount", existingCutpayData.gst_amount, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.registration_number)
-        setValue(
-          "extracted_data.registration_number",
-          existingCutpayData.registration_number,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.make_model)
-        setValue("extracted_data.make_model", existingCutpayData.make_model, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.model)
-        setValue("extracted_data.model", existingCutpayData.model, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.vehicle_variant)
-        setValue(
-          "extracted_data.vehicle_variant",
-          existingCutpayData.vehicle_variant,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.gvw)
-        setValue("extracted_data.gvw", existingCutpayData.gvw, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.rto)
-        setValue("extracted_data.rto", existingCutpayData.rto, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.state)
-        setValue("extracted_data.state", existingCutpayData.state, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.fuel_type)
-        setValue("extracted_data.fuel_type", existingCutpayData.fuel_type, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.cc)
-        setValue("extracted_data.cc", existingCutpayData.cc, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.age_year)
-        setValue("extracted_data.age_year", existingCutpayData.age_year, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.ncb)
-        setValue("extracted_data.ncb", existingCutpayData.ncb, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.discount_percent)
-        setValue(
-          "extracted_data.discount_percent",
-          existingCutpayData.discount_percent,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.business_type)
-        setValue(
-          "extracted_data.business_type",
-          existingCutpayData.business_type,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.seating_capacity)
-        setValue(
-          "extracted_data.seating_capacity",
-          existingCutpayData.seating_capacity,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.veh_wheels)
-        setValue("extracted_data.veh_wheels", existingCutpayData.veh_wheels, {
-          shouldValidate: true,
-        });
-
-      // Populate admin_input fields
-      if (existingCutpayData.reporting_month)
-        setValue(
-          "admin_input.reporting_month",
-          existingCutpayData.reporting_month,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.booking_date)
-        setValue("admin_input.booking_date", existingCutpayData.booking_date, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.agent_code)
-        setValue("admin_input.agent_code", existingCutpayData.agent_code, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.code_type)
-        setValue("admin_input.code_type", existingCutpayData.code_type, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.incoming_grid_percent)
-        setValue(
-          "admin_input.incoming_grid_percent",
-          existingCutpayData.incoming_grid_percent,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.agent_commission_given_percent)
-        setValue(
-          "admin_input.agent_commission_given_percent",
-          existingCutpayData.agent_commission_given_percent,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.extra_grid)
-        setValue("admin_input.extra_grid", existingCutpayData.extra_grid, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.commissionable_premium)
-        setValue(
-          "admin_input.commissionable_premium",
-          existingCutpayData.commissionable_premium,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.payment_by)
-        setValue("admin_input.payment_by", existingCutpayData.payment_by, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.payment_method)
-        setValue(
-          "admin_input.payment_method",
-          existingCutpayData.payment_method,
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.payout_on)
-        setValue("admin_input.payout_on", existingCutpayData.payout_on, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.payment_by_office)
-        setValue(
-          "admin_input.payment_by_office",
-          Number(existingCutpayData.payment_by_office),
-          { shouldValidate: true }
-        );
-      if (existingCutpayData.insurer_broker_code)
-        setValue(
-          "admin_input.insurer_code",
-          existingCutpayData.insurer_broker_code,
-          { shouldValidate: true }
-        );
-
-      // Other fields
-      if (existingCutpayData.claimed_by)
-        setValue("claimed_by", existingCutpayData.claimed_by, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.running_bal)
-        setValue("running_bal", existingCutpayData.running_bal, {
-          shouldValidate: true,
-        });
-      if (existingCutpayData.notes)
-        setValue("notes", existingCutpayData.notes, { shouldValidate: true });
+      // Handle special cases with transformations
+      Object.entries(specialFieldMappings).forEach(([apiField, config]) => {
+        const value = existingCutpayData[apiField as keyof typeof existingCutpayData];
+        if (value !== null && value !== undefined) {
+          const transformedValue = config.transform ? config.transform(value) : value;
+          setValue(config.target as any, transformedValue, { shouldValidate: true });
+        }
+      });
     }
   }, [editId, existingCutpayData, formType, setValue]);
 
@@ -1281,7 +1081,6 @@ const InputForm: React.FC<InputFormProps> = ({
             data.admin_input?.payment_method && data.admin_input.payment_detail
               ? `${data.admin_input.payment_method} - ${data.admin_input.payment_detail}`
               : data.admin_input.payment_method || "",
-          cluster: (data as any).cluster || "", // Policy-specific field
           notes: data.notes || "",
           start_date:
             (data as any).start_date ||
@@ -1590,11 +1389,11 @@ const InputForm: React.FC<InputFormProps> = ({
       setIsSubmitting(false); // Ensure submission state is reset
     }
   };
-  const keysToHideForAgent = [
-    "extracted_data.customer_phone_number",
-    "extracted_data.make_model",
-    "extracted_data.vehicle_variant",
-  ];
+  // const keysToHideForAgent = [
+  //   "extracted_data.customer_phone_number",
+  //   "extracted_data.make_model",
+  //   "extracted_data.vehicle_variant",
+  // ];
 
   const renderField = (field: FormFieldConfig) => {
     const { key, label, type, disabled, options: configOptions, tag } = field;
@@ -2037,15 +1836,19 @@ const InputForm: React.FC<InputFormProps> = ({
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {currentFormFields
-                      .filter((f) => {
-                        // Hide specific extracted fields for agents
-                        if (keysToHideForAgent.includes(f.key)) {
-                          return false;
+                      .filter(f => {
+                        if (formType === "policy") {
+                          // Only show these 3 extracted fields for policy
+                          return f.section === "extracted" && (
+                            f.key === "extracted_data.policy_number" ||
+                            f.key === "extracted_data.start_date" || 
+                            f.key === "extracted_data.end_date"
+                          );
                         }
-                        // Show only extracted section fields
                         return f.section === "extracted";
                       })
-                      .map((field) => renderField(field as FormFieldConfig))}
+                      .map(field => renderField(field))
+                    }
                   </CardContent>
                 </Card>
               </div>
@@ -2077,7 +1880,8 @@ const InputForm: React.FC<InputFormProps> = ({
                       <span className="h-2 w-2 bg-green-500 rounded-full"></span>
                       Input
                     </CardTitle>
-                    {(formType === "cutpay" &&
+                    {/* COMMENTED OUT: Running Balance Display */}
+                    {/* {(formType === "cutpay" &&
                       typeof runningBalValue === "number") ||
                     (formType === "policy" &&
                       typeof runningBalValue === "number") ? (
@@ -2096,7 +1900,7 @@ const InputForm: React.FC<InputFormProps> = ({
                             ₹{runningBalValue.toFixed(2)}
                           </span>
                           {/* Show additional info for policy form when Payment by InsureZeal */}
-                          {formType === "policy" &&
+                          {/* {formType === "policy" &&
                             paymentBy === "InsureZeal" && (
                               <div className="text-xs mt-1 font-normal">
                                 {(() => {
@@ -2104,8 +1908,9 @@ const InputForm: React.FC<InputFormProps> = ({
                                     (netPremium || 0) *
                                     ((agentCommissionPercent || 0) / 100);
                                   const grossPremiumVal = grossPremium || 0;
-                                  const calculatedAmount =
-                                    totalAgentPayout - grossPremiumVal;
+                                  const calculatedAmount = totalAgentPayout - grossPremiumVal;
+
+                                  // Get current running balance from form or use original balance
                                   const currentRunningBalance =
                                     (runningBalValue || 0) - calculatedAmount; // Original balance before this transaction
 
@@ -2130,9 +1935,9 @@ const InputForm: React.FC<InputFormProps> = ({
                                   }
                                 })()}
                               </div>
-                            )}
+                            )} */}
                           {/* Show standard info for cutpay or policy without InsureZeal payment */}
-                          {(formType === "cutpay" ||
+                          {/* {(formType === "cutpay" ||
                             (formType === "policy" &&
                               paymentBy !== "InsureZeal")) && (
                             <div className="text-xs mt-1 font-normal">
@@ -2150,10 +1955,10 @@ const InputForm: React.FC<InputFormProps> = ({
                                 }
                               })()}
                             </div>
-                          )}
-                        </div>
+                          )} */}
+                        {/* </div>
                       </div>
-                    ) : null}
+                    ) : null} */}
                   </CardHeader>
                   <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     {currentFormFields
@@ -2329,9 +2134,6 @@ const InputForm: React.FC<InputFormProps> = ({
                                 return totalAgentPayout.toFixed(2);
                               })()}
                             </div>
-                            <div className="text-sm text-green-600 mt-1">
-                              Net Premium × Agent Commission %
-                            </div>
                           </div>
                         </div>
 
@@ -2352,15 +2154,6 @@ const InputForm: React.FC<InputFormProps> = ({
                                     totalAgentPayout - grossPremiumVal;
                                   return calculatedAmount.toFixed(2);
                                 })()}
-                              </div>
-                              <div className="text-sm text-blue-600 mt-1">
-                                Total Agent Payout (₹
-                                {(
-                                  (netPremium || 0) *
-                                  ((agentCommissionPercent || 0) / 100)
-                                ).toFixed(2)}
-                                ) - Gross Premium (₹
-                                {(grossPremium || 0).toFixed(2)})
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
                                 {(() => {
@@ -2394,130 +2187,6 @@ const InputForm: React.FC<InputFormProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Policy-specific fields section - Only shown in policy mode */}
-          {formType === "policy" && (
-            <div className="mt-6">
-              <Card className="shadow-sm border border-l-6 border-purple-500">
-                <CardHeader className="bg-gray-50 border-b">
-                  <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                    <span className="h-2 w-2 bg-purple-500 rounded-full"></span>
-                    Policy Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Cluster Field */}
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="cluster"
-                      className="text-sm font-medium text-gray-700"
-                    >
-                      Cluster
-                    </Label>
-                    <Controller
-                      name={"cluster" as any}
-                      control={control}
-                      render={({ field: controllerField, fieldState }) => (
-                        <>
-                          <Input
-                            id="cluster"
-                            type="text"
-                            {...controllerField}
-                            value={String(controllerField.value ?? "")}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              controllerField.onChange(
-                                value === "" ? null : value
-                              );
-                            }}
-                            className="h-10"
-                            placeholder="Enter cluster"
-                          />
-                          {fieldState.error && (
-                            <p className="text-red-500 text-xs mt-1">
-                              {fieldState.error.message}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    />
-                  </div>
-
-                  {/* Start Date Field */}
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="start_date"
-                      className="text-sm font-medium text-gray-700"
-                    >
-                      Policy Start Date
-                    </Label>
-                    <Controller
-                      name={"start_date" as any}
-                      control={control}
-                      render={({ field: controllerField, fieldState }) => (
-                        <>
-                          <Input
-                            id="start_date"
-                            type="date"
-                            {...controllerField}
-                            value={String(controllerField.value ?? "")}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              controllerField.onChange(
-                                value === "" ? null : value
-                              );
-                            }}
-                            className="h-10"
-                          />
-                          {fieldState.error && (
-                            <p className="text-red-500 text-xs mt-1">
-                              {fieldState.error.message}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    />
-                  </div>
-
-                  {/* End Date Field */}
-                  <div className="space-y-2">
-                    <Label
-                      htmlFor="end_date"
-                      className="text-sm font-medium text-gray-700"
-                    >
-                      Policy End Date
-                    </Label>
-                    <Controller
-                      name={"end_date" as any}
-                      control={control}
-                      render={({ field: controllerField, fieldState }) => (
-                        <>
-                          <Input
-                            id="end_date"
-                            type="date"
-                            {...controllerField}
-                            value={String(controllerField.value ?? "")}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              controllerField.onChange(
-                                value === "" ? null : value
-                              );
-                            }}
-                            className="h-10"
-                          />
-                          {fieldState.error && (
-                            <p className="text-red-500 text-xs mt-1">
-                              {fieldState.error.message}
-                            </p>
-                          )}
-                        </>
-                      )}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           {/* Navigation buttons */}
           <div className="flex justify-between mt-6">
