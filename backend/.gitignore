@@ -173,7 +173,6 @@ uploads/
 .aws-sam/
 samconfig.toml
 template.yaml
-Dockerfile
 lambda_function.py
 .dockerignore
 
