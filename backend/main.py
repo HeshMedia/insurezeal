@@ -183,8 +183,7 @@ def health_check():
 
 logger.info("--- FastAPI application startup complete ---")
 
-# For VPS deployment, we expose the app directly
-# Use: uvicorn main:app --host 0.0.0.0 --port 8000
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000)

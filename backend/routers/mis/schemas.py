@@ -290,3 +290,4 @@ class PolicyDocumentsResponse(BaseModel):
     source: str = Field(..., description="Source table: 'policy' or 'cutpay'")
     found_in_policy_table: bool
     found_in_cutpay_table: bool
+
