@@ -256,16 +256,16 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-wrap gap-4 items-start">
                 {/* Policy Number */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Policy Number</Label>
                   <Controller
                     name="policy_number"
                     control={form.control}
                     render={({ field, fieldState }) => (
                       <>
-                        <Input {...field} className="h-10" />
+                        <Input {...field} className="h-10 w-fit" />
                         {fieldState.error && (
                           <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
                         )}
@@ -275,38 +275,38 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                 </div>
 
                 {/* Start Date */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Policy Start Date</Label>
                   <Controller
                     name="start_date"
                     control={form.control}
                     render={({ field }) => (
-                      <Input className="h-10" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                      <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
                     )}
                   />
                 </div>
 
                 {/* End Date */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Policy End Date</Label>
                   <Controller
                     name="end_date"
                     control={form.control}
                     render={({ field }) => (
-                      <Input className="h-10" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                      <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
                     )}
                   />
                 </div>
 
                 {/* Code Type */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Code Type</Label>
                   <Controller
                     name="code_type"
                     control={form.control}
                     render={({ field }) => (
                       <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="h-10">
+                        <SelectTrigger className="h-10 w-fit">
                           <SelectValue placeholder="Select Code Type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -319,7 +319,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                 </div>
 
                 {/* Insurer Code */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Insurer</Label>
                   <Controller
                     name="insurer_code"
@@ -327,7 +327,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                     render={({ field, fieldState }) => (
                       <>
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10">
+                          <SelectTrigger className="h-10 w-fit">
                             <SelectValue placeholder="Select Insurer" />
                           </SelectTrigger>
                           <SelectContent>
@@ -346,14 +346,14 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
 
                 {/* Broker Code (conditional) */}
                 {codeType === "Broker" && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 flex-none w-fit">
                     <Label className="text-sm font-medium text-gray-700">Broker</Label>
                     <Controller
                       name="broker_code"
                       control={form.control}
                       render={({ field }) => (
                         <Select value={field.value ?? undefined} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10">
+                          <SelectTrigger className="h-10 w-fit">
                             <SelectValue placeholder="Select Broker" />
                           </SelectTrigger>
                           <SelectContent>
@@ -368,7 +368,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                 )}
 
                 {/* Child ID */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Child ID</Label>
                   <Controller
                     name="child_id"
@@ -376,7 +376,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                     render={({ field, fieldState }) => (
                       <>
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10">
+                          <SelectTrigger className="h-10 w-fit">
                             <SelectValue placeholder="Select Child ID" />
                           </SelectTrigger>
                           <SelectContent>
@@ -394,14 +394,14 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                 </div>
 
                 {/* Payment By */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Payment By</Label>
                   <Controller
                     name="payment_by"
                     control={form.control}
                     render={({ field }) => (
                       <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="h-10">
+                        <SelectTrigger className="h-10 w-fit">
                           <SelectValue placeholder="Select Payment By" />
                         </SelectTrigger>
                         <SelectContent>
@@ -415,45 +415,45 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
 
                 {/* Payment Method (hidden when payment_by is Agent) */}
                 {paymentBy !== "Agent" && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 flex-none w-fit">
                     <Label className="text-sm font-medium text-gray-700">Payment Method</Label>
                     <Controller
                       name="payment_method"
                       control={form.control}
                       render={({ field }) => (
-                        <Input className="h-10" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                        <Input className="h-10 w-fit" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
                       )}
                     />
                   </div>
                 )}
 
                 {/* Payment By Office */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Payment By Office</Label>
                   <Controller
                     name="payment_by_office"
                     control={form.control}
                     render={({ field }) => (
-                      <Input className="h-10" type="number" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                      <Input className="h-10 w-fit" type="number" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
                     )}
                   />
                 </div>
 
                 {/* Agent Commission % */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-none w-fit">
                   <Label className="text-sm font-medium text-gray-700">Agent Commission (%)</Label>
                   <Controller
                     name="agent_commission_given_percent"
                     control={form.control}
                     render={({ field }) => (
-                      <Input className="h-10" type="number" step="0.01" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                      <Input className="h-10 w-fit" type="number" step="0.01" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
                     )}
                   />
                 </div>
               </div>
 
               {/* Notes (full width) */}
-              <div className="space-y-2">
+              <div className="space-y-2 w-full">
                 <Label className="text-sm font-medium text-gray-700">Notes</Label>
                 <Controller
                   name="notes"
