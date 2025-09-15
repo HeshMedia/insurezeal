@@ -1,209 +1,222 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
-import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { usePolicyDetails, useUpdatePolicy } from '@/hooks/policyQuery'
-import { Button } from '@/components/ui/button'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { LoadingSpinner } from '@/components/ui/loader'
-import { Calendar } from '@/components/ui/calendar'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { 
-  ArrowLeft, 
-  Save, 
-  Shield, 
-  User, 
-  Car, 
-  Calendar as CalendarIcon, 
-  FileText 
-} from 'lucide-react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useMemo, useEffect } from 'react'
+import { DashboardWrapper } from '@/components/dashboard-wrapper'
+import { usePolicyDetailsByNumber, useUpdatePolicyByNumber } from '@/hooks/policyQuery'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { LoadingSpinner } from '@/components/ui/loader'
+import { ArrowLeft, Save, Shield, User, Car, TrendingUp, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
-import { useEffect } from 'react'
-import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { useAtom } from 'jotai'
+import { selectedPolicyContextAtom } from '@/lib/atoms/policy'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useInsurers, useBrokersAndInsurers, useChildIdRequests } from '@/hooks/agentQuery'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Policy } from '@/types/policy.types'
+
+// Policy types for dropdown
+const policyTypes = [
+  'Motor - Private Car',
+  'Motor - Two Wheeler', 
+  'Motor - Commercial Vehicle',
+  'Health',
+  'Life',
+  'General',
+  'Other'
+]
 
 // Form schema for policy editing
-const policyEditSchema = z.object({
-  // Basic policy info
+const PolicyEditSchema = z.object({
   policy_number: z.string().min(1, "Policy number is required"),
-  broker_name: z.string().min(1, "Broker name is required"),
   insurance_company: z.string().min(1, "Insurance company is required"),
+  broker_name: z.string().optional(),
+  insurer_code: z.string().min(1, "Insurer is required"),
+  broker_code: z.string().optional(),
+  code_type: z.enum(["Direct", "Broker"]),
+  child_id: z.string().min(1, "Child ID is required"),
   customer_name: z.string().min(1, "Customer name is required"),
   customer_phone_number: z.string().optional(),
-  child_id: z.string().optional(),
-  
-  // Policy details
-  policy_type: z.string().optional(),
-  insurance_type: z.string().optional(),
+  policy_type: z.string().min(1, "Policy type is required"),
   vehicle_type: z.string().optional(),
   registration_number: z.string().optional(),
-  vehicle_class: z.string().optional(),
-  vehicle_segment: z.string().optional(),
   make_model: z.string().optional(),
   fuel_type: z.string().optional(),
+  cc: z.number().optional(),
   rto: z.string().optional(),
   state: z.string().optional(),
-  
-  // Financial details
-  gross_premium: z.number().min(0, "Gross premium must be positive"),
-  net_premium: z.number().min(0, "Net premium must be positive"),
-  od_premium: z.number().min(0).optional(),
-  tp_premium: z.number().min(0).optional(),
-  gst_amount: z.number().min(0).optional(),
-  
-  // Additional fields
-  ncb: z.string().optional(),
-  business_type: z.string().optional(),
-  seating_capacity: z.number().min(0).optional(),
-  cc: z.number().min(0).optional(),
-  age_year: z.number().min(0).optional(),
-  gvw: z.number().min(0).optional(),
-  
-  // Dates
-  start_date: z.date({ required_error: "Start date is required" }),
-  end_date: z.date({ required_error: "End date is required" }),
-  
-  // Notes
+  gross_premium: z.number().min(0),
+  net_premium: z.number().min(0),
+  od_premium: z.number().min(0),
+  tp_premium: z.number().min(0),
+  gst_amount: z.number().min(0),
+  payment_by: z.enum(["Agent", "InsureZeal"]),
+  payment_method: z.string().optional(),
+  payment_by_office: z.number().optional(),
+  agent_commission_given_percent: z.number().optional(),
+  start_date: z.string(),
+  end_date: z.string(),
   notes: z.string().optional(),
 })
 
-type PolicyEditFormValues = z.infer<typeof policyEditSchema>
+type PolicyEditFormData = z.infer<typeof PolicyEditSchema>
+
+type SimpleInsurer = { insurer_code: string; name: string };
+type SimpleBroker = { broker_code: string; name: string };
 
 export default function PolicyEditPage() {
   const params = useParams()
   const router = useRouter()
-  
   const policyId = params.id as string
+  const [selectedPolicy] = useAtom(selectedPolicyContextAtom)
+
+  // Get quarter/year from URL or atom
+  const searchParams = useSearchParams()
+  const rawQuarter = searchParams.get('quarter') || String(selectedPolicy?.quarter ?? '')
+  const rawYear = searchParams.get('year') || String(selectedPolicy?.year ?? '')
+  const qQuarter = (() => {
+    const digits = rawQuarter.replace(/[^0-9]/g, '')
+    const n = parseInt(digits || '0', 10)
+    return isNaN(n) ? 0 : n
+  })()
+  const qYear = (() => {
+    const n = parseInt(rawYear || '0', 10)
+    return isNaN(n) ? 0 : n
+  })()
   
-  const { data: policyData, isLoading: isLoadingPolicy } = usePolicyDetails(policyId)
-  const updateMutation = useUpdatePolicy()
+  const { data: policyData, isLoading: isLoadingPolicy } = usePolicyDetailsByNumber({
+    policy_number: policyId,
+    quarter: qQuarter,
+    year: qYear,
+  })
+  const updateMutation = useUpdatePolicyByNumber()
   
-  const isLoading = updateMutation.isPending
+  // Insurer/Broker/Child dropdown data
+  const { data: directInsurers } = useInsurers()
+  const { data: brokersAndInsurers } = useBrokersAndInsurers()
+  const { data: myRequests } = useChildIdRequests()
   
-  const form = useForm<PolicyEditFormValues>({
-    resolver: zodResolver(policyEditSchema),
+  const form = useForm<PolicyEditFormData>({
+    resolver: zodResolver(PolicyEditSchema),
     defaultValues: {
-      policy_number: "",
-      broker_name: "",
-      insurance_company: "",
-      customer_name: "",
-      customer_phone_number: "",
-      child_id: "",
-      policy_type: "",
-      insurance_type: "",
-      vehicle_type: "",
-      registration_number: "",
-      vehicle_class: "",
-      vehicle_segment: "",
-      make_model: "",
-      fuel_type: "",
-      rto: "",
-      state: "",
+      policy_number: '',
+      insurance_company: '',
+      broker_name: '',
+      insurer_code: '',
+      broker_code: '',
+      code_type: 'Direct',
+      child_id: '',
+      customer_name: '',
+      customer_phone_number: '',
+      policy_type: '',
+      vehicle_type: '',
+      registration_number: '',
+      make_model: '',
+      fuel_type: '',
+      cc: 0,
+      rto: '',
+      state: '',
       gross_premium: 0,
       net_premium: 0,
       od_premium: 0,
       tp_premium: 0,
       gst_amount: 0,
-      ncb: "",
-      business_type: "",
-      seating_capacity: 0,
-      cc: 0,
-      age_year: 0,
-      gvw: 0,
-      notes: "",
-    },
+      payment_by: 'Agent',
+      payment_method: '',
+      payment_by_office: 0,
+      agent_commission_given_percent: 0,
+      start_date: '',
+      end_date: '',
+      notes: '',
+    }
   })
-  
-  // Set form values when data is loaded
+
+  const codeType = form.watch("code_type")
+  const insurerCode = form.watch("insurer_code")
+  const brokerCode = form.watch("broker_code")
+  const paymentBy = form.watch("payment_by")
+
+  // Populate form when policy data loads
   useEffect(() => {
     if (policyData) {
       form.reset({
-        policy_number: policyData.policy_number || "",
-        broker_name: policyData.broker_name || "",
-        insurance_company: policyData.insurance_company || "",
-        customer_name: policyData.customer_name || "",
-        customer_phone_number: policyData.customer_phone_number || "",
-        child_id: policyData.child_id || "",
-        policy_type: policyData.policy_type || "",
-        insurance_type: policyData.insurance_type || "",
-        vehicle_type: policyData.vehicle_type || "",
-        registration_number: policyData.registration_number || "",
-        vehicle_class: policyData.vehicle_class || "",
-        vehicle_segment: policyData.vehicle_segment || "",
-        make_model: policyData.make_model || "",
-        fuel_type: policyData.fuel_type || "",
-        rto: policyData.rto || "",
-        state: policyData.state || "",
+        policy_number: policyData.policy_number || '',
+        insurance_company: policyData.insurance_company || '',
+        broker_name: policyData.broker_name || '',
+        insurer_code: (policyData as Policy & { insurer_code?: string }).insurer_code || '',
+        broker_code: (policyData as Policy & { broker_code?: string }).broker_code || '',
+        code_type: policyData.code_type as "Direct" | "Broker" || 'Direct',
+        child_id: policyData.child_id || '',
+        customer_name: policyData.customer_name || '',
+        customer_phone_number: policyData.customer_phone_number || '',
+        policy_type: policyData.policy_type || '',
+        vehicle_type: policyData.vehicle_type || '',
+        registration_number: policyData.registration_number || '',
+        make_model: policyData.make_model || '',
+        fuel_type: policyData.fuel_type || '',
+        cc: policyData.cc || 0,
+        rto: policyData.rto || '',
+        state: policyData.state || '',
         gross_premium: policyData.gross_premium || 0,
         net_premium: policyData.net_premium || 0,
         od_premium: policyData.od_premium || 0,
         tp_premium: policyData.tp_premium || 0,
         gst_amount: policyData.gst_amount || 0,
-        ncb: policyData.ncb || "",
-        business_type: policyData.business_type || "",
-        seating_capacity: policyData.seating_capacity || 0,
-        cc: policyData.cc || 0,
-        age_year: policyData.age_year || 0,
-        gvw: policyData.gvw || 0,
-        start_date: policyData.start_date ? new Date(policyData.start_date) : new Date(),
-        end_date: policyData.end_date ? new Date(policyData.end_date) : new Date(),
-        notes: policyData.notes || "",
+        payment_by: policyData.payment_by as "Agent" | "InsureZeal" || 'Agent',
+        payment_method: policyData.payment_method || '',
+        payment_by_office: policyData.payment_by_office || 0,
+        agent_commission_given_percent: policyData.agent_commission_given_percent || 0,
+        start_date: policyData.start_date || '',
+        end_date: policyData.end_date || '',
+        notes: policyData.notes || '',
       })
     }
   }, [policyData, form])
 
-  const onSubmit = async (data: PolicyEditFormValues) => {
-    try {
-      await updateMutation.mutateAsync({
-        policyId,
-        payload: {
-          ...data,
-          start_date: data.start_date.toISOString().split('T')[0],
-          end_date: data.end_date.toISOString().split('T')[0],
-        },
+  // Dropdown options
+  const insurerOptions = useMemo(() => {
+    const src = (codeType === "Broker"
+      ? (brokersAndInsurers?.insurers as SimpleInsurer[] | undefined)
+      : (directInsurers as SimpleInsurer[] | undefined)) || [];
+    return src.map((i) => ({ value: i.insurer_code, label: i.name }));
+  }, [codeType, directInsurers, brokersAndInsurers]);
+
+  const brokerOptions = useMemo(() => {
+    if (codeType !== "Broker") return [];
+    const src = (brokersAndInsurers?.brokers as SimpleBroker[] | undefined) || [];
+    return src.map((b) => ({ value: b.broker_code, label: b.name }));
+  }, [codeType, brokersAndInsurers]);
+
+  type MyChildRequest = {
+    id: string;
+    status: "pending" | "accepted" | "rejected" | "suspended";
+    child_id?: string | null;
+    insurer?: { insurer_code: string; name: string } | null;
+    broker_relation?: { broker_code: string; name: string } | null;
+  };
+
+  const myChildIdOptions = useMemo(() => {
+    const list = ((myRequests as unknown as { requests?: MyChildRequest[] } | undefined)?.requests) || [];
+    return list
+      .filter((r) => r.status === "accepted" && r.child_id)
+      .filter((r) => {
+        const insurerMatch = insurerCode ? r.insurer?.insurer_code === insurerCode : true;
+        const brokerMatch = codeType === "Broker" ? r.broker_relation?.broker_code === brokerCode : true;
+        return insurerMatch && brokerMatch;
       })
-      toast.success("Policy updated successfully")
-      router.push(`/agent/policies/${policyId}`)
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to update policy")
-    }
-  }
+      .map((r) => ({
+        value: r.child_id as string,
+        label: `${r.child_id} - ${r.broker_relation?.name || ""} (${r.insurer?.name || ""})`,
+      }));
+  }, [myRequests, insurerCode, brokerCode, codeType]);
 
-  const policyTypes = [
-    "Comprehensive",
-    "Third Party",
-    "Own Damage",
-    "Third Party Fire & Theft"
-  ]
-
-  const insuranceTypes = [
-    "Motor",
-    "Health",
-    "Life",
-    "General"
-  ]
-
-  const vehicleTypes = [
-    "Two Wheeler",
-    "Private Car",
-    "Commercial Vehicle",
-    "Goods Carrying Vehicle",
-    "Passenger Carrying Vehicle"
-  ]
-
-  const fuelTypes = [
-    "Petrol",
-    "Diesel",
-    "CNG",
-    "Electric",
-    "Hybrid"
-  ]
+  const isLoading = updateMutation.isPending
 
   if (isLoadingPolicy) {
     return (
@@ -212,6 +225,25 @@ export default function PolicyEditPage() {
           <div className="text-center space-y-4">
             <LoadingSpinner />
             <p className="text-sm text-gray-500">Loading policy details...</p>
+          </div>
+        </div>
+      </DashboardWrapper>
+    )
+  }
+
+  if (qQuarter < 1 || qQuarter > 4 || qYear < 2020 || qYear > 2030) {
+    return (
+      <DashboardWrapper requiredRole="agent">
+        <div className="max-w-5xl mx-auto p-6">
+          <div className="flex items-center justify-center min-h-[300px]">
+            <div className="text-center space-y-4">
+              <h1 className="text-2xl font-bold text-gray-900">Quarter/Year required</h1>
+              <p className="text-gray-600">Open this edit page from the policy details so quarter and year are included in the URL.</p>
+              <Button onClick={() => router.push('/agent/policies')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Go to Policies
+              </Button>
+            </div>
           </div>
         </div>
       </DashboardWrapper>
@@ -237,46 +269,66 @@ export default function PolicyEditPage() {
     )
   }
 
+  const onSubmit = async (values: PolicyEditFormData) => {
+    try {
+      await updateMutation.mutateAsync({
+        policy_number: policyId,
+        quarter: qQuarter,
+        year: qYear,
+        payload: {
+          policy_number: values.policy_number,
+          insurance_company: values.insurance_company,
+          broker_name: values.broker_name,
+          child_id: values.child_id,
+          policy_type: values.policy_type,
+          vehicle_type: values.vehicle_type,
+          registration_number: values.registration_number,
+          gross_premium: values.gross_premium || 0,
+          net_premium: values.net_premium || 0,
+          od_premium: values.od_premium || 0,
+          tp_premium: values.tp_premium || 0,
+          payment_by_office: values.payment_by_office || 0,
+          start_date: values.start_date,
+          end_date: values.end_date,
+        }
+      })
+      toast.success('Policy updated successfully')
+      router.push(`/agent/policies/${policyId}?quarter=${qQuarter}&year=${qYear}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update policy'
+      toast.error(errorMessage)
+    }
+  }
+
   return (
     <DashboardWrapper requiredRole="agent">
-      <div className="max-w-5xl mx-auto space-y-6 p-6">
+      <div className="w-full max-w-none mx-auto space-y-6 p-6">
         {/* Navigation */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center justify-between mb-6">
           <Button variant="outline" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Policy
+            Back to Policy Details
           </Button>
-        </div>
-
-        {/* Edit Header - Profile-like */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-              <Save className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Edit Policy
-              </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-300">
-                Policy: {policyData.policy_number}
-              </p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-blue-600" />
+            <h1 className="text-2xl font-bold text-gray-900">Edit Policy</h1>
           </div>
         </div>
 
-        {/* Edit Form */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="p-6">
+        {/* Full Width Form */}
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+            
                 {/* Basic Information */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                     <Shield className="h-5 w-5 text-blue-600" />
                     Basic Information
-                  </h3>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <FormField
                       control={form.control}
                       name="policy_number"
@@ -293,13 +345,21 @@ export default function PolicyEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="insurance_company"
+                    name="code_type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Insurance Company *</FormLabel>
+                        <FormLabel>Code Type *</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <Input placeholder="Enter insurance company" {...field} />
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select code type" />
+                            </SelectTrigger>
                           </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Direct">Direct</SelectItem>
+                            <SelectItem value="Broker">Broker</SelectItem>
+                          </SelectContent>
+                        </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -307,48 +367,72 @@ export default function PolicyEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="broker_name"
+                    name="insurer_code"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Broker Name *</FormLabel>
+                        <FormLabel>Insurer *</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <Input placeholder="Enter broker name" {...field} />
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select insurer" />
+                            </SelectTrigger>
                           </FormControl>
+                          <SelectContent>
+                            {insurerOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
 
+                  {codeType === "Broker" && (
                     <FormField
                       control={form.control}
-                      name="child_id"
+                      name="broker_code"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Child ID</FormLabel>
+                          <FormLabel>Broker *</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
                           <FormControl>
-                            <Input placeholder="Enter child ID" {...field} />
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select broker" />
+                              </SelectTrigger>
                           </FormControl>
+                            <SelectContent>
+                              {brokerOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+                  )}
 
                     <FormField
                       control={form.control}
-                      name="policy_type"
+                    name="child_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Policy Type</FormLabel>
+                        <FormLabel>Child ID *</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select policy type" />
+                              <SelectValue placeholder="Select child ID" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {policyTypes.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
+                            {myChildIdOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -360,18 +444,18 @@ export default function PolicyEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="insurance_type"
+                    name="policy_type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Insurance Type</FormLabel>
+                        <FormLabel>Policy Type *</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select insurance type" />
+                              <SelectValue placeholder="Select policy type" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {insuranceTypes.map((type) => (
+                            {policyTypes.map((type) => (
                                 <SelectItem key={type} value={type}>
                                   {type}
                                 </SelectItem>
@@ -383,15 +467,19 @@ export default function PolicyEditPage() {
                       )}
                     />
                   </div>
-                </div>
+              </CardContent>
+            </Card>
 
                 {/* Customer Information */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5 text-green-600" />
                     Customer Information
-                  </h3>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <FormField
                       control={form.control}
                       name="customer_name"
@@ -420,35 +508,28 @@ export default function PolicyEditPage() {
                       )}
                     />
                   </div>
-                </div>
+              </CardContent>
+            </Card>
 
                 {/* Vehicle Information */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                     <Car className="h-5 w-5 text-purple-600" />
                     Vehicle Information
-                  </h3>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <FormField
                       control={form.control}
                       name="vehicle_type"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Vehicle Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select vehicle type" />
-                              </SelectTrigger>
+                          <Input placeholder="Enter vehicle type" {...field} />
                             </FormControl>
-                            <SelectContent>
-                              {vehicleTypes.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -475,7 +556,7 @@ export default function PolicyEditPage() {
                         <FormItem>
                           <FormLabel>Make & Model</FormLabel>
                           <FormControl>
-                            <Input placeholder="Enter make and model" {...field} />
+                          <Input placeholder="Enter make & model" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -488,47 +569,8 @@ export default function PolicyEditPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Fuel Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select fuel type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {fuelTypes.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="vehicle_class"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Vehicle Class</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter vehicle class" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="vehicle_segment"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Vehicle Segment</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter vehicle segment" {...field} />
+                          <Input placeholder="Enter fuel type" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -544,28 +586,9 @@ export default function PolicyEditPage() {
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="Engine capacity" 
+                            placeholder="Enter CC" 
                               {...field}
-                              onChange={e => field.onChange(parseInt(e.target.value) || 0)}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="age_year"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Age (Years)</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              placeholder="Vehicle age" 
-                              {...field}
-                              onChange={e => field.onChange(parseInt(e.target.value) || 0)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -580,7 +603,7 @@ export default function PolicyEditPage() {
                         <FormItem>
                           <FormLabel>RTO</FormLabel>
                           <FormControl>
-                            <Input placeholder="RTO office" {...field} />
+                          <Input placeholder="Enter RTO" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -594,34 +617,39 @@ export default function PolicyEditPage() {
                         <FormItem>
                           <FormLabel>State</FormLabel>
                           <FormControl>
-                            <Input placeholder="State" {...field} />
+                          <Input placeholder="Enter state" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                </div>
+              </CardContent>
+            </Card>
 
                 {/* Financial Information */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-green-600" />
-                    Financial Details
-                  </h3>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-orange-600" />
+                  Financial Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <FormField
                       control={form.control}
                       name="gross_premium"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Gross Premium *</FormLabel>
+                        <FormLabel>Gross Premium</FormLabel>
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="0.00" 
+                            step="0.01"
+                            placeholder="Enter gross premium" 
                               {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -634,13 +662,14 @@ export default function PolicyEditPage() {
                       name="net_premium"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Net Premium *</FormLabel>
+                        <FormLabel>Net Premium</FormLabel>
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="0.00" 
+                            step="0.01"
+                            placeholder="Enter net premium" 
                               {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -657,9 +686,10 @@ export default function PolicyEditPage() {
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="0.00" 
+                            step="0.01"
+                            placeholder="Enter OD premium" 
                               {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -676,9 +706,10 @@ export default function PolicyEditPage() {
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="0.00" 
+                            step="0.01"
+                            placeholder="Enter TP premium" 
                               {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -695,9 +726,10 @@ export default function PolicyEditPage() {
                           <FormControl>
                             <Input 
                               type="number" 
-                              placeholder="0.00" 
+                            step="0.01"
+                            placeholder="Enter GST amount" 
                               {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormMessage />
@@ -707,64 +739,84 @@ export default function PolicyEditPage() {
 
                     <FormField
                       control={form.control}
-                      name="ncb"
+                    name="payment_by"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>NCB</FormLabel>
+                        <FormLabel>Payment By</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <Input placeholder="No Claim Bonus" {...field} />
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select payment by" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Agent">Agent</SelectItem>
+                            <SelectItem value="InsureZeal">InsureZeal</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {paymentBy === "InsureZeal" && (
+                    <FormField
+                      control={form.control}
+                      name="payment_method"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Payment Method</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Enter payment method" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="agent_commission_given_percent"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Agent Commission %</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            placeholder="Enter commission %" 
+                            {...field} 
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                </div>
+              </CardContent>
+            </Card>
 
                 {/* Policy Dates */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <CalendarIcon className="h-5 w-5 text-amber-600" />
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-amber-600" />
                     Policy Period
-                  </h3>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
                       control={form.control}
                       name="start_date"
                       render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Start Date *</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
+                      <FormItem>
+                        <FormLabel>Start Date</FormLabel>
                               <FormControl>
-                                <Button
-                                  variant={'outline'}
-                                  className={cn(
-                                    'w-full pl-3 text-left font-normal',
-                                    !field.value && 'text-muted-foreground'
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, 'PPP')
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
+                          <Input type="date" {...field} />
                               </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) =>
-                                  date > new Date() || date < new Date('1900-01-01')
-                                }
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -774,50 +826,25 @@ export default function PolicyEditPage() {
                       control={form.control}
                       name="end_date"
                       render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>End Date *</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
+                      <FormItem>
+                        <FormLabel>End Date</FormLabel>
                               <FormControl>
-                                <Button
-                                  variant={'outline'}
-                                  className={cn(
-                                    'w-full pl-3 text-left font-normal',
-                                    !field.value && 'text-muted-foreground'
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, 'PPP')
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
+                          <Input type="date" {...field} />
                               </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <Calendar
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                disabled={(date) => date < new Date('1900-01-01')}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                </div>
+              </CardContent>
+            </Card>
 
                 {/* Notes */}
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-gray-600" />
-                    Additional Notes
-                  </h3>
+            <Card>
+              <CardHeader>
+                <CardTitle>Additional Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
                   <FormField
                     control={form.control}
                     name="notes"
@@ -826,7 +853,7 @@ export default function PolicyEditPage() {
                         <FormLabel>Notes</FormLabel>
                         <FormControl>
                           <Textarea 
-                            placeholder="Enter any additional notes..." 
+                          placeholder="Enter additional notes..."
                             rows={4}
                             {...field} 
                           />
@@ -835,39 +862,30 @@ export default function PolicyEditPage() {
                       </FormItem>
                     )}
                   />
-                </div>
+              </CardContent>
+            </Card>
 
-                {/* Form Actions */}
-                <div className="border-t pt-6 flex items-center gap-4">
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading}
-                    className="min-w-[120px]"
-                  >
+            {/* Submit Button */}
+            <div className="flex justify-end gap-4">
+              <Button type="button" variant="outline" onClick={() => router.back()}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading}>
                     {isLoading ? (
                       <>
                         <LoadingSpinner />
-                        <span className="ml-2">Saving...</span>
+                    Updating...
                       </>
                     ) : (
                       <>
-                        <Save className="mr-2 h-4 w-4" />
-                        Save Changes
+                    <Save className="h-4 w-4 mr-2" />
+                    Update Policy
                       </>
                     )}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => router.back()}
-                  >
-                    Cancel
                   </Button>
                 </div>
               </form>
             </Form>
-          </div>
-        </div>
       </div>
     </DashboardWrapper>
   )

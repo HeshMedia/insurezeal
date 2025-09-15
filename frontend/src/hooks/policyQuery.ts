@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import * as policyApi from "@/lib/api/policy";
 import {
   ListAgentPoliciesParams,
@@ -9,15 +14,22 @@ import {
 const policyKeys = {
   all: ["policies"] as const,
   lists: () => [...policyKeys.all, "list"] as const,
-  list: (filters: ListPoliciesParams) => [...policyKeys.lists(), filters] as const,
+  list: (filters: ListPoliciesParams) =>
+    [...policyKeys.lists(), filters] as const,
   details: () => [...policyKeys.all, "detail"] as const,
   detail: (id: string) => [...policyKeys.details(), id] as const,
   agentLists: () => [...policyKeys.all, "agent-list"] as const,
   agentList: (agentCode: string, filters: ListAgentPoliciesParams) =>
     [...policyKeys.agentLists(), agentCode, filters] as const,
   helpers: () => [...policyKeys.all, "helpers"] as const,
-  childIds: (insurerCode?: string, brokerCode?: string, agentId?: string) => 
-    [...policyKeys.helpers(), "child-ids", insurerCode, brokerCode, agentId] as const,
+  childIds: (insurerCode?: string, brokerCode?: string, agentId?: string) =>
+    [
+      ...policyKeys.helpers(),
+      "child-ids",
+      insurerCode,
+      brokerCode,
+      agentId,
+    ] as const,
   agents: () => [...policyKeys.helpers(), "agents"] as const,
 };
 
@@ -52,27 +64,40 @@ export const useListPolicies = (params: ListPoliciesParams) => {
   });
 };
 
-export const usePolicyDetails = (policyId: string) => {
+export const usePolicyDetailsByNumber = ({
+  policy_number,
+  quarter,
+  year,
+}: {
+  policy_number: string;
+  quarter: number;
+  year: number;
+}) => {
   return useQuery({
-    queryKey: policyKeys.detail(policyId),
-    queryFn: () => policyApi.getPolicyDetails(policyId),
-    enabled: !!policyId,
+    queryKey: ["policies", "detail-by-number", policy_number, quarter, year],
+    queryFn: () =>
+      policyApi.getPolicyDetailsByNumber({ policy_number, quarter, year }),
+    enabled: !!policy_number && !!quarter && !!year,
   });
 };
 
-export const useUpdatePolicy = () => {
+export const useUpdatePolicyByNumber = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      policyId,
+      policy_number,
+      quarter,
+      year,
       payload,
     }: {
-      policyId: string;
+      policy_number: string;
+      quarter: number;
+      year: number;
       payload: UpdatePolicyPayload;
-    }) => policyApi.updatePolicy({ policyId, payload }),
-    onSuccess: (data) => {
+    }) =>
+      policyApi.updatePolicyByNumber({ policy_number, quarter, year, payload }),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: policyKeys.lists() });
-      queryClient.setQueryData(policyKeys.detail(data.id), data);
     },
   });
 };
@@ -80,7 +105,7 @@ export const useUpdatePolicy = () => {
 export const useDeletePolicy = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: policyApi.deletePolicy,
+    mutationFn: policyApi.deletePolicyByNumber,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: policyKeys.lists() });
     },
@@ -93,8 +118,13 @@ export const useChildIdOptions = (params?: {
   agent_id?: string;
 }) => {
   return useQuery({
-    queryKey: policyKeys.childIds(params?.insurer_code, params?.broker_code, params?.agent_id),
-    queryFn: () => params ? policyApi.getChildIdOptions(params) : Promise.resolve([]),
+    queryKey: policyKeys.childIds(
+      params?.insurer_code,
+      params?.broker_code,
+      params?.agent_id
+    ),
+    queryFn: () =>
+      params ? policyApi.getChildIdOptions(params) : Promise.resolve([]),
     enabled: !!params?.insurer_code, // Only run when insurer_code is available
   });
 };
@@ -107,7 +137,10 @@ export const useAgentOptions = () => {
 };
 
 // Fixed: Replace keepPreviousData: true with placeholderData: keepPreviousData
-export const useAgentPolicies = (agentCode: string, params: ListAgentPoliciesParams) => {
+export const useAgentPolicies = (
+  agentCode: string,
+  params: ListAgentPoliciesParams
+) => {
   return useQuery({
     queryKey: policyKeys.agentList(agentCode, params),
     queryFn: () => policyApi.getAgentPolicies({ agentCode, params }),
@@ -120,11 +153,11 @@ export const useExportPoliciesCsv = () => {
   return useMutation({
     mutationFn: policyApi.exportPoliciesCsv,
     onSuccess: (data: Blob) => {
-      const blob = new Blob([data], { type: 'text/csv' });
+      const blob = new Blob([data], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `policies-${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `policies-${new Date().toISOString().split("T")[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();

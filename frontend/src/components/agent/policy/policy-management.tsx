@@ -15,6 +15,8 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu'
 import { useListPolicies } from '@/hooks/policyQuery'
+import { useAtom } from 'jotai'
+import { selectedPolicyContextAtom } from '@/lib/atoms/policy'
 import { PolicyListItem, ListPoliciesParams } from '@/types/policy.types'
 
 function PolicyCard({ policy, onViewDetails, onEdit }: { 
@@ -69,6 +71,7 @@ function PolicyCard({ policy, onViewDetails, onEdit }: {
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Policy
               </DropdownMenuItem>
+              {/* Delete is admin-only; hidden for agents */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -113,6 +116,7 @@ function PolicyCard({ policy, onViewDetails, onEdit }: {
 
 export function PolicyManagement() {
   const router = useRouter()
+  const [, setSelectedPolicy] = useAtom(selectedPolicyContextAtom)
   const [params, setParams] = useState<ListPoliciesParams>({
     page: 1,
     page_size: 20
@@ -122,17 +126,32 @@ export function PolicyManagement() {
 
   const { data: policiesResponse, isLoading, error } = useListPolicies(params)
 
+
   const handleSearch = () => {
     setParams(prev => ({ ...prev, search: searchQuery, page: 1 }))
   }
 
-  const handleViewDetails = (policyId: string) => {
+  const handleViewDetails = (policyId: string, policy?: PolicyListItem) => {
+    if (policy?.policy_number && policy?.quarter && typeof policy.year === 'number') {
+      // Save to atom for downstream pages
+      const quarterNum = parseInt(String(policy.quarter).replace(/[^0-9]/g, '') || '0', 10)
+      setSelectedPolicy({ policy_number: policy.policy_number, quarter: quarterNum, year: Number(policy.year) })
+      router.push(`/agent/policies/${policy.policy_number}?quarter=${quarterNum}&year=${policy.year}`)
+      return
+    }
     router.push(`/agent/policies/${policyId}`)
   }
 
-  const handleEdit = (policyId: string) => {
+  const handleEdit = (policyId: string, policy?: PolicyListItem) => {
+    if (policy?.policy_number && policy?.quarter && typeof policy.year === 'number') {
+      const quarterNum = parseInt(String(policy.quarter).replace(/[^0-9]/g, '') || '0', 10)
+      setSelectedPolicy({ policy_number: policy.policy_number, quarter: quarterNum, year: Number(policy.year) })
+      router.push(`/agent/policies/${policy.policy_number}/edit?quarter=${quarterNum}&year=${policy.year}`)
+      return
+    }
     router.push(`/agent/policies/${policyId}/edit`)
   }
+
 
   const handleCreateNew = () => {
     router.push('/agent/policies/create')
@@ -242,8 +261,9 @@ export function PolicyManagement() {
                 <PolicyCard
                   key={policy.id}
                   policy={policy}
-                  onViewDetails={handleViewDetails}
-                  onEdit={handleEdit}
+                  onViewDetails={(id) => handleViewDetails(id, policy)}
+                  onEdit={(id) => handleEdit(id, policy)}
+                
                 />
               ))}
             </div>
