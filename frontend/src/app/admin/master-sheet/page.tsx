@@ -1,17 +1,15 @@
 'use client'
 
-import { MasterSheetTable } from '@/components/admin/mis/master-sheet-table'
-import React, { useState } from 'react'
+import React from 'react'
+import { MasterSheetTableWrapper } from '@/components/mistable/admin-mis-table.config'
 
 function MasterSheetPage() {
-  const [, setPendingChangesCount] = useState(0)
-
   return (
     <div className="h-[calc(100vh-80px)] flex flex-col bg-gray-50 p-4">
-
       {/* Table Container */}
       <div className="flex-1 w-[80vw] bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <MasterSheetTable onPendingChangesCount={setPendingChangesCount} />
+        {/* Use MasterSheetTableWrapper as a React component, not a function call */}
+        <MasterSheetTableWrapper userRole="admin" />
       </div>
     </div>
   )
