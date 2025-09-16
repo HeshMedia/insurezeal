@@ -15,6 +15,8 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu'
 import { useListPolicies } from '@/hooks/policyQuery'
+import { useAtom } from 'jotai'
+import { selectedPolicyContextAtom } from '@/lib/atoms/policy'
 import { PolicyListItem, ListPoliciesParams } from '@/types/policy.types'
 
 function PolicyCard({ policy, onViewDetails, onEdit }: { 
@@ -69,6 +71,7 @@ function PolicyCard({ policy, onViewDetails, onEdit }: {
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Policy
               </DropdownMenuItem>
+              {/* Delete is admin-only; hidden for agents */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -113,6 +116,7 @@ function PolicyCard({ policy, onViewDetails, onEdit }: {
 
 export function PolicyManagement() {
   const router = useRouter()
+  const [, setSelectedPolicy] = useAtom(selectedPolicyContextAtom)
   const [params, setParams] = useState<ListPoliciesParams>({
     page: 1,
     page_size: 20
@@ -122,17 +126,32 @@ export function PolicyManagement() {
 
   const { data: policiesResponse, isLoading, error } = useListPolicies(params)
 
+
   const handleSearch = () => {
     setParams(prev => ({ ...prev, search: searchQuery, page: 1 }))
   }
 
-  const handleViewDetails = (policyId: string) => {
+  const handleViewDetails = (policyId: string, policy?: PolicyListItem) => {
+    if (policy?.policy_number && policy?.quarter && typeof policy.year === 'number') {
+      // Save to atom for downstream pages
+      const quarterNum = parseInt(String(policy.quarter).replace(/[^0-9]/g, '') || '0', 10)
+      setSelectedPolicy({ policy_number: policy.policy_number, quarter: quarterNum, year: Number(policy.year) })
+      router.push(`/agent/policies/${policy.policy_number}?quarter=${quarterNum}&year=${policy.year}`)
+      return
+    }
     router.push(`/agent/policies/${policyId}`)
   }
 
-  const handleEdit = (policyId: string) => {
+  const handleEdit = (policyId: string, policy?: PolicyListItem) => {
+    if (policy?.policy_number && policy?.quarter && typeof policy.year === 'number') {
+      const quarterNum = parseInt(String(policy.quarter).replace(/[^0-9]/g, '') || '0', 10)
+      setSelectedPolicy({ policy_number: policy.policy_number, quarter: quarterNum, year: Number(policy.year) })
+      router.push(`/agent/policies/${policy.policy_number}/edit?quarter=${quarterNum}&year=${policy.year}`)
+      return
+    }
     router.push(`/agent/policies/${policyId}/edit`)
   }
+
 
   const handleCreateNew = () => {
     router.push('/agent/policies/create')
@@ -203,7 +222,7 @@ export function PolicyManagement() {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-600">{policiesResponse.policies.length}</div>
+             <div className="text-2xl font-bold text-green-600">{policiesResponse.policies?.length ?? 0}</div>
               <p className="text-sm text-gray-600">Current Page</p>
             </CardContent>
           </Card>
@@ -216,7 +235,7 @@ export function PolicyManagement() {
           <Card>
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-orange-600">
-                {policiesResponse.policies
+                {(policiesResponse.policies || [])
                   .reduce((sum, policy) => sum + (policy.net_premium || 0), 0)
                   .toLocaleString('en-IN')}
               </div>
@@ -238,12 +257,13 @@ export function PolicyManagement() {
         <>
           {viewMode === 'grid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {policiesResponse.policies.map((policy) => (
+              {(policiesResponse.policies || []).map((policy) => (
                 <PolicyCard
                   key={policy.id}
                   policy={policy}
-                  onViewDetails={handleViewDetails}
-                  onEdit={handleEdit}
+                  onViewDetails={(id) => handleViewDetails(id, policy)}
+                  onEdit={(id) => handleEdit(id, policy)}
+                
                 />
               ))}
             </div>
@@ -272,7 +292,7 @@ export function PolicyManagement() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {policiesResponse.policies.map((policy) => (
+                      {(policiesResponse.policies || []).map((policy) => (
                         <tr key={policy.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div>
@@ -360,7 +380,7 @@ export function PolicyManagement() {
       )}
 
       {/* Empty State */}
-      {policiesResponse && policiesResponse.policies.length === 0 && (
+      {policiesResponse && (policiesResponse.policies || []).length === 0 && (
         <div className="text-center py-12">
           <div className="text-gray-500 text-lg mb-2">No policies found</div>
           <p className="text-gray-400 mb-4">Get started by creating your first policy</p>

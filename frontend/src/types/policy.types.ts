@@ -72,6 +72,8 @@ export interface PolicyListItem {
   start_date: string;
   end_date: string;
   created_at: string;
+  quarter?: string;
+  year?: number;
 }
 
 export interface ListPoliciesParams {
@@ -80,6 +82,8 @@ export interface ListPoliciesParams {
   policy_type?: string;
   agent_id?: string;
   search?: string;
+  quarter?: number;
+  year?: number;
 }
 
 export interface ListPoliciesResponse {
@@ -117,6 +121,8 @@ export interface SubmitPolicyPayload {
   agent_id?: string;
   agent_code?: string;
   child_id?: string;
+  insurer_code?: string;
+  broker_code?: string;
   broker_name?: string;
   insurance_company?: string;
   
