@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AdminInputData, CalculationResult, ExtractedPolicyData } from '@/types/cutpay.types';
 
 // Utility type to create a union of paths from a prefixed object type 
@@ -71,10 +72,8 @@ export const formFields: FormFieldConfig[] = [
   { key: 'extracted_data.business_type', label: 'Business Type', type: 'text', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.seating_capacity', label: 'Seating Capacity', type: 'number', section: 'extracted', tag: 'autofill' },
   { key: 'extracted_data.veh_wheels', label: 'Number of Wheels', type: 'number', section: 'extracted', tag: 'autofill' },
-  { key: 'extracted_data.policy_start_date', label: 'Policy Start Date', type: 'date', section: 'extracted', tag: 'autofill' },
-  { key: 'extracted_data.policy_end_date', label: 'Policy End Date', type: 'date', section: 'extracted', tag: 'autofill' },
-  { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
-
+  { key: 'extracted_data.start_date', label: 'Policy Start Date', type: 'date', section: 'extracted', tag: 'autofill' },
+  { key: 'extracted_data.end_date', label: 'Policy End Date', type: 'date', section: 'extracted', tag: 'autofill' },
   //  Admin Input (in order) - Some have autocalculated tag
   { key: 'admin_input.booking_date', label: 'Booking Date', type: 'date', section: 'admin' },
   { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
@@ -104,7 +103,7 @@ export const formFields: FormFieldConfig[] = [
   { key: 'admin_input.payment_detail', label: 'Payment Detail', type: 'text', section: 'admin', tag: 'payment-method-dependent' },
   { key: 'admin_input.payment_by_office', label: 'Payment By Office', type: 'number', section: 'admin', tag: 'payment-method-dependent' },
   { key: 'claimed_by', label: 'Claimed By', type: 'select', section: 'admin' },
-  { key: 'running_bal', label: 'Running Balance', type: 'number', section: 'admin', tag: 'autocalculated' },
+  // { key: 'running_bal', label: 'Running Balance', type: 'number', section: 'admin', tag: 'autocalculated' },
   { key: 'notes', label: 'Notes', type: 'textarea', section: 'admin' },
 
   // ✅ Calculation (in order) - All have autocalculated tag
@@ -117,3 +116,44 @@ export const formFields: FormFieldConfig[] = [
   { key: 'calculations.agent_extra_amount', label: 'Agent Extra Amount', type: 'number', section: 'calculation', disabled: true, tag: 'autocalculated' },
   { key: 'calculations.total_agent_po_amt', label: 'Total Agent PO Amount', type: 'number', section: 'calculation', disabled: true, tag: 'autocalculated' },
 ];
+
+// Generate field mappings automatically from form fields
+export const generateEditModeFieldMappings = () => {
+  const mappings: Record<string, string> = {};
+  
+  formFields.forEach(field => {
+    // Extract the last part of the path as the API field name
+    const pathParts = field.key.split('.');
+    const apiFieldName = pathParts[pathParts.length - 1];
+    
+    // Map API field to form field path
+    mappings[apiFieldName] = field.key;
+  });
+  
+  return mappings;
+};
+
+// Use the generated mappings
+export const editModeFieldMappings = generateEditModeFieldMappings();
+
+// Special field mappings that need transformation or different target fields
+export const specialFieldMappings: Record<string, { 
+  target: string; 
+  transform?: (value: any) => any 
+}> = {
+  payment_by_office: { 
+    target: "admin_input.payment_by_office", 
+    transform: (value) => Number(value) 
+  },
+  insurer_broker_code: { 
+    target: "admin_input.insurer_code" 
+  },
+  // Add other special cases as needed
+};
+
+//Function to get all available field mappings for debugging
+export const getAllFieldMappings = () => {
+  console.log('Generated field mappings:', editModeFieldMappings);
+  console.log('Special field mappings:', specialFieldMappings);
+  return { editModeFieldMappings, specialFieldMappings };
+};

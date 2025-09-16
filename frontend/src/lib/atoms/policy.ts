@@ -69,3 +69,10 @@ export const policyFormCompletionAtom = atom<{
 
 // Created policy transaction after successful submission
 export const createdPolicyAtom = atom<Policy | null>(null)
+
+// Selected policy context (from list → details/edit)
+export const selectedPolicyContextAtom = atom<{
+  policy_number: string | null
+  quarter: number | null
+  year: number | null
+}>({ policy_number: null, quarter: null, year: null })

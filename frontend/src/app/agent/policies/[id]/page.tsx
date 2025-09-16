@@ -1,8 +1,8 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { usePolicyDetails } from '@/hooks/policyQuery'
+import {usePolicyDetailsByNumber } from '@/hooks/policyQuery'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/ui/loader'
@@ -16,13 +16,39 @@ import {
   TrendingUp,
   Car
 } from 'lucide-react'
+import { useAtom } from 'jotai'
+import { selectedPolicyContextAtom } from '@/lib/atoms/policy'
 
 export default function PolicyDetailPage() {
   const params = useParams()
   const router = useRouter()
   const policyId = params.id as string
+  const [selectedPolicy] = useAtom(selectedPolicyContextAtom)
 
-  const { data: policy, isLoading, error } = usePolicyDetails(policyId)
+  // Expect id param to be policy_number. Read quarter/year (accept Q2 or 2)
+  const searchParams = useSearchParams()
+  const rawQuarter = searchParams.get('quarter') || String(selectedPolicy.quarter ?? '')
+  const rawYear = searchParams.get('year') || String(selectedPolicy.year ?? '')
+  const qQuarter = (() => {
+    const digits = rawQuarter.replace(/[^0-9]/g, '')
+    const n = parseInt(digits || '0', 10)
+    return isNaN(n) ? 0 : n
+  })()
+  const qYear = (() => {
+    const n = parseInt(rawYear || '0', 10)
+    return isNaN(n) ? 0 : n
+  })()
+
+  const { data: policyNumData, isLoading: loadingNum, error: errorNum } = usePolicyDetailsByNumber({
+    policy_number: policyId,
+    quarter: qQuarter,
+    year: qYear,
+  })
+
+
+  const policy = policyNumData
+  const isLoading = loadingNum
+  const error = errorNum
 
   if (isLoading) {
     return (
@@ -31,6 +57,25 @@ export default function PolicyDetailPage() {
           <div className="text-center space-y-4">
             <LoadingSpinner />
             <p className="text-sm text-gray-500">Loading policy details...</p>
+          </div>
+        </div>
+      </DashboardWrapper>
+    )
+  }
+
+  if (qQuarter < 1 || qQuarter > 4 || qYear < 2020 || qYear > 2030) {
+    return (
+      <DashboardWrapper requiredRole="agent">
+        <div className="max-w-5xl mx-auto p-6">
+          <div className="flex items-center justify-center min-h-[300px]">
+            <div className="text-center space-y-4">
+              <h1 className="text-2xl font-bold text-gray-900">Quarter/Year required</h1>
+              <p className="text-gray-600">Open this policy from the list so quarter and year are included in the URL.</p>
+              <Button onClick={() => router.push('/agent/policies')}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Go to Policies
+              </Button>
+            </div>
           </div>
         </div>
       </DashboardWrapper>
@@ -140,10 +185,19 @@ export default function PolicyDetailPage() {
 
             {/* Actions */}
             <div className="flex flex-col gap-2">
-              <Button onClick={() => router.push(`/agent/policies/${policyId}/edit`)}>
+              <Button onClick={() => {
+                const q = qQuarter || selectedPolicy.quarter || 0
+                const y = qYear || selectedPolicy.year || 0
+                if (q && y) {
+                  router.push(`/agent/policies/${policyId}/edit?quarter=${q}&year=${y}`)
+                } else {
+                  router.push(`/agent/policies/${policyId}/edit`)
+                }
+              }}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Policy
               </Button>
+              {/* Delete is admin-only; hidden for agents */}
             </div>
           </div>
         </div>

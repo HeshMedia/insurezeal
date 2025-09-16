@@ -29,7 +29,7 @@ import {
 // Import components
 import PolicyPdfUpload from '@/components/forms/policy-pdf-upload'
 import AdditionalDocumentsUpload, { DocumentTypeConfig } from '@/components/forms/additional-documents-upload'
-import InputForm from '@/components/forms/input-form'
+import { PolicyReviewForm } from '@/components/policies'
 
 // Import IndexedDB utilities
 import { debugIndexedDB } from '@/lib/utils/indexeddb'
@@ -40,7 +40,7 @@ import { useExtractPdfData } from '@/hooks/policyQuery'
 // Define document types for additional documents
 const ADDITIONAL_DOCUMENT_TYPES: DocumentTypeConfig[] = [
   {
-    key: 'kyc',
+    key: 'kyc_documents',
     title: 'KYC Document',
     description: 'Upload KYC verification document (Aadhar, PAN, etc.)',
     icon: User,
@@ -49,7 +49,7 @@ const ADDITIONAL_DOCUMENT_TYPES: DocumentTypeConfig[] = [
     bgColor: 'bg-blue-50'
   },
   {
-    key: 'rc',
+    key: 'rc_document',
     title: 'RC Document',
     description: 'Upload Registration Certificate document',
     icon: Car,
@@ -58,7 +58,7 @@ const ADDITIONAL_DOCUMENT_TYPES: DocumentTypeConfig[] = [
     bgColor: 'bg-green-50'
   },
   {
-    key: 'previousPolicy',
+    key: 'previous_policy',
     title: 'Previous Policy',
     description: 'Upload previous insurance policy document',
     icon: Shield,
@@ -70,9 +70,9 @@ const ADDITIONAL_DOCUMENT_TYPES: DocumentTypeConfig[] = [
 
 // Define the documents type
 type AdditionalDocuments = {
-  kyc: File | null;
-  rc: File | null;
-  previousPolicy: File | null;
+  kyc_documents: File | null;
+  rc_document: File | null;
+  previous_policy: File | null;
 }
 
 const CreatePolicyPage = () => {
@@ -83,9 +83,9 @@ const CreatePolicyPage = () => {
 
   // State for additional documents
   const [additionalDocuments, setAdditionalDocuments] = useState<AdditionalDocuments>({
-    kyc: null,
-    rc: null,
-    previousPolicy: null
+    kyc_documents: null,
+    rc_document: null,
+    previous_policy: null
   })
 
   // Debug IndexedDB when component mounts
@@ -164,9 +164,9 @@ const CreatePolicyPage = () => {
         )
       case 3:
         return (
-          <InputForm 
-            formType="policy"
+          <PolicyReviewForm
             onPrev={handlePreviousStep}
+            onSuccess={() => setCurrentStep(1)}
           />
         )
       default:
