@@ -70,6 +70,30 @@ export interface MasterSheetRecord {
   row_number: number;
 }
 
+// Balance Sheet / Summary Stats Types
+export interface BalanceSheetRecord {
+  'Agent Code': string;
+  'Running Balance (True)': string;
+  'Net Premium (True)': string;
+  'Commissionable Premium (True)': string;
+  'Policy Count (True)': string;
+  'Running Balance (True&False)': string;
+  'Net Premium (True&False)': string;
+  'Commissionable Premium (True&False)': string;
+  'Policy Count (True&False)': string;
+}
+
+// View modes for balance sheet display
+export type BalanceSheetViewMode = 'admin' | 'agent-expanded';
+
+// Column configuration for different views
+export interface BalanceSheetColumnConfig {
+  key: keyof BalanceSheetRecord;
+  label: string;
+  isAgentColumn: boolean; // true for "True" columns, false for "True&False" columns
+  format: 'currency' | 'number' | 'text';
+}
+
 // Parameters for fetching the master sheet list
 export interface MasterSheetListParams {
   page?: number;
@@ -149,17 +173,14 @@ export interface MonthlySummaryStat {
   total_policies: number;
 }
 
-// Statistics from the master sheet
+// Statistics from the master sheet (Balance Sheet / Summary Stats)
 export interface MasterSheetStats {
-  total_records: number;
-  total_policies: number;
-  total_cutpay_transactions: number;
-  total_gross_premium: number;
-  total_net_premium: number;
-  total_cutpay_amount: number;
-  top_agents: TopAgentStat[];
-  top_insurers: TopInsurerStat[];
-  monthly_summary: MonthlySummaryStat[];
+  sheet_name: string;
+  total_rows: number;
+  total_columns: number;
+  headers: string[];
+  data: BalanceSheetRecord[];
+  last_updated: string;
 }
 
 // Parameters for exporting master sheet data
