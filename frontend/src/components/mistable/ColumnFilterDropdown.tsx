@@ -17,11 +17,8 @@ import {
   Search, 
   Calendar, 
   Hash, 
-  Type, 
-  Check, 
-  X 
+  Check
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface ColumnFilter {
   type: 'values' | 'search' | 'date_range' | 'number_range';
@@ -34,7 +31,7 @@ interface ColumnFilter {
 interface ColumnFilterDropdownProps {
   columnId: string;
   onFilter: (columnId: string, filter: ColumnFilter | null) => void;
-  getUniqueValues: () => any[];
+  getUniqueValues: () => string[];
   currentFilter?: ColumnFilter;
   children: React.ReactNode;
 }

@@ -39,7 +39,7 @@ class GoogleSheetsClient {
       
       // Create JWT with the correct payload structure for Google OAuth
       const jwt = await new SignJWT({
-        scope: 'https://www.googleapis.com/auth/spreadsheets.readonly'
+        scope: 'https://www.googleapis.com/auth/spreadsheets'
       })
         .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
         .setIssuer(this.clientEmail)
@@ -318,6 +318,80 @@ class GoogleSheetsClient {
       });
       return obj as T;
     });
+  }
+
+  /**
+   * Update a single cell in the spreadsheet
+   */
+  async updateCell(range: string, value: string): Promise<void> {
+    try {
+      const accessToken = await this.getAccessToken();
+      
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: [[value]]
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Google Sheets update error:', errorText);
+        throw new Error(`Failed to update cell: ${response.status} ${response.statusText}`);
+      }
+
+      console.log(`✅ Successfully updated cell ${range} with value: ${value}`);
+    } catch (error) {
+      console.error(`Error updating cell ${range}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update multiple cells in the spreadsheet using batch update (recommended approach)
+   */
+  async batchUpdateCells(updates: Array<{ range: string; value: string }>): Promise<any> {
+    try {
+      const accessToken = await this.getAccessToken();
+      
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.spreadsheetId}/values:batchUpdate`;
+      
+      const requestBody = {
+        valueInputOption: 'USER_ENTERED', // Parse formulas, dates, numbers etc.
+        data: updates.map(update => ({
+          range: update.range,
+          values: [[update.value]]
+        }))
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Google Sheets batch update error:', errorText);
+        throw new Error(`Failed to batch update cells: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log(`✅ Successfully batch updated ${updates.length} cells. Total cells updated: ${result.totalUpdatedCells}`);
+      return result;
+    } catch (error) {
+      console.error('Error in batch update:', error);
+      throw error;
+    }
   }
 }
 

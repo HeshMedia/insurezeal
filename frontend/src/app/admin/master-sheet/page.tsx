@@ -9,7 +9,7 @@ function MasterSheetPage() {
       {/* Table Container */}
       <div className="flex-1 w-[80vw] bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         {/* Use MasterSheetTableWrapper as a React component, not a function call */}
-        <MasterSheetTableWrapper userRole="admin" />
+        <MasterSheetTableWrapper />
       </div>
     </div>
   )

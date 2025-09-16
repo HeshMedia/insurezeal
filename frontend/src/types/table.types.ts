@@ -7,7 +7,7 @@ export interface ColumnConfig {
   kind: 'text' | 'number' | 'date' | 'select' | 'badge' | 'readonly' | 'currency';
   
   // Field mapping (for complex data extraction)
-  accessor?: (row: any) => any;  // Custom data extraction function
+  accessor?: (row: Record<string, unknown>) => unknown;  // Custom data extraction function
   
   // Behavior settings
   editable?: boolean;            // Can users edit this cell?
@@ -18,17 +18,17 @@ export interface ColumnConfig {
   options?: { value: string; label: string }[];
   
   // Custom display logic
-  formatter?: (value: any, row: any) => string; // Returns HTML string
+  formatter?: (value: unknown, row: Record<string, unknown>) => string; // Returns HTML string
   
   // Validation and conditional display
   required?: boolean;
-  hidden?: (row: any, allData: any[]) => boolean;  // Dynamic hiding
+  hidden?: (row: Record<string, unknown>, allData: Record<string, unknown>[]) => boolean;  // Dynamic hiding
 }
 
 export interface DataSourceAdapter<T> {
-  useList: (queryParams: Record<string, any>) => {
+  useList: (queryParams: Record<string, unknown>) => {
     data?: { pages: { records: T[] }[] };
-    error?: any;
+    error?: Error | null;
     fetchNextPage: () => void;
     hasNextPage?: boolean;
     isFetchingNextPage?: boolean;
@@ -40,8 +40,8 @@ export interface SaveAdapter {
   toUpdates: (
     pendingUpdates: Record<string, Record<string, unknown>>,
     columns: ColumnConfig[]
-  ) => { updates: any[] };
-  mutate: () => (payload: any) => Promise<any>;
+  ) => { updates: unknown[] };
+  mutate: () => (payload: unknown) => Promise<unknown>;
 }
 
 export interface TableConfig<T> {
@@ -79,7 +79,7 @@ export interface ColumnDefinition {
   sortable?: boolean;
   filterable?: boolean;
   width?: number;
-  formatter?: (value: any) => string;
+  formatter?: (value: unknown) => string;
   options?: Array<{ value: string; label: string }>;
 }
 
@@ -100,7 +100,7 @@ export interface SortConfiguration {
 export interface FilterConfiguration {
   field: string;
   type: 'text' | 'select' | 'date_range' | 'number_range';
-  value: any;
+  value: unknown;
   operator?: 'equals' | 'contains' | 'starts_with' | 'greater_than' | 'less_than';
 }
 
@@ -146,14 +146,14 @@ export type FilterType = TextFilter | SelectFilter | DateRangeFilter | NumberRan
 export interface FilterState {
   globalSearch: string;
   columnFilters: Map<string, FilterType>;
-  quickFilters: Record<string, any>;
+  quickFilters: Record<string, unknown>;
 }
 
 export interface FilterOperations {
   setGlobalSearch: (search: string) => void;
   setColumnFilter: (field: string, filter: FilterType | null) => void;
   clearAllFilters: () => void;
-  applyQuickFilter: (key: string, value: any) => void;
+  applyQuickFilter: (key: string, value: unknown) => void;
 }
 
 export interface SortOptions {

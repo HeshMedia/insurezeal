@@ -8,14 +8,22 @@ import { ColumnFilterDropdown } from './ColumnFilterDropdown';
 import { Search, Filter, X, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface ColumnFilter {
+  type: 'values' | 'search' | 'date_range' | 'number_range';
+  values?: string[];
+  search?: string;
+  dateRange?: { start?: string; end?: string };
+  numberRange?: { min?: number; max?: number };
+}
+
 interface FilterableColumnHeaderProps {
   title: string;
   columnId: string;
   onSort: (columnId: string, direction: 'asc' | 'desc' | null) => void;
-  onFilter: (columnId: string, filter: any) => void;
-  getUniqueValues: () => any[];
+  onFilter: (columnId: string, filter: ColumnFilter | null) => void;
+  getUniqueValues: () => string[];
   currentSort?: { direction: 'asc' | 'desc' } | null;
-  currentFilter?: any;
+  currentFilter?: ColumnFilter;
 }
 
 export function FilterableColumnHeader({
@@ -77,39 +85,99 @@ export function FilterableColumnHeader({
   );
 }
 
-interface GlobalSearchBarProps {
+
+interface GlobalSearchBarProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  className?: string;       // wrapper
+  inputClassName?: string;  // input element
+  iconClassName?: string;   // left icon
+  clearIconClassName?: string; // right icon
 }
 
-export function GlobalSearchBar({
-  value,
-  onChange,
-  placeholder = "Search across all fields..."
-}: GlobalSearchBarProps) {
-  return (
-    <div className="relative max-w-2xl flex-1">
-      <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-      <Input
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="pl-12 pr-12 h-12 text-base bg-white/80 backdrop-blur-sm border-gray-300 rounded-xl shadow-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-      />
-      {value && (
+export const GlobalSearchBar = React.forwardRef<HTMLInputElement, GlobalSearchBarProps>(
+  (
+    {
+      value,
+      onChange,
+      placeholder = "Search across all fields...",
+      className,
+      inputClassName,
+      iconClassName,
+      clearIconClassName,
+      "aria-label": ariaLabel,
+      type,
+      ...rest
+    },
+    ref
+  ) => {
+    const isEmpty = !value;
+
+    return (
+      <div
+        className={[
+          "relative flex-1 max-w-full",
+          className,
+        ].filter(Boolean).join(" ")}
+        role="search"
+      >
+        <Search
+          aria-hidden="true"
+          className={[
+            "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4",
+            iconClassName,
+          ].filter(Boolean).join(" ")}
+        />
+
+        <Input
+          ref={ref}
+          type={type ?? "search"}
+          role="searchbox"
+          aria-label={ariaLabel || "Search"}
+          placeholder={placeholder}
+          value={value}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && value) {
+              e.preventDefault();
+              onChange("");
+            }
+          }}
+          className={[
+            // sizing and base styles
+            "pl-10 pr-10 h-9 text-sm bg-white border border-gray-300 rounded-md",
+            // focus
+            "focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-blue-500",
+            // transitions
+            "transition-colors",
+            inputClassName,
+          ].filter(Boolean).join(" ")}
+          {...rest}
+        />
+
+        {/* Clear */}
         <Button
+          type="button"
           variant="ghost"
           size="sm"
-          onClick={() => onChange('')}
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 hover:bg-gray-100"
+          onClick={() => onChange("")}
+          className={[
+            "absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 p-0",
+            isEmpty ? "invisible" : "visible",
+            "hover:bg-gray-100",
+          ].join(" ")}
+          aria-label="Clear search"
+          tabIndex={isEmpty ? -1 : 0}
         >
-          <X className="h-4 w-4" />
+          <X className={["h-4 w-4", clearIconClassName].filter(Boolean).join(" ")} />
         </Button>
-      )}
-    </div>
-  );
-}
+      </div>
+    );
+  }
+);
+
+GlobalSearchBar.displayName = "GlobalSearchBar";
 
 interface FilterSummaryProps {
   stats: {

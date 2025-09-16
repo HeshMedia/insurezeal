@@ -10,6 +10,23 @@ export interface GoogleSheetsPendingUpdates {
   };
 }
 
+// Interface for multi-select functionality
+export interface SelectedCell {
+  recordId: string;
+  fieldName: string;
+  rowIndex: number;
+  columnIndex: number;
+  currentValue: string;
+}
+
+export interface MultiSelectState {
+  selectedCells: SelectedCell[];
+  isSelecting: boolean;
+  selectionStart: SelectedCell | null;
+  dragFillSource: SelectedCell | null;
+  isDragFilling: boolean;
+}
+
 // Loading states for different Google Sheets MIS operations
 export interface GoogleSheetsMISLoadingState {
   masterSheetData: boolean;
@@ -98,6 +115,15 @@ export const googleSheetsMISDataStateAtom = atom<GoogleSheetsMISDataState>({
   lastUpdated: null,
   sheetName: null,
   sheetId: process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID || null,
+});
+
+// Atom for multi-select functionality
+export const multiSelectStateAtom = atom<MultiSelectState>({
+  selectedCells: [],
+  isSelecting: false,
+  selectionStart: null,
+  dragFillSource: null,
+  isDragFilling: false,
 });
 
 // Atom for current filters/search parameters
@@ -284,5 +310,67 @@ export const googleSheetsRefreshDataAtom = atom(
       ...current, 
       lastUpdated: null 
     });
+  }
+);
+
+// =============================================================================
+// SHEET DATA STATE MANAGEMENT - For storing fetched data to avoid refetching
+// =============================================================================
+
+// Interface for sheet data state
+export interface SheetDataState {
+  data: QuarterlySheetRecord[];
+  lastFetched: Date;
+  sheetName: string;
+}
+
+// Interface for the sheet data map
+export interface GoogleSheetsDataMap {
+  [sheetName: string]: SheetDataState;
+}
+
+// Atom to store sheet data in memory (no persistence)
+export const googleSheetsDataMapAtom = atom<GoogleSheetsDataMap>({});
+
+// Atom to get data for a specific sheet
+export const getSheetDataAtom = atom(
+  (get) => (sheetName: string): SheetDataState | null => {
+    const dataMap = get(googleSheetsDataMapAtom);
+    return dataMap[sheetName] || null;
+  }
+);
+
+// Write-only atom to set data for a specific sheet
+export const setSheetDataAtom = atom(
+  null,
+  (get, set, { sheetName, data }: { sheetName: string; data: QuarterlySheetRecord[] }) => {
+    const current = get(googleSheetsDataMapAtom);
+    const newSheetData: SheetDataState = {
+      data,
+      lastFetched: new Date(),
+      sheetName
+    };
+    
+    set(googleSheetsDataMapAtom, {
+      ...current,
+      [sheetName]: newSheetData
+    });
+  }
+);
+
+// Write-only atom to clear data for a specific sheet or all sheets
+export const clearSheetDataAtom = atom(
+  null,
+  (get, set, sheetName?: string) => {
+    const current = get(googleSheetsDataMapAtom);
+    
+    if (sheetName) {
+      // Clear specific sheet
+      const { ...rest } = current;
+      set(googleSheetsDataMapAtom, rest);
+    } else {
+      // Clear all sheet data
+      set(googleSheetsDataMapAtom, {});
+    }
   }
 );

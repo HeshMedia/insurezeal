@@ -1,13 +1,17 @@
 // components/mistable/MIS-Table-ClientFiltered.tsx - Google Sheets Client-Side Filtering
+
 "use client";
 
+import { QuarterSheetSelect } from './QuarterSelector';
+import { exportRowsToCsv, exportRowsToXlsx } from '@/lib/utils/export-file';
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
   flexRender,
   createColumnHelper,
-  type ColumnDef
+  type ColumnDef,
+  type CellContext
 } from '@tanstack/react-table';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -19,7 +23,13 @@ import { toast } from 'sonner';
 import { 
   Database, 
   Save, 
-  RotateCcw 
+  RotateCcw,
+  FilterX,
+  FileSpreadsheet,
+  Maximize2,
+  Minimize2,
+  BarChart3,
+  Table as TableIcon
 } from 'lucide-react';
 import { 
   Table, 
@@ -31,34 +41,33 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GenericEditableCell } from './editable-cell';
-import { MasterSheetRecord } from '@/types/mis.types';
-
-// Types for DataTable configuration
-interface DataTableProps<T> {
-  config: {
-    title?: string;
-    className?: string;
-    columns: any[];
-    pageSize?: number;
-    enableSearch?: boolean;
-    enableBulkEdit?: boolean;
-    searchPlaceholder?: string;
-    idAccessor: (row: T) => string;
-    dataSource: any;
-    saveAdapter: any;
-    defaultSort?: any[];
-  };
-  onPendingChangesCount?: (count: number) => void;
-  clientFiltering?: any; // Accept client filtering from parent
-}
+import { BalanceSheet } from './BalanceSheet';
+import { 
+  multiSelectStateAtom,
+  SelectedCell
+} from '@/lib/atoms/google-sheets-mis';
+import { 
+  DataTableProps 
+} from './table-component.types';
 
 // Generic pending updates atom factory
 const createPendingUpdatesAtom = (key: string) => 
   atomWithStorage<Record<string, Record<string, unknown>>>(`pendingUpdates_${key}`, {});
 
-function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFiltering: propClientFiltering }: DataTableProps<T>) {
+function DataTableClientFiltered<T>({ 
+  config, 
+  onPendingChangesCount, 
+  clientFiltering: propClientFiltering,
+  availableSheets = [],
+  selectedSheet,
+  onSheetChange,
+  loading: externalLoading
+}: DataTableProps<T> & { loading?: boolean }) {
   // State management
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
+  const [multiSelectState, setMultiSelectState] = useAtom(multiSelectStateAtom);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showBalanceSheet, setShowBalanceSheet] = useState(false);
   
   // Create unique atom key
   const atomKey = config.title?.replace(/\s+/g, '_').toLowerCase() || 
@@ -86,68 +95,81 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
 
   // Get filtered and sorted data from client-side filtering
   const {
-    filteredData,
-    paginatedData,
-    filteredStats,
-    filters,
-    handleGlobalSearch,
-    handleSort,
-    handleColumnFilter,
-    getColumnUniqueValues,
-    getColumnFilter,
-    handleClearAllFilters,
-    isFiltered,
-    totalRecords,
-    filteredRecords
-  } = clientFiltering;
+    filteredData = [],
+    paginatedData = { data: [], totalRecords: 0, totalPages: 0, currentPage: 1, pageSize: 50 },
+    filters = { columnFilters: {} },
+    handleGlobalSearch = () => {},
+    handleSort = () => {},
+    handleColumnFilter = () => {},
+    getColumnUniqueValues = () => [],
+    getColumnFilter = () => null,
+    handleClearAllFilters = () => {},
+    isFiltered = false,
+    totalRecords = 0,
+    filteredRecords = 0
+  } = clientFiltering || {};
 
+  
   // Helper to create filterable header
   const createFilterableHeader = (title: string, columnId: string) => {
     const FilterableHeader = () => (
       <FilterableColumnHeader
         title={title}
         columnId={columnId}
-        onSort={(colId, direction) => handleSort(colId as keyof MasterSheetRecord)}
+        onSort={(colId) => handleSort(colId as never)}
         onFilter={(colId, filter) => {
           console.log('🔍 Filter applied:', { columnId: colId, filter });
           
           if (!filter) {
             // Clear filter
-            handleColumnFilter(colId as keyof MasterSheetRecord, new Set(), false);
+            handleColumnFilter(colId as never, new Set(), false);
           } else {
             switch (filter.type) {
               case 'values':
-                const stringValues = (filter.values || []).map((v: any) => String(v));
+                const stringValues = (filter.values || []).map((v: unknown) => String(v));
                 const valueSet = new Set<string>(stringValues);
-                handleColumnFilter(colId as keyof MasterSheetRecord, valueSet, true);
+                handleColumnFilter(colId as never, valueSet, true);
                 break;
               case 'search':
                 // Use column search functionality
-                if (clientFiltering.handleColumnSearch) {
-                  clientFiltering.handleColumnSearch(colId as keyof MasterSheetRecord, filter.search);
+                if (clientFiltering?.handleColumnSearch && filter.search) {
+                  clientFiltering.handleColumnSearch(colId as never, filter.search);
                 }
                 break;
               case 'date_range':
-                if (clientFiltering.handleDateRangeFilter) {
-                  clientFiltering.handleDateRangeFilter(colId, filter.dateRange.start, filter.dateRange.end);
+                if (clientFiltering?.handleDateRangeFilter && filter.dateRange?.start && filter.dateRange?.end) {
+                  // Type assertion to bypass the intersection type issue
+                  (clientFiltering.handleDateRangeFilter as (colId: string, start: Date, end: Date) => void)(
+                    colId, 
+                    new Date(filter.dateRange.start), 
+                    new Date(filter.dateRange.end)
+                  );
                 }
                 break;
               case 'number_range':
-                if (clientFiltering.handleNumberRangeFilter) {
+                if (clientFiltering?.handleNumberRangeFilter && filter.numberRange?.min !== undefined && filter.numberRange?.max !== undefined) {
                   clientFiltering.handleNumberRangeFilter(colId, filter.numberRange.min, filter.numberRange.max);
                 }
                 break;
             }
           }
         }}
-        getUniqueValues={() => getColumnUniqueValues(columnId as keyof MasterSheetRecord)}
+        getUniqueValues={() => getColumnUniqueValues(columnId as never)}
         currentSort={null}
-        currentFilter={getColumnFilter ? getColumnFilter(columnId as keyof MasterSheetRecord) : null}
+        currentFilter={getColumnFilter ? (() => {
+          const filter = getColumnFilter(columnId as never);
+          if (filter instanceof Set && filter.size > 0) {
+            return { type: 'values' as const, values: Array.from(filter) };
+          }
+          return undefined;
+        })() : undefined}
       />
     );
     FilterableHeader.displayName = `FilterableHeader-${title}`;
     return FilterableHeader;
   };
+  
+
   
   // Column definitions using TanStack Table
   const columnHelper = createColumnHelper<T>();
@@ -169,7 +191,7 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
             header: createFilterableHeader(colConfig.header, colConfig.id),
             enableSorting: true,
             size: colConfig.width,
-            cell: (cellContext) => {
+            cell: (cellContext: CellContext<T, unknown>) => {
               if (colConfig.editable && config.enableBulkEdit) {
                 return <GenericEditableCell {...cellContext} columnConfig={colConfig} />;
               }
@@ -190,17 +212,22 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
                   return <span className="text-gray-400">N/A</span>;
                 }
                 
+                const safeValue = String(value);
+                
                 switch (colConfig.kind) {
                   case 'currency':
-                    return `₹${Number(value).toLocaleString()}`;
+                    const numValue = Number(value);
+                    return `₹${isNaN(numValue) ? safeValue : numValue.toLocaleString()}`;
                   case 'badge':
-                    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{value}</span>;
+                    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{safeValue}</span>;
                   case 'number':
-                    return typeof value === 'number' ? value.toLocaleString() : value;
+                    const num = Number(value);
+                    return isNaN(num) ? safeValue : num.toLocaleString();
                   case 'date':
-                    return new Date(value).toLocaleDateString();
+                    const date = new Date(safeValue);
+                    return isNaN(date.getTime()) ? safeValue : date.toLocaleDateString();
                   default:
-                    return String(value);
+                    return safeValue;
                 }
               };
               
@@ -226,7 +253,7 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
   }, [setPendingUpdates]);
   
   const table = useReactTable({
-    data: paginatedData.data as T[],
+    data: filteredData as T[], // Use filteredData instead of paginatedData to show all records
     columns,
     getCoreRowModel: getCoreRowModel(),
     enableSortingRemoval: false,
@@ -239,6 +266,16 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
     } as any
   });
   
+  // Debug: Log column information
+  console.log(`🎯 Table rendering with ${columns.length} columns`, {
+    configColumnsLength: config.columns.length,
+    actualColumnsLength: columns.length,
+    tableColumnsLength: table.getAllColumns().length,
+    visibleColumnsLength: table.getVisibleLeafColumns().length,
+    dataLength: filteredData.length,
+    usingData: 'filteredData (all records)'
+  });
+  
   // Bulk save functionality
   const handleSaveChanges = useCallback(async () => {
     if (Object.keys(pendingUpdates).length === 0) {
@@ -247,7 +284,7 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
     }
 
     const promise = (async () => {
-      const payload = config.saveAdapter.toUpdates(pendingUpdates, config.columns);
+      const payload = config.saveAdapter.toUpdates(pendingUpdates);
       const mutateFn = config.saveAdapter.mutate();
       const result = await mutateFn(payload);
       setPendingUpdates({});
@@ -267,6 +304,180 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
   }, [setPendingUpdates]);
 
   const pendingChangesCount = Object.keys(pendingUpdates).length;
+
+const computeExportRows = useCallback(() => {
+  // Choose dataset for export:
+  // Option A: export filtered view
+  const dataset = filteredData as any[];
+
+  // Optional: map/omit columns based on config.columns visibility
+  const visibleIds = table.getVisibleLeafColumns().map((c) => c.id);
+  const rows = dataset.map((row) => {
+    const out: Record<string, any> = {};
+    visibleIds.forEach((id) => {
+      out[id] = (row as any)[id];
+    });
+    return out;
+  });
+  return rows;
+}, [filteredData, table]);
+
+const handleExportCSV = useCallback(() => {
+  const rows = computeExportRows();
+  // Optional: custom headers order from visibleIds
+  const headers = table.getVisibleLeafColumns().map((c) => c.id);
+  exportRowsToCsv(rows, `${config.title || 'export'}.csv`, headers);
+}, [computeExportRows, table, config.title]);
+
+const handleExportXLSX = useCallback(() => {
+  const rows = computeExportRows();
+  exportRowsToXlsx(rows, `${config.title || 'export'}.xlsx`, (config.title || 'Sheet'));
+}, [computeExportRows, config.title]);
+
+const handleToggleFullscreen = useCallback(() => {
+  setIsFullscreen(prev => !prev);
+}, []);
+
+const handleToggleBalanceSheet = useCallback(() => {
+  setShowBalanceSheet(prev => !prev);
+}, []);
+
+  
+  // Keyboard navigation for cell selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Handle Escape key for fullscreen mode
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+        return;
+      }
+
+      // Only handle if no input/textarea is focused and cells are selected
+      const activeElement = document.activeElement;
+      const isInputFocused = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA';
+      
+      if (isInputFocused || multiSelectState.selectedCells.length === 0) return;
+
+      const currentSelection = multiSelectState.selectedCells;
+      if (currentSelection.length === 0) return;
+
+      // Get the current active cell (last selected)
+      const activeCell = currentSelection[currentSelection.length - 1];
+      const allRows = table.getRowModel().rows;
+      const allColumns = table.getAllColumns();
+      
+      let newRowIndex = activeCell.rowIndex;
+      let newColIndex = activeCell.columnIndex;
+      
+      // Handle arrow key navigation
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault();
+          newRowIndex = Math.max(0, activeCell.rowIndex - 1);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          newRowIndex = Math.min(allRows.length - 1, activeCell.rowIndex + 1);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          newColIndex = Math.max(0, activeCell.columnIndex - 1);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          newColIndex = Math.min(allColumns.length - 1, activeCell.columnIndex + 1);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          // Clear selection on Escape
+          setMultiSelectState(prev => ({ ...prev, selectedCells: [] }));
+          return;
+        default:
+          // Handle typing on selected cells (printable characters)
+          if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            // Start editing the active cell and apply to all selected cells
+            const targetRow = allRows[activeCell.rowIndex];
+            const targetColumn = allColumns[activeCell.columnIndex];
+            if (targetRow && targetColumn) {
+              setEditingCell({ rowIndex: activeCell.rowIndex, columnId: targetColumn.id });
+              
+              // Apply the typed character to all selected cells
+              setTimeout(() => {
+                currentSelection.forEach(cell => {
+                  updateDataById(cell.recordId, cell.fieldName, e.key);
+                });
+              }, 0);
+            }
+          }
+          return;
+      }
+
+      // Create new cell data for the target position
+      const targetRow = allRows[newRowIndex];
+      const targetColumn = allColumns[newColIndex];
+      
+      if (targetRow && targetColumn) {
+        const targetRecordId = config.idAccessor(targetRow.original);
+        const targetValue = (targetRow.original as any)[targetColumn.id];
+        const newCellData = {
+          recordId: targetRecordId,
+          fieldName: targetColumn.id,
+          rowIndex: newRowIndex,
+          columnIndex: newColIndex,
+          currentValue: String(targetValue || '')
+        };
+
+        if (e.shiftKey) {
+          // Shift+Arrow: Extend selection
+          if (multiSelectState.selectionStart) {
+            const start = multiSelectState.selectionStart;
+            const end = newCellData;
+            
+            const startRow = Math.min(start.rowIndex, end.rowIndex);
+            const endRow = Math.max(start.rowIndex, end.rowIndex);
+            const startCol = Math.min(start.columnIndex, end.columnIndex);
+            const endCol = Math.max(start.columnIndex, end.columnIndex);
+            
+            const rangeSelection: SelectedCell[] = [];
+            
+            for (let rowIdx = startRow; rowIdx <= endRow; rowIdx++) {
+              for (let colIdx = startCol; colIdx <= endCol; colIdx++) {
+                const row = allRows[rowIdx];
+                const column = allColumns[colIdx];
+                if (row && column) {
+                  const recordId = config.idAccessor(row.original);
+                  const value = (row.original as any)[column.id];
+                  rangeSelection.push({
+                    recordId,
+                    fieldName: column.id,
+                    rowIndex: rowIdx,
+                    columnIndex: colIdx,
+                    currentValue: String(value || '')
+                  });
+                }
+              }
+            }
+            
+            setMultiSelectState(prev => ({
+              ...prev,
+              selectedCells: rangeSelection
+            }));
+          }
+        } else {
+          // Arrow without Shift: Move selection
+          setMultiSelectState(prev => ({
+            ...prev,
+            selectedCells: [newCellData],
+            selectionStart: newCellData
+          }));
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [multiSelectState, table, config.idAccessor, setMultiSelectState, setEditingCell, updateDataById, isFullscreen, setIsFullscreen]);
 
   useEffect(() => {
     onPendingChangesCount?.(pendingChangesCount);
@@ -303,159 +514,267 @@ function DataTableClientFiltered<T>({ config, onPendingChangesCount, clientFilte
 
   return (
     <div className={cn(
-      "h-full flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl shadow-2xl border border-white/20 backdrop-blur-sm",
+      "h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200",
+      (multiSelectState.isSelecting || multiSelectState.isDragFilling) && "select-none", // Prevent text selection during drag
+      isFullscreen && "fixed inset-0 z-50 rounded-none border-0 shadow-none",
       config.className
     )}>
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-lg border-b border-gray-200/50 rounded-t-2xl">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between">
-            {/* Left Section */}
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg">
-                <Database className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                {config.title && (
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                    {config.title}
-                  </h1>
-                )}
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-sm text-gray-600 font-medium">
-                    {totalRecords} records • {filteredRecords} filtered
-                  </span>
-                  {pendingChangesCount > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-400 to-orange-400 rounded-full shadow-md">
-                      <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                      <span className="text-white text-sm font-semibold">
-                        {pendingChangesCount} pending changes
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            {/* Action Buttons */}
-            {config.enableBulkEdit && (
-              <div className="flex items-center gap-4">
-                {pendingChangesCount > 0 && (
-                  <Button
-                    variant="outline"
-                    onClick={handleClearChanges}
-                    className="bg-white/50 border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition-all duration-200 shadow-md"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Clear Changes
-                  </Button>
-                )}
-                
-                <Button
-                  onClick={handleSaveChanges}
-                  disabled={pendingChangesCount === 0}
-                  size="lg"
-                  className={cn(
-                    "font-bold px-8 py-3 rounded-xl shadow-xl transition-all duration-300 transform",
-                    pendingChangesCount > 0
-                      ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-green-200 hover:scale-105 ring-4 ring-green-200"
-                      : "bg-gradient-to-r from-gray-300 to-gray-400 text-gray-600 cursor-not-allowed"
-                  )}
-                >
-                  <Save className="mr-3 h-5 w-5" />
-                  Save All Changes
-                  {pendingChangesCount > 0 && (
-                    <span className="ml-2 px-2 py-1 bg-white/20 rounded-full text-sm">
-                      {pendingChangesCount}
-                    </span>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
+    {/* Header */}
+<div className="bg-white border-b border-gray-200">
+  {/* Toggle Button - Fixed Position */}
+  <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+    <div className="flex justify-center">
+      <div className="inline-flex items-center bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+        <Button
+          variant={!showBalanceSheet ? "default" : "ghost"}
+          onClick={() => !showBalanceSheet || handleToggleBalanceSheet()}
+          className={cn(
+            "h-8 px-3 text-sm font-medium rounded-md transition-all",
+            !showBalanceSheet ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
+          )}
+        >
+          <TableIcon className="mr-2 h-4 w-4" />
+          MIS Table
+        </Button>
+        <Button
+          variant={showBalanceSheet ? "default" : "ghost"}
+          onClick={() => showBalanceSheet || handleToggleBalanceSheet()}
+          className={cn(
+            "h-8 px-3 text-sm font-medium rounded-md transition-all",
+            showBalanceSheet ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
+          )}
+        >
+          <BarChart3 className="mr-2 h-4 w-4" />
+          Balance Sheet
+        </Button>
       </div>
+    </div>
+  </div>
 
-      {/* Search and Filter Controls */}
-      <div className="bg-gradient-to-r from-white via-blue-50 to-indigo-50 border-b border-gray-200/50">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between gap-4">
-            <GlobalSearchBar
-              value={filters.globalSearch || ''}
-              onChange={handleGlobalSearch}
-              placeholder={config.searchPlaceholder || "Search across all fields..."}
-            />
-            
-            {isFiltered && (
-              <div className="flex items-center gap-4">
-                <FilterSummary 
-                  stats={{
-                    totalRecords,
-                    totalFilteredRecords: filteredRecords,
-                    activeFilters: Object.keys(filters.columnFilters).length + (filters.globalSearch ? 1 : 0)
-                  }}
-                  onClearAll={handleClearAllFilters}
-                />
-              </div>
-            )}
+  <div className="px-6 py-3">
+    <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* Left cluster: title + meta */}
+      {!showBalanceSheet && (
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-blue-100 rounded-lg shrink-0">
+            <Database className="h-5 w-5 text-blue-600" />
           </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 relative overflow-auto scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-blue-100">
-        <div className="min-w-max">
-          <Table className="w-full bg-white border-collapse">
-            <TableHeader className="sticky top-0 z-10">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={`header-group-${headerGroup.id}`} className="border-b-2 border-gray-300">
-                  {headerGroup.headers.map((header) => (
-                    <TableHead 
-                      key={`header-${header.id}`} 
-                      className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap bg-gray-50 border-r border-gray-300 last:border-r-0"
-                      style={{ width: header.getSize() }}
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody className="bg-white">
-              {table.getRowModel().rows.map((row, index) => (
-                <TableRow 
-                  key={`${config.idAccessor(row.original)}-${index}`} 
-                  className={cn(
-                    "transition-colors duration-200 border-b border-gray-200 hover:bg-blue-50",
-                    index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
-                  )}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell 
-                      key={`cell-${cell.id}-${config.idAccessor(row.original)}`} 
-                      className="p-0 whitespace-nowrap text-sm text-slate-800 border-r border-gray-200 last:border-r-0"
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {/* Results summary */}
-          <div className="h-16 flex justify-center items-center bg-white border-t-2 border-gray-300">
-            <div className="flex items-center gap-2 bg-green-50 px-6 py-3 rounded-lg border border-green-200">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm font-medium text-slate-700">
-                Showing {paginatedData.data.length} of {filteredRecords} records
+          <div className="min-w-0">
+            {config.title && (
+              <h1 className="text-base font-semibold text-gray-900 truncate">
+                {config.title}
+              </h1>
+            )}
+            <div className="flex items-center gap-3 mt-0.5">
+              <span className="text-xs text-gray-500">
+                {totalRecords} records • {filteredRecords} filtered
               </span>
+              {pendingChangesCount > 0 && (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100 rounded-md">
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                  <span className="text-amber-700 text-xs font-medium">
+                    {pendingChangesCount} pending
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Middle cluster: quarter dropdown + export buttons */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {!showBalanceSheet && availableSheets && availableSheets.length > 0 && (
+          <QuarterSheetSelect
+            availableSheets={availableSheets}
+            selectedSheet={selectedSheet}
+            onSheetChange={onSheetChange}
+            loading={externalLoading || loading.masterSheetData}
+            className="h-9"
+          />
+        )}
+
+        {!showBalanceSheet && (
+          <>
+            <Button
+              variant="secondary"
+              onClick={handleExportCSV}
+              className="h-9 px-3 text-sm font-medium"
+              title="Export all filtered rows to CSV"
+            >
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={handleExportXLSX}
+              className="h-9 px-3 text-sm font-medium"
+              title="Export all filtered rows to Excel (.xlsx)"
+            >
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Export Excel
+            </Button>
+          </>
+        )}
       </div>
+
+      {/* Right cluster: actions */}
+      {!showBalanceSheet && (
+        <div className="flex items-center gap-2">
+          {isFiltered && (
+            <Button
+              variant="ghost"
+              onClick={handleClearAllFilters}
+              className="h-9 px-3 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+            >
+              <FilterX className="mr-2 h-4 w-4" />
+              Clear Filters
+            </Button>
+          )}
+
+          {config.enableBulkEdit && (
+            <>
+              {pendingChangesCount > 0 && (
+                <Button
+                  variant="ghost"
+                  onClick={handleClearChanges}
+                  className="h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Clear Changes
+                </Button>
+              )}
+
+              <Button
+                onClick={handleSaveChanges}
+                disabled={pendingChangesCount === 0}
+                variant={pendingChangesCount > 0 ? "default" : "secondary"}
+                className={cn(
+                  "h-9 px-4 text-sm font-medium transition-colors",
+                  pendingChangesCount > 0
+                    ? "bg-blue-600 hover:bg-blue-700 text-white"
+                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                )}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
+                {pendingChangesCount > 0 && (
+                  <span className="ml-2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                    {pendingChangesCount}
+                  </span>
+                )}
+              </Button>
+            </>
+          )}
+
+          <Button
+            variant="ghost"
+            onClick={handleToggleFullscreen}
+            className="h-9 px-3 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+            title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
+{/* Search and Filter Controls */}
+{!showBalanceSheet && (
+  <div className="bg-gray-50 border-b border-gray-200">
+    <div className="px-6 py-2.5">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        {/* Compact search bar */}
+        <div className="flex-1 min-w-[220px] max-w-[520px]">
+          <GlobalSearchBar
+            value={filters.globalSearch || ""}
+            onChange={handleGlobalSearch}
+            placeholder={config.searchPlaceholder || "Search across all fields..."}
+          />
+        </div>
+
+        {isFiltered && (
+          <FilterSummary
+            stats={{
+              totalRecords,
+              totalFilteredRecords: filteredRecords,
+              activeFilters:
+                Object.keys(filters.columnFilters).length +
+                (filters.globalSearch ? 1 : 0),
+            }}
+            onClearAll={handleClearAllFilters}
+          />
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+
+      {/* Content */}
+      {showBalanceSheet ? (
+        <div className="flex-1">
+          <BalanceSheet />
+        </div>
+      ) : (
+        <div className="flex-1 relative overflow-auto">
+          <div className="min-w-max">
+            <Table className="w-full bg-white border-collapse">
+              <TableHeader className="sticky top-0 z-10">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={`header-group-${headerGroup.id}`} className="border-b border-gray-200 bg-gray-50">
+                    {headerGroup.headers.map((header) => (
+                      <TableHead 
+                        key={`header-${header.id}`} 
+                        className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-r border-gray-200 last:border-r-0"
+                        style={{ width: header.getSize() }}
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody className="bg-white">
+                {table.getRowModel().rows.map((row, index) => (
+                  <TableRow 
+                    key={`${config.idAccessor(row.original)}-${index}`} 
+                    className={cn(
+                      "transition-colors duration-200 border-b border-gray-100 hover:bg-gray-50",
+                      index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                    )}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell 
+                        key={`cell-${cell.id}-${config.idAccessor(row.original)}`} 
+                        className="p-0 whitespace-nowrap text-sm text-slate-800 border-r border-gray-200 last:border-r-0"
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            
+            {/* Results summary */}
+            <div className="h-12 flex justify-center items-center bg-white border-t border-gray-200">
+              <div className="text-sm text-gray-600">
+                Showing {paginatedData.data.length} of {filteredRecords} records
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,42 +2,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import DataTableClientFiltered from './MIS-Table-ClientFiltered';
 import { useGoogleSheetsMIS } from '@/hooks/useGoogleSheetsMIS';
+import { ColumnConfig, TableConfig, DataSource, SaveAdapter } from './table-component.types';
+import { BulkUpdateRequest } from '@/types/mis.types';
+import { QuarterlySheetRecord } from '@/types/admin-mis.types';
 
-// Simple type definitions to avoid import issues
-interface ColumnConfig {
-  id: string;
-  header: string;
-  kind: 'text' | 'number' | 'date' | 'select' | 'badge' | 'readonly' | 'currency';
-  accessor?: (row: any) => any;
-  editable?: boolean;
-  enableSorting?: boolean;
-  width?: number;
-  options?: { value: string; label: string }[];
-  formatter?: (value: any, row?: any) => string;
-  required?: boolean;
-  hidden?: (row: any, allData: any[]) => boolean;
-}
-
-interface TableConfig<T> {
-  title?: string;
-  className?: string;
-  columns: ColumnConfig[];
-  pageSize?: number;
-  enableSearch?: boolean;
-  enableBulkEdit?: boolean;
-  searchPlaceholder?: string;
-  idAccessor: (row: T) => string;
-  dataSource: any;
-  saveAdapter: any;
-  defaultSort?: any[];
-}
-
-const useBulkUpdateMasterSheet = () => ({
-  mutateAsync: async (data: any) => ({ success: true })
-});
-
-// Simple MasterSheetRecord type to avoid import issues
-type MasterSheetRecord = Record<string, any>;
 
 // Extract all field paths from the MasterSheetRecord type
 export type MasterSheetFieldPath = string;
@@ -49,16 +17,23 @@ export interface MasterSheetColumnConfig extends ColumnConfig {
 }
 
 // Dynamic column configuration generator
-export const generateDynamicColumns = (sampleData: any[]): MasterSheetColumnConfig[] => {
+export const generateDynamicColumns = (sampleData: unknown[]): MasterSheetColumnConfig[] => {
   if (!sampleData || sampleData.length === 0) {
     return [];
   }
 
-  // Get all keys from the first row
-  const allKeys = Object.keys(sampleData[0]);
+  // Get all unique keys from ALL rows to ensure we capture all columns
+  const allKeysSet = new Set<string>();
+  sampleData.forEach(row => {
+    if (row && typeof row === 'object') {
+      Object.keys(row as Record<string, unknown>).forEach(key => allKeysSet.add(key));
+    }
+  });
+  
+  const allKeys = Array.from(allKeysSet);
   
   // Generate columns for all keys without categorization
-  return allKeys.map((key, index) => {
+  return allKeys.map((key) => {
     return {
       key: key,
       id: key,
@@ -85,7 +60,7 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
     tag: 'readonly',
     editable: false,
     enableSorting: true,
-    formatter: (value: any) => `${value}`
+    formatter: (value: unknown) => `${value}`
   },
   { 
     key: "Reporting Month (mmm'yy)", 
@@ -308,7 +283,7 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
       { value: 'Completed', label: 'Completed' },
       { value: 'Cancelled', label: 'Cancelled' }
     ],
-    formatter: (value: any) => {
+    formatter: (value: unknown) => {
       const colorMap = {
         'Pending': 'bg-yellow-100 text-yellow-800',
         'pending payment': 'bg-yellow-100 text-yellow-800',
@@ -322,30 +297,98 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
 ];
 
 // Create a wrapper component that calls the hooks (like policy form pattern)
-export function MasterSheetTableWrapper({ userRole = 'admin' }: { userRole?: 'admin' }) {
+export function MasterSheetTableWrapper() {
   // Call hooks inside the wrapper like original
-  const bulkUpdateMutation = useBulkUpdateMasterSheet();
   const [hasLoadedData, setHasLoadedData] = useState(false);
+  const [sheetInfo, setSheetInfo] = useState<{ sheets: Array<{ properties: { title: string } }> } | null>(null);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
   
   // Use Google Sheets MIS hook for fetching all data
   const { 
     clientFiltering,
-    fetchAllMasterSheetData,
+    fetchSheetData,
+    bulkUpdateSheetData,
+    getSheetInfo,
     isReady,
     loading,
     errors
   } = useGoogleSheetsMIS();
 
-  // Load all data when component mounts - only once
+  // Load sheet info when component mounts
   useEffect(() => {
-    if (isReady && !hasLoadedData && !loading.masterSheetData) {
-      setHasLoadedData(true);
-      fetchAllMasterSheetData().catch(console.error);
+    if (isReady && !sheetInfo) {
+      getSheetInfo()
+        .then((info) => {
+          console.log('📊 Sheet info loaded:', info);
+          setSheetInfo(info);
+          if (info?.sheets) {
+            const sheetNames = info.sheets.map((sheet: { properties: { title: string } }) => sheet.properties.title);
+            setAvailableSheets(sheetNames);
+            console.log('📋 Available sheets:', sheetNames);
+            
+            // Helper function to identify quarter sheets
+            const isQuarterSheet = (sheetName: string) => {
+              const quarterPatterns = [
+                /q[1-4]/i,           // Q1, Q2, Q3, Q4
+                /quarter/i,          // Quarter
+                /qtr/i,              // Qtr
+                /\d{4}.*q[1-4]/i,    // 2024Q1, 2024-Q1, etc.
+                /[1-4].*quarter/i,   // 1st Quarter, 2nd Quarter, etc.
+                /jan.*mar|apr.*jun|jul.*sep|oct.*dec/i, // Month ranges for quarters
+                /fy\d{2}/i,          // FY24, FY2024 (Financial Year quarters)
+              ];
+              return quarterPatterns.some(pattern => pattern.test(sheetName));
+            };
+
+            // Filter for quarter sheets only
+            const quarterSheets = sheetNames.filter(isQuarterSheet);
+            console.log('📊 Quarter sheets found:', quarterSheets);
+            
+            // Auto-select the first quarter sheet if none selected, otherwise first available sheet
+            if (!selectedSheet && sheetNames.length > 0) {
+              const sheetToSelect = quarterSheets.length > 0 ? quarterSheets[0] : sheetNames[0];
+              setSelectedSheet(sheetToSelect);
+              console.log('🎯 Auto-selected sheet:', sheetToSelect);
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Failed to fetch sheet info:', error);
+        });
     }
-  }, [isReady, hasLoadedData, loading.masterSheetData]);
+  }, [isReady, getSheetInfo, sheetInfo, selectedSheet]);
+
+  // Load data when component mounts or when sheet changes
+  useEffect(() => {
+    if (isReady && !loading.masterSheetData && selectedSheet) {
+      if (!hasLoadedData) {
+        // Initial load - load from the selected sheet
+        setHasLoadedData(true);
+        console.log(`🚀 Initial data load from sheet: ${selectedSheet}`);
+        fetchSheetData(selectedSheet).catch(console.error);
+      }
+    }
+  }, [isReady, hasLoadedData, loading.masterSheetData, selectedSheet, fetchSheetData]);
+
+  // Handle sheet change
+  const handleSheetChange = async (sheetName: string) => {
+    console.log('📄 Switching to sheet:', sheetName);
+    setSelectedSheet(sheetName);
+    
+    try {
+      // Fetch data from the specific sheet
+      console.log(`🔄 Loading data from sheet: ${sheetName}`);
+      await fetchSheetData(sheetName);
+      console.log(`✅ Successfully loaded data from sheet: ${sheetName}`);
+    } catch (error) {
+      console.error(`❌ Failed to load data from sheet "${sheetName}":`, error);
+      // Show error to user but don't prevent sheet selection
+    }
+  };
 
   // Use client-side filtered data for Google Sheets-style filtering
-  const dataSource = {
+  const dataSource: DataSource = {
     useList: () => ({
       data: { pages: [{ records: clientFiltering.paginatedData.data || [] }] },
       error: errors.masterSheetData ? new Error(errors.masterSheetData) : null,
@@ -357,38 +400,77 @@ export function MasterSheetTableWrapper({ userRole = 'admin' }: { userRole?: 'ad
   };
 
   // Save adapter for bulk updates
-  const saveAdapter = {
-    toUpdates: (pendingUpdates: Record<string, Record<string, unknown>>, columns: any[]) => {
-      return {
-        updates: Object.entries(pendingUpdates).map(([id, changes]) => ({
-          id,
-          ...changes
-        }))
-      };
+  const saveAdapter: SaveAdapter = {
+    toUpdates: (pendingUpdates: Record<string, Record<string, unknown>>) => {
+      // Flatten all field updates into individual update requests
+      const allUpdates: { id: string; [key: string]: unknown }[] = [];
+      
+      console.log('📝 Processing pending updates:', pendingUpdates);
+      
+      Object.entries(pendingUpdates).forEach(([recordId, changes]) => {
+        Object.entries(changes as Record<string, unknown>).forEach(([fieldName, newValue]) => {
+          allUpdates.push({
+            id: `${recordId}_${fieldName}`,
+            record_id: recordId,
+            field_name: fieldName,
+            new_value: String(newValue)
+          });
+        });
+      });
+
+      console.log('🔄 Transformed updates:', allUpdates);
+      return { updates: allUpdates };
     },
-    mutate: () => bulkUpdateMutation.mutateAsync
+    mutate: () => async (payload: unknown): Promise<{ successful_updates?: number; [key: string]: unknown }> => {
+      if (!selectedSheet) {
+        throw new Error('No sheet selected for updates');
+      }
+      
+      console.log(`🔄 Saving changes to sheet: ${selectedSheet}`, payload);
+      const result = await bulkUpdateSheetData(selectedSheet, payload as BulkUpdateRequest);
+      
+      // Convert BulkUpdateResponse to expected format
+      return {
+        successful_updates: result.successful_updates,
+        total_updates: result.total_updates,
+        failed_updates: result.failed_updates,
+        message: result.message,
+        results: result.results,
+        processing_time_seconds: result.processing_time_seconds
+      };
+    }
   };
 
-  // Generate dynamic columns from actual data
+  // Generate dynamic columns from raw data (not paginated) to get all column headers
   const dynamicColumns = useMemo(() => {
-    if (clientFiltering.paginatedData.data && clientFiltering.paginatedData.data.length > 0) {
-      return generateDynamicColumns(clientFiltering.paginatedData.data);
+    if (clientFiltering.rawData && clientFiltering.rawData.length > 0) {
+      return generateDynamicColumns(clientFiltering.rawData);
     }
     return masterSheetColumnConfigs; // Fallback to static configs
-  }, [clientFiltering.paginatedData.data]);
+  }, [clientFiltering.rawData]);
 
-  const adminTableConfig: TableConfig<MasterSheetRecord> = {
-    title: "Master Sheet Data - Google Sheets Integration",
+  const adminTableConfig: TableConfig<QuarterlySheetRecord> = {
+    title: selectedSheet 
+      ? `Master Sheet Data - ${selectedSheet}` 
+      : "Master Sheet Data - Google Sheets Integration",
     className: "h-full",
     columns: dynamicColumns.map((config: MasterSheetColumnConfig) => ({
       ...config,
-      accessor: (row: MasterSheetRecord) => (row as any)[config.key]
+      accessor: (row: unknown) => {
+        const record = row as QuarterlySheetRecord;
+        return record[config.key as keyof QuarterlySheetRecord];
+      }
     })),
     pageSize: 1000, // Load more records at once for better client-side filtering
     enableSearch: true,
     enableBulkEdit: true,
-    searchPlaceholder: "Search policies, customers, agents, etc...",
-    idAccessor: (row: MasterSheetRecord) => row['Policy number'] || '',
+    searchPlaceholder: selectedSheet 
+      ? `Search in ${selectedSheet}...` 
+      : "Search policies, customers, agents, etc...",
+    idAccessor: (row: QuarterlySheetRecord) => {
+      const policyNumber = row['Policy number'];
+      return typeof policyNumber === 'string' ? policyNumber : String(policyNumber || '');
+    },
     dataSource,
     saveAdapter,
     defaultSort: [
@@ -397,13 +479,17 @@ export function MasterSheetTableWrapper({ userRole = 'admin' }: { userRole?: 'ad
   };
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="h-full flex flex-col bg-white">
       <DataTableClientFiltered 
         config={adminTableConfig}
         onPendingChangesCount={(count: number) => {
           console.log(`${count} pending changes`);
         }}
         clientFiltering={clientFiltering}
+        availableSheets={availableSheets}
+        selectedSheet={selectedSheet}
+        onSheetChange={handleSheetChange}
+        loading={loading.masterSheetData || loading.sheetInfo}
       />
     </div>
   );
