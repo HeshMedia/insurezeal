@@ -10,6 +10,7 @@ import { useInsurers, useBrokersAndInsurers, useChildIdRequests } from "@/hooks/
 import { useSubmitPolicy } from "@/hooks/policyQuery";
 import { useProfile } from "@/hooks/profileQuery";
 import DocumentViewer from "@/components/forms/documentviewer";
+import { Mosaic, type MosaicNode } from "react-mosaic-component";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,18 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
   const { data: userProfile } = useProfile();
   const [isViewerOpen, setIsViewerOpen] = useState(true);
   const router = useRouter()
+
+  type ViewId = "input" | "doc";
+  const initialLayout: MosaicNode<ViewId> | null = useMemo(() => ({
+    direction: "row",
+    first: "input",
+    second: "doc",
+    splitPercentage: 50,
+  }), []);
+  const [layout, setLayout] = useState<MosaicNode<ViewId> | null>(initialLayout);
+  useEffect(() => {
+    setLayout(isViewerOpen ? initialLayout : "input");
+  }, [isViewerOpen, initialLayout]);
 
   const form = useForm<PolicyReviewFormSchemaType>({
     resolver: zodResolver(PolicyReviewFormSchema),
@@ -245,268 +258,274 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         </Button>
       </div>
 
-      <div className="flex flex-wrap md:flex-nowrap gap-6">
-        {/* Left column: single consolidated form box */}
-        <div className={`transition-all duration-300 ${isViewerOpen ? "w-full md:w-1/2" : "w-full"}`}>
-          <Card className="shadow-sm border border-l-6 border-green-500 h-full">
-            <CardHeader className="bg-gray-50 border-b">
-              <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                <span className="h-2 w-2 bg-green-500 rounded-full"></span>
-                Input
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="flex flex-wrap gap-4 items-start">
-                {/* Policy Number */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Policy Number</Label>
-                  <Controller
-                    name="policy_number"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <>
-                        <Input {...field} className="h-10 w-fit" />
-                        {fieldState.error && (
-                          <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                {/* Start Date */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Policy Start Date</Label>
-                  <Controller
-                    name="start_date"
-                    control={form.control}
-                    render={({ field }) => (
-                      <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
-                    )}
-                  />
-                </div>
-
-                {/* End Date */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Policy End Date</Label>
-                  <Controller
-                    name="end_date"
-                    control={form.control}
-                    render={({ field }) => (
-                      <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
-                    )}
-                  />
-                </div>
-
-                {/* Code Type */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Code Type</Label>
-                  <Controller
-                    name="code_type"
-                    control={form.control}
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="h-10 w-fit">
-                          <SelectValue placeholder="Select Code Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Direct">Direct</SelectItem>
-                          <SelectItem value="Broker">Broker</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-
-                {/* Insurer Code */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Insurer</Label>
-                  <Controller
-                    name="insurer_code"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10 w-fit">
-                            <SelectValue placeholder="Select Insurer" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {insurerOptions.map((o: { value: string; label: string }) => (
-                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {fieldState.error && (
-                          <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                {/* Broker Code (conditional) */}
-                {codeType === "Broker" && (
-                  <div className="space-y-2 flex-none w-fit">
-                    <Label className="text-sm font-medium text-gray-700">Broker</Label>
-                    <Controller
-                      name="broker_code"
-                      control={form.control}
-                      render={({ field }) => (
-                        <Select value={field.value ?? undefined} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10 w-fit">
-                            <SelectValue placeholder="Select Broker" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {brokerOptions.map((o: { value: string; label: string }) => (
-                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                )}
-
-                {/* Child ID */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Child ID</Label>
-                  <Controller
-                    name="child_id"
-                    control={form.control}
-                    render={({ field, fieldState }) => (
-                      <>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-10 w-fit">
-                            <SelectValue placeholder="Select Child ID" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {myChildIdOptions.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {fieldState.error && (
-                          <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
-                        )}
-                      </>
-                    )}
-                  />
-                </div>
-
-                {/* Payment By */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Payment By</Label>
-                  <Controller
-                    name="payment_by"
-                    control={form.control}
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="h-10 w-fit">
-                          <SelectValue placeholder="Select Payment By" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Agent">Agent</SelectItem>
-                          <SelectItem value="InsureZeal">InsureZeal</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-
-                {/* Payment Method (hidden when payment_by is Agent) */}
-                {paymentBy !== "Agent" && (
-                  <div className="space-y-2 flex-none w-fit">
-                    <Label className="text-sm font-medium text-gray-700">Payment Method</Label>
-                    <Controller
-                      name="payment_method"
-                      control={form.control}
-                      render={({ field }) => (
-                        <Input className="h-10 w-fit" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
-                      )}
-                    />
-                  </div>
-                )}
-
-                {/* Payment By Office */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Payment By Office</Label>
-                  <Controller
-                    name="payment_by_office"
-                    control={form.control}
-                    render={({ field }) => (
-                      <Input className="h-10 w-fit" type="number" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
-                    )}
-                  />
-                </div>
-
-                {/* Agent Commission % */}
-                <div className="space-y-2 flex-none w-fit">
-                  <Label className="text-sm font-medium text-gray-700">Agent Commission (%)</Label>
-                  <Controller
-                    name="agent_commission_given_percent"
-                    control={form.control}
-                    render={({ field }) => (
-                      <Input className="h-10 w-fit" type="number" step="0.01" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
-                    )}
-                  />
-                </div>
-              </div>
-
-              {/* Notes (full width) */}
-              <div className="space-y-2 w-full">
-                <Label className="text-sm font-medium text-gray-700">Notes</Label>
-                <Controller
-                  name="notes"
-                  control={form.control}
-                  render={({ field }) => (
-                    <Textarea rows={3} value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
-                  )}
-                />
-              </div>
-
-              {/* Calculation section */}
-              <div className="space-y-4">
-                {/* Total Agent Payout */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-gray-700">Total Agent Payout Amount</Label>
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-lg font-semibold text-green-800">
-                    ₹{(totalAgentPayout || 0).toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Payment Calculation when payment by InsureZeal */}
-                {paymentBy === "InsureZeal" && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-gray-700">Payment Calculation</Label>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="text-lg font-semibold text-blue-800">
-                        ₹{(totalAgentPayout - grossPremium).toFixed(2)}
+      <div className="w-full resize-y overflow-auto min-h-[400px] h-[70vh]">
+        <Mosaic<ViewId>
+          className="h-full"
+          value={layout}
+          onChange={setLayout}
+          resize={{ minimumPaneSizePercentage: 15 }}
+          renderTile={(id) => (
+            id === "input" ? (
+              <div className="h-full overflow-auto pr-1">
+                <Card className="shadow-sm border border-l-6 border-green-500 h-full">
+                  <CardHeader className="bg-gray-50 border-b">
+                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                      <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                      Input
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-6">
+                    <div className="flex flex-wrap gap-4 items-start">
+                      {/* Policy Number */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Policy Number</Label>
+                        <Controller
+                          name="policy_number"
+                          control={form.control}
+                          render={({ field, fieldState }) => (
+                            <>
+                              <Input {...field} className="h-10 w-fit" />
+                              {fieldState.error && (
+                                <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
+                              )}
+                            </>
+                          )}
+                        />
                       </div>
-                      <div className="text-xs text-gray-500 mt-2">
-                        {(() => {
-                          const calculatedAmount = totalAgentPayout - grossPremium;
-                          if (calculatedAmount > 0) {
-                            return "This positive amount will be added to running balance (InsureZeal owes more to agent)";
-                          } else if (calculatedAmount < 0) {
-                            return "This negative amount will be added to running balance (Agent owes to InsureZeal)";
-                          }
-                          return "This transaction is balanced - no change to running balance";
-                        })()}
+
+                      {/* Start Date */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Policy Start Date</Label>
+                        <Controller
+                          name="start_date"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                          )}
+                        />
+                      </div>
+
+                      {/* End Date */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Policy End Date</Label>
+                        <Controller
+                          name="end_date"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                          )}
+                        />
+                      </div>
+
+                      {/* Code Type */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Code Type</Label>
+                        <Controller
+                          name="code_type"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <SelectTrigger className="h-10 w-fit">
+                                <SelectValue placeholder="Select Code Type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Direct">Direct</SelectItem>
+                                <SelectItem value="Broker">Broker</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+
+                      {/* Insurer Code */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Insurer</Label>
+                        <Controller
+                          name="insurer_code"
+                          control={form.control}
+                          render={({ field, fieldState }) => (
+                            <>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger className="h-10 w-fit">
+                                  <SelectValue placeholder="Select Insurer" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {insurerOptions.map((o: { value: string; label: string }) => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {fieldState.error && (
+                                <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
+                              )}
+                            </>
+                          )}
+                        />
+                      </div>
+
+                      {/* Broker Code (conditional) */}
+                      {codeType === "Broker" && (
+                        <div className="space-y-2 flex-none w-fit">
+                          <Label className="text-sm font-medium text-gray-700">Broker</Label>
+                          <Controller
+                            name="broker_code"
+                            control={form.control}
+                            render={({ field }) => (
+                              <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                                <SelectTrigger className="h-10 w-fit">
+                                  <SelectValue placeholder="Select Broker" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {brokerOptions.map((o: { value: string; label: string }) => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
+                      )}
+
+                      {/* Child ID */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Child ID</Label>
+                        <Controller
+                          name="child_id"
+                          control={form.control}
+                          render={({ field, fieldState }) => (
+                            <>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <SelectTrigger className="h-10 w-fit">
+                                  <SelectValue placeholder="Select Child ID" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {myChildIdOptions.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {fieldState.error && (
+                                <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
+                              )}
+                            </>
+                          )}
+                        />
+                      </div>
+
+                      {/* Payment By */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Payment By</Label>
+                        <Controller
+                          name="payment_by"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <SelectTrigger className="h-10 w-fit">
+                                <SelectValue placeholder="Select Payment By" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Agent">Agent</SelectItem>
+                                <SelectItem value="InsureZeal">InsureZeal</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+
+                      {/* Payment Method (hidden when payment_by is Agent) */}
+                      {paymentBy !== "Agent" && (
+                        <div className="space-y-2 flex-none w-fit">
+                          <Label className="text-sm font-medium text-gray-700">Payment Method</Label>
+                          <Controller
+                            name="payment_method"
+                            control={form.control}
+                            render={({ field }) => (
+                              <Input className="h-10 w-fit" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                            )}
+                          />
+                        </div>
+                      )}
+
+                      {/* Payment By Office */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Payment By Office</Label>
+                        <Controller
+                          name="payment_by_office"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Input className="h-10 w-fit" type="number" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                          )}
+                        />
+                      </div>
+
+                      {/* Agent Commission % */}
+                      <div className="space-y-2 flex-none w-fit">
+                        <Label className="text-sm font-medium text-gray-700">Agent Commission (%)</Label>
+                        <Controller
+                          name="agent_commission_given_percent"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Input className="h-10 w-fit" type="number" step="0.01" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))} />
+                          )}
+                        />
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Right column: Document viewer */}
-        {isViewerOpen && (
-          <div className="w-full md:w-1/2 transition-all duration-300">
-            <DocumentViewer />
-          </div>
-        )}
+                    {/* Notes (full width) */}
+                    <div className="space-y-2 w-full">
+                      <Label className="text-sm font-medium text-gray-700">Notes</Label>
+                      <Controller
+                        name="notes"
+                        control={form.control}
+                        render={({ field }) => (
+                          <Textarea rows={3} value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                        )}
+                      />
+                    </div>
+
+                    {/* Calculation section */}
+                    <div className="space-y-4">
+                      {/* Total Agent Payout */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-gray-700">Total Agent Payout Amount</Label>
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-lg font-semibold text-green-800">
+                          ₹{(totalAgentPayout || 0).toFixed(2)}
+                        </div>
+                      </div>
+
+                      {/* Payment Calculation when payment by InsureZeal */}
+                      {paymentBy === "InsureZeal" && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-gray-700">Payment Calculation</Label>
+                          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="text-lg font-semibold text-blue-800">
+                              ₹{(totalAgentPayout - grossPremium).toFixed(2)}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-2">
+                              {(() => {
+                                const calculatedAmount = totalAgentPayout - grossPremium;
+                                if (calculatedAmount > 0) {
+                                  return "This positive amount will be added to running balance (InsureZeal owes more to agent)";
+                                } else if (calculatedAmount < 0) {
+                                  return "This negative amount will be added to running balance (Agent owes to InsureZeal)";
+                                }
+                                return "This transaction is balanced - no change to running balance";
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="h-full w-full overflow-hidden">
+                <DocumentViewer />
+              </div>
+            )
+          )}
+        />
       </div>
 
       {/* Actions */}

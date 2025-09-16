@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "react-mosaic-component/react-mosaic-component.css";
 
 import { QueryProvider } from '@/lib/query-client'
 import { Toaster } from '@/components/ui/sonner'
