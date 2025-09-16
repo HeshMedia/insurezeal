@@ -763,6 +763,67 @@ class MISHelpers:
         except Exception as e:
             logger.error(f"Error accessing Summary sheet: {str(e)}")
             return {"error": f"Failed to access Summary sheet: {str(e)}"}
+
+    async def get_broker_sheet_data(self) -> Dict[str, Any]:
+        """Get complete data from Broker sheet"""
+        try:
+            if not self.sheets_client.client:
+                return {"error": "Google Sheets not available"}
+            
+            # Import quarterly manager to access Broker sheet
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the Broker sheet
+            broker_sheet = quarterly_manager.get_broker_sheet()
+            
+            if not broker_sheet:
+                logger.error("Broker sheet not found")
+                return {"error": "Broker sheet not accessible"}
+            
+            logger.info("Successfully accessed Broker sheet")
+            
+            # Get all data from the Broker sheet
+            all_values = broker_sheet.get_all_values()
+            
+            if not all_values or len(all_values) < 2:
+                logger.warning("No data found in Broker sheet")
+                return {"error": "No data found in Broker sheet"}
+            
+            # Extract headers and data rows
+            headers = all_values[0]
+            data_rows = all_values[1:]
+            
+            logger.info(f"Broker sheet has {len(headers)} columns and {len(data_rows)} data rows")
+            
+            # Convert to list of dictionaries
+            broker_data = []
+            for row in data_rows:
+                # Ensure row has the same length as headers
+                while len(row) < len(headers):
+                    row.append("")
+                
+                row_dict = {}
+                for i, header in enumerate(headers):
+                    row_dict[header] = row[i] if i < len(row) else ""
+                
+                broker_data.append(row_dict)
+            
+            # Prepare response with complete Broker sheet data
+            response = {
+                "sheet_name": "Broker Sheet",
+                "total_rows": len(data_rows),
+                "total_columns": len(headers),
+                "headers": headers,
+                "data": broker_data,
+                "last_updated": "Real-time data from Google Sheets"
+            }
+            
+            logger.info(f"Successfully retrieved {len(broker_data)} records from Broker sheet")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error accessing Broker sheet: {str(e)}")
+            return {"error": f"Failed to access Broker sheet: {str(e)}"}
     
     def _convert_row_to_record(self, row_data: Dict[str, Any], row_number: int) -> MasterSheetRecord:
         """Convert a sheet row dictionary to MasterSheetRecord using new header structure"""

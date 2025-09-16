@@ -119,13 +119,22 @@ class BulkUpdateResponse(BaseModel):
     processing_time_seconds: float
 
 class MasterSheetStatsResponse(BaseModel):
-    """Complete data from Summary sheet"""
-    sheet_name: str = Field(..., description="Name of the sheet (Summary)")
+    """Complete data from Summary sheet and Broker sheet"""
+    # Summary sheet data
+    sheet_name: str = Field(..., description="Name of the summary sheet (Summary)")
     total_rows: int = Field(..., description="Total number of data rows in Summary sheet")
     total_columns: int = Field(..., description="Total number of columns in Summary sheet")
     headers: List[str] = Field(..., description="All column headers from Summary sheet")
     data: List[Dict[str, Any]] = Field(..., description="All data from Summary sheet as list of dictionaries")
     last_updated: str = Field(..., description="Last update timestamp")
+    
+    # Broker sheet data
+    broker_sheet_name: Optional[str] = Field(None, description="Name of the broker sheet (Broker Sheet)")
+    broker_total_rows: Optional[int] = Field(None, description="Total number of data rows in Broker sheet")
+    broker_total_columns: Optional[int] = Field(None, description="Total number of columns in Broker sheet")
+    broker_headers: Optional[List[str]] = Field(None, description="All column headers from Broker sheet")
+    broker_data: Optional[List[Dict[str, Any]]] = Field(None, description="All data from Broker sheet as list of dictionaries")
+    broker_last_updated: Optional[str] = Field(None, description="Broker sheet last update timestamp")
 
 class AgentMISRecord(BaseModel):
     """Filtered quarterly sheet record for agent MIS with only specific required fields"""
