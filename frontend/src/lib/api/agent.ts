@@ -92,12 +92,14 @@ export const agentApi = {
   },
   // MIS APIs
   mis: {
-    // Get agent MIS data (Admin/SuperAdmin only)
+    // Get agent MIS data (agent's own quarterly data)
     getAgentMISData: async (params: AgentMISParams): Promise<AgentMISResponse> => {
-      const {  page = 1, page_size = 50 } = params
+      const { quarter = 3, year = 2025, page = 1, page_size = 50 } = params
       
       const response = await apiClient.get(`/mis/my-mis`, {
         params: {
+          quarter,
+          year,
           page,
           page_size
         }

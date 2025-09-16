@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -17,9 +17,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2 } from 'lucide-react'
+import { RefreshCw, Loader2, Calendar, TrendingUp } from 'lucide-react'
 import { useInView } from 'react-intersection-observer'
 import { cn } from '@/lib/utils'
 import { useInfiniteQuery } from '@tanstack/react-query'
@@ -32,7 +39,21 @@ interface AgentMISTableProps {
   }) => void
 }
 
+// Helper function to get current quarter
+const getCurrentQuarter = (): number => {
+  const month = new Date().getMonth() + 1 // getMonth() returns 0-11
+  return Math.ceil(month / 3)
+}
+
+// Helper function to get current year
+const getCurrentYear = (): number => {
+  return new Date().getFullYear()
+}
+
 export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(getCurrentQuarter())
+  const [selectedYear, setSelectedYear] = useState<number>(getCurrentYear())
+
   const {
     data,
     error,
@@ -42,10 +63,12 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
     isLoading,
     refetch,
   } = useInfiniteQuery<AgentMISResponse, Error>({
-    queryKey: ['agent-mis'],
+    queryKey: ['agent-mis', selectedQuarter, selectedYear],
     queryFn: async (context: { pageParam?: unknown }) => {
       const pageParam = typeof context.pageParam === 'number' ? context.pageParam : 1
       return agentApi.mis.getAgentMISData({
+        quarter: selectedQuarter,
+        year: selectedYear,
         page: pageParam,
         page_size: 50,
       })
@@ -83,6 +106,16 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
   const handleRefresh = () => {
     refetch()
   }
+
+  // Generate year options (current year and previous 4 years)
+  const yearOptions = useMemo(() => {
+    const currentYear = getCurrentYear()
+    const years = []
+    for (let i = 0; i < 5; i++) {
+      years.push(currentYear - i)
+    }
+    return years
+  }, [])
 
   if (isLoading && !data) {
     return (
@@ -126,6 +159,71 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
 
   return (
     <div className="w-full h-full max-w-full flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl shadow-2xl border border-white/20 backdrop-blur-sm overflow-hidden">
+      {/* Header with Controls */}
+      <div className="p-6 bg-white/90 backdrop-blur-sm border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">MIS Data</h2>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            {/* Quarter Selection */}
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-500" />
+              <label className="text-sm font-medium text-gray-700">Quarter:</label>
+              <Select 
+                value={selectedQuarter.toString()} 
+                onValueChange={(value) => setSelectedQuarter(parseInt(value))}
+              >
+                <SelectTrigger className="w-24">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Q1</SelectItem>
+                  <SelectItem value="2">Q2</SelectItem>
+                  <SelectItem value="3">Q3</SelectItem>
+                  <SelectItem value="4">Q4</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Year Selection */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Year:</label>
+              <Select 
+                value={selectedYear.toString()} 
+                onValueChange={(value) => setSelectedYear(parseInt(value))}
+              >
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Refresh Button */}
+            <Button
+              onClick={handleRefresh}
+              variant="outline"
+              size="sm"
+              className="border-blue-300 hover:bg-blue-50"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Table Container with scroll */}
       <div className="flex-1 w-full overflow-auto scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-blue-100">
         <div className="min-w-full">
@@ -162,7 +260,7 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
             <TableBody className="bg-white">
               {table.getRowModel().rows.map((row, index) => (
                 <TableRow
-                  key={`${row.original.id}-${index}`}
+                  key={`${row.original.policy_number}-${index}`}
                   className={cn(
                     'transition-colors duration-200 border-b border-gray-200 hover:bg-blue-50',
                     index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'

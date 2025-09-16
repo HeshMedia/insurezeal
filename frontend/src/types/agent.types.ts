@@ -91,45 +91,33 @@ export interface AgentStats {
   active_child_ids: number
   pending_requests: number
 }
-// Agent MIS Record - filtered version of MasterSheetRecord for agents
+// Agent MIS Record - filtered version based on new API response
 export interface AgentMISRecord {
-  id: string;
-  reporting_month: string;
   booking_date: string;
-  agent_code: string;
-  insurer_name: string;
-  broker_name: string;
+  policy_start_date: string;
+  policy_end_date: string;
   policy_number: string;
-  formatted_policy_number: string;
-  customer_name: string;
-  customer_phone_number: string;
-  major_categorisation: string;
-  product_insurer_report: string;
-  product_type: string;
-  plan_type: string;
+  insurer_name: string | null;
+  broker_name: string;
   gross_premium: string;
-  net_premium: string;
-  registration_number: string;
-  make_model: string;
-  model: string;
-  agent_commission_perc: string;
-  agent_po_amount: string;
-  total_agent_po: string;
-  running_balance: string;
-  already_given_to_agent: string;
-  created_at: string;
-  updated_at: string;
+  net_premium: string | null;
+  commissionable_premium: string;
+  agent_total_po_amount: string | null;
+  actual_agent_po_percent: string | null;
 }
 
-// Agent MIS Statistics
+// Agent MIS Statistics - updated with new fields
 export interface AgentMISStats {
   number_of_policies: number;
   running_balance: number;
   total_net_premium: number;
+  commissionable_premium: number;
 }
 
-// Parameters for fetching agent MIS data
+// Parameters for fetching agent MIS data - updated with quarter and year
 export interface AgentMISParams {
+  quarter?: number;
+  year?: number;
   page?: number;
   page_size?: number;
 }
