@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { AccessTokenResponse, SheetData } from '@/types/google-sheets.types';
 import { SignJWT, importPKCS8 } from 'jose';
 

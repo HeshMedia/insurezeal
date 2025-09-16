@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // table-component.types.ts - Shared types for MIS table components
 
 export interface ColumnConfig {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 import { atom } from 'jotai';
 import { MasterSheetRecord, MasterSheetStats, MasterSheetListParams } from '@/types/mis.types';
 

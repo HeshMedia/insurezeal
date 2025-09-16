@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useAtom } from 'jotai'
 import { useCallback } from 'react'
 import { 
@@ -9,7 +10,6 @@ import {
   quarterDataErrorAtom,
   quarterRecordsAtom,
   updateQuarterRecordsAtom,
-  SelectedQuarter
 } from '@/lib/atoms/quarterly-sheets'
 
 /**

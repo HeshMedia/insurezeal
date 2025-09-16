@@ -1,4 +1,4 @@
-// lib/exporters.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type Row = Record<string, any>;
 
 const normalizeHeader = (key: string) => key?.toString?.() ?? "";
