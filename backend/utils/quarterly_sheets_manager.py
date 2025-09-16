@@ -19,7 +19,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import logging
 from config import (
-    GOOGLE_SHEETS_CREDENTIALS_JSON, 
+    GOOGLE_SHEETS_CREDENTIALS, 
     GOOGLE_SHEETS_DOCUMENT_ID
 )
 
@@ -30,7 +30,7 @@ class QuarterlySheetManager:
     """Manages quarterly sheet creation, balance carryover, and data routing"""
     
     def __init__(self):
-        self.credentials_path = GOOGLE_SHEETS_CREDENTIALS_JSON
+        self.credentials = GOOGLE_SHEETS_CREDENTIALS
         self.document_id = GOOGLE_SHEETS_DOCUMENT_ID
         self.client = None
         self.spreadsheet = None
@@ -42,7 +42,7 @@ class QuarterlySheetManager:
     def _initialize_client(self):
         """Initialize Google Sheets client with service account credentials"""
         try:
-            if not self.credentials_path or not self.document_id:
+            if not self.credentials or not self.document_id:
                 logger.warning("Google Sheets credentials or document ID not configured")
                 return
                 
@@ -51,12 +51,9 @@ class QuarterlySheetManager:
                 'https://www.googleapis.com/auth/drive'
             ]
             
-            if not os.path.exists(self.credentials_path):
-                logger.warning(f"Google Sheets credentials file not found: {self.credentials_path}")
-                return
-            
-            credentials = Credentials.from_service_account_file(
-                self.credentials_path, 
+            # Create credentials from dictionary instead of file
+            credentials = Credentials.from_service_account_info(
+                self.credentials, 
                 scopes=scope
             )
             

@@ -93,12 +93,12 @@ class QuarterlySheetConfigUtil:
             results["valid"] = False
         
         # Check 4: Environment Variables
-        from config import GOOGLE_SHEETS_CREDENTIALS_JSON, GOOGLE_SHEETS_DOCUMENT_ID
+        from config import GOOGLE_SHEETS_CREDENTIALS, GOOGLE_SHEETS_DOCUMENT_ID
         
-        if GOOGLE_SHEETS_CREDENTIALS_JSON:
-            results["checks"].append("✅ GOOGLE_SHEETS_CREDENTIALS_JSON configured")
+        if GOOGLE_SHEETS_CREDENTIALS and all(GOOGLE_SHEETS_CREDENTIALS.values()):
+            results["checks"].append("✅ GOOGLE_SHEETS_CREDENTIALS configured")
         else:
-            results["errors"].append("❌ GOOGLE_SHEETS_CREDENTIALS_JSON not configured")
+            results["errors"].append("❌ GOOGLE_SHEETS_CREDENTIALS not configured or missing values")
             results["valid"] = False
         
         if GOOGLE_SHEETS_DOCUMENT_ID:
@@ -128,7 +128,18 @@ class QuarterlySheetConfigUtil:
         """Create a sample .env file with quarterly sheets configuration"""
         env_content = """
 # Quarterly Sheets Configuration
-GOOGLE_SHEETS_CREDENTIALS_JSON=./credentials/google_sheets.json
+# Google Sheets Service Account Credentials (individual environment variables)
+GOOGLE_SHEETS_TYPE=service_account
+GOOGLE_SHEETS_PROJECT_ID=your_project_id_here
+GOOGLE_SHEETS_PRIVATE_KEY_ID=your_private_key_id_here
+GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\\nyour_private_key_here\\n-----END PRIVATE KEY-----\\n"
+GOOGLE_SHEETS_CLIENT_EMAIL=your_service_account_email_here
+GOOGLE_SHEETS_CLIENT_ID=your_client_id_here
+GOOGLE_SHEETS_AUTH_URI=https://accounts.google.com/o/oauth2/auth
+GOOGLE_SHEETS_TOKEN_URI=https://oauth2.googleapis.com/token
+GOOGLE_SHEETS_AUTH_PROVIDER_X509_CERT_URL=https://www.googleapis.com/oauth2/v1/certs
+GOOGLE_SHEETS_CLIENT_X509_CERT_URL=your_client_cert_url_here
+GOOGLE_SHEETS_UNIVERSE_DOMAIN=googleapis.com
 GOOGLE_SHEETS_DOCUMENT_ID=your_google_sheets_document_id_here
 
 # Database Configuration

@@ -1074,7 +1074,6 @@ async def get_my_mis_data(
 ):
     """
     Get agent's own quarterly MIS data with summary
-    
     **Agent endpoint**
     
     Returns the authenticated agent's own quarterly sheet data with:
