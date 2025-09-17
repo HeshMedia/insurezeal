@@ -166,6 +166,7 @@ class AgentMISResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+    oldest_quarter_sheet: Optional[str] = Field(None, description="Name of the oldest quarter sheet available")
 
 class QuarterlySheetUpdateRecord(BaseModel):
     """Schema for updating a single quarterly sheet record with direct field mapping"""

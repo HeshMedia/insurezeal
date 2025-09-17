@@ -1210,8 +1210,73 @@ class MISHelpers:
                 }
 
             # Get all data from the quarterly sheet as dictionaries
-            all_data = quarterly_sheet.get_all_records()
-            logger.info(f"Retrieved {len(all_data)} total records from Q{quarter}-{year}")
+            try:
+                # Use manual approach to handle duplicate/problematic headers
+                all_values = quarterly_sheet.get_all_values()
+                if not all_values or len(all_values) < 2:
+                    logger.warning(f"No data found in quarterly sheet Q{quarter}-{year}")
+                    return {
+                        "records": [],
+                        "total_count": 0,
+                        "page": page,
+                        "page_size": page_size,
+                        "total_pages": 0,
+                        "stats": {"running_balance": 0.0, "total_net_premium": 0.0, "commissionable_premium": 0.0}
+                    }
+                
+                # Get and clean headers
+                headers = all_values[0]
+                cleaned_headers = []
+                header_map = {}
+                
+                for i, header in enumerate(headers):
+                    cleaned_header = str(header).strip()
+                    if cleaned_header:
+                        cleaned_headers.append(cleaned_header)
+                        header_map[i] = cleaned_header
+                    else:
+                        cleaned_headers.append(f"Column_{i}")
+                        header_map[i] = f"Column_{i}"
+                
+                # Convert rows to dictionaries using cleaned headers
+                all_data = []
+                for row_values in all_values[1:]:  # Skip header row
+                    record = {}
+                    for i, value in enumerate(row_values):
+                        if i in header_map:
+                            record[header_map[i]] = value
+                    all_data.append(record)
+                
+                logger.info(f"Retrieved {len(all_data)} total records from Q{quarter}-{year} using manual parsing")
+                
+            except Exception as e:
+                logger.error(f"Error getting records from quarterly sheet: {str(e)}")
+                # Try to get headers to diagnose the issue
+                try:
+                    headers = quarterly_sheet.row_values(1)
+                    logger.error(f"Headers in Q{quarter}-{year}: {headers}")
+                    # Check for duplicates
+                    seen = set()
+                    duplicates = []
+                    for header in headers:
+                        if header in seen:
+                            duplicates.append(header)
+                        seen.add(header)
+                    if duplicates:
+                        logger.error(f"Duplicate headers found: {duplicates}")
+                    else:
+                        logger.error("No duplicate headers found, but get_all_records() still failing")
+                except Exception as header_e:
+                    logger.error(f"Could not retrieve headers: {str(header_e)}")
+                
+                return {
+                    "records": [],
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0,
+                    "stats": {"running_balance": 0.0, "total_net_premium": 0.0, "commissionable_premium": 0.0}
+                }
             
             # Filter records for this agent
             filtered_records = []

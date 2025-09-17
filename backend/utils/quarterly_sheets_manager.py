@@ -1448,6 +1448,49 @@ class QuarterlySheetManager:
             logger.error(f"Error getting all records from quarter sheet Q{quarter}-{year}: {str(e)}")
             return []
 
+    def get_oldest_quarter_sheet_name(self) -> Optional[str]:
+        """
+        Get the name of the oldest quarterly sheet available in the workbook
+        
+        Returns:
+            Optional[str]: Name of the oldest quarter sheet (e.g., "Q1-2023") or None if no sheets found
+        """
+        try:
+            if not self.spreadsheet:
+                logger.error("Google Sheets spreadsheet not initialized")
+                return None
+            
+            # Get all worksheets
+            all_worksheets = self.spreadsheet.worksheets()
+            quarter_sheets = []
+            
+            # Filter for quarterly sheets (format: Q{quarter}-{year})
+            import re
+            quarter_pattern = re.compile(r'^Q([1-4])-(\d{4})$')
+            
+            for sheet in all_worksheets:
+                match = quarter_pattern.match(sheet.title)
+                if match:
+                    quarter = int(match.group(1))
+                    year = int(match.group(2))
+                    quarter_sheets.append((year, quarter, sheet.title))
+            
+            if not quarter_sheets:
+                logger.info("No quarterly sheets found")
+                return None
+            
+            # Sort by year, then by quarter to find the oldest
+            quarter_sheets.sort(key=lambda x: (x[0], x[1]))  # Sort by year, then quarter
+            oldest_sheet = quarter_sheets[0]
+            oldest_name = oldest_sheet[2]
+            
+            logger.info(f"Found oldest quarterly sheet: {oldest_name}")
+            return oldest_name
+            
+        except Exception as e:
+            logger.error(f"Error getting oldest quarter sheet name: {str(e)}")
+            return None
+
 
 # Global instance
 quarterly_manager = QuarterlySheetManager()

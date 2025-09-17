@@ -1176,6 +1176,14 @@ async def get_my_mis_data(
         
         if not agent_code:
             logger.warning(f"No agent code found for user: {user_id}")
+            # Get the oldest quarter sheet name even for empty response
+            oldest_quarter_sheet = None
+            try:
+                from utils.quarterly_sheets_manager import quarterly_manager
+                oldest_quarter_sheet = quarterly_manager.get_oldest_quarter_sheet_name()
+            except Exception as e:
+                logger.warning(f"Could not retrieve oldest quarter sheet name: {str(e)}")
+                
             return AgentMISResponse(
                 records=[],
                 stats=AgentMISStats(
@@ -1186,7 +1194,8 @@ async def get_my_mis_data(
                 total_count=0,
                 page=page,
                 page_size=page_size,
-                total_pages=0
+                total_pages=0,
+                oldest_quarter_sheet=oldest_quarter_sheet
             )
         
         logger.info(f"Fetching quarterly MIS data for agent: {agent_code} (user: {user_id}) from Q{quarter}-{year}")
@@ -1203,6 +1212,14 @@ async def get_my_mis_data(
         
         if not quarterly_result:
             logger.warning(f"No quarterly MIS data found for agent: {agent_code} in Q{quarter}-{year}")
+            # Get the oldest quarter sheet name even for empty response
+            oldest_quarter_sheet = None
+            try:
+                from utils.quarterly_sheets_manager import quarterly_manager
+                oldest_quarter_sheet = quarterly_manager.get_oldest_quarter_sheet_name()
+            except Exception as e:
+                logger.warning(f"Could not retrieve oldest quarter sheet name: {str(e)}")
+                
             return AgentMISResponse(
                 records=[],
                 stats=AgentMISStats(
@@ -1213,7 +1230,8 @@ async def get_my_mis_data(
                 total_count=0,
                 page=page,
                 page_size=page_size,
-                total_pages=0
+                total_pages=0,
+                oldest_quarter_sheet=oldest_quarter_sheet
             )
             
         # Convert records to AgentMISRecord objects with field mapping
@@ -1247,13 +1265,22 @@ async def get_my_mis_data(
             commissionable_premium=quarterly_result.get("stats", {}).get("commissionable_premium", 0.0)
         )
         
+        # Get the oldest quarter sheet name
+        oldest_quarter_sheet = None
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            oldest_quarter_sheet = quarterly_manager.get_oldest_quarter_sheet_name()
+        except Exception as e:
+            logger.warning(f"Could not retrieve oldest quarter sheet name: {str(e)}")
+        
         return AgentMISResponse(
             records=agent_records,
             stats=stats,
             total_count=quarterly_result["total_count"],
             page=quarterly_result["page"],
             page_size=quarterly_result["page_size"],
-            total_pages=quarterly_result["total_pages"]
+            total_pages=quarterly_result["total_pages"],
+            oldest_quarter_sheet=oldest_quarter_sheet
         )
         
     except Exception as e:
