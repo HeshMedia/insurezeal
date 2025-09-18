@@ -1,3 +1,4 @@
+import uuid
 from supabase import Client
 from fastapi import HTTPException, status
 from config import get_supabase_client, get_supabase_admin_client, JWT_SECRET_KEY, JWT_ALGORITHM
@@ -54,8 +55,19 @@ class AuthHelpers:
                     detail="Invalid token: missing user ID"
                 )
             
+            # Convert string UUID to UUID object for database compatibility
+            try:
+                user_id_uuid = uuid.UUID(user_id)
+            except ValueError:
+                logger.error(f"Invalid UUID format in JWT: {user_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, 
+                    detail="Invalid user ID format"
+                )
+            
             return type('User', (), {
-                'id': user_id,
+                'id': user_id_uuid,  # Now a proper UUID object
+                'id_str': user_id,   # Keep string version for logging
                 'email': email,
                 'role': role,
                 'payload': payload
