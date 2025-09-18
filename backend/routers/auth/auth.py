@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from config import get_db, get_supabase_client
 from models import UserProfile, Users
+import uuid
+from datetime import datetime
 from .schemas import (
     UserRegister, 
     UserLogin, 
@@ -56,7 +58,7 @@ async def get_current_user(
             "email": supabase_user.email,
             "role": supabase_user.role 
         }
-        logger.info(f"User {supabase_user.id} authenticated via JWT role: {supabase_user.role}")
+        logger.info(f"User {supabase_user.id_str} authenticated via JWT role: {supabase_user.role}")
         
     else:
         # Fallback to database lookup for users without role in JWT
@@ -77,7 +79,7 @@ async def get_current_user(
             "role": user_profile.user_role,  
             "profile": user_profile 
         }
-        logger.info(f"User {supabase_user.id} authenticated via DB role: {user_profile.user_role}")
+        logger.info(f"User {supabase_user.id_str} authenticated via DB role: {user_profile.user_role}")
     
     request.state.current_user = current_user
     
@@ -155,8 +157,19 @@ async def login(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )     
+        
+        # Convert string UUID to UUID object for database compatibility
+        try:
+            user_id_uuid = uuid.UUID(auth_response.user.id)
+        except ValueError:
+            logger.error(f"Invalid UUID format from Supabase login: {auth_response.user.id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Invalid user ID format from authentication service"
+            )
+        
         result = await db.execute(
-            select(UserProfile).where(UserProfile.user_id == auth_response.user.id)
+            select(UserProfile).where(UserProfile.user_id == user_id_uuid)
         )
         user_profile = result.scalar_one_or_none()
         
@@ -359,8 +372,10 @@ async def supabase_webhook(
             
         elif event_type == "DELETE":
             logger.info(f"Starting user deletion process for user {user_data.id}")
+            # Convert string UUID to UUID object for database compatibility
+            user_id_uuid = uuid.UUID(user_data.id)
             # Soft delete user in local database
-            await soft_delete_user(db, user_data.id)
+            await soft_delete_user(db, user_id_uuid)
             logger.info(f"Successfully completed user deletion for user {user_data.id}")
         
         else:
@@ -399,10 +414,20 @@ async def upsert_user_from_supabase(db: AsyncSession, user_data):
     try:
         logger.info(f"Starting upsert process for user {user_data.id}")
         
+        # Convert string UUID to UUID object for database compatibility
+        try:
+            user_id_uuid = uuid.UUID(user_data.id)
+        except ValueError:
+            logger.error(f"Invalid UUID format from Supabase: {user_data.id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid user ID format from Supabase"
+            )
+        
         # Check if user already exists
         logger.info(f"Checking if user {user_data.id} exists in local database")
         result = await db.execute(
-            select(Users).where(Users.id == user_data.id)
+            select(Users).where(Users.id == user_id_uuid)
         )
         existing_user = result.scalar_one_or_none()
         
@@ -432,7 +457,7 @@ async def upsert_user_from_supabase(db: AsyncSession, user_data):
             logger.info(f"Creating new user {user_data.id}")
             
             new_user = Users(
-                id=user_data.id,
+                id=user_id_uuid,  # Use the converted UUID object
                 email=user_data.email,
                 phone=user_data.phone,
                 role=role,
@@ -475,8 +500,19 @@ async def create_user_profile_from_webhook(db: AsyncSession, user_data):
         
         # Check if profile already exists
         logger.info(f"Checking if profile exists for user {user_data.id}")
+        
+        # Convert string UUID to UUID object for database compatibility
+        try:
+            user_id_uuid = uuid.UUID(user_data.id)
+        except ValueError:
+            logger.error(f"Invalid UUID format from Supabase: {user_data.id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid user ID format from Supabase"
+            )
+        
         result = await db.execute(
-            select(UserProfile).where(UserProfile.user_id == user_data.id)
+            select(UserProfile).where(UserProfile.user_id == user_id_uuid)
         )
         existing_profile = result.scalar_one_or_none()
         
@@ -508,7 +544,7 @@ async def create_user_profile_from_webhook(db: AsyncSession, user_data):
         # Create user profile
         logger.info(f"Creating UserProfile record with agent_code: {agent_code}")
         new_profile = UserProfile(
-            user_id=user_data.id,
+            user_id=user_id_uuid,  # Use the converted UUID object
             username=username,
             first_name=first_name,
             last_name=last_name,
