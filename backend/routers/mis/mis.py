@@ -407,48 +407,94 @@ async def get_master_sheet_statistics(
     _rbac_check = Depends(require_admin_read)
 ):
     """
-    Get complete data from Summary Google Sheet
+    Get complete data from Summary Google Sheet and Broker Sheet
     
     **Admin/SuperAdmin only endpoint**
     
-    This endpoint returns the entire contents of the Summary sheet from Google Sheets,
-    which contains calculated agent summaries, financial data, and performance metrics.
+    This endpoint returns the entire contents of both the Summary sheet and Broker sheet 
+    from Google Sheets, which contains calculated agent summaries, financial data, 
+    performance metrics, and broker-specific data.
     
     **Returns:**
     - Complete Summary sheet data as structured JSON
-    - All columns and rows from the Summary sheet
+    - Complete Broker sheet data as structured JSON
+    - All columns and rows from both sheets
     - Headers and data in easy-to-process format
     - Real-time data directly from Google Sheets
     
-    **Data Includes:**
+    **Summary Sheet Data Includes:**
     - Agent financial summaries
     - Performance calculations
     - Commission details
     - Balance information
     - All other calculated fields from Summary sheet
     
+    **Broker Sheet Data Includes:**
+    - Broker-specific financial data
+    - Broker performance metrics
+    - Broker commission details
+    - All fields and data from Broker sheet
+    
     **Use Cases:**
     - Dashboard overview widgets
     - Complete financial reporting
-    - Agent performance analysis
-    - Summary data export
+    - Agent and broker performance analysis
+    - Summary and broker data export
+    - Combined financial analysis
     """
     
     try:
-        logger.info("Generating master sheet statistics")
+        logger.info("Generating master sheet statistics including broker data")
         
-        # Get statistics from master sheet
-        stats = await mis_helpers.get_master_sheet_stats()
+        # Get statistics from summary sheet
+        summary_stats = await mis_helpers.get_master_sheet_stats()
         
-        if "error" in stats:
+        if "error" in summary_stats:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Master sheet statistics error: {stats['error']}"
+                detail=f"Summary sheet statistics error: {summary_stats['error']}"
             )
         
-        logger.info("Successfully generated master sheet statistics")
+        # Get broker sheet data
+        broker_stats = await mis_helpers.get_broker_sheet_data()
         
-        return MasterSheetStatsResponse(**stats)
+        # Prepare response with both summary and broker data
+        response_data = {
+            # Summary sheet data (required fields)
+            "sheet_name": summary_stats.get("sheet_name", "Summary"),
+            "total_rows": summary_stats.get("total_rows", 0),
+            "total_columns": summary_stats.get("total_columns", 0),
+            "headers": summary_stats.get("headers", []),
+            "data": summary_stats.get("data", []),
+            "last_updated": summary_stats.get("last_updated", ""),
+        }
+        
+        # Add broker sheet data if available (optional fields)
+        if "error" not in broker_stats:
+            response_data.update({
+                "broker_sheet_name": broker_stats.get("sheet_name", "Broker Sheet"),
+                "broker_total_rows": broker_stats.get("total_rows", 0),
+                "broker_total_columns": broker_stats.get("total_columns", 0),
+                "broker_headers": broker_stats.get("headers", []),
+                "broker_data": broker_stats.get("data", []),
+                "broker_last_updated": broker_stats.get("last_updated", ""),
+            })
+            logger.info(f"Successfully retrieved broker sheet data with {broker_stats.get('total_rows', 0)} rows")
+        else:
+            logger.warning(f"Could not retrieve broker sheet data: {broker_stats.get('error', 'Unknown error')}")
+            # Set broker fields to None when broker sheet is not available
+            response_data.update({
+                "broker_sheet_name": None,
+                "broker_total_rows": None,
+                "broker_total_columns": None,
+                "broker_headers": None,
+                "broker_data": None,
+                "broker_last_updated": None,
+            })
+        
+        logger.info("Successfully generated master sheet statistics with broker data")
+        
+        return MasterSheetStatsResponse(**response_data)
         
     except HTTPException:
         raise
@@ -1062,7 +1108,6 @@ async def get_my_mis_data(
 ):
     """
     Get agent's own quarterly MIS data with summary
-    
     **Agent endpoint**
     
     Returns the authenticated agent's own quarterly sheet data with:
@@ -1119,6 +1164,14 @@ async def get_my_mis_data(
         
         if not agent_code:
             logger.warning(f"No agent code found for user: {user_id}")
+            # Get the oldest quarter sheet name even for empty response
+            oldest_quarter_sheet = None
+            try:
+                from utils.quarterly_sheets_manager import quarterly_manager
+                oldest_quarter_sheet = quarterly_manager.get_oldest_quarter_sheet_name()
+            except Exception as e:
+                logger.warning(f"Could not retrieve oldest quarter sheet name: {str(e)}")
+                
             return AgentMISResponse(
                 records=[],
                 stats=AgentMISStats(
@@ -1129,7 +1182,8 @@ async def get_my_mis_data(
                 total_count=0,
                 page=page,
                 page_size=page_size,
-                total_pages=0
+                total_pages=0,
+                oldest_quarter_sheet=oldest_quarter_sheet
             )
         
         logger.info(f"Fetching quarterly MIS data for agent: {agent_code} (user: {user_id}) from Q{quarter}-{year}")
@@ -1146,6 +1200,14 @@ async def get_my_mis_data(
         
         if not quarterly_result:
             logger.warning(f"No quarterly MIS data found for agent: {agent_code} in Q{quarter}-{year}")
+            # Get the oldest quarter sheet name even for empty response
+            oldest_quarter_sheet = None
+            try:
+                from utils.quarterly_sheets_manager import quarterly_manager
+                oldest_quarter_sheet = quarterly_manager.get_oldest_quarter_sheet_name()
+            except Exception as e:
+                logger.warning(f"Could not retrieve oldest quarter sheet name: {str(e)}")
+                
             return AgentMISResponse(
                 records=[],
                 stats=AgentMISStats(
@@ -1156,7 +1218,8 @@ async def get_my_mis_data(
                 total_count=0,
                 page=page,
                 page_size=page_size,
-                total_pages=0
+                total_pages=0,
+                oldest_quarter_sheet=oldest_quarter_sheet
             )
             
         # Convert records to AgentMISRecord objects with field mapping
@@ -1190,13 +1253,22 @@ async def get_my_mis_data(
             commissionable_premium=quarterly_result.get("stats", {}).get("commissionable_premium", 0.0)
         )
         
+        # Get the oldest quarter sheet name
+        oldest_quarter_sheet = None
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            oldest_quarter_sheet = quarterly_manager.get_oldest_quarter_sheet_name()
+        except Exception as e:
+            logger.warning(f"Could not retrieve oldest quarter sheet name: {str(e)}")
+        
         return AgentMISResponse(
             records=agent_records,
             stats=stats,
             total_count=quarterly_result["total_count"],
             page=quarterly_result["page"],
             page_size=quarterly_result["page_size"],
-            total_pages=quarterly_result["total_pages"]
+            total_pages=quarterly_result["total_pages"],
+            oldest_quarter_sheet=oldest_quarter_sheet
         )
         
     except Exception as e:

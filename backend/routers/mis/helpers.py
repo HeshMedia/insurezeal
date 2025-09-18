@@ -799,6 +799,67 @@ class MISHelpers:
         except Exception as e:
             logger.error(f"Error accessing Summary sheet: {str(e)}")
             return {"error": f"Failed to access Summary sheet: {str(e)}"}
+
+    async def get_broker_sheet_data(self) -> Dict[str, Any]:
+        """Get complete data from Broker sheet"""
+        try:
+            if not self.sheets_client.client:
+                return {"error": "Google Sheets not available"}
+            
+            # Import quarterly manager to access Broker sheet
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get the Broker sheet
+            broker_sheet = quarterly_manager.get_broker_sheet()
+            
+            if not broker_sheet:
+                logger.error("Broker sheet not found")
+                return {"error": "Broker sheet not accessible"}
+            
+            logger.info("Successfully accessed Broker sheet")
+            
+            # Get all data from the Broker sheet
+            all_values = broker_sheet.get_all_values()
+            
+            if not all_values or len(all_values) < 2:
+                logger.warning("No data found in Broker sheet")
+                return {"error": "No data found in Broker sheet"}
+            
+            # Extract headers and data rows
+            headers = all_values[0]
+            data_rows = all_values[1:]
+            
+            logger.info(f"Broker sheet has {len(headers)} columns and {len(data_rows)} data rows")
+            
+            # Convert to list of dictionaries
+            broker_data = []
+            for row in data_rows:
+                # Ensure row has the same length as headers
+                while len(row) < len(headers):
+                    row.append("")
+                
+                row_dict = {}
+                for i, header in enumerate(headers):
+                    row_dict[header] = row[i] if i < len(row) else ""
+                
+                broker_data.append(row_dict)
+            
+            # Prepare response with complete Broker sheet data
+            response = {
+                "sheet_name": "Broker Sheet",
+                "total_rows": len(data_rows),
+                "total_columns": len(headers),
+                "headers": headers,
+                "data": broker_data,
+                "last_updated": "Real-time data from Google Sheets"
+            }
+            
+            logger.info(f"Successfully retrieved {len(broker_data)} records from Broker sheet")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error accessing Broker sheet: {str(e)}")
+            return {"error": f"Failed to access Broker sheet: {str(e)}"}
     
     def _convert_row_to_record(self, row_data: Dict[str, Any], row_number: int) -> MasterSheetRecord:
         """Convert a sheet row dictionary to MasterSheetRecord using new header structure"""
@@ -1185,8 +1246,73 @@ class MISHelpers:
                 }
 
             # Get all data from the quarterly sheet as dictionaries
-            all_data = quarterly_sheet.get_all_records()
-            logger.info(f"Retrieved {len(all_data)} total records from Q{quarter}-{year}")
+            try:
+                # Use manual approach to handle duplicate/problematic headers
+                all_values = quarterly_sheet.get_all_values()
+                if not all_values or len(all_values) < 2:
+                    logger.warning(f"No data found in quarterly sheet Q{quarter}-{year}")
+                    return {
+                        "records": [],
+                        "total_count": 0,
+                        "page": page,
+                        "page_size": page_size,
+                        "total_pages": 0,
+                        "stats": {"running_balance": 0.0, "total_net_premium": 0.0, "commissionable_premium": 0.0}
+                    }
+                
+                # Get and clean headers
+                headers = all_values[0]
+                cleaned_headers = []
+                header_map = {}
+                
+                for i, header in enumerate(headers):
+                    cleaned_header = str(header).strip()
+                    if cleaned_header:
+                        cleaned_headers.append(cleaned_header)
+                        header_map[i] = cleaned_header
+                    else:
+                        cleaned_headers.append(f"Column_{i}")
+                        header_map[i] = f"Column_{i}"
+                
+                # Convert rows to dictionaries using cleaned headers
+                all_data = []
+                for row_values in all_values[1:]:  # Skip header row
+                    record = {}
+                    for i, value in enumerate(row_values):
+                        if i in header_map:
+                            record[header_map[i]] = value
+                    all_data.append(record)
+                
+                logger.info(f"Retrieved {len(all_data)} total records from Q{quarter}-{year} using manual parsing")
+                
+            except Exception as e:
+                logger.error(f"Error getting records from quarterly sheet: {str(e)}")
+                # Try to get headers to diagnose the issue
+                try:
+                    headers = quarterly_sheet.row_values(1)
+                    logger.error(f"Headers in Q{quarter}-{year}: {headers}")
+                    # Check for duplicates
+                    seen = set()
+                    duplicates = []
+                    for header in headers:
+                        if header in seen:
+                            duplicates.append(header)
+                        seen.add(header)
+                    if duplicates:
+                        logger.error(f"Duplicate headers found: {duplicates}")
+                    else:
+                        logger.error("No duplicate headers found, but get_all_records() still failing")
+                except Exception as header_e:
+                    logger.error(f"Could not retrieve headers: {str(header_e)}")
+                
+                return {
+                    "records": [],
+                    "total_count": 0,
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0,
+                    "stats": {"running_balance": 0.0, "total_net_premium": 0.0, "commissionable_premium": 0.0}
+                }
             
             # Filter records for this agent
             filtered_records = []
