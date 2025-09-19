@@ -62,9 +62,29 @@ if DATABASE_URL:
     logger.info("DATABASE_URL loaded successfully.")
     logger.info("Attempting to create SQLAlchemy async engine...")
     
-    sync_engine = create_engine(DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://"))
+    # Create sync URL for legacy routes and alembic
+    if DATABASE_URL.startswith("postgresql+asyncpg://"):
+        sync_url = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    elif DATABASE_URL.startswith("postgres+asyncpg://"):
+        sync_url = DATABASE_URL.replace("postgres+asyncpg://", "postgresql://")
+    elif DATABASE_URL.startswith("postgresql://"):
+        sync_url = DATABASE_URL
+    elif DATABASE_URL.startswith("postgres://"):
+        sync_url = DATABASE_URL.replace("postgres://", "postgresql://")
+    else:
+        sync_url = DATABASE_URL
     
-    asyncpg_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    sync_engine = create_engine(sync_url)
+    
+    # Create async URL
+    if DATABASE_URL.startswith("postgresql://"):
+        asyncpg_url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
+    elif DATABASE_URL.startswith("postgres://"):
+        asyncpg_url = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://")
+    elif DATABASE_URL.startswith("postgres+asyncpg://"):
+        asyncpg_url = DATABASE_URL.replace("postgres+asyncpg://", "postgresql+asyncpg://")
+    else:
+        asyncpg_url = DATABASE_URL
     
     if "?" in asyncpg_url:
         base_url = asyncpg_url.split("?")[0]
@@ -77,9 +97,9 @@ if DATABASE_URL:
         async_engine = create_async_engine(
             asyncpg_url,
             echo=False,
-            pool_pre_ping=False, 
+            pool_pre_ping=True,  # Enable health checks for Coolify
             pool_size=5,
-            max_overflow=0
+            max_overflow=2       # Allow some overflow
         )
         logger.info("SQLAlchemy async engine created successfully.")
     except Exception as e:
@@ -145,7 +165,20 @@ def get_sync_engine():
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 DEBUG = ENVIRONMENT == "dev"
 
-GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+# Google Sheets Service Account Credentials
+GOOGLE_SHEETS_CREDENTIALS = {
+    "type": os.getenv("GOOGLE_SHEETS_TYPE"),
+    "project_id": os.getenv("GOOGLE_SHEETS_PROJECT_ID"),
+    "private_key_id": os.getenv("GOOGLE_SHEETS_PRIVATE_KEY_ID"),
+    "private_key": os.getenv("GOOGLE_SHEETS_PRIVATE_KEY"),
+    "client_email": os.getenv("GOOGLE_SHEETS_CLIENT_EMAIL"),
+    "client_id": os.getenv("GOOGLE_SHEETS_CLIENT_ID"),
+    "auth_uri": os.getenv("GOOGLE_SHEETS_AUTH_URI"),
+    "token_uri": os.getenv("GOOGLE_SHEETS_TOKEN_URI"),
+    "auth_provider_x509_cert_url": os.getenv("GOOGLE_SHEETS_AUTH_PROVIDER_X509_CERT_URL"),
+    "client_x509_cert_url": os.getenv("GOOGLE_SHEETS_CLIENT_X509_CERT_URL"),
+    "universe_domain": os.getenv("GOOGLE_SHEETS_UNIVERSE_DOMAIN")
+}
 GOOGLE_SHEETS_DOCUMENT_ID = os.getenv("GOOGLE_SHEETS_DOCUMENT_ID")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")

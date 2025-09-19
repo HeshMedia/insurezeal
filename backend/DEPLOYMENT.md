@@ -52,8 +52,18 @@ JWT_SECRET_KEY=your-jwt-secret-key
 GEMINI_API_KEY=your-gemini-api-key
 LLMWHISPERER_API_KEY=your-llm-whisper-api-key
 
-# Google Sheets Integration
-GOOGLE_SHEETS_CREDENTIALS_JSON=credentials/google_sheets.json
+# Google Sheets Integration (Service Account Credentials as Environment Variables)
+GOOGLE_SHEETS_TYPE=service_account
+GOOGLE_SHEETS_PROJECT_ID=your-project-id
+GOOGLE_SHEETS_PRIVATE_KEY_ID=your-private-key-id
+GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour-private-key-content-here\n-----END PRIVATE KEY-----\n"
+GOOGLE_SHEETS_CLIENT_EMAIL=your-service-account-email
+GOOGLE_SHEETS_CLIENT_ID=your-client-id
+GOOGLE_SHEETS_AUTH_URI=https://accounts.google.com/o/oauth2/auth
+GOOGLE_SHEETS_TOKEN_URI=https://oauth2.googleapis.com/token
+GOOGLE_SHEETS_AUTH_PROVIDER_X509_CERT_URL=https://www.googleapis.com/oauth2/v1/certs
+GOOGLE_SHEETS_CLIENT_X509_CERT_URL=your-client-x509-cert-url
+GOOGLE_SHEETS_UNIVERSE_DOMAIN=googleapis.com
 GOOGLE_SHEETS_DOCUMENT_ID=your-google-sheets-document-id
 
 # Application Environment

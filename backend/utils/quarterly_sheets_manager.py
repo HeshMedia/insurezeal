@@ -19,7 +19,7 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 import logging
 from config import (
-    GOOGLE_SHEETS_CREDENTIALS_JSON, 
+    GOOGLE_SHEETS_CREDENTIALS, 
     GOOGLE_SHEETS_DOCUMENT_ID
 )
 
@@ -30,7 +30,7 @@ class QuarterlySheetManager:
     """Manages quarterly sheet creation, balance carryover, and data routing"""
     
     def __init__(self):
-        self.credentials_path = GOOGLE_SHEETS_CREDENTIALS_JSON
+        self.credentials = GOOGLE_SHEETS_CREDENTIALS
         self.document_id = GOOGLE_SHEETS_DOCUMENT_ID
         self.client = None
         self.spreadsheet = None
@@ -42,7 +42,7 @@ class QuarterlySheetManager:
     def _initialize_client(self):
         """Initialize Google Sheets client with service account credentials"""
         try:
-            if not self.credentials_path or not self.document_id:
+            if not self.credentials or not self.document_id:
                 logger.warning("Google Sheets credentials or document ID not configured")
                 return
                 
@@ -51,12 +51,9 @@ class QuarterlySheetManager:
                 'https://www.googleapis.com/auth/drive'
             ]
             
-            if not os.path.exists(self.credentials_path):
-                logger.warning(f"Google Sheets credentials file not found: {self.credentials_path}")
-                return
-            
-            credentials = Credentials.from_service_account_file(
-                self.credentials_path, 
+            # Create credentials from dictionary instead of file
+            credentials = Credentials.from_service_account_info(
+                self.credentials, 
                 scopes=scope
             )
             
@@ -175,6 +172,38 @@ class QuarterlySheetManager:
                     
         except Exception as e:
             logger.error(f"Error getting summary sheet: {str(e)}")
+            return None
+    
+    def get_broker_sheet(self) -> Optional[gspread.Worksheet]:
+        """Get the Broker sheet from Google Sheets"""
+        try:
+            if not self.spreadsheet:
+                logger.error("Spreadsheet not initialized")
+                return None
+            
+            # Try to get the Broker sheet
+            try:
+                broker_sheet = self.spreadsheet.worksheet("Broker Sheet")
+                logger.info("Found Broker Sheet")
+                return broker_sheet
+            except gspread.WorksheetNotFound:
+                logger.warning("Broker Sheet not found")
+                
+                # Try alternative names for broker sheet
+                alternative_names = ["Broker", "BROKER SHEET", "Broker Data", "Brokers", "Broker Report"]
+                for alt_name in alternative_names:
+                    try:
+                        broker_sheet = self.spreadsheet.worksheet(alt_name)
+                        logger.info(f"Found Broker sheet with alternative name: {alt_name}")
+                        return broker_sheet
+                    except gspread.WorksheetNotFound:
+                        continue
+                
+                logger.error("No Broker sheet found with any expected name")
+                return None
+                    
+        except Exception as e:
+            logger.error(f"Error getting broker sheet: {str(e)}")
             return None
     
     def load_master_template_headers(self) -> List[str]:
@@ -1418,6 +1447,49 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error getting all records from quarter sheet Q{quarter}-{year}: {str(e)}")
             return []
+
+    def get_oldest_quarter_sheet_name(self) -> Optional[str]:
+        """
+        Get the name of the oldest quarterly sheet available in the workbook
+        
+        Returns:
+            Optional[str]: Name of the oldest quarter sheet (e.g., "Q1-2023") or None if no sheets found
+        """
+        try:
+            if not self.spreadsheet:
+                logger.error("Google Sheets spreadsheet not initialized")
+                return None
+            
+            # Get all worksheets
+            all_worksheets = self.spreadsheet.worksheets()
+            quarter_sheets = []
+            
+            # Filter for quarterly sheets (format: Q{quarter}-{year})
+            import re
+            quarter_pattern = re.compile(r'^Q([1-4])-(\d{4})$')
+            
+            for sheet in all_worksheets:
+                match = quarter_pattern.match(sheet.title)
+                if match:
+                    quarter = int(match.group(1))
+                    year = int(match.group(2))
+                    quarter_sheets.append((year, quarter, sheet.title))
+            
+            if not quarter_sheets:
+                logger.info("No quarterly sheets found")
+                return None
+            
+            # Sort by year, then by quarter to find the oldest
+            quarter_sheets.sort(key=lambda x: (x[0], x[1]))  # Sort by year, then quarter
+            oldest_sheet = quarter_sheets[0]
+            oldest_name = oldest_sheet[2]
+            
+            logger.info(f"Found oldest quarterly sheet: {oldest_name}")
+            return oldest_name
+            
+        except Exception as e:
+            logger.error(f"Error getting oldest quarter sheet name: {str(e)}")
+            return None
 
 
 # Global instance

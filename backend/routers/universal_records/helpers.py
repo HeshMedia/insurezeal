@@ -13,6 +13,7 @@ import uuid
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, date
 from decimal import Decimal, InvalidOperation
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from fastapi import HTTPException, status
@@ -29,6 +30,154 @@ from .schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def parse_date_field(date_string: str) -> str:
+    """
+    Parse various date formats and standardize them for Google Sheets
+    
+    Common formats from different insurers:
+    - DD/MM/YYYY
+    - DD-MM-YYYY  
+    - YYYY-MM-DD
+    - DD/MM/YY
+    - MM/DD/YYYY
+    
+    Returns: Standardized date string in DD/MM/YYYY format or empty string if invalid
+    """
+    if not date_string or not isinstance(date_string, str):
+        return ""
+    
+    date_string = date_string.strip()
+    if not date_string:
+        return ""
+    
+    try:
+        # Common date patterns
+        patterns = [
+            (r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$', 'DMY'),  # DD/MM/YYYY or DD-MM-YYYY
+            (r'^(\d{1,2})[/-](\d{1,2})[/-](\d{4})\s+\d{1,2}:\d{2}$', 'DMY'),  # DD-MM-YYYY HH:MM
+            (r'^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$', 'YMD'),  # YYYY-MM-DD or YYYY/MM/DD
+            (r'^(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+\d{1,2}:\d{2}$', 'YMD'),  # YYYY-MM-DD HH:MM
+            (r'^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$', 'DMY2'),  # DD/MM/YY or DD-MM-YY
+        ]
+        
+        for pattern, format_type in patterns:
+            match = re.match(pattern, date_string)
+            if match:
+                if format_type == 'DMY':
+                    day, month, year = match.groups()
+                    return f"{day.zfill(2)}/{month.zfill(2)}/{year}"
+                elif format_type == 'YMD':
+                    year, month, day = match.groups()
+                    return f"{day.zfill(2)}/{month.zfill(2)}/{year}"
+                elif format_type == 'DMY2':
+                    day, month, year = match.groups()
+                    # Assume 20xx for years 00-30, 19xx for years 31-99
+                    full_year = "20" + year if int(year) <= 30 else "19" + year
+                    return f"{day.zfill(2)}/{month.zfill(2)}/{full_year}"
+        
+        # If no pattern matches, try to parse with datetime (including time formats)
+        for format_str in ['%d/%m/%Y', '%d-%m-%Y', '%d-%m-%Y %H:%M', '%Y-%m-%d', '%Y/%m/%d', '%d/%m/%y', '%d-%m-%y']:
+            try:
+                parsed_date = datetime.strptime(date_string, format_str)
+                return parsed_date.strftime('%d/%m/%Y')
+            except ValueError:
+                continue
+        
+        logger.warning(f"Could not parse date: '{date_string}'")
+        return ""
+        
+    except Exception as e:
+        logger.error(f"Error parsing date '{date_string}': {str(e)}")
+        return ""
+
+
+def deduplicate_records_by_policy_number(records: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """
+    Deduplicate records by policy number, keeping the most complete/recent record.
+    
+    Args:
+        records: List of mapped records
+        
+    Returns:
+        - Deduplicated list of records
+        - Dictionary showing duplicate counts per policy number
+    """
+    policy_groups = {}
+    duplicate_counts = {}
+    
+    for record in records:
+        policy_number = record.get('Policy number', '').strip()
+        if not policy_number:
+            continue
+            
+        if policy_number not in policy_groups:
+            policy_groups[policy_number] = []
+            
+        policy_groups[policy_number].append(record)
+    
+    deduplicated_records = []
+    
+    for policy_number, policy_records in policy_groups.items():
+        if len(policy_records) > 1:
+            duplicate_counts[policy_number] = len(policy_records)
+            logger.info(f"Found {len(policy_records)} duplicates for policy {policy_number}")
+            
+            # Choose the most complete record (one with most non-empty fields)
+            best_record = None
+            max_completeness = 0
+            
+            for record in policy_records:
+                # Calculate completeness score
+                completeness = sum(1 for value in record.values() if value and str(value).strip())
+                
+                if completeness > max_completeness:
+                    max_completeness = completeness
+                    best_record = record
+                elif completeness == max_completeness and best_record:
+                    # If equal completeness, merge the records to get the most complete data
+                    merged_record = best_record.copy()
+                    for key, value in record.items():
+                        if value and str(value).strip() and (not merged_record.get(key) or not str(merged_record.get(key)).strip()):
+                            merged_record[key] = value
+                    best_record = merged_record
+            
+            if best_record:
+                deduplicated_records.append(best_record)
+                logger.info(f"Selected best record for policy {policy_number} with completeness score {max_completeness}")
+        else:
+            # No duplicates, add the single record
+            deduplicated_records.append(policy_records[0])
+    
+    logger.info(f"Deduplicated {len(records)} records to {len(deduplicated_records)} unique policies")
+    return deduplicated_records, duplicate_counts
+
+
+def compare_record_fields(existing_record: Dict[str, Any], new_record: Dict[str, Any]) -> Tuple[bool, List[str], Dict[str, Tuple[str, str]]]:
+    """
+    Simple comparison: always return True to overwrite existing record with new data
+    
+    Args:
+        existing_record: Current record from quarterly sheet
+        new_record: New record from upload
+        
+    Returns:
+        - has_changes: Always True (always update)
+        - changed_fields: All field names from new record
+        - field_changes: All fields mapped to (old_value, new_value) tuples
+    """
+    changed_fields = []
+    field_changes = {}
+    
+    # Get all fields from the new record - we want to update everything
+    for field, new_value in new_record.items():
+        existing_value = existing_record.get(field, '')
+        changed_fields.append(field)
+        field_changes[field] = (str(existing_value), str(new_value))
+    
+    logger.info(f"Updating all fields for policy: {new_record.get('Policy number', 'Unknown')}")
+    return True, changed_fields, field_changes
 
 # Master insurer mappings loaded from CSV configuration
 INSURER_MAPPINGS: Dict[str, Dict[str, str]] = {}
@@ -189,6 +338,11 @@ def parse_csv_with_mapping(
             for original_header, value in row.items():
                 if original_header in insurer_mapping:
                     mapped_header = insurer_mapping[original_header]
+                    
+                    # Apply date parsing for date fields
+                    if mapped_header in ['Policy Start Date', 'Policy End Date', 'Booking Date(Click to select Date)']:
+                        value = parse_date_field(value)
+                    
                     mapped_row[mapped_header] = value
                     # Debug policy number mapping
                     if mapped_header == "Policy Number":
@@ -683,7 +837,13 @@ async def process_universal_record_csv_to_quarterly_sheets(
                 processed_by_user_id=admin_user_id
             )
         
-        logger.info(f"Processing {len(mapped_records)} records for insurer {insurer_name} to quarterly sheets")
+        # Deduplicate records within the CSV by policy number
+        deduplicated_records, duplicate_counts = deduplicate_records_by_policy_number(mapped_records)
+        logger.info(f"Original records: {len(mapped_records)}, After deduplication: {len(deduplicated_records)}")
+        if duplicate_counts:
+            logger.info(f"Found duplicates: {duplicate_counts}")
+        
+        logger.info(f"Processing {len(deduplicated_records)} unique records for insurer {insurer_name} to quarterly sheets")
         
         # Import quarterly manager
         from utils.quarterly_sheets_manager import quarterly_manager
@@ -702,43 +862,69 @@ async def process_universal_record_csv_to_quarterly_sheets(
             try:
                 quarterly_records = quarterly_manager.get_all_records_from_quarter_sheet(quarter, year)
                 logger.info(f"Retrieved {len(quarterly_records)} existing records from {quarter_name}")
+                
+                # Log some sample policy numbers for debugging
+                if quarterly_records:
+                    sample_policies = []
+                    for qr in quarterly_records[:5]:  # Show first 5 policy numbers
+                        policy_num = qr.get('Policy number', 'N/A')
+                        normalized = normalize_policy_number(policy_num)
+                        sample_policies.append(f"'{policy_num}' -> '{normalized}'")
+                    logger.info(f"Sample existing policy numbers in {quarter_name}: {sample_policies}")
+                    
             except Exception as e:
                 logger.error(f"Failed to get records from {quarter_name}: {str(e)}")
                 quarterly_records = []
             
-            # Process each mapped record for this quarter
+            # Process each unique mapped record for this quarter
             quarter_updates = 0
             quarter_additions = 0
             quarter_errors = 0
             
-            for i, record in enumerate(mapped_records):
+            for i, record in enumerate(deduplicated_records):
                 try:
                     stats.total_records_processed += 1
                     total_records_across_quarters += 1
                     
                     policy_number = record.get('Policy number', '').strip()
+                    # Remove any leading/trailing quotes from policy number
+                    policy_number = policy_number.strip('\'"')
+                    
                     if not policy_number:
+                        logger.warning(f"Skipping record {i+1}: No policy number found")
                         stats.total_records_skipped += 1
                         continue
+                    
+                    logger.info(f"Processing record {i+1}/{len(deduplicated_records)}: Policy '{policy_number}' for {quarter_name}")
                     
                     # Transform record to quarterly sheet headers format
                     quarterly_record = transform_to_quarterly_headers(record, insurer_name)
                     
-                    # Find existing record in quarterly sheet by policy number
+                    # Find existing record in quarterly sheet by policy number (normalized comparison)
                     existing_record = None
+                    normalized_policy_number = normalize_policy_number(policy_number)
+                    
                     for qr in quarterly_records:
-                        if qr.get('Policy number', '').strip() == policy_number:
+                        existing_policy = qr.get('Policy number', '').strip()
+                        existing_normalized = normalize_policy_number(existing_policy)
+                        if existing_normalized == normalized_policy_number:
                             existing_record = qr
+                            logger.info(f"Found existing record for policy '{policy_number}' (normalized: '{normalized_policy_number}') matching existing '{existing_policy}' (normalized: '{existing_normalized}')")
                             break
                     
+                    if not existing_record:
+                        logger.info(f"No existing record found for policy '{policy_number}' (normalized: '{normalized_policy_number}') in {quarter_name}. Will add as new record.")
+                    
                     if existing_record:
-                        # Update existing record in quarterly sheet
-                        has_changes, changed_fields = await compare_quarterly_record(
-                            existing_record, quarterly_record, quarter, year
+                        # Compare records using enhanced field comparison
+                        has_changes, changed_fields, field_changes = compare_record_fields(
+                            existing_record, quarterly_record
                         )
                         
                         if has_changes:
-                            # Route updated record to specific quarterly sheet
+                            logger.info(f"Policy {policy_number}: Found changes in fields: {changed_fields}")
+                            
+                            # Update existing record in quarterly sheet
                             update_result = quarterly_manager.update_existing_record_by_policy_number(
                                 quarterly_record, policy_number, quarter, year
                             )
@@ -754,18 +940,23 @@ async def process_universal_record_csv_to_quarterly_sheets(
                                 
                                 change_details.append(RecordChangeDetail(
                                     policy_number=policy_number,
-                                    operation="UPDATE",
-                                    quarter_sheet=quarter_name,
-                                    changed_fields=changed_fields,
-                                    previous_values={field: existing_record.get(field, '') for field in changed_fields},
-                                    new_values={field: quarterly_record.get(field, '') for field in changed_fields}
+                                    record_type="quarterly_sheet",
+                                    action="updated",
+                                    changed_fields={field: f"Updated: {old_val} -> {new_val}" for field, (old_val, new_val) in field_changes.items()},
+                                    previous_values={field: old_val for field, (old_val, new_val) in field_changes.items()},
+                                    new_values={field: new_val for field, (old_val, new_val) in field_changes.items()}
                                 ))
+                                
+                                logger.info(f"Successfully updated policy {policy_number} in {quarter_name}")
                             else:
                                 stats.total_errors += 1
                                 quarter_errors += 1
-                                stats.error_details.append(f"Failed to update {policy_number} in {quarter_name}: {update_result.get('error', 'Unknown error')}")
+                                error_msg = f"Failed to update {policy_number} in {quarter_name}: {update_result.get('error', 'Unknown error')}"
+                                stats.error_details.append(error_msg)
+                                logger.error(error_msg)
                         else:
-                            # No changes needed, but mark as processed
+                            # No changes needed - record is identical
+                            logger.info(f"Policy {policy_number}: No changes detected, skipping update")
                             stats.total_records_skipped += 1
                     else:
                         # Add new record to quarterly sheet
@@ -780,9 +971,9 @@ async def process_universal_record_csv_to_quarterly_sheets(
                             
                             change_details.append(RecordChangeDetail(
                                 policy_number=policy_number,
-                                operation="ADD",
-                                quarter_sheet=quarter_name,
-                                changed_fields=list(quarterly_record.keys()),
+                                record_type="quarterly_sheet",
+                                action="added",
+                                changed_fields={field: "Added field" for field in quarterly_record.keys()},
                                 previous_values={},
                                 new_values=quarterly_record
                             ))
@@ -819,6 +1010,8 @@ async def process_universal_record_csv_to_quarterly_sheets(
                 "original_headers": original_headers,
                 "unmapped_headers": unmapped_headers,
                 "total_records": len(mapped_records),
+                "unique_records_after_deduplication": len(deduplicated_records),
+                "duplicate_counts": duplicate_counts,
                 "target_quarters": [f"Q{q}-{y}" for q, y in zip(quarter_list, year_list)],
                 "quarter_processing_details": quarter_processing_details
             },
@@ -1025,15 +1218,9 @@ def normalize_field_value(field_name: str, value: Any) -> str:
         except:
             pass
     
-    # For date fields
+    # For date fields - use standardized date parsing
     if "date" in field_name.lower():
-        try:
-            # Try to parse and format consistently
-            from datetime import datetime
-            parsed_date = datetime.strptime(normalized, "%Y-%m-%d")
-            return parsed_date.strftime("%Y-%m-%d")
-        except:
-            pass
+        return parse_date_field(normalized)
     
     return normalized
 
@@ -1062,11 +1249,11 @@ def transform_to_quarterly_headers(record: Dict[str, Any], insurer_name: str) ->
         'Broker Name': record.get('Broker Name', ''),
         'Insurer name': record.get('Insurer Name', record.get('Insurer name', '')),
         
-        # Dates
+        # Dates - use standardized date parsing
         'Reporting Month (mmm\'yy)': record.get('Reporting Month (mmm\'yy)', ''),
-        'Policy Start Date': record.get('Policy Start Date', ''),
-        'Policy End Date': record.get('Policy End Date', ''),
-        'Booking Date(Click to select Date)': record.get('Booking Date(Click to select Date)', ''),
+        'Policy Start Date': parse_date_field(record.get('Policy Start Date', '')),
+        'Policy End Date': parse_date_field(record.get('Policy End Date', '')),
+        'Booking Date(Click to select Date)': parse_date_field(record.get('Booking Date(Click to select Date)', '')),
         
         # Product details
         'Major Categorisation( Motor/Life/ Health)': record.get('Major Categorisation( Motor/Life/ Health)', ''),

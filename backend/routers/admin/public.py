@@ -59,11 +59,8 @@ async def promote_to_superadmin(
             # Update UserProfile role
             user_profile.user_role = "superadmin"
             
-            # Update Users table metadata to mirror what should be in Supabase
-            if user_record.raw_user_meta_data:
-                user_record.raw_user_meta_data["role"] = "superadmin"
-            else:
-                user_record.raw_user_meta_data = {"role": "superadmin"}
+            # Update Users table role field
+            user_record.role = "superadmin"
             
             await db.commit()
             updated_in_database = True

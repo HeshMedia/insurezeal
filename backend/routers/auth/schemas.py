@@ -44,6 +44,12 @@ class AuthResponse(BaseModel):
     user: UserResponse
     message: Optional[str] = None 
 
+class RegistrationResponse(BaseModel):
+    message: str
+    user_id: str
+    email: str
+    status: str = "pending_verification"
+    
 class TokenResponse(BaseModel):
     access_token: str
 
@@ -63,7 +69,7 @@ class ResetPasswordRequest(BaseModel):
 # Webhook schemas for Supabase Auth replication
 class SupabaseUserRecord(BaseModel):
     """Schema for Supabase auth.users record in webhook payload"""
-    id: uuid.UUID
+    id: str  # UUID as string from Supabase
     email: Optional[str] = None
     phone: Optional[str] = None
     role: Optional[str] = None
