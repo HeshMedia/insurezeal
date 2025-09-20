@@ -3,6 +3,7 @@
 import {
   BarChart3,
   Building,
+  FileSpreadsheet,
   Settings,
   Shield,
   User,
@@ -47,6 +48,11 @@ const superAdminNavItems = [
     title: "Admin Child IDs",
     url: "/superadmin/admin-child-ids",
     icon: Shield,
+  },
+  {
+    title: "MIS & Reports",
+    url: "/superadmin/mis-reports",
+    icon: FileSpreadsheet,
   },
   {
     title: "Settings",
