@@ -31,11 +31,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/apidocs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json",
-    servers=[
-        {"url": "http://localhost:8000", "description": "Local Development Server"},
-        {"url": "https://api.insurezeal.com", "description": "Production Server"},
-    ],
+    openapi_url="/openapi.json"
 )
 
 logger.info("--- FastAPI application starting up ---")
