@@ -756,11 +756,8 @@ async def promote_agent_to_admin(
         # Update UserProfile role
         user_profile.user_role = "admin"
         
-        # Update Users table metadata to mirror what should be in Supabase
-        if user_record.raw_user_meta_data:
-            user_record.raw_user_meta_data["role"] = "admin"
-        else:
-            user_record.raw_user_meta_data = {"role": "admin"}
+        # Update Users table role field
+        user_record.role = "admin"
         
         await db.commit()
         
