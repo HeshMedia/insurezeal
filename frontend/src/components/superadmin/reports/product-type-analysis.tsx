@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import React, { useMemo } from 'react'
@@ -5,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { QuarterlySheetRecord } from '@/types/admin-mis.types'
 import {
   ResponsiveContainer,
-  BarChart,
   Bar,
   XAxis,
   YAxis,

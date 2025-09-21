@@ -4,7 +4,7 @@ import { useMemo, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAtom } from "jotai";
-import { PolicyReviewFormSchema, PolicyReviewFormSchemaType } from "./policy-form-schema";
+import { PolicyReviewFormSchema, PolicyReviewFormSchemaType } from "@/components/agent/policy/policy-form-schema";
 import { pdfExtractionDataAtom, policyPdfUrlAtom } from "@/lib/atoms/cutpay";
 import { useInsurers, useBrokersAndInsurers, useChildIdRequests } from "@/hooks/agentQuery";
 import { useSubmitPolicy } from "@/hooks/policyQuery";

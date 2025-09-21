@@ -3,9 +3,9 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { ChildIdRequestForm } from '@/components/agent/child-id-request-form'
-import { ChildIdStatus } from '@/components/agent/child-id-status'
-import { ActiveChildIds } from '@/components/agent/active-child-ids'
+import { ChildIdRequestForm } from '@/components/agent/child-id/child-id-request-form'
+import { ChildIdStatus } from '@/components/agent/child-id/child-id-status'
+import { ActiveChildIds } from '@/components/agent/child-id/active-child-ids'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, List, Award } from 'lucide-react'
 
