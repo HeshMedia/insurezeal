@@ -165,12 +165,38 @@ def get_sync_engine():
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 DEBUG = ENVIRONMENT == "dev"
 
+# Google Sheets Private Key handling function
+def get_google_sheets_private_key():
+    """Get Google Sheets private key, supporting both regular and Base64 formats"""
+    import base64
+    
+    # Try Base64 encoded version first (better for deployment platforms)
+    base64_key = os.getenv("GOOGLE_SHEETS_PRIVATE_KEY_BASE64")
+    if base64_key:
+        try:
+            decoded_key = base64.b64decode(base64_key).decode('utf-8')
+            logger.info("Using Base64 decoded Google Sheets private key")
+            return decoded_key
+        except Exception as e:
+            logger.error(f"Failed to decode Base64 private key: {e}")
+    
+    # Fallback to regular version
+    regular_key = os.getenv("GOOGLE_SHEETS_PRIVATE_KEY", "")
+    if regular_key:
+        # Handle newline escaping
+        processed_key = regular_key.replace('\\n', '\n')
+        logger.info("Using regular Google Sheets private key")
+        return processed_key
+    
+    logger.error("No Google Sheets private key found")
+    return ""
+
 # Google Sheets Service Account Credentials
 GOOGLE_SHEETS_CREDENTIALS = {
     "type": os.getenv("GOOGLE_SHEETS_TYPE"),
     "project_id": os.getenv("GOOGLE_SHEETS_PROJECT_ID"),
     "private_key_id": os.getenv("GOOGLE_SHEETS_PRIVATE_KEY_ID"),
-    "private_key": os.getenv("GOOGLE_SHEETS_PRIVATE_KEY"),
+    "private_key": get_google_sheets_private_key(),
     "client_email": os.getenv("GOOGLE_SHEETS_CLIENT_EMAIL"),
     "client_id": os.getenv("GOOGLE_SHEETS_CLIENT_ID"),
     "auth_uri": os.getenv("GOOGLE_SHEETS_AUTH_URI"),
