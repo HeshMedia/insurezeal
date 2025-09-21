@@ -153,6 +153,9 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
+# Alembic
+alembic.ini
+
 # AWS Lambda deployment
 lambda_deployment.zip
 

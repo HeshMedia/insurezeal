@@ -1,14 +1,7 @@
-"""
-FastAPI application entry point for Insurezeal Backend API.
-
-This module initializes the FastAPI application with all necessary middleware,
-routers, and lifecycle events for the Insurezeal insurance management system.
-"""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi import Request
+from fastapi import Request, HTTPException
 import os
 import logging
 
@@ -21,14 +14,12 @@ from routers.superadmin.superadmin import router as superadmin_router
 from routers.admin.cutpay import router as cutpay_router
 from routers.admin.public import router as public_router
 from routers.mis.mis import router as mis_router
-from routers.universal_records.universal_records import (
-    router as universal_records_router,
-)
+from routers.universal_records.universal_records import router as universal_records_router
+from routers.admin.quarterly_sheets import router as quarterly_sheets_router
+from utils.quarterly_scheduler import startup_quarterly_system, shutdown_quarterly_system
 
-# Configure logging for production readiness
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Setup detailed logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
@@ -40,83 +31,89 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/apidocs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    openapi_url="/openapi.json"
 )
 
-logger.info("FastAPI application initialized successfully")
+logger.info("--- FastAPI application starting up ---")
 
-
-# Application lifecycle events
+# Add startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
-    """
-    Application startup event handler.
-
-    Initializes core application services and performs startup tasks.
-    """
-    logger.info("Application startup initiated")
+    """Application startup event"""
+    logger.info("Running application startup tasks...")
     try:
-        # Application startup tasks can be added here
-        logger.info("Application startup completed successfully")
+        # Start quarterly system
+        await startup_quarterly_system()
+        logger.info("Startup tasks completed successfully")
     except Exception as e:
-        logger.error(f"Application startup failed: {str(e)}", exc_info=True)
-        raise
+        logger.error(f"Error in startup tasks: {str(e)}")
 
-
-@app.on_event("shutdown")
+@app.on_event("shutdown") 
 async def shutdown_event():
-    """
-    Application shutdown event handler.
-
-    Gracefully shuts down core application services and cleans up resources
-    to ensure data integrity and proper application termination.
-    """
-    logger.info("Application shutdown initiated")
+    """Application shutdown event"""
+    logger.info("Running application shutdown tasks...")
     try:
-        # Application shutdown tasks can be added here
-        logger.info("Application shutdown completed successfully")
+        # Stop quarterly system
+        await shutdown_quarterly_system()
+        logger.info("Shutdown tasks completed successfully")
     except Exception as e:
-        logger.error(f"Application shutdown failed: {str(e)}", exc_info=True)
+        logger.error(f"Error in shutdown tasks: {str(e)}")
 
-
-# Configure CORS middleware for cross-origin requests
+logger.info("Configuring CORS middleware...")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Restrict origins in production
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info("CORS middleware configured.")
 
-# Register all API routers
+logger.info("Importing and including routers...")
 try:
     app.include_router(auth_router)
+    logger.info("Included auth_router.")
+    
     app.include_router(users_router)
+    logger.info("Included users_router.")
+    
     app.include_router(admin_router)
+    logger.info("Included admin_router.")
+    
     app.include_router(superadmin_router)
+    logger.info("Included superadmin_router.")
+    
     app.include_router(child_router)
+    logger.info("Included child_router.")
+    
     app.include_router(policies_router)
+    logger.info("Included policies_router.")
+    
     app.include_router(cutpay_router)
+    logger.info("Included cutpay_router.")
+    
     app.include_router(public_router)
+    logger.info("Included public_router.")
+    
     app.include_router(mis_router)
+    logger.info("Included mis_router.")
+    
     app.include_router(universal_records_router)
+    logger.info("Included universal_records_router.")
+    
+    app.include_router(quarterly_sheets_router)
+    logger.info("Included quarterly_sheets_router.")
 
-    logger.info("All API routers registered successfully")
+    logger.info("All routers included successfully.")
+
 except Exception as e:
-    logger.critical(f"Critical error registering routers: {e}", exc_info=True)
+    logger.critical(f"FATAL: Failed to import or include routers: {e}", exc_info=True)
     raise
-
 
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):
-    """
-    Custom API documentation endpoint using Stoplight Elements.
-
-    Provides a clean, dark-themed interface for API documentation
-    instead of the default Swagger UI.
-    """
     openapi_url = "/openapi.json"
-
+    
     return HTMLResponse(
         f"""
 <!doctype html>
@@ -141,15 +138,9 @@ async def api_documentation(request: Request):
 </html>"""
     )
 
-
 @app.get("/", response_class=HTMLResponse)
 def home():
-    """
-    Default homepage route for the Insurezeal API.
-
-    Returns an HTML page with links to API documentation and related resources.
-    This serves as a landing page for developers accessing the API.
-    """
+    """This is the first and default route for the Insurezeal Site Backend"""
     return """
     <html>
       <head>
@@ -181,20 +172,14 @@ def home():
     </html>
     """
 
-
 @app.get("/health")
 def health_check():
-    """
-    Health check endpoint for monitoring and load balancers.
-
-    Returns the application status to verify the service is running
-    and responsive. Used by monitoring tools and container orchestration.
-    """
+    """Health check endpoint for monitoring"""
     return {"status": "healthy", "service": "insurezeal-api"}
+
+logger.info("--- FastAPI application startup complete ---")
 
 
 if __name__ == "__main__":
     import uvicorn
-
-    logger.info("Starting Uvicorn server...")
     uvicorn.run("main:app", host="0.0.0.0", port=8000)

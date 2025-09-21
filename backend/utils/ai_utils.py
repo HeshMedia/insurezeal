@@ -1,19 +1,3 @@
-"""
-AI utilities for Insurezeal Backend API using Google Gemini.
-
-This module provides AI-powered document processing capabilities for insurance
-policy extraction and analysis. It integrates with Google Gemini AI to extract
-structured data from insurance policy documents in various formats.
-
-Key Features:
-- PDF policy document text extraction
-- AI-powered policy data extraction using Gemini
-- Insurance company and broker name matching
-- Structured data validation and formatting
-- OCR integration for scanned documents
-- Error handling and retry mechanisms
-"""
-
 import google.generativeai as genai
 import json
 from typing import Dict, Any, Optional
@@ -24,8 +8,7 @@ from utils.pdf_utils import PDFProcessor
 
 logger = logging.getLogger(__name__)
 
-# Comprehensive list of supported insurance companies for AI matching
-# Used by Gemini AI to accurately identify and standardize insurer names
+# Insurer names list for AI matching
 INSURER_NAMES = [
     "Bajaj Allianz General Insurance Company Ltd",
     "Chola Mandlam MS General Insurance Company LTD",
@@ -45,53 +28,27 @@ INSURER_NAMES = [
     "UNITED INDIA INSURANCE COMPANY LIMITED",
     "Universal Sompo General Insurance",
     "Zuno General Insurance Limited",
-    "Zurich Kotak General Insurance Company",
+    "Zurich Kotak General Insurance Company"
 ]
 
-# List of supported insurance brokers for AI matching
-# Helps Gemini AI identify the broker associated with each policy
+# Broker names list for AI matching
 BROKER_NAMES = [
     "Invictus Insurance Broking Services Pvt. Ltd",
     "Nirmal Bang Insurance Broking Pvt Ltd",
     "TURTLEMINT INSURANCE BROKING SERVICES PRIVATE LIMITED",
     "PROSALES FINANCIAL SERVICES PVT.LTD.",
     "JIO INSURANCE BROKING LIMITED",
-    "VITRAK INSURANCE BROKING PVT. LTD",
+    "VITRAK INSURANCE BROKING PVT. LTD"
 ]
 
-
 class GeminiPolicyExtractor:
-    """
-    AI-powered policy document processor using Google Gemini.
-
-    This class handles the extraction of structured data from insurance policy
-    documents using Google's Gemini AI model. It can process various document
-    formats and extract key policy information like policy numbers, dates,
-    coverage amounts, and insurer details.
-
-    Attributes:
-        model: Configured Gemini AI model instance
-
-    Note:
-        Requires GEMINI_API_KEY environment variable to be set for authentication.
-    """
-
     def __init__(self):
-        """
-        Initialize the Gemini policy extractor with API credentials.
-
-        Raises:
-            ValueError: If GEMINI_API_KEY environment variable is not set
-        """
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            logger.error("GEMINI_API_KEY environment variable not found")
-            raise ValueError("GEMINI_API_KEY environment variable not set")
-
+            raise ValueError("GEMINI_API_KEY environment variable not set")        
         genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
-        logger.info("Gemini policy extractor initialized successfully")
-
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
+    
     def create_extraction_prompt(self, pdf_text: str) -> str:
         return f"""
         You are a professional insurance document data extraction assistant. Your task is to extract structured information from legitimate business insurance policy documents for comprehensive CutPay processing.
@@ -226,28 +183,34 @@ class GeminiPolicyExtractor:
         Document text:
         {pdf_text}
         """
-
+    
     def extract_policy_data(self, pdf_text: str) -> Optional[Dict[str, Any]]:
-        """Extract strwuctured policy data using Gemini"""
+        """Extract structured policy data using Gemini"""
         try:
             if len(pdf_text) > 16000:
                 pdf_text = pdf_text[:16000] + "..."
                 logger.info("Truncated PDF text to avoid safety filter issues")
-
+            
             prompt = self.create_extraction_prompt(pdf_text)
             safety_settings = [
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH", 
+                    "threshold": "BLOCK_NONE"
+                },
                 {
                     "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                    "threshold": "BLOCK_NONE",
+                    "threshold": "BLOCK_NONE"
                 },
                 {
                     "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                    "threshold": "BLOCK_NONE",
-                },
+                    "threshold": "BLOCK_NONE"
+                }
             ]
-
+            
             response = self.model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
@@ -255,59 +218,53 @@ class GeminiPolicyExtractor:
                     max_output_tokens=1024,
                     candidate_count=1,
                 ),
-                safety_settings=safety_settings,
+                safety_settings=safety_settings
             )
-
+            
             if not response.parts:
                 logger.error("Gemini response was blocked by safety filters")
                 if response.candidates and len(response.candidates) > 0:
                     finish_reason = response.candidates[0].finish_reason
                     logger.error(f"Finish reason: {finish_reason}")
-
+                    
                     return self._try_fallback_extraction(pdf_text)
                 return None
-
+            
             json_text = response.text.strip()
-
-            if json_text.startswith("```json"):
-                json_text = json_text.replace("```json", "").replace("```", "").strip()
-            elif json_text.startswith("```"):
-                json_text = json_text.replace("```", "").strip()
-
+            
+            if json_text.startswith('```json'):
+                json_text = json_text.replace('```json', '').replace('```', '').strip()
+            elif json_text.startswith('```'):
+                json_text = json_text.replace('```', '').strip()
+            
             extracted_data = json.loads(json_text)
-
-            if "confidence_score" not in extracted_data:
-                extracted_data["confidence_score"] = 0.5
-
+            
+            if 'confidence_score' not in extracted_data:
+                extracted_data['confidence_score'] = 0.5
+            
             # Post-process extracted data
             extracted_data = self._post_process_extracted_data(extracted_data)
-
-            logger.info(
-                f"Successfully extracted policy data with confidence: {extracted_data.get('confidence_score', 0)}"
-            )
+            
+            logger.info(f"Successfully extracted policy data with confidence: {extracted_data.get('confidence_score', 0)}")
             return extracted_data
-
+            
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Gemini response as JSON: {str(e)}")
-            if "response" in locals():
-                logger.error(
-                    f"Raw response: {response.text if response.parts else 'No response parts'}"
-                )
+            if 'response' in locals():
+                logger.error(f"Raw response: {response.text if response.parts else 'No response parts'}")
             return None
-
+            
         except Exception as e:
             logger.error(f"Error extracting policy data with Gemini: {str(e)}")
-            if "response" in locals():
+            if 'response' in locals():
                 try:
-                    if hasattr(response, "candidates") and response.candidates:
-                        logger.error(
-                            f"Response finish reason: {response.candidates[0].finish_reason}"
-                        )
+                    if hasattr(response, 'candidates') and response.candidates:
+                        logger.error(f"Response finish reason: {response.candidates[0].finish_reason}")
                     logger.error(f"Response parts available: {bool(response.parts)}")
                 except:
                     pass
             return None
-
+    
     def _try_fallback_extraction(self, pdf_text: str) -> Optional[Dict[str, Any]]:
         """Fallback extraction with simpler prompt"""
         try:
@@ -326,70 +283,60 @@ class GeminiPolicyExtractor:
             
             Document: {pdf_text[:3000]}
             """
-
+            
             response = self.model.generate_content(
                 simple_prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.2,
                     max_output_tokens=512,
-                ),
+                )
             )
-
+            
             if response.parts:
                 json_text = response.text.strip()
-                if json_text.startswith("```"):
-                    json_text = (
-                        json_text.replace("```json", "").replace("```", "").strip()
-                    )
-
+                if json_text.startswith('```'):
+                    json_text = json_text.replace('```json', '').replace('```', '').strip()
+                
                 return json.loads(json_text)
-
+            
         except Exception as e:
             logger.error(f"Fallback extraction also failed: {str(e)}")
-
+        
         return None
 
     def _post_process_extracted_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Post-process extracted data to clean and format fields"""
         try:
             # Process policy numbers
-            if data.get("policy_number"):
-                policy_num = str(data["policy_number"]).strip()
+            if data.get('policy_number'):
+                policy_num = str(data['policy_number']).strip()
                 # Keep the complete policy number with all "/" and "-" characters as-is
-                data["policy_number"] = policy_num
-
+                data['policy_number'] = policy_num
+                
                 # Set formatted policy number with "#" prefix and full original format
-                if not data.get("formatted_policy_number"):
-                    data["formatted_policy_number"] = "#" + policy_num
-                elif not str(data["formatted_policy_number"]).startswith("#"):
-                    data["formatted_policy_number"] = "#" + str(
-                        data["formatted_policy_number"]
-                    )
-
+                if not data.get('formatted_policy_number'):
+                    data['formatted_policy_number'] = '#' + policy_num
+                elif not str(data['formatted_policy_number']).startswith('#'):
+                    data['formatted_policy_number'] = '#' + str(data['formatted_policy_number'])
+            
             # Clean registration number - remove dashes, spaces, and special characters
-            if data.get("registration_number"):
-                reg_no = str(data["registration_number"]).upper()
+            if data.get('registration_number'):
+                reg_no = str(data['registration_number']).upper()
                 # Remove common separators and spaces
-                reg_no = (
-                    reg_no.replace("-", "")
-                    .replace(" ", "")
-                    .replace("_", "")
-                    .replace(".", "")
-                )
-                data["registration_number"] = reg_no
-
+                reg_no = reg_no.replace('-', '').replace(' ', '').replace('_', '').replace('.', '')
+                data['registration_number'] = reg_no
+                
                 # Extract RTO from first 4 characters of registration number
                 if len(reg_no) >= 4:
-                    data["rto"] = reg_no[:4]
-
+                    data['rto'] = reg_no[:4]
+            
             return data
-
+            
         except Exception as e:
             logger.error(f"Error in post-processing extracted data: {str(e)}")
             return data
 
-
-# legacy helper func no longer in use
+#legacy helper func no longer in use
 async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
     """Extract comprehensive policy data from PDF using the Gemini extractor"""
     try:
@@ -399,21 +346,20 @@ async def extract_policy_data_from_pdf(pdf_url: str) -> Dict[str, Any]:
             response = requests.get(pdf_url, timeout=30)
             response.raise_for_status()
             pdf_bytes = response.content
-
+            
             # Delegate to the bytes function (no policy flow for legacy function)
             return await extract_policy_data_from_pdf_bytes(pdf_bytes)
-
+                
         except requests.RequestException as e:
             logger.error(f"Failed to download PDF from {pdf_url}: {str(e)}")
             return {}
         except Exception as e:
             logger.error(f"Failed to extract text from PDF: {str(e)}")
             return {}
-
+            
     except Exception as e:
         logger.error(f"Error extracting policy data: {str(e)}")
         return {}
-
 
 async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]:
     """Extract comprehensive policy data from PDF bytes using the Gemini extractor (stateless)"""
@@ -421,41 +367,39 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
         if not gemini_extractor:
             logger.error("Gemini extractor not available")
             return {}
-
+        
         # Extract text directly from PDF bytes
         pdf_text = PDFProcessor.extract_text_from_bytes(pdf_bytes)
         if not pdf_text or len(pdf_text.strip()) < 50:
             logger.warning("No meaningful text extracted from PDF bytes")
             return {}
-
-        logger.info(
-            f"Extracting comprehensive policy data from PDF bytes ({len(pdf_bytes)} bytes)"
-        )
+        
+        logger.info(f"Extracting comprehensive policy data from PDF bytes ({len(pdf_bytes)} bytes)")
         logger.info(f"Extracted text length: {len(pdf_text)} characters")
         logger.info(f"Policy flow: Always includes insurer/broker detection")
-
+        
         extracted_data = gemini_extractor.extract_policy_data(pdf_text)
-
+        
         if extracted_data:
             # Base data that's always returned
             result = {
                 # Basic Policy Information
                 "policy_number": extracted_data.get("policy_number"),
-                "formatted_policy_number": extracted_data.get(
-                    "formatted_policy_number"
-                ),
+                "formatted_policy_number": extracted_data.get("formatted_policy_number"),
                 "major_categorisation": extracted_data.get("major_categorisation"),
                 "product_insurer_report": extracted_data.get("product_insurer_report"),
                 "product_type": extracted_data.get("product_type"),
                 "plan_type": extracted_data.get("plan_type"),
                 "customer_name": extracted_data.get("customer_name"),
                 "customer_phone_number": extracted_data.get("customer_phone_number"),
+                
                 # Premium & Financial Details
                 "gross_premium": extracted_data.get("gross_premium"),
                 "net_premium": extracted_data.get("net_premium"),
                 "od_premium": extracted_data.get("od_premium"),
                 "tp_premium": extracted_data.get("tp_premium"),
                 "gst_amount": extracted_data.get("gst_amount"),
+                
                 # Vehicle Details
                 "registration_number": extracted_data.get("registration_number"),
                 "make_model": extracted_data.get("make_model"),
@@ -472,31 +416,29 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
                 "business_type": extracted_data.get("business_type"),
                 "seating_capacity": extracted_data.get("seating_capacity"),
                 "veh_wheels": extracted_data.get("veh_wheels"),
+                
                 # Policy Dates
                 "start_date": extracted_data.get("start_date"),
                 "end_date": extracted_data.get("end_date"),
+                
                 # Insurer/Broker Detection (always included)
-                "ai_detected_insurer_name": extracted_data.get(
-                    "ai_detected_insurer_name"
-                ),
-                "ai_detected_broker_name": extracted_data.get(
-                    "ai_detected_broker_name"
-                ),
-                "confidence_score": extracted_data.get("confidence_score", 0.0),
+                "ai_detected_insurer_name": extracted_data.get("ai_detected_insurer_name"),
+                "ai_detected_broker_name": extracted_data.get("ai_detected_broker_name"),
+                
+                "confidence_score": extracted_data.get("confidence_score", 0.0)
             }
-
+            
             logger.info(f"Detected insurer: {result.get('ai_detected_insurer_name')}")
             logger.info(f"Detected broker: {result.get('ai_detected_broker_name')}")
-
+            
             return result
         else:
             logger.warning("No data extracted from Gemini")
             return {}
-
+            
     except Exception as e:
         logger.error(f"Error extracting policy data from bytes: {str(e)}")
         return {}
-
 
 try:
     gemini_extractor = GeminiPolicyExtractor()

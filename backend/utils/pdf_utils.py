@@ -1,78 +1,30 @@
-"""
-PDF processing utilities for Insurezeal Backend API.
-
-This module provides PDF document processing capabilities using LLMWhisperer,
-a specialized service for extracting structured text from PDF documents.
-It's optimized for insurance policy documents and handles various PDF formats
-including scanned documents and native text PDFs.
-
-Key Features:
-- Text extraction from PDF files using LLMWhisperer OCR
-- Support for both file path and byte stream processing
-- Error handling and retry mechanisms
-- Optimized for insurance document formats
-- Integration with AI extraction pipeline
-"""
-
 from unstract.llmwhisperer import LLMWhispererClientV2
 from unstract.llmwhisperer.client_v2 import LLMWhispererClientException
 from typing import Optional
 import logging
 import os
 import io
+import tempfile
 from config import LLMWHISPERER_API_KEY
 
 logger = logging.getLogger(__name__)
 
-
 class PDFProcessor:
-    """
-    PDF document processor using LLMWhisperer for text extraction.
-
-    This class provides methods to extract text content from PDF documents,
-    specifically optimized for insurance policy documents. It handles both
-    native text PDFs and scanned documents through OCR.
-
-    Attributes:
-        client: LLMWhisperer client instance for PDF processing
-
-    Note:
-        Requires LLMWHISPERER_API_KEY environment variable for service authentication.
-    """
-
     def __init__(self):
-        """
-        Initialize the PDF processor with LLMWhisperer client.
-
-        Sets up the client connection and handles authentication errors gracefully.
-        If initialization fails, the processor will be in a non-functional state.
-        """
+        """Initialize the LLMWhisperer client"""
         try:
             if LLMWHISPERER_API_KEY:
                 self.client = LLMWhispererClientV2(api_key=LLMWHISPERER_API_KEY)
-                logger.info("PDF processor initialized successfully")
             else:
                 logger.error("LLMWHISPERER_API_KEY not found in environment variables")
                 self.client = None
         except Exception as e:
             logger.error(f"Failed to initialize LLMWhisperer client: {str(e)}")
             self.client = None
-
+    
     @staticmethod
     def get_client() -> Optional[LLMWhispererClientV2]:
-        """
-        Get a new LLMWhisperer client instance.
-
-        Factory method to create LLMWhisperer clients for PDF processing.
-        Used for stateless operations and concurrent processing.
-
-        Returns:
-            Optional[LLMWhispererClientV2]: Configured client or None if initialization fails
-
-        Note:
-            Creates a new client instance each time to avoid connection issues
-            in concurrent environments.
-        """
+        """Get a LLMWhisperer client instance"""
         try:
             if LLMWHISPERER_API_KEY:
                 return LLMWhispererClientV2(api_key=LLMWHISPERER_API_KEY)
@@ -82,73 +34,51 @@ class PDFProcessor:
         except Exception as e:
             logger.error(f"Failed to create LLMWhisperer client: {str(e)}")
             return None
-
+    
     @staticmethod
     def extract_text_from_pdf(pdf_path: str) -> Optional[str]:
-        """
-        Extract text content from PDF file using LLMWhisperer.
-
-        This method processes PDF files stored on disk and extracts all text content,
-        handling both native text PDFs and scanned documents through OCR.
-
-        Args:
-            pdf_path: File system path to the PDF document
-
-        Returns:
-            Optional[str]: Extracted text content or None if extraction fails
-
-        Raises:
-            LLMWhispererClientException: If the LLMWhisperer service encounters errors
-
-        Note:
-            Uses synchronous mode to ensure complete processing before returning.
-            Large documents may take longer to process due to OCR requirements.
-        """
+        """Extract text from PDF using LLMWhisperer"""
         try:
             if not os.path.exists(pdf_path):
                 logger.error(f"PDF file not found: {pdf_path}")
                 return None
-
+            
             client = PDFProcessor.get_client()
             if not client:
                 logger.error("LLMWhisperer client not available")
                 return None
-
+                
             # Use sync mode to wait for completion
             result = client.whisper(
                 file_path=pdf_path,
                 wait_for_completion=True,
                 wait_timeout=200,
                 mode="low_cost",
-                output_mode="text",
+                output_mode="text"
             )
-
+            
             if result.get("status_code") == 200 and result.get("extraction"):
                 extracted_text = result["extraction"].get("result_text", "")
                 return extracted_text.strip() if extracted_text else None
             else:
                 logger.error(f"LLMWhisperer extraction failed: {result}")
                 return None
-
+                
         except LLMWhispererClientException as e:
             # Extract error details from the exception
             error_info = str(e)
-            if hasattr(e, "args") and len(e.args) > 0 and isinstance(e.args[0], dict):
+            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], dict):
                 error_dict = e.args[0]
-                message = error_dict.get("message", "Unknown error")
-                status_code = error_dict.get("status_code", "Unknown")
-                logger.error(
-                    f"LLMWhisperer error extracting text from PDF: {message}, Status Code: {status_code}"
-                )
+                message = error_dict.get('message', 'Unknown error')
+                status_code = error_dict.get('status_code', 'Unknown')
+                logger.error(f"LLMWhisperer error extracting text from PDF: {message}, Status Code: {status_code}")
             else:
-                logger.error(
-                    f"LLMWhisperer error extracting text from PDF: {error_info}"
-                )
+                logger.error(f"LLMWhisperer error extracting text from PDF: {error_info}")
             return None
         except Exception as e:
             logger.error(f"Error extracting text from PDF: {str(e)}")
             return None
-
+    
     @staticmethod
     def extract_text_from_bytes(pdf_bytes: bytes) -> Optional[str]:
         """Extract text from PDF bytes using LLMWhisperer"""
@@ -157,89 +87,85 @@ class PDFProcessor:
             if not client:
                 logger.error("LLMWhisperer client not available")
                 return None
-
+            
             # Create a BytesIO stream from the bytes
             pdf_stream = io.BytesIO(pdf_bytes)
-
+            
             # Use sync mode to wait for completion
             result = client.whisper(
                 stream=pdf_stream,
                 wait_for_completion=True,
                 wait_timeout=200,
                 mode="high_quality",
-                output_mode="text",
+                output_mode="text"
             )
-
+            
             if result.get("status_code") == 200 and result.get("extraction"):
                 extracted_text = result["extraction"].get("result_text", "")
                 return extracted_text.strip() if extracted_text else None
             else:
                 logger.error(f"LLMWhisperer extraction failed: {result}")
                 return None
-
+            
         except LLMWhispererClientException as e:
             # Extract error details from the exception
             error_info = str(e)
-            if hasattr(e, "args") and len(e.args) > 0 and isinstance(e.args[0], dict):
+            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], dict):
                 error_dict = e.args[0]
-                message = error_dict.get("message", "Unknown error")
-                status_code = error_dict.get("status_code", "Unknown")
-                logger.error(
-                    f"LLMWhisperer error extracting text from PDF bytes: {message}, Status Code: {status_code}"
-                )
+                message = error_dict.get('message', 'Unknown error')
+                status_code = error_dict.get('status_code', 'Unknown')
+                logger.error(f"LLMWhisperer error extracting text from PDF bytes: {message}, Status Code: {status_code}")
             else:
-                logger.error(
-                    f"LLMWhisperer error extracting text from PDF bytes: {error_info}"
-                )
+                logger.error(f"LLMWhisperer error extracting text from PDF bytes: {error_info}")
             return None
         except Exception as e:
             logger.error(f"Error extracting text from PDF bytes: {str(e)}")
             return None
-
+    
     @staticmethod
     def validate_pdf_file(file_path: str) -> bool:
         """Validate if the file is a valid PDF by attempting to process it"""
         try:
             if not os.path.exists(file_path):
                 return False
-
+            
             # Check file extension first
-            if not file_path.lower().endswith(".pdf"):
+            if not file_path.lower().endswith('.pdf'):
                 return False
-
+            
             # Try to read the file and check if it starts with PDF header
-            with open(file_path, "rb") as file:
+            with open(file_path, 'rb') as file:
                 header = file.read(4)
-                if header != b"%PDF":
+                if header != b'%PDF':
                     return False
-
+            
             # Optionally, you could try a quick LLMWhisperer validation
             # but this might use API quota, so we'll stick to basic validation
             return True
-
+            
         except Exception as e:
             logger.error(f"PDF validation failed: {str(e)}")
             return False
-
+    
     @staticmethod
     def validate_pdf_bytes(pdf_bytes: bytes) -> bool:
         """Validate if the bytes represent a valid PDF"""
         try:
             if not pdf_bytes or len(pdf_bytes) < 4:
                 return False
-
+            
             # Check PDF header
-            if pdf_bytes[:4] != b"%PDF":
+            if pdf_bytes[:4] != b'%PDF':
                 return False
-
+            
             # Optionally, you could try a quick LLMWhisperer validation
             # but this might use API quota, so we'll stick to basic validation
             return True
-
+            
         except Exception as e:
             logger.error(f"PDF bytes validation failed: {str(e)}")
             return False
-
+    
     @staticmethod
     def extract_text_from_pdf_async(pdf_path: str) -> Optional[dict]:
         """
@@ -250,44 +176,44 @@ class PDFProcessor:
             if not os.path.exists(pdf_path):
                 logger.error(f"PDF file not found: {pdf_path}")
                 return None
-
+            
             client = PDFProcessor.get_client()
             if not client:
                 logger.error("LLMWhisperer client not available")
                 return None
-
+                
             # Use async mode (default)
             result = client.whisper(
-                file_path=pdf_path, mode="high_quality", output_mode="text"
+                file_path=pdf_path,
+                mode="high_quality",
+                output_mode="text"
             )
-
+            
             if result.get("status_code") == 202:
                 return {
                     "whisper_hash": result.get("whisper_hash"),
                     "status": result.get("status"),
-                    "message": result.get("message"),
+                    "message": result.get("message")
                 }
             else:
                 logger.error(f"LLMWhisperer async extraction failed: {result}")
                 return None
-
+                
         except LLMWhispererClientException as e:
             # Extract error details from the exception
             error_info = str(e)
-            if hasattr(e, "args") and len(e.args) > 0 and isinstance(e.args[0], dict):
+            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], dict):
                 error_dict = e.args[0]
-                message = error_dict.get("message", "Unknown error")
-                status_code = error_dict.get("status_code", "Unknown")
-                logger.error(
-                    f"LLMWhisperer error in async extraction: {message}, Status Code: {status_code}"
-                )
+                message = error_dict.get('message', 'Unknown error')
+                status_code = error_dict.get('status_code', 'Unknown')
+                logger.error(f"LLMWhisperer error in async extraction: {message}, Status Code: {status_code}")
             else:
                 logger.error(f"LLMWhisperer error in async extraction: {error_info}")
             return None
         except Exception as e:
             logger.error(f"Error in async PDF extraction: {str(e)}")
             return None
-
+    
     @staticmethod
     def get_whisper_status(whisper_hash: str) -> Optional[dict]:
         """Get the status of a whisper operation"""
@@ -296,26 +222,24 @@ class PDFProcessor:
             if not client:
                 logger.error("LLMWhisperer client not available")
                 return None
-
+            
             return client.whisper_status(whisper_hash)
-
+            
         except LLMWhispererClientException as e:
             # Extract error details from the exception
             error_info = str(e)
-            if hasattr(e, "args") and len(e.args) > 0 and isinstance(e.args[0], dict):
+            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], dict):
                 error_dict = e.args[0]
-                message = error_dict.get("message", "Unknown error")
-                status_code = error_dict.get("status_code", "Unknown")
-                logger.error(
-                    f"LLMWhisperer error getting status: {message}, Status Code: {status_code}"
-                )
+                message = error_dict.get('message', 'Unknown error')
+                status_code = error_dict.get('status_code', 'Unknown')
+                logger.error(f"LLMWhisperer error getting status: {message}, Status Code: {status_code}")
             else:
                 logger.error(f"LLMWhisperer error getting status: {error_info}")
             return None
         except Exception as e:
             logger.error(f"Error getting whisper status: {str(e)}")
             return None
-
+    
     @staticmethod
     def retrieve_whisper_result(whisper_hash: str) -> Optional[str]:
         """Retrieve the result of a whisper operation"""
@@ -324,26 +248,24 @@ class PDFProcessor:
             if not client:
                 logger.error("LLMWhisperer client not available")
                 return None
-
+            
             result = client.whisper_retrieve(whisper_hash)
-
+            
             if result.get("status_code") == 200 and result.get("extraction"):
                 extracted_text = result["extraction"].get("result_text", "")
                 return extracted_text.strip() if extracted_text else None
             else:
                 logger.error(f"LLMWhisperer result retrieval failed: {result}")
                 return None
-
+            
         except LLMWhispererClientException as e:
             # Extract error details from the exception
             error_info = str(e)
-            if hasattr(e, "args") and len(e.args) > 0 and isinstance(e.args[0], dict):
+            if hasattr(e, 'args') and len(e.args) > 0 and isinstance(e.args[0], dict):
                 error_dict = e.args[0]
-                message = error_dict.get("message", "Unknown error")
-                status_code = error_dict.get("status_code", "Unknown")
-                logger.error(
-                    f"LLMWhisperer error retrieving result: {message}, Status Code: {status_code}"
-                )
+                message = error_dict.get('message', 'Unknown error')
+                status_code = error_dict.get('status_code', 'Unknown')
+                logger.error(f"LLMWhisperer error retrieving result: {message}, Status Code: {status_code}")
             else:
                 logger.error(f"LLMWhisperer error retrieving result: {error_info}")
             return None

@@ -4,17 +4,13 @@ from datetime import datetime, date
 from uuid import UUID
 from enum import Enum
 
-
 class SortOrder(str, Enum):
     """Sort order options"""
-
     asc = "asc"
     desc = "desc"
 
-
 class SortableFields(str, Enum):
     """Fields that can be used for sorting"""
-
     reporting_month = "reporting_month"
     child_id = "child_id"
     agent_code = "agent_code"
@@ -37,29 +33,19 @@ class SortableFields(str, Enum):
     policy_start_date = "policy_start_date"
     policy_end_date = "policy_end_date"
 
-
 class MasterSheetRecord(BaseModel):
     """Schema for a single record from Master sheet with updated headers"""
-
     # Updated fields to match new master sheet headers
     reporting_month: Optional[str] = Field(None, alias="Reporting Month (mmm'yy)")
-    child_id: Optional[str] = Field(
-        None, alias="Child ID/ User ID [Provided by Insure Zeal]"
-    )
+    child_id: Optional[str] = Field(None, alias="Child ID/ User ID [Provided by Insure Zeal]")
     insurer_broker_code: Optional[str] = Field(None, alias="Insurer /broker code")
     policy_start_date: Optional[str] = Field(None, alias="Policy Start Date")
     policy_end_date: Optional[str] = Field(None, alias="Policy End Date")
-    booking_date: Optional[str] = Field(
-        None, alias="Booking Date(Click to select Date)"
-    )
+    booking_date: Optional[str] = Field(None, alias="Booking Date(Click to select Date)")
     broker_name: Optional[str] = Field(None, alias="Broker Name")
     insurer_name: Optional[str] = Field(None, alias="Insurer name")
-    major_categorisation: Optional[str] = Field(
-        None, alias="Major Categorisation( Motor/Life/ Health)"
-    )
-    product_insurer_report: Optional[str] = Field(
-        None, alias="Product (Insurer Report)"
-    )
+    major_categorisation: Optional[str] = Field(None, alias="Major Categorisation( Motor/Life/ Health)")
+    product_insurer_report: Optional[str] = Field(None, alias="Product (Insurer Report)")
     product_type: Optional[str] = Field(None, alias="Product Type")
     plan_type: Optional[str] = Field(None, alias="Plan type (Comp/STP/SAOD)")
     gross_premium: Optional[str] = Field(None, alias="Gross premium")
@@ -68,9 +54,7 @@ class MasterSheetRecord(BaseModel):
     od_premium: Optional[str] = Field(None, alias="OD Preimium")
     tp_premium: Optional[str] = Field(None, alias="TP Premium")
     policy_number: Optional[str] = Field(None, alias="Policy number")
-    formatted_policy_number: Optional[str] = Field(
-        None, alias="Formatted Policy number"
-    )
+    formatted_policy_number: Optional[str] = Field(None, alias="Formatted Policy number")
     registration_number: Optional[str] = Field(None, alias="Registration.no")
     make_model: Optional[str] = Field(None, alias="Make_Model")
     model: Optional[str] = Field(None, alias="Model")
@@ -93,18 +77,12 @@ class MasterSheetRecord(BaseModel):
     incoming_grid_percent: Optional[str] = Field(None, alias="Incoming Grid %")
     receivable_from_broker: Optional[str] = Field(None, alias="Receivable from Broker")
     extra_grid: Optional[str] = Field(None, alias="Extra Grid")
-    extra_amount_receivable_from_broker: Optional[str] = Field(
-        None, alias="Extra Amount Receivable from Broker"
-    )
-    total_receivable_from_broker: Optional[str] = Field(
-        None, alias="Total Receivable from Broker"
-    )
+    extra_amount_receivable_from_broker: Optional[str] = Field(None, alias="Extra Amount Receivable from Broker")
+    total_receivable_from_broker: Optional[str] = Field(None, alias="Total Receivable from Broker")
     claimed_by: Optional[str] = Field(None, alias="Claimed By")
     payment_by: Optional[str] = Field(None, alias="Payment by")
     payment_mode: Optional[str] = Field(None, alias="Payment Mode")
-    cut_pay_amount_received: Optional[str] = Field(
-        None, alias="Cut Pay Amount Received From Agent"
-    )
+    cut_pay_amount_received: Optional[str] = Field(None, alias="Cut Pay Amount Received From Agent")
     already_given_to_agent: Optional[str] = Field(None, alias="Already Given to agent")
     actual_agent_po_percent: Optional[str] = Field(None, alias="Actual Agent_PO%")
     agent_po_amt: Optional[str] = Field(None, alias="Agent_PO_AMT")
@@ -114,9 +92,7 @@ class MasterSheetRecord(BaseModel):
     payment_by_office: Optional[str] = Field(None, alias="Payment By Office")
     po_paid_to_agent: Optional[str] = Field(None, alias="PO Paid To Agent")
     running_bal: Optional[str] = Field(None, alias="Running Bal")
-    total_receivable_with_gst: Optional[str] = Field(
-        None, alias="Total Receivable from Broker Include 18% GST"
-    )
+    total_receivable_with_gst: Optional[str] = Field(None, alias="Total Receivable from Broker Include 18% GST")
     iz_total_po_percent: Optional[str] = Field(None, alias="IZ Total PO%")
     broker_po_percent: Optional[str] = Field(None, alias="As per Broker PO%")
     broker_po_amt: Optional[str] = Field(None, alias="As per Broker PO AMT")
@@ -131,58 +107,40 @@ class MasterSheetRecord(BaseModel):
     remarks: Optional[str] = Field(None, alias="Remarks")
     match: Optional[str] = Field(None, alias="Match")
     agent_code: Optional[str] = Field(None, alias="Agent Code")
-
+    
     class Config:
         populate_by_name = True
         allow_population_by_field_name = True
-
-
+    
 class MasterSheetResponse(BaseModel):
     """Response for paginated master sheet data"""
-
     records: List[MasterSheetRecord]
     total_count: int
     page: int
     page_size: int
     total_pages: int
 
-
 class BulkUpdateField(BaseModel):
     """Schema for a single field update"""
-
-    record_id: str = Field(
-        ...,
-        description="ID of the record to update. For quarterly sheets, use the policy number. For master sheet, use the actual record ID.",
-    )
+    record_id: str = Field(..., description="ID of the record to update. For quarterly sheets, use the policy number. For master sheet, use the actual record ID.")
     field_name: str = Field(..., description="Name of the field to update")
     new_value: Optional[str] = Field(None, description="New value for the field")
 
-
 class BulkUpdateRequest(BaseModel):
     """Schema for bulk update request"""
-
-    updates: List[BulkUpdateField] = Field(
-        ..., min_items=1, description="List of field updates to apply"
-    )
-
+    updates: List[BulkUpdateField] = Field(..., min_items=1, description="List of field updates to apply")
 
 class BulkUpdateResult(BaseModel):
     """Result of a single update operation"""
-
-    record_id: str = Field(
-        ...,
-        description="ID of the record that was updated. For quarterly sheets, this is the policy number.",
-    )
+    record_id: str = Field(..., description="ID of the record that was updated. For quarterly sheets, this is the policy number.")
     field_name: str
     old_value: Optional[str]
     new_value: Optional[str]
     success: bool
     error_message: Optional[str] = None
 
-
 class BulkUpdateResponse(BaseModel):
     """Response for bulk update operation"""
-
     message: str
     total_updates: int
     successful_updates: int
@@ -190,48 +148,26 @@ class BulkUpdateResponse(BaseModel):
     results: List[BulkUpdateResult]
     processing_time_seconds: float
 
-
 class MasterSheetStatsResponse(BaseModel):
     """Complete data from Summary sheet and Broker sheet"""
-
     # Summary sheet data
     sheet_name: str = Field(..., description="Name of the summary sheet (Summary)")
-    total_rows: int = Field(
-        ..., description="Total number of data rows in Summary sheet"
-    )
-    total_columns: int = Field(
-        ..., description="Total number of columns in Summary sheet"
-    )
+    total_rows: int = Field(..., description="Total number of data rows in Summary sheet")
+    total_columns: int = Field(..., description="Total number of columns in Summary sheet")
     headers: List[str] = Field(..., description="All column headers from Summary sheet")
-    data: List[Dict[str, Any]] = Field(
-        ..., description="All data from Summary sheet as list of dictionaries"
-    )
+    data: List[Dict[str, Any]] = Field(..., description="All data from Summary sheet as list of dictionaries")
     last_updated: str = Field(..., description="Last update timestamp")
-
+    
     # Broker sheet data
-    broker_sheet_name: Optional[str] = Field(
-        None, description="Name of the broker sheet (Broker Sheet)"
-    )
-    broker_total_rows: Optional[int] = Field(
-        None, description="Total number of data rows in Broker sheet"
-    )
-    broker_total_columns: Optional[int] = Field(
-        None, description="Total number of columns in Broker sheet"
-    )
-    broker_headers: Optional[List[str]] = Field(
-        None, description="All column headers from Broker sheet"
-    )
-    broker_data: Optional[List[Dict[str, Any]]] = Field(
-        None, description="All data from Broker sheet as list of dictionaries"
-    )
-    broker_last_updated: Optional[str] = Field(
-        None, description="Broker sheet last update timestamp"
-    )
-
+    broker_sheet_name: Optional[str] = Field(None, description="Name of the broker sheet (Broker Sheet)")
+    broker_total_rows: Optional[int] = Field(None, description="Total number of data rows in Broker sheet")
+    broker_total_columns: Optional[int] = Field(None, description="Total number of columns in Broker sheet")
+    broker_headers: Optional[List[str]] = Field(None, description="All column headers from Broker sheet")
+    broker_data: Optional[List[Dict[str, Any]]] = Field(None, description="All data from Broker sheet as list of dictionaries")
+    broker_last_updated: Optional[str] = Field(None, description="Broker sheet last update timestamp")
 
 class AgentMISRecord(BaseModel):
     """Filtered quarterly sheet record for agent MIS with only specific required fields"""
-
     # Core fields as requested
     booking_date: Optional[str] = None
     policy_start_date: Optional[str] = None
@@ -245,57 +181,39 @@ class AgentMISRecord(BaseModel):
     agent_total_po_amount: Optional[str] = None
     actual_agent_po_percent: Optional[str] = None
 
-
 class AgentMISStats(BaseModel):
     """Statistics for agent MIS data"""
-
     number_of_policies: int
     running_balance: float
     total_net_premium: float
     commissionable_premium: float
 
-
 class AgentMISResponse(BaseModel):
     """Response for agent MIS data with filtered fields and statistics"""
-
     records: List[AgentMISRecord]
     stats: AgentMISStats
     total_count: int
     page: int
     page_size: int
     total_pages: int
-    oldest_quarter_sheet: Optional[str] = Field(
-        None, description="Name of the oldest quarter sheet available"
-    )
-
+    oldest_quarter_sheet: Optional[str] = Field(None, description="Name of the oldest quarter sheet available")
 
 class QuarterlySheetUpdateRecord(BaseModel):
     """Schema for updating a single quarterly sheet record with direct field mapping"""
-
     # Required field for record identification
-    policy_number: str = Field(
-        ..., description="Policy number to identify the record to update"
-    )
-
+    policy_number: str = Field(..., description="Policy number to identify the record to update")
+    
     # All quarterly sheet fields as optional for updates
     reporting_month: Optional[str] = Field(None, alias="Reporting Month (mmm'yy)")
-    child_id: Optional[str] = Field(
-        None, alias="Child ID/ User ID [Provided by Insure Zeal]"
-    )
+    child_id: Optional[str] = Field(None, alias="Child ID/ User ID [Provided by Insure Zeal]")
     insurer_broker_code: Optional[str] = Field(None, alias="Insurer /broker code")
     policy_start_date: Optional[str] = Field(None, alias="Policy Start Date")
     policy_end_date: Optional[str] = Field(None, alias="Policy End Date")
-    booking_date: Optional[str] = Field(
-        None, alias="Booking Date(Click to select Date)"
-    )
+    booking_date: Optional[str] = Field(None, alias="Booking Date(Click to select Date)")
     broker_name: Optional[str] = Field(None, alias="Broker Name")
     insurer_name: Optional[str] = Field(None, alias="Insurer name")
-    major_categorisation: Optional[str] = Field(
-        None, alias="Major Categorisation( Motor/Life/ Health)"
-    )
-    product_insurer_report: Optional[str] = Field(
-        None, alias="Product (Insurer Report)"
-    )
+    major_categorisation: Optional[str] = Field(None, alias="Major Categorisation( Motor/Life/ Health)")
+    product_insurer_report: Optional[str] = Field(None, alias="Product (Insurer Report)")
     product_type: Optional[str] = Field(None, alias="Product Type")
     plan_type: Optional[str] = Field(None, alias="Plan type (Comp/STP/SAOD)")
     gross_premium: Optional[str] = Field(None, alias="Gross premium")
@@ -304,9 +222,7 @@ class QuarterlySheetUpdateRecord(BaseModel):
     od_premium: Optional[str] = Field(None, alias="OD Preimium")
     tp_premium: Optional[str] = Field(None, alias="TP Premium")
     # policy_number is already defined above as the identifier
-    formatted_policy_number: Optional[str] = Field(
-        None, alias="Formatted Policy number"
-    )
+    formatted_policy_number: Optional[str] = Field(None, alias="Formatted Policy number")
     registration_no: Optional[str] = Field(None, alias="Registration.no")
     make_model: Optional[str] = Field(None, alias="Make_Model")
     model: Optional[str] = Field(None, alias="Model")
@@ -329,18 +245,12 @@ class QuarterlySheetUpdateRecord(BaseModel):
     incoming_grid_percent: Optional[str] = Field(None, alias="Incoming Grid %")
     receivable_from_broker: Optional[str] = Field(None, alias="Receivable from Broker")
     extra_grid: Optional[str] = Field(None, alias="Extra Grid")
-    extra_amount_receivable_from_broker: Optional[str] = Field(
-        None, alias="Extra Amount Receivable from Broker"
-    )
-    total_receivable_from_broker: Optional[str] = Field(
-        None, alias="Total Receivable from Broker"
-    )
+    extra_amount_receivable_from_broker: Optional[str] = Field(None, alias="Extra Amount Receivable from Broker")
+    total_receivable_from_broker: Optional[str] = Field(None, alias="Total Receivable from Broker")
     claimed_by: Optional[str] = Field(None, alias="Claimed By")
     payment_by: Optional[str] = Field(None, alias="Payment by")
     payment_mode: Optional[str] = Field(None, alias="Payment Mode")
-    cut_pay_amount_received: Optional[str] = Field(
-        None, alias="Cut Pay Amount Received From Agent"
-    )
+    cut_pay_amount_received: Optional[str] = Field(None, alias="Cut Pay Amount Received From Agent")
     already_given_to_agent: Optional[str] = Field(None, alias="Already Given to agent")
     actual_agent_po_percent: Optional[str] = Field(None, alias="Actual Agent_PO%")
     agent_po_amt: Optional[str] = Field(None, alias="Agent_PO_AMT")
@@ -350,9 +260,7 @@ class QuarterlySheetUpdateRecord(BaseModel):
     payment_by_office: Optional[str] = Field(None, alias="Payment By Office")
     po_paid_to_agent: Optional[str] = Field(None, alias="PO Paid To Agent")
     running_bal: Optional[str] = Field(None, alias="Running Bal")
-    total_receivable_with_gst: Optional[str] = Field(
-        None, alias="Total Receivable from Broker Include 18% GST"
-    )
+    total_receivable_with_gst: Optional[str] = Field(None, alias="Total Receivable from Broker Include 18% GST")
     iz_total_po_percent: Optional[str] = Field(None, alias="IZ Total PO%")
     broker_po_percent: Optional[str] = Field(None, alias="As per Broker PO%")
     broker_po_amt: Optional[str] = Field(None, alias="As per Broker PO AMT")
@@ -367,36 +275,29 @@ class QuarterlySheetUpdateRecord(BaseModel):
     remarks: Optional[str] = Field(None, alias="Remarks")
     match: Optional[str] = Field(None, alias="Match")
     agent_code: Optional[str] = Field(None, alias="Agent Code")
-
+    
     class Config:
         populate_by_name = True
         allow_population_by_field_name = True
 
-
 class QuarterlySheetUpdateRequest(BaseModel):
     """Schema for quarterly sheet update request with direct field mapping"""
-
-    records: List[QuarterlySheetUpdateRecord] = Field(
-        ..., min_items=1, description="List of records to update"
-    )
-
+    records: List[QuarterlySheetUpdateRecord] = Field(..., min_items=1, description="List of records to update")
 
 class QuarterlySheetUpdateResponse(BaseModel):
     """Response for quarterly sheet update operation"""
-
     message: str
     total_records: int
     successful_updates: int
     failed_updates: int
     processing_time_seconds: float
 
-
 class PolicyDocumentsResponse(BaseModel):
     """Response schema for policy documents retrieval"""
-
     policy_number: str
     policy_pdf_url: Optional[str] = None
     additional_documents: Optional[str] = None
     source: str = Field(..., description="Source table: 'policy' or 'cutpay'")
     found_in_policy_table: bool
     found_in_cutpay_table: bool
+
