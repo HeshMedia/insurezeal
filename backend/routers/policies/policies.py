@@ -99,6 +99,7 @@ async def extract_pdf_data_endpoint(
 async def upload_policy_document(
     policy_id: str = Form(..., description="Policy ID to associate with the uploaded PDF"),
     document_type: str = Form("policy_pdf", description="Type of document: 'policy_pdf' or 'additional'"),
+    type: str = Form(..., description="Document type - any string provided by frontend (required)"),
     filename: str = Form(..., description="Filename for the document to upload"),
     content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
@@ -112,11 +113,13 @@ async def upload_policy_document(
     
     - **policy_id**: Policy ID to associate the file with
     - **document_type**: Type of document ('policy_pdf' for main policy PDF, 'additional' for additional documents)
+    - **type**: Document type - accepts any string from frontend (required)
     - **filename**: Filename for the document to upload
     - **content_type**: MIME type of the file (optional, defaults to application/pdf)
     
     Always returns a presigned URL for direct upload to S3. For additional documents,
-    new documents are appended to existing ones without overwriting.
+    the 'type' parameter will be used as the key in the additional_documents JSON field.
+    If the same type is uploaded again, it will update the existing entry.
     """
     try:
         # Validate document type
@@ -156,33 +159,48 @@ async def upload_policy_document(
             # For main policy PDF, replace existing
             update_data["policy_pdf_url"] = file_path
         else:  # additional documents
-            # For additional documents, append to existing list using JSON format
+            # For additional documents, use type as key in JSON object
             current_additional_docs = existing_policy.additional_documents or ""
-            existing_docs = []
+            existing_docs = {}
             
-            # Parse existing documents (handle both JSON array and comma-separated legacy format)
+            # Parse existing documents (handle both JSON object and legacy formats)
             if current_additional_docs:
                 try:
-                    # Try to parse as JSON array first
-                    existing_docs = json.loads(current_additional_docs)
-                    if not isinstance(existing_docs, list):
-                        existing_docs = []
+                    # Try to parse as JSON first
+                    parsed_docs = json.loads(current_additional_docs)
+                    if isinstance(parsed_docs, dict):
+                        existing_docs = parsed_docs
+                    elif isinstance(parsed_docs, list):
+                        # Convert legacy list format to dict (use filename as key)
+                        for doc in parsed_docs:
+                            if isinstance(doc, dict) and doc.get('filename'):
+                                existing_docs[doc.get('filename', 'unknown')] = doc
+                            elif isinstance(doc, str):
+                                existing_docs[f'legacy_{len(existing_docs)}'] = doc
                 except (json.JSONDecodeError, TypeError):
-                    # Fallback to comma-separated format
-                    existing_docs = [doc.strip() for doc in current_additional_docs.split(',') if doc.strip()]
+                    # Fallback for comma-separated format - convert to dict
+                    doc_list = [doc.strip() for doc in current_additional_docs.split(',') if doc.strip()]
+                    for i, doc in enumerate(doc_list):
+                        existing_docs[f'legacy_{i}'] = doc
             
-            # Add new document if not already present
+            # Add/update document with the provided type as key
+            type_clean = type.strip() if type else ""
+            if not type_clean:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="'type' parameter is required for additional documents"
+                )
+                
             new_doc_info = {
                 "filename": filename,
                 "url": file_path,
                 "uploaded_at": datetime.now().isoformat(),
-                "uploaded_by": str(user_id)
+                "uploaded_by": str(user_id),
+                "document_type": type_clean
             }
             
-            # Check if this URL already exists
-            existing_urls = [doc.get('url') if isinstance(doc, dict) else doc for doc in existing_docs]
-            if file_path not in existing_urls:
-                existing_docs.append(new_doc_info)
+            # Update or add the document for this type (overwrites if type exists)
+            existing_docs[type_clean] = new_doc_info
             
             # Store as JSON string
             update_data["additional_documents"] = json.dumps(existing_docs)
@@ -201,7 +219,7 @@ async def upload_policy_document(
             confidence_score=None,
             pdf_file_path=file_path,
             pdf_file_name=filename,
-            message=f"Presigned URL generated for {document_type}. Upload directly to S3.",
+            message=f"Presigned URL generated for {document_type}" + (f" (type: {type})" if document_type != "policy_pdf" else "") + ". Upload directly to S3.",
             upload_url=upload_url,
         )
 

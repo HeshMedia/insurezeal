@@ -1360,9 +1360,10 @@ async def delete_cutpay_transaction_by_policy(
 
 @router.post("/upload-document", response_model=DocumentUploadResponse)
 async def upload_policy_document(
-    policy_number: str = Query(..., description="Policy number to upload document for"),
+    policy_id: str = Query(..., description="Policy ID to upload document for"),
     filename: str = Form(..., description="Document filename for upload"),
     document_type: str = Form("policy_pdf"),
+    type: str = Form(..., description="Document type - any string provided by frontend (required)"),
     content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -1371,24 +1372,23 @@ async def upload_policy_document(
     """
     Upload policy PDF or additional documents using presigned URL
     
-    Supported document types:
-    - policy_pdf: Main policy document
-    - kyc_documents: KYC documents
-    - rc_document: Registration Certificate
-    - previous_policy: Previous policy PDF
-    
     Parameters:
-    - policy_number: The policy number to upload document for
+    - policy_id: The policy ID to upload document for
     - filename: Document filename for upload
     - document_type: Type of document being uploaded
+    - type: Document type - accepts any string from frontend (required)
+    
+    For additional documents (non-policy_pdf), the 'type' parameter will be used as the key
+    in the additional_documents JSON field. If the same type is uploaded again, it will 
+    update the existing entry.
     
     Returns a presigned URL for direct upload to S3
     """
     try:
-        # Find CutPay record by policy number
+        # Find CutPay record by policy ID
         result = await db.execute(
             select(CutPay)
-            .where(CutPay.policy_number == policy_number)
+            .where(CutPay.id == policy_id)
             .order_by(desc(CutPay.id))  # Get the most recent one if multiple exist
         )
         cutpay = result.first()
@@ -1399,7 +1399,7 @@ async def upload_policy_document(
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"CutPay transaction with policy number '{policy_number}' not found"
+                detail=f"CutPay transaction with policy ID '{policy_id}' not found"
             )
         
         from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
@@ -1413,14 +1413,16 @@ async def upload_policy_document(
         document_url = build_cloudfront_url(key)
 
         # Comprehensive debugging for presigned uploads
-        logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' for policy '{policy_number}' (CutPay ID {cutpay_id})")
+        logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' with type='{type}' for policy ID '{policy_id}' (CutPay ID {cutpay_id})")
         logger.info(f"🔵 PRESIGNED: Document URL generated: {document_url}")
         logger.info(f"🔵 PRESIGNED: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
         logger.info(f"🔵 PRESIGNED: Before update - additional_documents: {cutpay.additional_documents}")
         
         # Normalize document_type to handle any whitespace/case issues
         document_type_clean = document_type.strip() if document_type else ""
+        type_clean = type.strip() if type else ""
         logger.info(f"🔵 PRESIGNED: Cleaned document_type: '{document_type_clean}'")
+        logger.info(f"🔵 PRESIGNED: Cleaned type: '{type_clean}'")
         logger.info(f"🔵 PRESIGNED: document_type_clean == 'policy_pdf': {document_type_clean == 'policy_pdf'}")
 
         if document_type_clean == "policy_pdf":
@@ -1429,19 +1431,43 @@ async def upload_policy_document(
             cutpay.policy_pdf_url = document_url
             logger.info(f"✅ PRESIGNED: policy_pdf_url updated from '{old_url}' to '{cutpay.policy_pdf_url}'")
         else:
-            logger.info(f"❌ PRESIGNED: ENTERING additional_documents branch for type: '{document_type_clean}'")
-            if not cutpay.additional_documents:
-                cutpay.additional_documents = {}
-                logger.info(f"❌ PRESIGNED: Initialized empty additional_documents dict")
+            logger.info(f"❌ PRESIGNED: ENTERING additional_documents branch using frontend-provided type: '{type_clean}'")
             
-            old_value = cutpay.additional_documents.get(document_type_clean, "None")
+            # Parse existing additional documents (handle both JSON object and legacy formats)
+            current_additional_docs = cutpay.additional_documents or {}
+            existing_docs = {}
             
-            # Proper JSON field update - Create new dict to trigger SQLAlchemy change detection
-            updated_additional_docs = dict(cutpay.additional_documents) if cutpay.additional_documents else {}
-            updated_additional_docs[document_type_clean] = document_url
-            cutpay.additional_documents = updated_additional_docs
+            if current_additional_docs:
+                if isinstance(current_additional_docs, dict):
+                    existing_docs = current_additional_docs.copy()
+                else:
+                    # Handle legacy formats if needed
+                    logger.info(f"Converting legacy additional_documents format: {type(current_additional_docs)}")
+                    existing_docs = {}
             
-            logger.info(f"❌ PRESIGNED: additional_documents['{document_type_clean}'] updated from '{old_value}' to '{document_url}'")
+            # Add/update document with the provided type as key
+            if not type_clean:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="'type' parameter is required for additional documents"
+                )
+            
+            # Create new document info
+            new_doc_info = {
+                "filename": filename,
+                "url": document_url,
+                "uploaded_at": datetime.now().isoformat(),
+                "uploaded_by": str(current_user["user_id"]),
+                "document_type": type_clean
+            }
+            
+            old_value = existing_docs.get(type_clean, "None")
+            
+            # Update or add the document for this type (overwrites if type exists)
+            existing_docs[type_clean] = new_doc_info
+            cutpay.additional_documents = existing_docs
+            
+            logger.info(f"❌ PRESIGNED: additional_documents['{type_clean}'] updated from '{old_value}' to new document info")
             logger.info(f"❌ PRESIGNED: New additional_documents dict: {cutpay.additional_documents}")
         
         # Mark the field as modified to ensure SQLAlchemy detects the change
@@ -1453,18 +1479,18 @@ async def upload_policy_document(
         
         logger.info(f"🔵 PRESIGNED: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
         logger.info(f"🔵 PRESIGNED: After commit/refresh - additional_documents: {cutpay.additional_documents}")
-        logger.info(f"Generated presigned URL for policy '{policy_number}' (CutPay ID {cutpay_id}), key: {key}")
+        logger.info(f"Generated presigned URL for policy ID '{policy_id}' (CutPay ID {cutpay_id}), key: {key}")
 
         return DocumentUploadResponse(
             document_url=document_url, 
-            document_type=document_type, 
+            document_type=type_clean if document_type_clean != "policy_pdf" else document_type_clean,  # Use type for additional docs
             upload_status="presigned", 
             message="Presigned URL generated; upload directly to S3", 
             upload_url=upload_url
         )
         
     except Exception as e:
-        logger.error(f"Failed to upload document for policy '{policy_number}': {str(e)}")
+        logger.error(f"Failed to upload document for policy ID '{policy_id}': {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Document upload failed: {str(e)}"

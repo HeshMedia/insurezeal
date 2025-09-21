@@ -11,8 +11,7 @@ from .schemas import (
     ProfileImageUpload,
     DocumentUpload,
     DocumentUploadResponse,
-    DocumentListResponse,
-    DocumentTypeEnum
+    DocumentListResponse
 )
 from .helpers import user_helpers
 from utils.model_utils import model_data_from_orm
@@ -253,7 +252,7 @@ async def delete_profile_image(
 
 @router.post("/documents/upload", response_model=DocumentUploadResponse)
 async def upload_document(
-    document_type: DocumentTypeEnum = Form(...),
+    document_type: str = Form(..., description="Document type - any string provided by frontend (required)"),
     filename: str = Form(..., description="Document filename for upload"),
     content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
@@ -267,7 +266,12 @@ async def upload_document(
     - JPEG (.jpg, .jpeg)
     - PNG (.png)
     
+    - **document_type**: Document type - accepts any string from frontend (required)
+    - **filename**: Document filename for upload
+    - **content_type**: MIME type of the file (optional)
+    
     The filename will be used both for the S3 key and as the document name in the database.
+    If the same document type is uploaded again, it will update the existing entry.
     Returns a presigned URL for direct upload to S3.
     """
     try:
@@ -293,36 +297,84 @@ async def upload_document(
                 detail=f"File type {file_ext} not allowed. Allowed: {', '.join(allowed_extensions)}"
             )
         
+        # Validate document_type
+        document_type_clean = document_type.strip() if document_type else ""
+        if not document_type_clean:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="'document_type' parameter is required"
+            )
+        
         # Generate S3 key and presigned URL
         key = build_key(prefix=f"documents/{profile.user_id}", filename=filename)
         upload_url = generate_presigned_put_url(key=key, content_type=content_type or guess_content_type(filename, "application/pdf"))
         document_url = build_cloudfront_url(key)
 
-        # Save document record immediately
-        logger.info(f"🔵 PRESIGNED: Creating document record for user {profile.user_id}")
-        logger.info(f"🔵 PRESIGNED: Document URL: {document_url}")
-        
-        document_record = UserDocument(
-            user_id=current_user["user_id"],
-            document_type=document_type.value,
-            document_name=filename,
-            document_url=document_url,
-            file_size=0,  # Will be updated when file is actually uploaded
-            upload_date=datetime.utcnow()
+        # Check if document with same type already exists
+        result = await db.execute(
+            select(UserDocument).where(
+                and_(
+                    UserDocument.user_id == current_user["user_id"],
+                    UserDocument.document_type == document_type_clean
+                )
+            )
         )
+        existing_document = result.scalar_one_or_none()
         
-        db.add(document_record)
-        await db.commit()
-        await db.refresh(document_record)
-        
-        logger.info(f"🔵 PRESIGNED: Document record created with ID: {document_record.id}")
-        
-        return DocumentUploadResponse.model_validate({
-            **{column.name: getattr(document_record, column.name) for column in document_record.__table__.columns},
-            "document_id": str(document_record.id),
-            "message": "Presigned URL generated; upload directly to S3",
-            "upload_url": upload_url
-        })
+        if existing_document:
+            # Update existing document
+            logger.info(f"🔵 PRESIGNED: Updating existing document record for type '{document_type_clean}'")
+            
+            # Delete old file if it exists
+            if existing_document.document_url:
+                try:
+                    await user_helpers.delete_document_from_storage(existing_document.document_url)
+                except Exception as e:
+                    logger.warning(f"Could not delete old document: {str(e)}")
+            
+            # Update existing record
+            existing_document.document_name = filename
+            existing_document.document_url = document_url
+            existing_document.file_size = 0  # Will be updated when file is actually uploaded
+            existing_document.upload_date = datetime.utcnow()
+            
+            await db.commit()
+            await db.refresh(existing_document)
+            
+            logger.info(f"🔵 PRESIGNED: Updated document record with ID: {existing_document.id}")
+            
+            return DocumentUploadResponse.model_validate({
+                **{column.name: getattr(existing_document, column.name) for column in existing_document.__table__.columns},
+                "document_id": str(existing_document.id),
+                "message": f"Presigned URL generated for document type '{document_type_clean}' update; upload directly to S3",
+                "upload_url": upload_url
+            })
+        else:
+            # Create new document record
+            logger.info(f"🔵 PRESIGNED: Creating new document record for user {profile.user_id}")
+            logger.info(f"🔵 PRESIGNED: Document URL: {document_url}")
+            
+            document_record = UserDocument(
+                user_id=current_user["user_id"],
+                document_type=document_type_clean,
+                document_name=filename,
+                document_url=document_url,
+                file_size=0,  # Will be updated when file is actually uploaded
+                upload_date=datetime.utcnow()
+            )
+            
+            db.add(document_record)
+            await db.commit()
+            await db.refresh(document_record)
+            
+            logger.info(f"🔵 PRESIGNED: New document record created with ID: {document_record.id}")
+            
+            return DocumentUploadResponse.model_validate({
+                **{column.name: getattr(document_record, column.name) for column in document_record.__table__.columns},
+                "document_id": str(document_record.id),
+                "message": f"Presigned URL generated for new document type '{document_type_clean}'; upload directly to S3",
+                "upload_url": upload_url
+            })
         
     except HTTPException:
         raise
