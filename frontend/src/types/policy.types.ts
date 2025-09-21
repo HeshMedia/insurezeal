@@ -238,3 +238,10 @@ export interface ChildIdOptionsParams {
   broker_code?: string;
   agent_id?: string;
 }
+
+export interface CheckPolicyNumberResponse {
+  policy_number: string;
+  is_duplicate: boolean;
+  message: string;
+  existing_policy_id?: string;
+}

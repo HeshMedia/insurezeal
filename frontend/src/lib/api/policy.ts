@@ -12,6 +12,7 @@ import {
   SubmitPolicyPayload,
   UpdatePolicyPayload,
   UploadPolicyPdfResponse,
+  CheckPolicyNumberResponse,
 } from "@/types/policy.types";
 
 
@@ -269,4 +270,23 @@ export const getAgentPolicies = async ({
 }): Promise<ListPoliciesResponse> => {
   const { data } = await apiClient.get(`/policies/agent/${agentCode}`, { params });
   return data;
+};
+
+export const checkPolicyNumberDuplicate = async ({
+  policy_number,
+  exclude_policy_id,
+}: {
+  policy_number: string;
+  exclude_policy_id?: string | null;
+}): Promise<CheckPolicyNumberResponse> => {
+  const { data } = await apiClient.get(
+    "/policies/helpers/check-policy-number",
+    {
+      params: {
+        policy_number,
+        ...(exclude_policy_id ? { exclude_policy_id } : {}),
+      },
+    }
+  );
+  return data as CheckPolicyNumberResponse;
 };

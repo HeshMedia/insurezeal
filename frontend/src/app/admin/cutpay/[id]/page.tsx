@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useCutPayById } from '@/hooks/cutpayQuery'
+import { useCutPayByPolicy } from '@/hooks/cutpayQuery'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/ui/loader'
@@ -11,9 +12,16 @@ import { ArrowLeft, Edit, DollarSign, Calendar, User, FileText, TrendingUp, Buil
 export default function CutPayDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const search = useSearchParams()
   const cutpayId = parseInt(params.id as string)
+  const policy = search.get('policy') || ''
+  const quarter = search.get('q') ? parseInt(search.get('q') as string) : undefined
+  const year = search.get('y') ? parseInt(search.get('y') as string) : undefined
 
-  const { data: cutpay, isLoading, error } = useCutPayById(cutpayId)
+  const { data: policyData, isLoading, error } = useCutPayByPolicy(policy, quarter, year, true)
+
+  // Normalize combined policy data into a flat object for display
+  const cutpay = policyData?.database_record as any
 
   if (isLoading) {
     return (
@@ -65,7 +73,7 @@ export default function CutPayDetailPage() {
 
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="max-w-5xl mx-auto space-y-6 p-6">
+      <div className=" mx-auto space-y-6 p-6">
         {/* Navigation */}
         <div className="flex items-center gap-4 mb-6">
           <Button variant="outline" onClick={() => router.back()}>
@@ -131,7 +139,7 @@ export default function CutPayDetailPage() {
 
             {/* Actions */}
             <div className="flex flex-col gap-2">
-              <Button onClick={() => router.push(`/admin/cutpay/${cutpayId}/edit`)}>
+              <Button onClick={() => router.push(`/admin/cutpay/${cutpayId}/edit?policy=${encodeURIComponent(policy)}&q=${quarter}&y=${year}`)}>
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Transaction
               </Button>

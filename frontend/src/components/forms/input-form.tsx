@@ -31,8 +31,7 @@ import { useAgentList } from "@/hooks/adminQuery";
 import {
   useCreateCutPay,
   useUploadCutPayDocument,
-  useUpdateCutPay,
-  useCutPayById,
+  useUpdateCutPayByPolicy,
 } from "@/hooks/cutpayQuery";
  
 import {
@@ -64,11 +63,21 @@ import { editModeFieldMappings, specialFieldMappings } from '@/components/admin/
 interface InputFormProps {
   onPrev: () => void; // Function to go to the previous step
   editId?: number; // Optional ID for edit mode
+  policyNumber?: string;
+  quarter?: number;
+  year?: number;
+  initialDbRecord?: any;
 }
 
 const InputForm: React.FC<InputFormProps> = ({
   onPrev,
-  editId, // Optional ID for edit mode
+  // editId is optional but currently unused in policy-based update flow
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  editId: _editId, // Optional ID for edit mode
+  policyNumber,
+  quarter,
+  year,
+  initialDbRecord,
 }) => {
   const router = useRouter();
   // State for document viewer visibility is now managed locally
@@ -109,14 +118,11 @@ const InputForm: React.FC<InputFormProps> = ({
   ]);
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
-  const updateCutPayMutation = useUpdateCutPay();
+  const updateCutPayByPolicyMutation = useUpdateCutPayByPolicy();
 
 
-  // Fetch existing cutpay data for edit mode
-  const { data: existingCutpayData } = useCutPayById(
-    editId || 0,
-    !!editId
-  );
+  // Existing data supplied from parent for edit mode (policy-based)
+  const existingCutpayData = initialDbRecord;
 
   // State for child ID auto-fill functionality
   const [, setSelectedChildIdDetails] = useState<
@@ -221,9 +227,9 @@ const InputForm: React.FC<InputFormProps> = ({
     }
   }, [pdfExtractionData, setValue]);
 
-  // Effect to populate form with existing cutpay data in edit mode
+  // Effect to populate the form with existing cutpay data in edit mode (from DB record)
   useEffect(() => {
-    if (editId && existingCutpayData) {
+    if (existingCutpayData) {
       console.log("Populating form with existing cutpay data:", existingCutpayData);
 
       // Populate regular fields using the auto-generated mapping
@@ -243,7 +249,7 @@ const InputForm: React.FC<InputFormProps> = ({
         }
       });
     }
-  }, [editId, existingCutpayData, setValue]);
+  }, [existingCutpayData, setValue]);
 
   // Auto-fill plan type based on PDF extraction data
   useEffect(() => {
@@ -906,11 +912,11 @@ const InputForm: React.FC<InputFormProps> = ({
 
         let createdTransaction;
 
-        if (editId) {
-          // Edit mode - use update mutation
-          createdTransaction = await updateCutPayMutation.mutateAsync({
-            cutpayId: editId,
-            data: payload as any, // Type assertion needed for update
+        if (policyNumber && quarter && year) {
+          // Edit mode - policy-based update
+          createdTransaction = await updateCutPayByPolicyMutation.mutateAsync({
+            params: { policy_number: policyNumber, quarter, year },
+            data: payload as any,
           });
           updateStepStatus("create-transaction", "completed");
           toast.success("Transaction updated successfully!");

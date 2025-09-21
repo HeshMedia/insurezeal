@@ -1,8 +1,8 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useCutPayById } from '@/hooks/cutpayQuery'
+import { useCutPayByPolicy } from '@/hooks/cutpayQuery'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/loader'
 import { ArrowLeft } from 'lucide-react'
@@ -10,68 +10,92 @@ import InputForm from '@/components/forms/input-form'
 import { useAtom } from 'jotai'
 import { pdfExtractionDataAtom } from '@/lib/atoms/cutpay'
 import { useEffect } from 'react'
-import { CutPayTransaction } from '@/types/cutpay.types'
+import type { ExtractedPolicyData, AdminInputData, CalculationResult } from '@/types/cutpay.types'
+// Types are inferred via API response normalization, no explicit imports needed
+
+const toStringOrNull = (val: unknown): string | null => {
+  if (val === null || val === undefined) return null
+  const s = String(val)
+  return s === '' ? null : s
+}
+
+const toNumberOrNull = (val: unknown): number | null => {
+  if (val === null || val === undefined || val === '') return null
+  const n = Number(val)
+  return Number.isNaN(n) ? null : n
+}
 
 export default function CutPayEditPage() {
-  const params = useParams()
+  // const params = useParams()
   const router = useRouter()
-  const cutpayId = parseInt(params.id as string)
+  const search = useSearchParams()
+  // const cutpayId = parseInt(params.id as string)
+  const policy = search.get('policy') || ''
+  const quarter = search.get('q') ? parseInt(search.get('q') as string) : undefined
+  const year = search.get('y') ? parseInt(search.get('y') as string) : undefined
   
-  const { data: cutpayData, isLoading: isLoadingCutpay } = useCutPayById(cutpayId)
+  const { data: policyData, isLoading: isLoadingCutpay } = useCutPayByPolicy(policy, quarter, year, true)
   const [, setPdfExtractionData] = useAtom(pdfExtractionDataAtom)
 
   // Transform cutpay data to match the form structure
-  const transformCutpayData = (data: CutPayTransaction | null) => {
+  const transformCutpayData = (data: Record<string, unknown> | null): {
+    extracted_data: ExtractedPolicyData
+    admin_input: AdminInputData
+    calculations: CalculationResult
+    claimed_by: string | null
+    running_bal: number | null
+    notes: string | null
+  } | null => {
     if (!data) return null
 
     return {
       extracted_data: {
-        policy_number: data.policy_number,
-        formatted_policy_number: data.formatted_policy_number,
-        major_categorisation: data.major_categorisation,
-        product_insurer_report: data.product_insurer_report,
-        product_type: data.product_type,
-        plan_type: data.plan_type,
-        customer_name: data.customer_name,
-        customer_phone_number: null, // Not in CutPayTransaction
-        gross_premium: data.gross_premium,
-        net_premium: data.net_premium,
-        od_premium: data.od_premium,
-        tp_premium: data.tp_premium,
-        gst_amount: data.gst_amount,
-        registration_number: data.registration_number,
-        make_model: data.make_model,
-        model: data.model,
-        vehicle_variant: data.vehicle_variant,
-        gvw: data.gvw,
-        rto: data.rto,
-        state: data.state,
-        fuel_type: data.fuel_type,
-        cc: data.cc,
-        age_year: data.age_year,
-        ncb: data.ncb,
-        discount_percent: data.discount_percent,
-        business_type: data.business_type,
-        seating_capacity: data.seating_capacity,
-        veh_wheels: data.veh_wheels,
+        policy_number: toStringOrNull((data)['policy_number']),
+        formatted_policy_number: toStringOrNull((data)['formatted_policy_number']),
+        major_categorisation: toStringOrNull((data)['major_categorisation']),
+        product_insurer_report: toStringOrNull((data)['product_insurer_report']),
+        product_type: toStringOrNull((data)['product_type']),
+        plan_type: toStringOrNull((data)['plan_type']),
+        customer_name: toStringOrNull((data)['customer_name']),
+        customer_phone_number: null,
+        gross_premium: toNumberOrNull((data)['gross_premium']),
+        net_premium: toNumberOrNull((data)['net_premium']),
+        od_premium: toNumberOrNull((data)['od_premium']),
+        tp_premium: toNumberOrNull((data)['tp_premium']),
+        gst_amount: toNumberOrNull((data)['gst_amount']),
+        registration_number: toStringOrNull((data)['registration_number']),
+        make_model: toStringOrNull((data)['make_model']),
+        model: toStringOrNull((data)['model']),
+        vehicle_variant: toStringOrNull((data)['vehicle_variant']),
+        gvw: toNumberOrNull((data)['gvw']),
+        rto: toStringOrNull((data)['rto']),
+        state: toStringOrNull((data)['state']),
+        fuel_type: toStringOrNull((data)['fuel_type']),
+        cc: toNumberOrNull((data)['cc']),
+        age_year: toNumberOrNull((data)['age_year']),
+        ncb: toStringOrNull((data)['ncb']),
+        discount_percent: toNumberOrNull((data)['discount_percent']),
+        business_type: toStringOrNull((data)['business_type']),
+        seating_capacity: toNumberOrNull((data)['seating_capacity']),
+        veh_wheels: toNumberOrNull((data)['veh_wheels']),
       },
       admin_input: {
-        reporting_month: data.reporting_month,
-        booking_date: data.booking_date,
-        agent_code: data.agent_code,
-        code_type: data.code_type,
-        incoming_grid_percent: data.incoming_grid_percent,
-        agent_commission_given_percent: data.agent_commission_given_percent,
-        extra_grid: data.extra_grid,
-        commissionable_premium: data.commissionable_premium,
-        payment_by: data.payment_by,
-        payment_method: data.payment_method,
-        payout_on: data.payout_on,
-        agent_extra_percent: data.agent_extra_percent,
-        payment_by_office: data.payment_by_office,
-        insurer_code: data.insurer_id?.toString() || null,
-        broker_code: data.broker_id?.toString() || null,
-        admin_child_id: data.child_id_request_id,
+        reporting_month: toStringOrNull((data)['reporting_month']),
+        booking_date: toStringOrNull((data)['booking_date']),
+        agent_code: toStringOrNull((data)['agent_code']),
+        code_type: toStringOrNull((data)['code_type']),
+        incoming_grid_percent: toNumberOrNull((data)['incoming_grid_percent']),
+        agent_commission_given_percent: toNumberOrNull((data)['agent_commission_given_percent']),
+        extra_grid: toNumberOrNull((data)['extra_grid']),
+        commissionable_premium: toNumberOrNull((data)['commissionable_premium']),
+        payment_by: toStringOrNull((data)['payment_by']),
+        payment_method: toStringOrNull((data)['payment_method']),
+        payout_on: toStringOrNull((data)['payout_on']),
+        agent_extra_percent: toNumberOrNull((data)['agent_extra_percent']),
+        payment_by_office: toStringOrNull((data)['payment_by_office']),
+        insurer_code: (data)['insurer_id'] != null ? String((data)['insurer_id'] as unknown) : null,
+        broker_code: (data)['broker_id'] != null ? String((data)['broker_id'] as unknown) : null,
+        admin_child_id: toStringOrNull((data)['admin_child_id'] ?? (data)['child_id_request_id']),
         // OD+TP specific fields - these may not exist in the current transaction
         od_incoming_grid_percent: null,
         tp_incoming_grid_percent: null,
@@ -81,25 +105,26 @@ export default function CutPayEditPage() {
         tp_agent_payout_percent: null,
       },
       calculations: {
-        receivable_from_broker: data.receivable_from_broker,
-        extra_amount_receivable_from_broker: data.extra_amount_receivable_from_broker,
-        total_receivable_from_broker: data.total_receivable_from_broker,
-        total_receivable_from_broker_with_gst: data.total_receivable_from_broker_with_gst,
-        cut_pay_amount: data.cut_pay_amount,
-        agent_po_amt: data.agent_po_amt,
-        agent_extra_amount: data.agent_extra_amount,
-        total_agent_po_amt: data.total_agent_po_amt,
+        receivable_from_broker: toNumberOrNull((data)['receivable_from_broker']),
+        extra_amount_receivable_from_broker: toNumberOrNull((data)['extra_amount_receivable_from_broker']),
+        total_receivable_from_broker: toNumberOrNull((data)['total_receivable_from_broker']),
+        total_receivable_from_broker_with_gst: toNumberOrNull((data)['total_receivable_from_broker_with_gst']),
+        cut_pay_amount: toNumberOrNull((data)['cut_pay_amount']),
+        agent_po_amt: toNumberOrNull((data)['agent_po_amt']),
+        agent_extra_amount: toNumberOrNull((data)['agent_extra_amount']),
+        total_agent_po_amt: toNumberOrNull((data)['total_agent_po_amt']),
       },
-      claimed_by: data.claimed_by,
-      running_bal: data.running_bal,
-      notes: data.notes,
+      claimed_by: toStringOrNull((data)['claimed_by']),
+      running_bal: toNumberOrNull((data)['running_bal']),
+      notes: toStringOrNull((data)['notes']),
     }
   }
 
   // Set the extracted data when cutpay data is loaded
   useEffect(() => {
-    if (cutpayData) {
-      const transformedData = transformCutpayData(cutpayData)
+    const dbRecord = policyData?.database_record as Record<string, unknown>
+    if (dbRecord) {
+      const transformedData = transformCutpayData(dbRecord)
       if (transformedData) {
         setPdfExtractionData({
           extracted_data: transformedData.extracted_data,
@@ -109,7 +134,7 @@ export default function CutPayEditPage() {
         })
       }
     }
-  }, [cutpayData, setPdfExtractionData])
+  }, [policyData, setPdfExtractionData])
 
   const handlePrev = () => {
     router.back()
@@ -128,10 +153,10 @@ export default function CutPayEditPage() {
     )
   }
 
-  if (!cutpayData) {
+  if (!policyData || !policyData.database_record) {
     return (
       <DashboardWrapper requiredRole="admin">
-        <div className="max-w-5xl mx-auto p-6">
+        <div className=" mx-auto p-6">
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center space-y-4">
               <h1 className="text-2xl font-bold text-gray-900">Transaction Not Found</h1>
@@ -169,7 +194,7 @@ export default function CutPayEditPage() {
                 Edit Transaction
               </h1>
               <p className="text-lg text-gray-600 dark:text-gray-300">
-                Policy: {cutpayData.policy_number}
+                Policy: {policy}
               </p>
             </div>
           </div>
@@ -178,7 +203,10 @@ export default function CutPayEditPage() {
         {/* Reusable InputForm for editing */}
         <InputForm 
           onPrev={handlePrev} 
-          editId={cutpayId}
+          policyNumber={policy}
+          quarter={quarter as number}
+          year={year as number}
+          initialDbRecord={policyData?.database_record as Record<string, unknown>}
         />
       </div>
     </DashboardWrapper>

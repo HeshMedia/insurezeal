@@ -14,12 +14,9 @@ import { CutPayListParams, CutPayTransaction } from "@/types/cutpay.types"
 import { cn } from "@/lib/utils"
 import { 
   Search, 
-  Filter, 
-  Download, 
   MoreHorizontal, 
   Eye, 
   Edit,
-  DollarSign,
   Calendar,
   ArrowLeft,
   ArrowRight,
@@ -37,8 +34,8 @@ import {
 
 function CutPayCard({ cutpay, onViewDetails, onEdit }: { 
   cutpay: CutPayTransaction; 
-  onViewDetails: (id: number) => void;
-  onEdit: (id: number) => void;
+  onViewDetails: () => void;
+  onEdit: () => void;
 }) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -86,15 +83,12 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => onViewDetails(cutpay.id)}
-                className="cursor-pointer"
-              >
+              <DropdownMenuItem onClick={onViewDetails} className="cursor-pointer">
                 <Eye className="h-4 w-4 mr-2" />
                 View Details
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => onEdit(cutpay.id)}
+                onClick={onEdit}
                 className="cursor-pointer"
               >
                 <Edit className="h-4 w-4 mr-2" />
@@ -129,7 +123,7 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
         </div>
         <div className="mt-5 pt-4 border-t border-gray-100">
           <Button
-            onClick={() => onViewDetails(cutpay.id)}
+            onClick={onViewDetails}
             className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-sm"
             size="sm"
           >
@@ -183,12 +177,26 @@ export function CutPayManagement() {
     setCurrentPage(newPage)
   }
 
-  const handleViewDetails = (cutpayId: number) => {
-    router.push(`/admin/cutpay/${cutpayId}`)
+  const computeQuarterYear = (dateStr?: string | null) => {
+    const d = dateStr ? new Date(dateStr) : new Date()
+    const year = d.getFullYear()
+    const month = d.getMonth() + 1
+    const quarter = Math.ceil(month / 3)
+    return { quarter, year }
   }
 
-  const handleEdit = (cutpayId: number) => {
-    router.push(`/admin/cutpay/${cutpayId}/edit`)
+  const handleViewDetails = (cutpay: CutPayTransaction) => {
+    const { quarter, year } = computeQuarterYear(cutpay.booking_date || cutpay.created_at)
+    const policy = cutpay.policy_number || ''
+    const query = `?policy=${encodeURIComponent(policy)}&q=${quarter}&y=${year}`
+    router.push(`/admin/cutpay/${cutpay.id}${query}`)
+  }
+
+  const handleEdit = (cutpay: CutPayTransaction) => {
+    const { quarter, year } = computeQuarterYear(cutpay.booking_date || cutpay.created_at)
+    const policy = cutpay.policy_number || ''
+    const query = `?policy=${encodeURIComponent(policy)}&q=${quarter}&y=${year}`
+    router.push(`/admin/cutpay/${cutpay.id}/edit${query}`)
   }
 
   const handleCreateNew = () => {
@@ -214,6 +222,7 @@ export function CutPayManagement() {
             <h1 className="text-2xl font-bold text-gray-900">CutPay Management</h1>
             <p className="text-gray-600 mt-1">Manage cutpay transactions and monitor payments</p>
           </div>
+          
           <div className="flex gap-3">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -247,60 +256,6 @@ export function CutPayManagement() {
           </div>
         </div>
       </div>
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Transactions</CardTitle>
-            <div className="p-2 bg-slate-100 rounded-lg">
-              <CreditCard className="h-4 w-4 text-slate-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-gray-900">
-              {totalTransactions}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Total cutpay transactions</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Recent Transactions</CardTitle>
-            <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-gray-900">
-              {cutpayTransactions?.filter(t => {
-                const transactionDate = new Date(t.created_at)
-                const thirtyDaysAgo = new Date()
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-                return transactionDate > thirtyDaysAgo
-              }).length || 0}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Last 30 days</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Amount</CardTitle>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <DollarSign className="h-4 w-4 text-blue-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-gray-900">
-              ₹{cutpayTransactions?.reduce((sum, t) => sum + (t.cut_pay_amount || 0), 0).toLocaleString('en-IN') || '0'}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Total cut pay amount</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Filters and Search */}
       <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
         <CardContent className="p-6">
@@ -319,14 +274,6 @@ export function CutPayManagement() {
               <Button onClick={handleSearch} variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
                 <Search className="h-4 w-4 mr-2" />
                 Search
-              </Button>
-              <Button variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
-              <Button variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
-                <Download className="h-4 w-4 mr-2" />
-                Export
               </Button>
             </div>
           </div>
@@ -391,8 +338,8 @@ export function CutPayManagement() {
                 <CutPayCard
                   key={cutpay.id}
                   cutpay={cutpay}
-                  onViewDetails={handleViewDetails}
-                  onEdit={handleEdit}
+                  onViewDetails={() => handleViewDetails(cutpay)}
+                  onEdit={() => handleEdit(cutpay)}
                 />
               ))}
             </div>

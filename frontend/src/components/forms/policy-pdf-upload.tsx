@@ -31,6 +31,7 @@ import {
 } from "@/lib/atoms/cutpay";
 
 import { saveToIndexedDB } from "@/lib/utils/indexeddb";
+import { useCheckPolicyNumberDuplicate } from "@/hooks/policyQuery";
 
 interface PolicyPdfUploadProps {
   onNext: () => void;
@@ -52,8 +53,10 @@ const PolicyPdfUpload = ({
 
   const [uploadProgress] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
 
   const extractPdfMutation = useExtractionHook();
+  const checkDuplicateMutation = useCheckPolicyNumberDuplicate();
 
   // ... rest of the component remains exactly the same as your original code
   const handleFileUpload = useCallback(
@@ -186,16 +189,45 @@ const PolicyPdfUpload = ({
     setError,
   ]);
 
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     if (
       successStates.pdfExtracted &&
       extractionData &&
       extractionData.extracted_data
     ) {
+      const extractedPolicyNumber: string | undefined =
+        extractionData.extracted_data?.policy_number ??
+        extractionData.extracted_data?.formatted_policy_number ??
+        undefined;
+
+      if (extractedPolicyNumber) {
+        try {
+          setCheckingDuplicate(true);
+          const result = await checkDuplicateMutation.mutateAsync({
+            policy_number: extractedPolicyNumber,
+          });
+          if (result?.is_duplicate) {
+            setError(
+              result?.message ||
+                "Duplicate policy number detected. Please verify before proceeding."
+            );
+            setCheckingDuplicate(false);
+            return;
+          }
+        } catch {
+          setError(
+            "Could not verify duplicates right now. Please try again in a moment."
+          );
+          setCheckingDuplicate(false);
+          return;
+        }
+        setCheckingDuplicate(false);
+      }
+
       setFormCompletion((prev) => ({ ...prev, step1Complete: true }));
       onNext();
     }
-  }, [successStates.pdfExtracted, extractionData, setFormCompletion, onNext]);
+  }, [successStates.pdfExtracted, extractionData, setFormCompletion, onNext, checkDuplicateMutation, setError]);
 
   const isLoading =
     loadingStates.uploadingToIndexedDB || loadingStates.extracting;
@@ -296,7 +328,7 @@ const PolicyPdfUpload = ({
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-800">
                       <strong>Data extracted successfully!</strong>
-                      {extractionData.extraction_status === "success"
+                      {extractionData?.extraction_status === "success"
                         ? " Key information has been extracted from your policy document."
                         : " Extraction completed with some issues."}
                     </AlertDescription>
@@ -381,10 +413,10 @@ const PolicyPdfUpload = ({
                                 Extraction Confidence:{" "}
                                 {Math.round(
                                   Object.values(
-                                    extractionData.confidence_scores
+                                    extractionData?.confidence_scores || {}
                                   ).reduce((a, b) => a + b, 0) /
                                     Object.values(
-                                      extractionData.confidence_scores
+                                      extractionData?.confidence_scores || {}
                                     ).length
                                 )}
                                 %
@@ -447,10 +479,16 @@ const PolicyPdfUpload = ({
         >
           <Button
             onClick={handleContinue}
-            disabled={!isCompleted}
-            className="min-w-[120px] bg-green-600 hover:bg-green-700"
+            disabled={!isCompleted || checkingDuplicate}
+            className="min-w-[160px] bg-green-600 hover:bg-green-700"
           >
-            Continue to Documents
+            {checkingDuplicate ? (
+              <span className="flex items-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Checking duplicates...
+              </span>
+            ) : (
+              "Continue to Documents"
+            )}
           </Button>
         </motion.div>
       )}

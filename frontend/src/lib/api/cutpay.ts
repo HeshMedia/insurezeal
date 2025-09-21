@@ -15,6 +15,8 @@ import {
   UpdateAgentConfigRequest,
   BulkPostCutpayRequest,
   BulkPostCutpayResponse,
+  PolicyDetailsResponse,
+  CutPayDatabaseResponse,
 } from '@/types/cutpay.types'
 
 // Create axios instance with Supabase authentication
@@ -102,6 +104,25 @@ export const cutpayApi = {
   // Update bulk post-cutpay details
   updateBulkPostDetails: async (data: BulkPostCutpayRequest): Promise<BulkPostCutpayResponse> => {
     const response = await apiClient.put('/cutpay/post-details', data)
+    return response.data
+  },
+
+  // New policy-based endpoints
+  getByPolicy: async (params: { policy_number: string; quarter: number; year: number }): Promise<PolicyDetailsResponse> => {
+    const response = await apiClient.get('/cutpay/policy-details', { params })
+    return response.data
+  },
+
+  updateByPolicy: async (
+    params: { policy_number: string; quarter: number; year: number },
+    data: CreateCutpayTransactionCutpayPostRequest
+  ): Promise<CutPayDatabaseResponse> => {
+    const response = await apiClient.put('/cutpay/policy-update', data, { params })
+    return response.data
+  },
+
+  deleteByPolicy: async (params: { policy_number: string; quarter: number; year: number }): Promise<any> => {
+    const response = await apiClient.delete('/cutpay/policy-delete', { params })
     return response.data
   },
 

@@ -6,8 +6,6 @@ import { z } from "zod";
 export const PolicyReviewFormSchema = z.object({
   // Extracted fields (editable)
   policy_number: z.string().min(1, "Policy number is required"),
-  start_date: z.string().nullable().optional(),
-  end_date: z.string().nullable().optional(),
 
   // Admin input fields
   code_type: z.enum(["Direct", "Broker"], {

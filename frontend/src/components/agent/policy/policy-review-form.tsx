@@ -54,8 +54,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
     resolver: zodResolver(PolicyReviewFormSchema),
     defaultValues: {
       policy_number: pdfExtractionData?.extracted_data?.policy_number || "",
-      start_date: pdfExtractionData?.extracted_data?.start_date || null,
-      end_date: pdfExtractionData?.extracted_data?.end_date || null,
       code_type: "Direct",
       insurer_code: "",
       broker_code: null,
@@ -113,19 +111,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         label: `${r.child_id} - ${r.broker_relation?.name || ""} (${r.insurer?.name || ""})`,
       }));
   }, [myRequests, insurerCode, brokerCode, codeType]);
-
-  // Autofill start/end if missing (today + 1 year)
-  useEffect(() => {
-    if (!form.getValues("start_date")) {
-      const today = new Date().toISOString().split("T")[0];
-      form.setValue("start_date", today, { shouldValidate: true });
-    }
-    if (!form.getValues("end_date")) {
-      const end = new Date();
-      end.setFullYear(end.getFullYear() + 1);
-      form.setValue("end_date", end.toISOString().split("T")[0], { shouldValidate: true });
-    }
-  }, [form]);
 
   // Simple calculation preview
   const netPremium = Number(pdfExtractionData?.extracted_data?.net_premium || 0);
@@ -212,6 +197,8 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         business_type: extracted.business_type || undefined,
         seating_capacity: extracted.seating_capacity || undefined,
         veh_wheels: extracted.veh_wheels || undefined,
+        start_date: extracted.start_date || undefined,
+        end_date: extracted.end_date || undefined,
 
         // Premium
         gross_premium: extracted.gross_premium || undefined,
@@ -229,11 +216,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         payment_by: values.payment_by,
         payment_method: values.payment_method || undefined,
         notes: values.notes || undefined,
-
-        // Dates
-        start_date: values.start_date || undefined,
-        end_date: values.end_date || undefined,
-
         // AI metadata
         ai_confidence_score: aiConfidenceScore,
         manual_override: false,
@@ -284,35 +266,11 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                           control={form.control}
                           render={({ field, fieldState }) => (
                             <>
-                              <Input {...field} className="h-10 w-fit" />
+                              <Input {...field} className="h-10 w-fit" disabled/>
                               {fieldState.error && (
                                 <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
                               )}
                             </>
-                          )}
-                        />
-                      </div>
-
-                      {/* Start Date */}
-                      <div className="space-y-2 flex-none w-fit">
-                        <Label className="text-sm font-medium text-gray-700">Policy Start Date</Label>
-                        <Controller
-                          name="start_date"
-                          control={form.control}
-                          render={({ field }) => (
-                            <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
-                          )}
-                        />
-                      </div>
-
-                      {/* End Date */}
-                      <div className="space-y-2 flex-none w-fit">
-                        <Label className="text-sm font-medium text-gray-700">Policy End Date</Label>
-                        <Controller
-                          name="end_date"
-                          control={form.control}
-                          render={({ field }) => (
-                            <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
                           )}
                         />
                       </div>

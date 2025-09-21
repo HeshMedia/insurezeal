@@ -342,3 +342,39 @@ export interface ListAgentConfigsParams {
   limit?: number;
 }
 
+// Policy-based API response types
+export interface CutPayDatabaseResponse {
+  id: number;
+  policy_pdf_url?: string | null;
+  additional_documents?: Record<string, unknown> | null;
+  policy_number?: string | null;
+  agent_code?: string | null;
+  booking_date?: string | null;
+  admin_child_id?: string | null;
+  insurer_id?: number | null;
+  broker_id?: number | null;
+  child_id_request_id?: string | null;
+  policy_start_date?: string | null;
+  policy_end_date?: string | null;
+  created_at: string;
+  updated_at: string;
+  quarter?: number | null;
+  year?: number | null;
+  quarter_sheet_name?: string | null;
+}
+
+export interface PolicyDetailsResponse {
+  policy_number: string;
+  quarter: number;
+  year: number;
+  quarter_sheet_name: string;
+  database_record: CutPayDatabaseResponse | Record<string, unknown> | null;
+  google_sheets_data: Record<string, string> | { error?: string };
+  broker_name?: string;
+  insurer_name?: string;
+  found_in_database: boolean;
+  found_in_sheets: boolean;
+  quarter_sheet_exists: boolean;
+  metadata?: Record<string, unknown>;
+}
+

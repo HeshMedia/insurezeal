@@ -31,6 +31,8 @@ const policyKeys = {
       agentId,
     ] as const,
   agents: () => [...policyKeys.helpers(), "agents"] as const,
+  duplicateCheck: (policyNumber?: string, excludeId?: string | null) =>
+    [...policyKeys.helpers(), "duplicate-check", policyNumber, excludeId] as const,
 };
 
 export const useExtractPdfData = () => {
@@ -163,5 +165,11 @@ export const useExportPoliciesCsv = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     },
+  });
+};
+
+export const useCheckPolicyNumberDuplicate = () => {
+  return useMutation({
+    mutationFn: policyApi.checkPolicyNumberDuplicate,
   });
 };
