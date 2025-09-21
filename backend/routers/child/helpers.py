@@ -61,8 +61,14 @@ class ChildHelpers:
             if broker_code:
                 await self.validate_broker_code(db, broker_code)
             
+            # Handle both UUID object and string inputs for user_id
+            if isinstance(user_id, uuid.UUID):
+                user_uuid = user_id
+            else:
+                user_uuid = uuid.UUID(user_id)
+            
             child_request = ChildIdRequest(
-                user_id=uuid.UUID(user_id),
+                user_id=user_uuid,
                 **request_data
             )
             
@@ -113,12 +119,16 @@ class ChildHelpers:
         try:
             from sqlalchemy.orm import selectinload
             
-            # Validate UUID format before attempting conversion
+            # Handle both UUID object and string inputs
             try:
-                user_uuid = uuid.UUID(user_id)
-                logger.info(f"Successfully parsed user_id UUID: {user_id}")
-            except ValueError as uuid_error:
-                logger.error(f"Invalid UUID format for user_id: '{user_id}' - Length: {len(user_id)} - Error: {str(uuid_error)}")
+                if isinstance(user_id, uuid.UUID):
+                    user_uuid = user_id
+                    logger.info(f"Received UUID object for user_id: {user_id}")
+                else:
+                    user_uuid = uuid.UUID(user_id)
+                    logger.info(f"Successfully parsed user_id UUID from string: {user_id}")
+            except (ValueError, TypeError) as uuid_error:
+                logger.error(f"Invalid UUID format for user_id: '{user_id}' - Type: {type(user_id)} - Error: {str(uuid_error)}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid user ID format. Expected valid UUID, got: '{user_id}'"
@@ -193,10 +203,13 @@ class ChildHelpers:
             
             if user_id:
                 try:
-                    user_uuid = uuid.UUID(user_id)
+                    if isinstance(user_id, uuid.UUID):
+                        user_uuid = user_id
+                    else:
+                        user_uuid = uuid.UUID(user_id)
                     query = query.where(ChildIdRequest.user_id == user_uuid)
-                except ValueError as uuid_error:
-                    logger.error(f"Invalid UUID format for user_id: '{user_id}' - Error: {str(uuid_error)}")
+                except (ValueError, TypeError) as uuid_error:
+                    logger.error(f"Invalid UUID format for user_id: '{user_id}' - Type: {type(user_id)} - Error: {str(uuid_error)}")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Invalid user ID format. Expected valid UUID, got: '{user_id}'"
@@ -419,12 +432,27 @@ class ChildHelpers:
         try:
             from sqlalchemy.orm import selectinload
             
+            # Handle both UUID object and string inputs
+            try:
+                if isinstance(user_id, uuid.UUID):
+                    user_uuid = user_id
+                    logger.info(f"Received UUID object for user_id: {user_id}")
+                else:
+                    user_uuid = uuid.UUID(user_id)
+                    logger.info(f"Successfully parsed user_id UUID from string: {user_id}")
+            except (ValueError, TypeError) as uuid_error:
+                logger.error(f"Invalid UUID format for user_id: '{user_id}' - Type: {type(user_id)} - Error: {str(uuid_error)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid user ID format. Expected valid UUID, got: '{user_id}'"
+                )
+            
             query = select(ChildIdRequest).options(
                 selectinload(ChildIdRequest.insurer),
                 selectinload(ChildIdRequest.broker)
             ).where(
                 and_(
-                    ChildIdRequest.user_id == uuid.UUID(user_id),
+                    ChildIdRequest.user_id == user_uuid,
                     ChildIdRequest.status == "accepted"
                 )
             ).order_by(desc(ChildIdRequest.approved_at))
@@ -488,7 +516,11 @@ class ChildHelpers:
                 
             # Agent filter: Only return child IDs assigned to this agent
             if agent_id:
-                conditions.append(ChildIdRequest.user_id == uuid.UUID(agent_id))
+                if isinstance(agent_id, uuid.UUID):
+                    agent_uuid = agent_id
+                else:
+                    agent_uuid = uuid.UUID(agent_id)
+                conditions.append(ChildIdRequest.user_id == agent_uuid)
             
             # Build query with proper joins
             if broker_code:
