@@ -1361,17 +1361,15 @@ async def delete_cutpay_transaction_by_policy(
 @router.post("/upload-document", response_model=DocumentUploadResponse)
 async def upload_policy_document(
     policy_number: str = Query(..., description="Policy number to upload document for"),
-    file: UploadFile = File(None),
+    filename: str = Form(..., description="Document filename for upload"),
     document_type: str = Form("policy_pdf"),
-    presign: bool = Form(False),
-    filename: str | None = Form(None),
     content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_admin_cutpay)
 ):
     """
-    Upload policy PDF or additional documents using policy number
+    Upload policy PDF or additional documents using presigned URL
     
     Supported document types:
     - policy_pdf: Main policy document
@@ -1381,9 +1379,10 @@ async def upload_policy_document(
     
     Parameters:
     - policy_number: The policy number to upload document for
-    - file: Document file to upload (optional for presigned uploads)
+    - filename: Document filename for upload
     - document_type: Type of document being uploaded
-    - presign: Whether to generate presigned URL instead of direct upload
+    
+    Returns a presigned URL for direct upload to S3
     """
     try:
         # Find CutPay record by policy number
@@ -1405,127 +1404,64 @@ async def upload_policy_document(
         
         from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
 
-        if presign or not file:
-            if not filename or not filename.lower().endswith('.pdf'):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valid PDF filename is required")
-            key = build_key(prefix=f"cutpay/{cutpay_id}", filename=filename)
-            upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
-            document_url = build_cloudfront_url(key)
-
-            # ✅ COMPREHENSIVE DEBUGGING FOR PRESIGNED UPLOADS
-            logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' for policy '{policy_number}' (CutPay ID {cutpay_id})")
-            logger.info(f"🔵 PRESIGNED: Document URL generated: {document_url}")
-            logger.info(f"🔵 PRESIGNED: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
-            logger.info(f"🔵 PRESIGNED: Before update - additional_documents: {cutpay.additional_documents}")
+        # Validate PDF filename
+        if not filename or not filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valid PDF filename is required")
             
-            # Normalize document_type to handle any whitespace/case issues
-            document_type_clean = document_type.strip() if document_type else ""
-            logger.info(f"🔵 PRESIGNED: Cleaned document_type: '{document_type_clean}'")
-            logger.info(f"🔵 PRESIGNED: document_type_clean == 'policy_pdf': {document_type_clean == 'policy_pdf'}")
+        key = build_key(prefix=f"cutpay/{cutpay_id}", filename=filename)
+        upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
+        document_url = build_cloudfront_url(key)
 
-            if document_type_clean == "policy_pdf":
-                logger.info(f"✅ PRESIGNED: ENTERING policy_pdf branch - UPDATING policy_pdf_url")
-                old_url = cutpay.policy_pdf_url
-                cutpay.policy_pdf_url = document_url
-                logger.info(f"✅ PRESIGNED: policy_pdf_url updated from '{old_url}' to '{cutpay.policy_pdf_url}'")
-            else:
-                logger.info(f"❌ PRESIGNED: ENTERING additional_documents branch for type: '{document_type_clean}'")
-                if not cutpay.additional_documents:
-                    cutpay.additional_documents = {}
-                    logger.info(f"❌ PRESIGNED: Initialized empty additional_documents dict")
-                
-                old_value = cutpay.additional_documents.get(document_type_clean, "None")
-                
-                # ✅ PROPER JSON FIELD UPDATE - Create new dict to trigger SQLAlchemy change detection
-                updated_additional_docs = dict(cutpay.additional_documents) if cutpay.additional_documents else {}
-                updated_additional_docs[document_type_clean] = document_url
-                cutpay.additional_documents = updated_additional_docs
-                
-                logger.info(f"❌ PRESIGNED: additional_documents['{document_type_clean}'] updated from '{old_value}' to '{document_url}'")
-                logger.info(f"❌ PRESIGNED: New additional_documents dict: {cutpay.additional_documents}")
-            
-            # Mark the field as modified to ensure SQLAlchemy detects the change
-            attributes.flag_modified(cutpay, 'additional_documents')
-            
-            # Force database commit and refresh
-            await db.commit()
-            await db.refresh(cutpay)
-            
-            logger.info(f"🔵 PRESIGNED: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
-            logger.info(f"🔵 PRESIGNED: After commit/refresh - additional_documents: {cutpay.additional_documents}")
-            logger.info(f"Generated presigned URL for policy '{policy_number}' (CutPay ID {cutpay_id}), key: {key}")
-
-            return DocumentUploadResponse(
-                document_url=document_url, 
-                document_type=document_type, 
-                upload_status="presigned", 
-                message="Presigned URL generated; upload directly to S3", 
-                upload_url=upload_url
-            )
-
-        if not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are supported")
-
-        file_content = await file.read()
-        if len(file_content) > 10 * 1024 * 1024: 
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File size must be less than 10MB"
-            )
-
-        try:
-            from utils.s3_utils import build_key, build_cloudfront_url, put_object
-            file_extension = os.path.splitext(file.filename)[1] if file.filename else '.pdf'
-            unique_key = build_key(prefix=f"cutpay/{cutpay_id}", filename=f"x{file_extension}")
-            put_object(key=unique_key, body=file_content, content_type="application/pdf")
-            document_url = build_cloudfront_url(unique_key)
-        except Exception as upload_error:
-            logger.error(f"Upload error: {str(upload_error)}")
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to upload PDF: {str(upload_error)}")
-
-        # ✅ COMPREHENSIVE DEBUGGING FOR DIRECT UPLOADS
-        logger.info(f"🟢 DIRECT: Processing document_type='{document_type}' for policy '{policy_number}' (CutPay ID {cutpay_id})")
-        logger.info(f"🟢 DIRECT: Document URL generated: {document_url}")
-        logger.info(f"🟢 DIRECT: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
-        logger.info(f"🟢 DIRECT: Before update - additional_documents: {cutpay.additional_documents}")
+        # Comprehensive debugging for presigned uploads
+        logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' for policy '{policy_number}' (CutPay ID {cutpay_id})")
+        logger.info(f"🔵 PRESIGNED: Document URL generated: {document_url}")
+        logger.info(f"🔵 PRESIGNED: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
+        logger.info(f"🔵 PRESIGNED: Before update - additional_documents: {cutpay.additional_documents}")
         
         # Normalize document_type to handle any whitespace/case issues
         document_type_clean = document_type.strip() if document_type else ""
-        logger.info(f"🟢 DIRECT: Cleaned document_type: '{document_type_clean}'")
-        logger.info(f"🟢 DIRECT: document_type_clean == 'policy_pdf': {document_type_clean == 'policy_pdf'}")
+        logger.info(f"🔵 PRESIGNED: Cleaned document_type: '{document_type_clean}'")
+        logger.info(f"🔵 PRESIGNED: document_type_clean == 'policy_pdf': {document_type_clean == 'policy_pdf'}")
 
         if document_type_clean == "policy_pdf":
-            logger.info(f"✅ DIRECT: ENTERING policy_pdf branch - UPDATING policy_pdf_url")
+            logger.info(f"✅ PRESIGNED: ENTERING policy_pdf branch - UPDATING policy_pdf_url")
             old_url = cutpay.policy_pdf_url
             cutpay.policy_pdf_url = document_url
-            logger.info(f"✅ DIRECT: policy_pdf_url updated from '{old_url}' to '{cutpay.policy_pdf_url}'")
+            logger.info(f"✅ PRESIGNED: policy_pdf_url updated from '{old_url}' to '{cutpay.policy_pdf_url}'")
         else:
-            logger.info(f"❌ DIRECT: ENTERING additional_documents branch for type: '{document_type_clean}'")
+            logger.info(f"❌ PRESIGNED: ENTERING additional_documents branch for type: '{document_type_clean}'")
             if not cutpay.additional_documents:
                 cutpay.additional_documents = {}
-                logger.info(f"❌ DIRECT: Initialized empty additional_documents dict")
+                logger.info(f"❌ PRESIGNED: Initialized empty additional_documents dict")
             
             old_value = cutpay.additional_documents.get(document_type_clean, "None")
             
-            # ✅ PROPER JSON FIELD UPDATE - Create new dict to trigger SQLAlchemy change detection
+            # Proper JSON field update - Create new dict to trigger SQLAlchemy change detection
             updated_additional_docs = dict(cutpay.additional_documents) if cutpay.additional_documents else {}
             updated_additional_docs[document_type_clean] = document_url
             cutpay.additional_documents = updated_additional_docs
             
-            logger.info(f"❌ DIRECT: additional_documents['{document_type_clean}'] updated from '{old_value}' to '{document_url}'")
-            logger.info(f"❌ DIRECT: New additional_documents dict: {cutpay.additional_documents}")
+            logger.info(f"❌ PRESIGNED: additional_documents['{document_type_clean}'] updated from '{old_value}' to '{document_url}'")
+            logger.info(f"❌ PRESIGNED: New additional_documents dict: {cutpay.additional_documents}")
         
         # Mark the field as modified to ensure SQLAlchemy detects the change
         attributes.flag_modified(cutpay, 'additional_documents')
         
+        # Force database commit and refresh
         await db.commit()
         await db.refresh(cutpay)
         
-        logger.info(f"🟢 DIRECT: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
-        logger.info(f"🟢 DIRECT: After commit/refresh - additional_documents: {cutpay.additional_documents}")
-        logger.info(f"Uploaded {document_type} for policy '{policy_number}' (CutPay ID {cutpay_id})")
-        
-        return DocumentUploadResponse(document_url=document_url, document_type=document_type, upload_status="success", message=f"Document uploaded successfully")
+        logger.info(f"🔵 PRESIGNED: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
+        logger.info(f"🔵 PRESIGNED: After commit/refresh - additional_documents: {cutpay.additional_documents}")
+        logger.info(f"Generated presigned URL for policy '{policy_number}' (CutPay ID {cutpay_id}), key: {key}")
+
+        return DocumentUploadResponse(
+            document_url=document_url, 
+            document_type=document_type, 
+            upload_status="presigned", 
+            message="Presigned URL generated; upload directly to S3", 
+            upload_url=upload_url
+        )
         
     except Exception as e:
         logger.error(f"Failed to upload document for policy '{policy_number}': {str(e)}")

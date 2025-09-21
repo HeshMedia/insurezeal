@@ -7,6 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 import uuid
 import traceback
+import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from datetime import date, datetime
@@ -96,25 +97,26 @@ async def extract_pdf_data_endpoint(
 
 @router.post("/upload", response_model=PolicyUploadResponse)
 async def upload_policy_document(
-    file: UploadFile | None = File(None, description="Policy PDF file (if presign=false)"),
     policy_id: str = Form(..., description="Policy ID to associate with the uploaded PDF"),
     document_type: str = Form("policy_pdf", description="Type of document: 'policy_pdf' or 'additional'"),
-    presign: bool = Form(False),
-    filename: str | None = Form(None),
+    filename: str = Form(..., description="Filename for the document to upload"),
     content_type: str | None = Form(None),
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rbac_check = Depends(require_policy_write)
 ):
     """
-    Upload policy PDF file or additional documents and associate with a specific policy
+    Upload policy PDF file or additional documents using presigned URLs
     
     **Requires policy write permission**
     
-    - **file**: PDF file to upload
     - **policy_id**: Policy ID to associate the file with
     - **document_type**: Type of document ('policy_pdf' for main policy PDF, 'additional' for additional documents)
-    Returns file upload information
+    - **filename**: Filename for the document to upload
+    - **content_type**: MIME type of the file (optional, defaults to application/pdf)
+    
+    Always returns a presigned URL for direct upload to S3. For additional documents,
+    new documents are appended to existing ones without overwriting.
     """
     try:
         # Validate document type
@@ -123,103 +125,94 @@ async def upload_policy_document(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="document_type must be either 'policy_pdf' or 'additional'"
             )
-            
-        if presign or not file:
-            user_id = current_user["user_id"]
-            user_role = current_user.get("role", "agent")
-            filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
-            existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
-            if not existing_policy:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy not found or you don't have access to it")
-
-            if not filename:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="filename is required for presign")
-            if not filename.lower().endswith('.pdf'):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
-
-            key = build_key(prefix=f"policies/{user_id}", filename=filename)
-            upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
-            file_path = build_cloudfront_url(key)
-
-            # Update appropriate field based on document type
-            update_data = {}
-            if document_type == "policy_pdf":
-                update_data["policy_pdf_url"] = file_path
-            else:  # additional documents
-                # For additional documents, we could store multiple URLs (comma-separated or JSON)
-                # For now, let's store as a single URL (can be enhanced later for multiple files)
-                update_data["additional_documents"] = file_path
-
-            await PolicyHelpers.update_policy(
-                db,
-                policy_id,
-                update_data,
-                filter_user_id,
-            )
-
-            return PolicyUploadResponse(
-                policy_id=policy_id,
-                extracted_data={},
-                confidence_score=None,
-                pdf_file_path=file_path,
-                pdf_file_name=filename,
-                message="Presigned URL generated; upload directly to S3",
-                upload_url=upload_url,
-            )
-
-        if not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
         
+        # Validate filename
+        if not filename or not filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Only PDF files are allowed"
+            )
+            
         user_id = current_user["user_id"]
         user_role = current_user.get("role", "agent")
-        
         filter_user_id = user_id if user_role not in ["admin", "superadmin"] else None
-        existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         
+        # Check if policy exists and user has access
+        existing_policy = await PolicyHelpers.get_policy_by_id(db, policy_id, filter_user_id)
         if not existing_policy:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_404_NOT_FOUND, 
                 detail="Policy not found or you don't have access to it"
             )
-        
-        file_content = await file.read()
 
-        file_path, original_filename = await PolicyHelpers.save_uploaded_file_from_bytes(
-            file_content, file.filename, user_id
-        )
-        
-        # Update the policy record with the new file information based on document type
+        # Generate S3 key and presigned URL
+        key = build_key(prefix=f"policies/{user_id}", filename=filename)
+        upload_url = generate_presigned_put_url(key=key, content_type=content_type or "application/pdf")
+        file_path = build_cloudfront_url(key)
+
+        # Prepare update data based on document type
         update_data = {}
         if document_type == "policy_pdf":
+            # For main policy PDF, replace existing
             update_data["policy_pdf_url"] = file_path
         else:  # additional documents
-            # For additional documents, we could store multiple URLs (comma-separated or JSON)
-            # For now, let's store as a single URL (can be enhanced later for multiple files)
-            update_data["additional_documents"] = file_path
+            # For additional documents, append to existing list using JSON format
+            current_additional_docs = existing_policy.additional_documents or ""
+            existing_docs = []
             
+            # Parse existing documents (handle both JSON array and comma-separated legacy format)
+            if current_additional_docs:
+                try:
+                    # Try to parse as JSON array first
+                    existing_docs = json.loads(current_additional_docs)
+                    if not isinstance(existing_docs, list):
+                        existing_docs = []
+                except (json.JSONDecodeError, TypeError):
+                    # Fallback to comma-separated format
+                    existing_docs = [doc.strip() for doc in current_additional_docs.split(',') if doc.strip()]
+            
+            # Add new document if not already present
+            new_doc_info = {
+                "filename": filename,
+                "url": file_path,
+                "uploaded_at": datetime.now().isoformat(),
+                "uploaded_by": str(user_id)
+            }
+            
+            # Check if this URL already exists
+            existing_urls = [doc.get('url') if isinstance(doc, dict) else doc for doc in existing_docs]
+            if file_path not in existing_urls:
+                existing_docs.append(new_doc_info)
+            
+            # Store as JSON string
+            update_data["additional_documents"] = json.dumps(existing_docs)
+
+        # Update policy record
         await PolicyHelpers.update_policy(
-            db, 
-            policy_id, 
-            update_data, 
-            filter_user_id
+            db,
+            policy_id,
+            update_data,
+            filter_user_id,
         )
-        
+
         return PolicyUploadResponse(
             policy_id=policy_id,
             extracted_data={},
             confidence_score=None,
             pdf_file_path=file_path,
-            pdf_file_name=original_filename,
-            message=f"Document uploaded successfully and associated with policy {policy_id}. Use /extract-pdf-data to extract data if needed."
+            pdf_file_name=filename,
+            message=f"Presigned URL generated for {document_type}. Upload directly to S3.",
+            upload_url=upload_url,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error uploading policy PDF: {str(e)}")
+        logger.error(f"Error generating presigned URL for policy document: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,            
-            detail="Failed to upload policy PDF"        )
+            detail="Failed to generate upload URL for policy document"
+        )
 
 
 @router.post("/submit", response_model=PolicyCreateResponse)
