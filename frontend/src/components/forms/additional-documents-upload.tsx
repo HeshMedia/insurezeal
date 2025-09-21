@@ -322,27 +322,6 @@ const AdditionalDocumentsUpload = <T extends Record<string, File | null>>({
           )}
         </Button>
       </div>
-
-      {/* Upload Tips */}
-      <Card className="bg-amber-50 border-amber-200">
-        <CardContent className="pt-4">
-          <div className="flex items-start space-x-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="font-medium text-amber-900">Upload Tips</h4>
-              <ul className="text-sm text-amber-700 space-y-1">
-                <li>
-                  • All documents are optional but recommended for complete
-                  records
-                </li>
-                <li>
-                  • Documents are stored locally in your browser for privacy
-                </li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

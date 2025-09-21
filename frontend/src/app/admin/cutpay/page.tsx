@@ -8,7 +8,7 @@ import { CutPayManagement } from '@/components/admin/cutpay/enhanced-cutpay-mana
 export default function CutPayPage() {
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex-1 space-y-4 px-4">
         {/* <Tabs defaultValue="transactions" className="space-y-4">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="transactions">Transactions</TabsTrigger>

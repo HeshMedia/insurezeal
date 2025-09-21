@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 
 import { useCutPayList } from "@/hooks/cutpayQuery"
@@ -143,6 +144,7 @@ export function CutPayManagement() {
     skip: 0
   })
   const [searchQuery, setSearchQuery] = useState("")
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 20
@@ -214,16 +216,25 @@ export function CutPayManagement() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className=" mx-auto space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">CutPay Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900">CutPay Management</h1>
             <p className="text-gray-600 mt-1">Manage cutpay transactions and monitor payments</p>
           </div>
           
           <div className="flex gap-3">
+            {/* Search dialog trigger button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSearchOpen(true)}
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="w-[120px]">
@@ -256,41 +267,45 @@ export function CutPayManagement() {
           </div>
         </div>
       </div>
-      {/* Filters and Search */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
+      {/* Search Dialog */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="!top-[25%] left-[80%]">
+          <DialogHeader>
+            <DialogTitle>Search CutPay Transactions</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col sm:flex-row gap-3 mt-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search by policy number, agent code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10 border-gray-200 focus:border-green-400 focus:ring-green-400"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch();
+                    setIsSearchOpen(false);
+                  }
+                }}
+                className="pl-10"
               />
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleSearch} variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
-                <Search className="h-4 w-4 mr-2" />
-                Search
-              </Button>
-            </div>
+            <Button
+              variant="default"
+              onClick={() => {
+                handleSearch();
+                setIsSearchOpen(false);
+              }}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Search
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       {/* Transactions Grid/List */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold text-gray-900">Transactions</CardTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Page size: {pageSize}</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <div className="">
+        <div>
           {isLoading ? (
             <div className={cn(
               "grid gap-4",
@@ -376,8 +391,8 @@ export function CutPayManagement() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

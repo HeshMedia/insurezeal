@@ -493,11 +493,7 @@ const PolicyPdfUpload = ({
         </motion.div>
       )}
 
-      {/* Status Footer */}
-      <div className="flex items-center justify-center space-x-2 pt-4 text-xs text-muted-foreground">
-        <Database className="h-3 w-3" />
-        <span>Documents are stored locally in your browser for security</span>
-      </div>
+ 
     </div>
   );
 };
