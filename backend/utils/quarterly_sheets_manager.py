@@ -1,51 +1,47 @@
 """
 Quarterly Google Sheets Management System for Insurezeal Backend API.
 
-This module implements a comprehensive quarterly data management system that
-automates the creation, maintenance, and data processing of quarterly business
-sheets in Google Sheets. It provides seamless quarter-to-quarter transitions
-with proper balance carryover, template replication, and data routing.
+This module implements a comprehensive quarterly data management system for
+quarterly business sheets in Google Sheets. It provides data processing,
+template management, and data routing capabilities.
 
 Key Features:
-- Automated quarterly sheet creation with proper naming conventions
-- Balance carryover from previous quarters for continuity
-- Template-based sheet structure replication
-- Data routing to current active quarterly sheet
+- Data routing to existing quarterly sheets
 - Master template management and synchronization
 - Record mapping and data validation
-- Quarter transition detection and processing
+- Sheet access and data retrieval
 - Comprehensive error handling and logging
 
 Business Logic:
 The quarterly sheets system supports critical business operations including:
-- Insurance policy data organization by quarters
-- Commission tracking and balance management
+- Insurance policy data organization by quarters (within existing sheets)
+- Commission tracking and data management
 - Client information management across time periods
 - Regulatory compliance reporting
-- Data archival and historical tracking
-- Template standardization across all quarters
+- Data retrieval and historical tracking
+- Template standardization access
 
 Architecture:
-- Google Sheets API integration for cloud-based data management
+- Google Sheets API integration for cloud-based data access
 - Service account authentication for secure access
-- Template-driven sheet creation for consistency
-- Balance carryover logic for financial continuity
-- Dynamic quarter detection based on current date
+- Template-driven data operations for consistency
 - Configurable master templates and record mappings
 
 Data Flow:
-1. Quarter transition detection
-2. New quarterly sheet creation from master template
-3. Balance carryover from previous quarter (where applicable)
-4. Formula and formatting replication
-5. Data routing updates to new active sheet
-6. Validation and health checks
+1. Access existing quarterly sheets (created by Google Apps Script)
+2. Route data to appropriate quarterly sheets
+3. Retrieve and validate data from sheets
+4. Health checks and connectivity validation
 
 Dependencies:
 - gspread: Google Sheets API client library
 - google.oauth2: Service account authentication
 - config: Credentials and configuration management
 - logging: Comprehensive operation monitoring
+
+Note: Quarterly sheet creation is handled by Google Apps Script (runs one day before new quarter).
+Cross-quarter aggregation and summaries are also handled by Google Apps Script.
+This manager focuses on data operations within existing sheets only - no sheet creation.
 """
 
 from typing import List, Dict, Any, Optional, Tuple
@@ -60,19 +56,17 @@ logger = logging.getLogger(__name__)
 
 class QuarterlySheetManager:
     """
-    Comprehensive manager for quarterly Google Sheets operations and data processing.
+    Comprehensive manager for quarterly Google Sheets data operations and access.
 
-    This class orchestrates all aspects of quarterly sheet management including
-    creation, data migration, balance carryover, and template synchronization.
-    It serves as the central controller for quarterly business operations in
-    the insurance platform.
+    This class orchestrates quarterly sheet data management including record routing, 
+    data retrieval, and template access. It serves as the central controller for 
+    quarterly business operations in the insurance platform.
 
-    The manager ensures business continuity across quarter boundaries by:
-    - Automatically detecting quarter transitions
-    - Creating new quarterly sheets with proper structure
-    - Carrying forward balances and relevant data
-    - Maintaining template consistency
-    - Routing new data to appropriate quarterly sheets
+    The manager ensures business continuity by:
+    - Accessing existing quarterly sheets (created by Google Apps Script)
+    - Routing data to appropriate quarterly sheets
+    - Retrieving data from quarterly sheets
+    - Providing template structure access
 
     Attributes:
         credentials (dict): Google Sheets service account credentials
@@ -82,18 +76,21 @@ class QuarterlySheetManager:
         master_template_sheet_name (str): Name of the master template sheet
 
     Key Operations:
-        - Quarter detection and sheet creation
-        - Balance carryover with matching logic
-        - Template replication and formula copying
+        - Data routing and record management
         - Data validation and integrity checks
         - Error handling and recovery processes
+        - Sheet access and connectivity checks
 
     Integration Points:
         - Google Sheets API for cloud operations
         - Master Template sheet for structure definition
         - Record Mapper for data field mapping
         - Backend database for operational data
-        - Quarterly scheduler for automated operations
+        - Google Apps Script for sheet creation (automated)
+
+    Note: Quarterly sheet creation is handled by Google Apps Script (runs one day before new quarter).
+    Cross-quarter aggregation is handled by Google Apps Script.
+    This manager focuses on data operations within existing sheets only.
     """
 
     def __init__(self):
@@ -135,46 +132,8 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Failed to initialize Google Sheets client: {str(e)}")
 
-    def get_current_quarter_info(
-        self, target_date: Optional[date] = None
-    ) -> Tuple[str, int, int]:
-        """
-        Get current quarter information
-
-        Returns:
-            Tuple of (quarter_name, quarter_number, year)
-        """
-        if target_date is None:
-            target_date = date.today()
-
-        year = target_date.year
-        month = target_date.month
-
-        if month <= 3:
-            quarter = 1
-        elif month <= 6:
-            quarter = 2
-        elif month <= 9:
-            quarter = 3
-        else:
-            quarter = 4
-
-        quarter_name = f"Q{quarter}-{year}"
-        return quarter_name, quarter, year
-
-    def get_previous_quarter_info(
-        self, current_quarter: int, current_year: int
-    ) -> Tuple[str, int, int]:
-        """Get previous quarter information"""
-        if current_quarter == 1:
-            prev_quarter = 4
-            prev_year = current_year - 1
-        else:
-            prev_quarter = current_quarter - 1
-            prev_year = current_year
-
-        prev_quarter_name = f"Q{prev_quarter}-{prev_year}"
-        return prev_quarter_name, prev_quarter, prev_year
+    def __init__(self):
+        self.credentials = GOOGLE_SHEETS_CREDENTIALS
 
     def get_master_template_sheet(self) -> Optional[gspread.Worksheet]:
         """Get the Master Template sheet from Google Sheets"""
@@ -361,11 +320,13 @@ class QuarterlySheetManager:
                     target_quarter = int(quarter_part)
                     target_year = int(year_part)
                 else:
-                    # Fallback to current quarter
-                    _, target_quarter, target_year = self.get_current_quarter_info()
+                    # Use default values if quarter cannot be determined
+                    target_quarter = 1
+                    target_year = 2025
             except:
-                # Fallback to current quarter
-                _, target_quarter, target_year = self.get_current_quarter_info()
+                # Use default values if parsing fails
+                target_quarter = 1
+                target_year = 2025
 
             logger.info(
                 f"Copying template structure from {self.master_template_sheet_name} to {target_worksheet.title} (Q{target_quarter}-{target_year})"
@@ -651,95 +612,6 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error checking if sheet exists: {str(e)}")
             return False
-
-    def create_quarterly_sheet(
-        self, quarter: int, year: int
-    ) -> Optional[gspread.Worksheet]:
-        """
-        Create a new quarterly sheet with proper structure and formulas from Google Sheets template
-
-        Args:
-            quarter: Quarter number (1-4)
-            year: Year (e.g., 2025)
-
-        Returns:
-            Created worksheet or None if failed
-        """
-        try:
-            if not self.spreadsheet:
-                logger.error("Spreadsheet not initialized")
-                return None
-
-            sheet_name = self.get_quarterly_sheet_name(quarter, year)
-
-            # Check if sheet already exists
-            if self.sheet_exists(sheet_name):
-                logger.info(f"Sheet {sheet_name} already exists")
-                return self.spreadsheet.worksheet(sheet_name)
-
-            # Get complete headers
-            headers = self.create_quarterly_sheet_headers()
-
-            # Create new worksheet
-            worksheet = self.spreadsheet.add_worksheet(
-                title=sheet_name,
-                rows=5000,  # Start with 5000 rows for quarterly data
-                cols=len(headers),
-            )
-
-            logger.info(f"Created new worksheet: {sheet_name}")
-
-            # Copy structure, formulas, and formatting from template
-            template_copied = self.copy_template_structure_and_formulas(worksheet)
-
-            if not template_copied:
-                # Fallback: Add headers manually and basic formatting
-                worksheet.update("A1", [headers], value_input_option="RAW")
-                self._format_header_row(worksheet, len(headers))
-                logger.warning("Template copy failed, applied basic structure")
-
-            # Apply balance carryover if this is not Q1 or if previous quarter exists
-            if quarter > 1 or year > 2025:  # Assuming 2025 is the starting year
-                self._apply_balance_carryover(worksheet, quarter, year, headers)
-
-            logger.info(f"Successfully created quarterly sheet: {sheet_name}")
-            return worksheet
-
-        except Exception as e:
-            logger.error(f"Error creating quarterly sheet Q{quarter}-{year}: {str(e)}")
-            return None
-
-    def _format_header_row(self, worksheet: gspread.Worksheet, num_cols: int):
-        """Apply formatting to header row"""
-        try:
-            # Format header row - bold and freeze
-            header_range = f"A1:{self._col_to_a1(num_cols)}1"
-            worksheet.format(
-                header_range,
-                {
-                    "textFormat": {"bold": True},
-                    "backgroundColor": {"red": 0.9, "green": 0.9, "blue": 0.9},
-                },
-            )
-
-            # Freeze header row
-            worksheet.freeze(rows=1)
-
-            logger.info("Applied header formatting and freeze")
-
-        except Exception as e:
-            logger.error(f"Error formatting header row: {str(e)}")
-
-    def _col_to_a1(self, col: int) -> str:
-        """Convert column number to A1 notation"""
-        if col <= 0:
-            raise ValueError("Column index must be positive.")
-
-        result = ""
-        while col > 0:
-            col, remainder = divmod(col - 1, 26)
-            result = chr(65 + remainder) + result
-        return result
 
     def _adjust_formula_for_row(
         self, formula: str, source_row: int, target_row: int
@@ -1075,16 +947,16 @@ class QuarterlySheetManager:
                             f"DEBUG: Target worksheet quarter info: Q{quarter}-{year}"
                         )
                     else:
-                        # Fallback to current quarter
-                        _, quarter, year = self.get_current_quarter_info()
+                        # Use default values if worksheet name doesn't match expected format
+                        quarter, year = 1, 2025
                         logger.warning(
-                            f"DEBUG: Could not parse worksheet name '{worksheet_name}', using current quarter: Q{quarter}-{year}"
+                            f"DEBUG: Could not parse worksheet name '{worksheet_name}', using default: Q{quarter}-{year}"
                         )
                 except:
-                    # Fallback to current quarter
-                    _, quarter, year = self.get_current_quarter_info()
+                    # Use default values if parsing fails
+                    quarter, year = 1, 2025
                     logger.warning(
-                        f"DEBUG: Error parsing worksheet name '{worksheet_name}', using current quarter: Q{quarter}-{year}"
+                        f"DEBUG: Error parsing worksheet name '{worksheet_name}', using default: Q{quarter}-{year}"
                     )
 
                 # Process each cell: apply data formulas from Master Template
@@ -1193,22 +1065,6 @@ class QuarterlySheetManager:
             logger.error(f"Error copying formulas only to row {target_row}: {e}")
             return False
 
-    def get_current_quarter_sheet(self) -> Optional[gspread.Worksheet]:
-        """Get the current quarter's sheet, creating it if necessary"""
-        try:
-            quarter_name, quarter, year = self.get_current_quarter_info()
-
-            # Check if current quarter sheet exists
-            if self.sheet_exists(quarter_name):
-                return self.spreadsheet.worksheet(quarter_name)
-            else:
-                # Create current quarter sheet
-                return self.create_quarterly_sheet(quarter, year)
-
-        except Exception as e:
-            logger.error(f"Error getting current quarter sheet: {str(e)}")
-            return None
-
     def get_quarterly_sheet(
         self, quarter: int, year: int
     ) -> Optional[gspread.Worksheet]:
@@ -1227,129 +1083,27 @@ class QuarterlySheetManager:
             logger.error(f"Error getting quarter sheet Q{quarter}-{year}: {str(e)}")
             return None
 
-    def auto_refresh_dependent_quarters(self, source_quarter: int, source_year: int):
-        """
-        Automatically refresh carryover data in quarters that depend on the source quarter
 
-        Args:
-            source_quarter: Quarter that was updated (1-4)
-            source_year: Year of the updated quarter
-        """
-        try:
-            # Determine next quarter that depends on this source quarter
-            if source_quarter == 4:
-                next_quarter = 1
-                next_year = source_year + 1
-            else:
-                next_quarter = source_quarter + 1
-                next_year = source_year
-
-            next_quarter_name = f"Q{next_quarter}-{next_year}"
-            source_quarter_name = f"Q{source_quarter}-{source_year}"
-
-            # Check if the dependent quarter exists
-            if self.sheet_exists(next_quarter_name):
-                logger.info(
-                    f"Auto-refreshing carryover: {source_quarter_name} -> {next_quarter_name}"
-                )
-
-                # Get the dependent quarter sheet
-                dependent_sheet = self.spreadsheet.worksheet(next_quarter_name)
-
-                # Get headers for the dependent sheet
-                headers = self.create_quarterly_sheet_headers()
-
-                # Clear existing carryover data (keep headers and new records, only clear carryover rows)
-                self._clear_carryover_data_only(dependent_sheet, headers)
-
-                # Re-apply carryover with fresh data
-                self._apply_balance_carryover(
-                    dependent_sheet, next_quarter, next_year, headers
-                )
-
-                logger.info(
-                    f"Successfully auto-refreshed carryover from {source_quarter_name} to {next_quarter_name}"
-                )
-                return True
-            else:
-                logger.debug(
-                    f"Dependent quarter {next_quarter_name} does not exist - no refresh needed"
-                )
-                return False
-
-        except Exception as e:
-            logger.error(f"Error auto-refreshing dependent quarters: {str(e)}")
-            return False
 
     def route_new_record_to_current_quarter(
         self, record_data: Dict[str, Any], operation_type: str = "CREATE"
     ) -> Dict[str, Any]:
         """
         Route new record to current quarter's sheet
+        Note: This method is deprecated since automatic quarter detection was removed.
+        Use route_record_to_specific_quarter() instead.
 
         Args:
             record_data: The record data to add
             operation_type: "CREATE" for new records, "UPDATE" for existing records
 
         Returns:
-            Success status and details
+            Error message indicating deprecation
         """
-        try:
-            # Get current quarter sheet
-            current_sheet = self.get_current_quarter_sheet()
-
-            if not current_sheet:
-                return {
-                    "success": False,
-                    "error": "Could not access current quarter sheet",
-                }
-
-            # Get headers
-            headers = self.create_quarterly_sheet_headers()
-
-            # Prepare row data
-            row_data = []
-            for header in headers:
-                value = record_data.get(header, "") or record_data.get(
-                    header.replace(" ", "_").lower(), ""
-                )
-                row_data.append(str(value) if value else "")
-
-            # Find next empty row
-            next_row = self._find_next_empty_row(current_sheet)
-
-            # First, add the actual record data
-            range_notation = f"A{next_row}:{self._col_to_a1(len(headers))}{next_row}"
-            current_sheet.update(
-                range_notation, [row_data], value_input_option="USER_ENTERED"
-            )
-
-            # Then, copy ONLY the formulas from row 2 to the new row (preserving our data)
-            logger.info(
-                f"DEBUG: About to copy formulas to new record at row {next_row}"
-            )
-            formula_copy_success = self._copy_formulas_only_to_row(
-                current_sheet, next_row
-            )  # Data rows only
-            logger.info(
-                f"DEBUG: Formula copy to new record row {next_row} success: {formula_copy_success}"
-            )
-
-            quarter_name, quarter, year = self.get_current_quarter_info()
-
-            logger.info(
-                f"Successfully {operation_type.lower()}d record to {quarter_name} at row {next_row} with formulas"
-            )
-
-            # Auto-refresh dependent quarters when new data is added
-            quarter_name, quarter, year = self.get_current_quarter_info()
-            self.auto_refresh_dependent_quarters(quarter, year)
-
-            return {"success": True, "sheet_name": quarter_name, "row_number": next_row}
-
-        except Exception as e:
-            logger.error(f"Error routing record to current quarter: {str(e)}")
-            return {"success": False, "error": str(e)}
+        return {
+            "success": False,
+            "error": "Automatic quarter routing is no longer supported. Please use route_record_to_specific_quarter() with explicit quarter and year parameters.",
+        }
 
     def route_new_record_to_specific_quarter(
         self,
@@ -1377,13 +1131,11 @@ class QuarterlySheetManager:
                 target_sheet = self.spreadsheet.worksheet(quarter_name)
                 logger.info(f"Found target quarter sheet: {quarter_name}")
             except gspread.WorksheetNotFound:
-                logger.info(f"Quarter sheet {quarter_name} not found, creating it")
-                target_sheet = self.create_quarterly_sheet(quarter, year)
-                if not target_sheet:
-                    return {
-                        "success": False,
-                        "error": f"Could not create quarter sheet {quarter_name}",
-                    }
+                logger.error(f"Quarter sheet {quarter_name} not found and automatic creation is disabled")
+                return {
+                    "success": False,
+                    "error": f"Quarter sheet {quarter_name} does not exist. Please create it manually using Google Apps Script.",
+                }
 
             # Get headers
             headers = self.create_quarterly_sheet_headers()
@@ -1419,9 +1171,6 @@ class QuarterlySheetManager:
             logger.info(
                 f"Successfully {operation_type.lower()}d record to {quarter_name} at row {next_row} with formulas"
             )
-
-            # Auto-refresh dependent quarters when new data is added
-            self.auto_refresh_dependent_quarters(quarter, year)
 
             return {"success": True, "sheet_name": quarter_name, "row_number": next_row}
 
@@ -1459,240 +1208,11 @@ class QuarterlySheetManager:
             logger.error(f"Error finding next empty row: {str(e)}")
             return 2
 
-    def _apply_balance_carryover(
-        self, worksheet: gspread.Worksheet, quarter: int, year: int, headers: List[str]
-    ):
-        """
-        Apply balance carryover from previous quarter to current quarter worksheet
 
-        Args:
-            worksheet: Target worksheet to apply carryover to
-            quarter: Target quarter number (1-4)
-            year: Target year
-            headers: Column headers for the worksheet
-        """
-        try:
-            # Get previous quarter info
-            prev_quarter_name, prev_quarter, prev_year = self.get_previous_quarter_info(
-                quarter, year
-            )
 
-            # Check if previous quarter sheet exists
-            if not self.sheet_exists(prev_quarter_name):
-                logger.info(
-                    f"No previous quarter sheet found ({prev_quarter_name}) - skipping carryover"
-                )
-                return
 
-            # Get previous quarter data
-            prev_sheet = self.spreadsheet.worksheet(prev_quarter_name)
-            prev_data = prev_sheet.get_all_records()
 
-            # Process carryover data
-            carryover_records = self._process_balance_carryover(prev_data, headers)
 
-            if not carryover_records:
-                logger.info(f"No carryover records found from {prev_quarter_name}")
-                return
-
-            # Find starting row for carryover data (after header and template row)
-            current_row = 3  # Start from row 3 (after header row 1 and template row 2)
-
-            # Add carryover records to the worksheet
-            for record in carryover_records:
-                try:
-                    # Prepare row data based on headers
-                    row_data = []
-                    for header in headers:
-                        value = record.get(header, "")
-                        row_data.append(str(value) if value else "")
-
-                    # Write the row data
-                    range_notation = (
-                        f"A{current_row}:{self._col_to_a1(len(headers))}{current_row}"
-                    )
-                    worksheet.update(
-                        range_notation, [row_data], value_input_option="USER_ENTERED"
-                    )
-
-                    # Copy formulas from template row to this row
-                    self._copy_formulas_only_to_row(worksheet, current_row)
-
-                    current_row += 1
-
-                except Exception as row_error:
-                    logger.error(
-                        f"Error adding carryover record at row {current_row}: {row_error}"
-                    )
-                    continue
-
-            logger.info(
-                f"Successfully applied {len(carryover_records)} carryover records from {prev_quarter_name} to Q{quarter}-{year}"
-            )
-
-        except Exception as e:
-            logger.error(f"Error applying balance carryover: {str(e)}")
-
-    def _process_balance_carryover(
-        self, prev_data: List[Dict[str, Any]], headers: List[str]
-    ) -> List[Dict[str, Any]]:
-        """
-        Process records from previous quarter and return those that should be carried over
-
-        Args:
-            prev_data: Records from previous quarter
-            headers: Headers for the new quarter sheet
-
-        Returns:
-            List of records to carry over (where Match = True and Running Bal > 0)
-        """
-        try:
-            carryover_records = []
-
-            for record in prev_data:
-                # Check if this record should be carried over
-                # Criteria: Match = True and Running Bal > 0
-                match_value = str(record.get("Match", "")).strip().lower()
-                running_bal = record.get("Running Bal", 0)
-
-                # Convert running balance to float for comparison
-                try:
-                    running_bal_float = float(running_bal) if running_bal else 0
-                except (ValueError, TypeError):
-                    running_bal_float = 0
-
-                # Carryover if Match is True and Running Balance is greater than 0
-                if match_value == "true" and running_bal_float > 0:
-                    # Create a new record for carryover
-                    carryover_record = {}
-
-                    # Copy relevant fields that should be carried over
-                    fields_to_carry = [
-                        "Policy Number",
-                        "Product",
-                        "Insured Name",
-                        "Mobile",
-                        "Agent Name",
-                        "Agent Code",
-                        "Insurer",
-                        "Policy Premium",
-                        "Brokerage %",
-                        "Brokerage",
-                        "TDS",
-                        "TDS %",
-                        "GST",
-                        "Total Receivable from Broker",
-                        "Total Receivable from Broker (Include 18% GST)",
-                        "Match",
-                    ]
-
-                    for field in fields_to_carry:
-                        if field in record:
-                            carryover_record[field] = record[field]
-
-                    # Set the carried over running balance as the new "carried forward" amount
-                    carryover_record["Running Bal"] = running_bal_float
-
-                    # Mark this as carried over data
-                    carryover_record["Notes"] = (
-                        f"Carried over from previous quarter (Original Bal: {running_bal_float})"
-                    )
-
-                    carryover_records.append(carryover_record)
-
-            logger.info(
-                f"Processed {len(carryover_records)} records for carryover out of {len(prev_data)} total records"
-            )
-            return carryover_records
-
-        except Exception as e:
-            logger.error(f"Error processing balance carryover: {str(e)}")
-            return []
-
-    def _clear_carryover_data_only(
-        self, worksheet: gspread.Worksheet, headers: List[str]
-    ):
-        """
-        Clear only carryover data from worksheet, preserving header and new records
-
-        Args:
-            worksheet: Worksheet to clear carryover data from
-            headers: Column headers
-        """
-        try:
-            # Get all records to identify carryover vs new records
-            all_records = worksheet.get_all_records()
-
-            # Find rows that are carryover records (have notes about being carried over)
-            rows_to_clear = []
-
-            for i, record in enumerate(all_records):
-                notes = str(record.get("Notes", "")).lower()
-                if "carried over" in notes or "carryover" in notes:
-                    # This is a carryover record - mark for clearing
-                    # Row number is i + 2 (1 for header, 1 for 0-based index)
-                    rows_to_clear.append(i + 2)
-
-            # Clear the identified carryover rows
-            if rows_to_clear:
-                for row_num in sorted(
-                    rows_to_clear, reverse=True
-                ):  # Clear from bottom up
-                    try:
-                        range_to_clear = (
-                            f"A{row_num}:{self._col_to_a1(len(headers))}{row_num}"
-                        )
-                        worksheet.batch_clear([range_to_clear])
-                    except Exception as clear_error:
-                        logger.warning(f"Could not clear row {row_num}: {clear_error}")
-
-                logger.info(f"Cleared {len(rows_to_clear)} carryover rows")
-            else:
-                logger.info("No carryover rows found to clear")
-
-        except Exception as e:
-            logger.error(f"Error clearing carryover data: {str(e)}")
-
-    def check_quarter_transition(self) -> Dict[str, Any]:
-        """
-        Check if we need to transition to a new quarter and create sheet if needed
-
-        Returns:
-            Status of quarter transition check
-        """
-        try:
-            quarter_name, quarter, year = self.get_current_quarter_info()
-
-            # Check if current quarter sheet exists
-            if not self.sheet_exists(quarter_name):
-                logger.info(
-                    f"Current quarter sheet {quarter_name} doesn't exist - creating it"
-                )
-                new_sheet = self.create_quarterly_sheet(quarter, year)
-
-                if new_sheet:
-                    return {
-                        "transition_needed": True,
-                        "new_sheet_created": True,
-                        "sheet_name": quarter_name,
-                        "message": f"Created new quarterly sheet: {quarter_name}",
-                    }
-                else:
-                    return {
-                        "transition_needed": True,
-                        "new_sheet_created": False,
-                        "error": f"Failed to create quarterly sheet: {quarter_name}",
-                    }
-            else:
-                return {
-                    "transition_needed": False,
-                    "current_sheet": quarter_name,
-                    "message": f"Current quarter sheet {quarter_name} already exists",
-                }
-
-        except Exception as e:
-            logger.error(f"Error checking quarter transition: {str(e)}")
-            return {"transition_needed": False, "error": str(e)}
 
     def get_quarter_summary(self, quarter: int, year: int) -> Dict[str, Any]:
         """Get summary information for a specific quarter"""
@@ -1758,14 +1278,15 @@ class QuarterlySheetManager:
                     target_sheet = self.spreadsheet.worksheet(quarter_name)
                     logger.info(f"Targeting specific quarter sheet: {quarter_name}")
                 except gspread.WorksheetNotFound:
-                    logger.warning(
-                        f"Quarter sheet {quarter_name} not found, falling back to current quarter"
-                    )
-                    target_sheet = self.get_current_quarter_sheet()
+                    return {
+                        "success": False,
+                        "error": f"Quarter sheet {quarter_name} not found. Please create it manually using Google Apps Script.",
+                    }
             else:
-                target_sheet = self.get_current_quarter_sheet()
-                quarter_name, quarter, year = self.get_current_quarter_info()
-                logger.info(f"Using current quarter sheet: {quarter_name}")
+                return {
+                    "success": False,
+                    "error": "Quarter and year parameters are required since automatic quarter detection is disabled.",
+                }
 
             if not target_sheet:
                 return {
@@ -1973,38 +1494,9 @@ quarterly_manager = QuarterlySheetManager()
 
 
 # Convenience functions for integration
-def get_current_quarter_sheet() -> Optional[gspread.Worksheet]:
-    """Get current quarter sheet"""
-    return quarterly_manager.get_current_quarter_sheet()
-
-
 def route_record_to_current_quarter(record_data: Dict[str, Any]) -> Dict[str, Any]:
     """Route record to current quarter"""
     return quarterly_manager.route_new_record_to_current_quarter(record_data)
-
-
-def check_and_create_quarterly_sheet() -> Dict[str, Any]:
-    """Check if quarterly sheet needs to be created"""
-    return quarterly_manager.check_quarter_transition()
-
-
-def create_quarterly_sheet_for_date(target_date: date) -> Optional[gspread.Worksheet]:
-    """Create quarterly sheet for specific date"""
-    quarter_name, quarter, year = quarterly_manager.get_current_quarter_info(
-        target_date
-    )
-    return quarterly_manager.create_quarterly_sheet(quarter, year)
-
-
-def check_and_refresh_dependent_quarters(quarter: int, year: int) -> Dict[str, Any]:
-    """
-    Convenience function to manually trigger carryover refresh for dependent quarters
-    """
-    success = quarterly_manager.auto_refresh_dependent_quarters(quarter, year)
-    return {
-        "success": success,
-        "message": f"Carryover refresh {'completed' if success else 'failed'} for Q{quarter}-{year} dependents",
-    }
 
 
 def get_quarter_summary_data(quarter: int, year: int) -> Dict[str, Any]:

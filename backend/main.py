@@ -24,10 +24,6 @@ from routers.mis.mis import router as mis_router
 from routers.universal_records.universal_records import (
     router as universal_records_router,
 )
-from utils.quarterly_scheduler import (
-    startup_quarterly_system,
-    shutdown_quarterly_system,
-)
 
 # Configure logging for production readiness
 logging.basicConfig(
@@ -56,12 +52,11 @@ async def startup_event():
     """
     Application startup event handler.
 
-    Initializes quarterly system for automatic report generation and
-    other background services required for the application.
+    Initializes core application services and performs startup tasks.
     """
     logger.info("Application startup initiated")
     try:
-        await startup_quarterly_system()
+        # Application startup tasks can be added here
         logger.info("Application startup completed successfully")
     except Exception as e:
         logger.error(f"Application startup failed: {str(e)}", exc_info=True)
@@ -73,12 +68,12 @@ async def shutdown_event():
     """
     Application shutdown event handler.
 
-    Gracefully shuts down background services and cleans up resources
+    Gracefully shuts down core application services and cleans up resources
     to ensure data integrity and proper application termination.
     """
     logger.info("Application shutdown initiated")
     try:
-        await shutdown_quarterly_system()
+        # Application shutdown tasks can be added here
         logger.info("Application shutdown completed successfully")
     except Exception as e:
         logger.error(f"Application shutdown failed: {str(e)}", exc_info=True)
