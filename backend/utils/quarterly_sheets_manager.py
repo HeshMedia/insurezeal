@@ -44,7 +44,7 @@ Cross-quarter aggregation and summaries are also handled by Google Apps Script.
 This manager focuses on data operations within existing sheets only - no sheet creation.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
@@ -58,8 +58,8 @@ class QuarterlySheetManager:
     """
     Comprehensive manager for quarterly Google Sheets data operations and access.
 
-    This class orchestrates quarterly sheet data management including record routing, 
-    data retrieval, and template access. It serves as the central controller for 
+    This class orchestrates quarterly sheet data management including record routing,
+    data retrieval, and template access. It serves as the central controller for
     quarterly business operations in the insurance platform.
 
     The manager ensures business continuity by:
@@ -1083,8 +1083,6 @@ class QuarterlySheetManager:
             logger.error(f"Error getting quarter sheet Q{quarter}-{year}: {str(e)}")
             return None
 
-
-
     def route_new_record_to_current_quarter(
         self, record_data: Dict[str, Any], operation_type: str = "CREATE"
     ) -> Dict[str, Any]:
@@ -1131,7 +1129,9 @@ class QuarterlySheetManager:
                 target_sheet = self.spreadsheet.worksheet(quarter_name)
                 logger.info(f"Found target quarter sheet: {quarter_name}")
             except gspread.WorksheetNotFound:
-                logger.error(f"Quarter sheet {quarter_name} not found and automatic creation is disabled")
+                logger.error(
+                    f"Quarter sheet {quarter_name} not found and automatic creation is disabled"
+                )
                 return {
                     "success": False,
                     "error": f"Quarter sheet {quarter_name} does not exist. Please create it manually using Google Apps Script.",
@@ -1207,12 +1207,6 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error finding next empty row: {str(e)}")
             return 2
-
-
-
-
-
-
 
     def get_quarter_summary(self, quarter: int, year: int) -> Dict[str, Any]:
         """Get summary information for a specific quarter"""

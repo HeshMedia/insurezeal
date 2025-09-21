@@ -47,7 +47,11 @@ logger = logging.getLogger(__name__)
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 
-router = APIRouter(prefix="/admin/public", tags=["Public Admin"], include_in_schema=ENVIRONMENT == "dev")
+router = APIRouter(
+    prefix="/admin/public",
+    tags=["Public Admin"],
+    include_in_schema=ENVIRONMENT == "dev",
+)
 
 
 # TODO: ek baar superadmins sab bnajeynge tab ye route ko remove krna hai yaad rkahne ko TODO hai ye
