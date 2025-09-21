@@ -9,9 +9,11 @@ import { ArrowLeft } from 'lucide-react'
 import InputForm from '@/components/forms/input-form'
 import { useAtom } from 'jotai'
 import { pdfExtractionDataAtom } from '@/lib/atoms/cutpay'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { ExtractedPolicyData, AdminInputData, CalculationResult } from '@/types/cutpay.types'
 // Types are inferred via API response normalization, no explicit imports needed
+import { useSetAtom } from 'jotai'
+import { policyPdfUrlAtom, additionalDocumentsUrlsAtom } from '@/lib/atoms/cutpay'
 
 const toStringOrNull = (val: unknown): string | null => {
   if (val === null || val === undefined) return null
@@ -36,6 +38,71 @@ export default function CutPayEditPage() {
   
   const { data: policyData, isLoading: isLoadingCutpay } = useCutPayByPolicy(policy, quarter, year, true)
   const [, setPdfExtractionData] = useAtom(pdfExtractionDataAtom)
+  const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom)
+  const setAdditionalDocUrls = useSetAtom(additionalDocumentsUrlsAtom)
+
+  // Build a combined record from Google Sheets + DB for form auto-fill
+  const dbRecord = policyData?.database_record as Record<string, unknown> | undefined
+  const sheet = policyData?.google_sheets_data as Record<string, string> | undefined
+  const fromSheet = useMemo<Record<string, unknown>>(() => {
+    if (!sheet) return {}
+    const rawPaymentMode = sheet['Payment Mode'] || ''
+    const dashIndex = rawPaymentMode.indexOf(' - ')
+    const parsedPaymentMethod = dashIndex >= 0 ? rawPaymentMode.slice(0, dashIndex).trim() : rawPaymentMode
+    const parsedPaymentDetail = dashIndex >= 0 ? rawPaymentMode.slice(dashIndex + 3).trim() : null
+    const insurerBrokerCode = sheet['Insurer /broker code'] || ''
+    const derivedCodeType = insurerBrokerCode && insurerBrokerCode.trim() !== '' ? 'Broker' : 'Direct'
+    return {
+      policy_number: sheet['Policy number'] || null,
+      formatted_policy_number: sheet['Formatted Policy number'] || null,
+      major_categorisation: sheet["Major Categorisation( Motor/Life/ Health)"] || null,
+      product_insurer_report: sheet['Product (Insurer Report)'] || null,
+      product_type: sheet['Product Type'] || null,
+      plan_type: sheet['Plan type (Comp/STP/SAOD)'] || null,
+      customer_name: sheet['Customer Name'] || null,
+      gross_premium: toNumberOrNull(sheet['Gross premium'] || null),
+      net_premium: toNumberOrNull(sheet[' Net premium '] || null),
+      od_premium: toNumberOrNull(sheet['OD Preimium'] || null),
+      tp_premium: toNumberOrNull(sheet['TP Premium'] || null),
+      gst_amount: toNumberOrNull(sheet['GST Amount'] || null),
+      registration_number: sheet['Registration.no'] || null,
+      make_model: sheet['Make_Model'] || null,
+      model: sheet['Model'] || null,
+      vehicle_variant: sheet['Vehicle_Variant'] || null,
+      gvw: toNumberOrNull(sheet['GVW'] || null),
+      rto: sheet['RTO'] || null,
+      state: sheet['State'] || null,
+      fuel_type: sheet['Fuel Type'] || null,
+      cc: toNumberOrNull(sheet['CC'] || null),
+      age_year: toNumberOrNull(sheet['Age(Year)'] || null),
+      ncb: sheet['NCB (YES/NO)'] || null,
+      discount_percent: toNumberOrNull(sheet['Discount %'] || null),
+      business_type: sheet['Business Type'] || null,
+      seating_capacity: toNumberOrNull(sheet['Seating Capacity'] || null),
+      veh_wheels: toNumberOrNull(sheet['Veh_Wheels'] || null),
+      reporting_month: sheet["Reporting Month (mmm'yy)"] || null,
+      booking_date: sheet['Booking Date(Click to select Date)'] || null,
+      agent_code: sheet['Agent Code'] || null,
+      commissionable_premium: toNumberOrNull(sheet['Commissionable Premium'] || null),
+      incoming_grid_percent: toNumberOrNull(sheet['Incoming Grid %'] || null),
+      extra_grid: toNumberOrNull(sheet['Extra Grid'] || null),
+      receivable_from_broker: toNumberOrNull(sheet['Receivable from Broker'] || null),
+      extra_amount_receivable_from_broker: toNumberOrNull(sheet['Extra Amount Receivable from Broker'] || null),
+      total_receivable_from_broker: toNumberOrNull(sheet['Total Receivable from Broker'] || null),
+      total_receivable_from_broker_with_gst: toNumberOrNull(sheet['Total Receivable from Broker Include 18% GST'] || null),
+      claimed_by: sheet['Claimed By'] || null,
+      payment_by: sheet['Payment by'] || null,
+      payment_method: parsedPaymentMethod || null,
+      payment_detail: parsedPaymentDetail,
+      payment_by_office: toNumberOrNull(sheet['Payment By Office'] || null),
+      agent_commission_given_percent: toNumberOrNull(sheet['As per Broker PO%'] || null),
+      admin_child_id: sheet["Child ID/ User ID [Provided by Insure Zeal]"] || null,
+      code_type: derivedCodeType,
+    }
+  }, [sheet])
+  const combinedRecord = useMemo<Record<string, unknown> | undefined>(() => {
+    return (dbRecord || sheet) ? { ...(fromSheet || {}), ...(dbRecord || {}) } : undefined
+  }, [dbRecord, sheet, fromSheet])
 
   // Transform cutpay data to match the form structure
   const transformCutpayData = (data: Record<string, unknown> | null): {
@@ -122,19 +189,26 @@ export default function CutPayEditPage() {
 
   // Set the extracted data when cutpay data is loaded
   useEffect(() => {
-    const dbRecord = policyData?.database_record as Record<string, unknown>
-    if (dbRecord) {
-      const transformedData = transformCutpayData(dbRecord)
+    if (combinedRecord && Object.keys(combinedRecord).length) {
+      const transformedData = transformCutpayData(combinedRecord)
       if (transformedData) {
         setPdfExtractionData({
           extracted_data: transformedData.extracted_data,
           confidence_scores: {},
           extraction_status: 'completed',
-          extraction_time: new Date().toISOString()
+          extraction_time: new Date().toISOString(),
         })
       }
     }
-  }, [policyData, setPdfExtractionData])
+
+    // Set S3/remote URLs for document viewer from API if available
+    try {
+      const policyUrl = (dbRecord && typeof dbRecord === 'object' ? (dbRecord as Record<string, unknown>)['policy_pdf_url'] : null) as string | null
+      if (policyUrl) setPolicyPdfUrl(policyUrl)
+      // If future API adds additional document URLs, set them here
+      setAdditionalDocUrls({ kyc_documents: null, rc_document: null, previous_policy: null })
+    } catch {}
+  }, [policyData, combinedRecord, dbRecord, setPdfExtractionData, setPolicyPdfUrl, setAdditionalDocUrls])
 
   const handlePrev = () => {
     router.back()
@@ -174,7 +248,7 @@ export default function CutPayEditPage() {
 
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="max-w-5xl mx-auto space-y-6 p-6">
+      <div className=" space-y-6 p-6 overflow-y-hidden">
         {/* Navigation */}
         <div className="flex items-center gap-4 mb-6">
           <Button variant="outline" onClick={handlePrev}>
@@ -183,22 +257,7 @@ export default function CutPayEditPage() {
           </Button>
         </div>
 
-        {/* Edit Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-              <ArrowLeft className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Edit Transaction
-              </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-300">
-                Policy: {policy}
-              </p>
-            </div>
-          </div>
-        </div>
+        
 
         {/* Reusable InputForm for editing */}
         <InputForm 
@@ -206,7 +265,7 @@ export default function CutPayEditPage() {
           policyNumber={policy}
           quarter={quarter as number}
           year={year as number}
-          initialDbRecord={policyData?.database_record as Record<string, unknown>}
+          initialDbRecord={combinedRecord}
         />
       </div>
     </DashboardWrapper>

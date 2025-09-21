@@ -31,8 +31,19 @@ const DocumentViewer: React.FC = () => {
 
   useEffect(() => {
     const loadDocuments = async () => {
-      const docs = [];
+      // Prefer remote URLs from atoms if present; fallback to IndexedDB only when absent
+      const hasRemoteAdditional = !!(additionalDocUrls.kyc_documents || additionalDocUrls.rc_document || additionalDocUrls.previous_policy);
+      const docs: Array<{key: string, label: string, available: boolean, type?: string, name?: string}> = [];
       docs.push({ key: 'policy', label: 'Policy PDF', available: !!policyPdfUrl, type: 'application/pdf' });
+
+      if (hasRemoteAdditional) {
+        // Build availability purely from provided URLs; no IndexedDB access
+        docs.push({ key: 'kyc', label: 'KYC Documents', available: !!additionalDocUrls.kyc_documents, type: 'application/pdf' });
+        docs.push({ key: 'rc', label: 'RC Document', available: !!additionalDocUrls.rc_document, type: 'application/pdf' });
+        docs.push({ key: 'previous', label: 'Previous Policy', available: !!additionalDocUrls.previous_policy, type: 'application/pdf' });
+        setAvailableDocuments(docs);
+        return;
+      }
 
       const kycDoc = await getFromIndexedDB('kyc_documents');
       docs.push({ key: 'kyc', label: 'KYC Documents', available: !!kycDoc, type: kycDoc?.type, name: kycDoc?.name });
@@ -63,7 +74,7 @@ const DocumentViewer: React.FC = () => {
         if (url) URL.revokeObjectURL(url);
       });
     };
-  }, [policyPdfUrl, setAdditionalDocUrls]);
+  }, [policyPdfUrl, additionalDocUrls, setAdditionalDocUrls]);
 
   const getDocumentUrl = (docType: string) => {
     switch (docType) {
