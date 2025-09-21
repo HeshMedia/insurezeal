@@ -1360,7 +1360,7 @@ async def delete_cutpay_transaction_by_policy(
 
 @router.post("/upload-document", response_model=DocumentUploadResponse)
 async def upload_policy_document(
-    policy_id: str = Query(..., description="Policy ID to upload document for"),
+    cutpay_id: int = Query(..., description="CutPay record ID to upload document for"),
     filename: str = Form(..., description="Document filename for upload"),
     document_type: str = Form("policy_pdf"),
     type: str = Form(..., description="Document type - any string provided by frontend (required)"),
@@ -1373,7 +1373,7 @@ async def upload_policy_document(
     Upload policy PDF or additional documents using presigned URL
     
     Parameters:
-    - policy_id: The policy ID to upload document for
+    - cutpay_id: The CutPay record ID to upload document for
     - filename: Document filename for upload
     - document_type: Type of document being uploaded
     - type: Document type - accepts any string from frontend (required)
@@ -1385,21 +1385,20 @@ async def upload_policy_document(
     Returns a presigned URL for direct upload to S3
     """
     try:
-        # Find CutPay record by policy ID
+        # Find CutPay record by ID
         result = await db.execute(
             select(CutPay)
-            .where(CutPay.id == policy_id)
+            .where(CutPay.id == cutpay_id)
             .order_by(desc(CutPay.id))  # Get the most recent one if multiple exist
         )
         cutpay = result.first()
         
         if cutpay:
             cutpay = cutpay[0]  # Extract the CutPay object from the Row
-            cutpay_id = cutpay.id
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"CutPay transaction with policy ID '{policy_id}' not found"
+                detail=f"CutPay transaction with ID '{cutpay_id}' not found"
             )
         
         from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
@@ -1413,7 +1412,7 @@ async def upload_policy_document(
         document_url = build_cloudfront_url(key)
 
         # Comprehensive debugging for presigned uploads
-        logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' with type='{type}' for policy ID '{policy_id}' (CutPay ID {cutpay_id})")
+        logger.info(f"🔵 PRESIGNED: Processing document_type='{document_type}' with type='{type}' for CutPay ID '{cutpay_id}'")
         logger.info(f"🔵 PRESIGNED: Document URL generated: {document_url}")
         logger.info(f"🔵 PRESIGNED: Before update - policy_pdf_url: '{cutpay.policy_pdf_url}'")
         logger.info(f"🔵 PRESIGNED: Before update - additional_documents: {cutpay.additional_documents}")
@@ -1433,15 +1432,23 @@ async def upload_policy_document(
         else:
             logger.info(f"❌ PRESIGNED: ENTERING additional_documents branch using frontend-provided type: '{type_clean}'")
             
-            # Parse existing additional documents (handle both JSON object and legacy formats)
+            # Parse existing additional documents (handle both JSON string and dict formats)
             current_additional_docs = cutpay.additional_documents or {}
             existing_docs = {}
             
             if current_additional_docs:
-                if isinstance(current_additional_docs, dict):
+                if isinstance(current_additional_docs, str):
+                    # Parse JSON string from database
+                    try:
+                        import json
+                        existing_docs = json.loads(current_additional_docs)
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning(f"Failed to parse additional_documents as JSON: {current_additional_docs}")
+                        existing_docs = {}
+                elif isinstance(current_additional_docs, dict):
                     existing_docs = current_additional_docs.copy()
                 else:
-                    # Handle legacy formats if needed
+                    # Handle other legacy formats if needed
                     logger.info(f"Converting legacy additional_documents format: {type(current_additional_docs)}")
                     existing_docs = {}
             
@@ -1465,10 +1472,13 @@ async def upload_policy_document(
             
             # Update or add the document for this type (overwrites if type exists)
             existing_docs[type_clean] = new_doc_info
-            cutpay.additional_documents = existing_docs
+            
+            # Convert to JSON string for database storage
+            import json
+            cutpay.additional_documents = json.dumps(existing_docs)
             
             logger.info(f"❌ PRESIGNED: additional_documents['{type_clean}'] updated from '{old_value}' to new document info")
-            logger.info(f"❌ PRESIGNED: New additional_documents dict: {cutpay.additional_documents}")
+            logger.info(f"❌ PRESIGNED: New additional_documents JSON: {json.dumps(existing_docs)}")
         
         # Mark the field as modified to ensure SQLAlchemy detects the change
         attributes.flag_modified(cutpay, 'additional_documents')
@@ -1479,7 +1489,7 @@ async def upload_policy_document(
         
         logger.info(f"🔵 PRESIGNED: After commit/refresh - policy_pdf_url: '{cutpay.policy_pdf_url}'")
         logger.info(f"🔵 PRESIGNED: After commit/refresh - additional_documents: {cutpay.additional_documents}")
-        logger.info(f"Generated presigned URL for policy ID '{policy_id}' (CutPay ID {cutpay_id}), key: {key}")
+        logger.info(f"Generated presigned URL for CutPay ID '{cutpay_id}', key: {key}")
 
         return DocumentUploadResponse(
             document_url=document_url, 
@@ -1490,7 +1500,7 @@ async def upload_policy_document(
         )
         
     except Exception as e:
-        logger.error(f"Failed to upload document for policy ID '{policy_id}': {str(e)}")
+        logger.error(f"Failed to upload document for CutPay ID '{cutpay_id}': {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Document upload failed: {str(e)}"
