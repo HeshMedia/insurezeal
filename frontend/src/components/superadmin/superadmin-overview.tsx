@@ -2,11 +2,13 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Building, Database } from "lucide-react"
+import { Building2, Building, Database, FileSpreadsheet } from "lucide-react"
 import { useBrokerList, useInsurerList, useAdminChildIdList } from "@/hooks/superadminQuery"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
 
 export function SuperAdminOverview() {
+  const router = useRouter()
   const { data: brokers, isLoading: brokersLoading } = useBrokerList()
   const { data: insurers, isLoading: insurersLoading } = useInsurerList()
   const { data: adminChildIds, isLoading: adminChildIdsLoading } = useAdminChildIdList()
@@ -38,7 +40,7 @@ export function SuperAdminOverview() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Brokers */}
         <Card className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -102,6 +104,27 @@ export function SuperAdminOverview() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* MIS & Reports */}
+        <Card 
+          className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:bg-gray-50"
+          onClick={() => router.push('/superadmin/mis-reports')}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-gray-700">MIS & Reports</CardTitle>
+            <FileSpreadsheet className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <div className="text-2xl font-bold text-gray-900">Analytics</div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="bg-orange-100 text-orange-700 border-orange-200">
+                  View Reports
+                </Badge>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

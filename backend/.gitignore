@@ -6,6 +6,8 @@
 .env.production.local
 
 # Byte-compiled / optimized / DLL files
+__pycache__/
+__pycache__/<*.pyc>
 _pycache_/
 *.py[cod]
 *$py.class
@@ -189,3 +191,4 @@ terraform.tfvars
 
 google_sheets.json
 credentials/
+
