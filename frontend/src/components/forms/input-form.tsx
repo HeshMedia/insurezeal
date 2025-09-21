@@ -34,9 +34,7 @@ import {
   useUpdateCutPay,
   useCutPayById,
 } from "@/hooks/cutpayQuery";
-import { useSubmitPolicy, useChildIdOptions } from "@/hooks/policyQuery";
-import { useInsurers, useBrokersAndInsurers } from "@/hooks/agentQuery";
-import { useProfile } from "@/hooks/profileQuery";
+ 
 import {
   useBrokerList,
   useInsurerList,
@@ -46,7 +44,7 @@ import {
 import { AgentSummary } from "@/types/admin.types";
 import { clearAllFromIndexedDB } from "@/lib/utils/indexeddb";
 import { CreateCutpayTransactionCutpayPostRequest } from "@/types/cutpay.types";
-import { SubmitPolicyPayload, ChildIdOption } from "@/types/policy.types";
+ 
 import { Insurer, Broker, AdminChildId } from "@/types/superadmin.types";
 import {
   CutPayFormSchema,
@@ -62,16 +60,14 @@ import { Loader2 } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
 import { editModeFieldMappings, specialFieldMappings } from '@/components/admin/cutpay/form-config';
 
-// Props interface for the InputForm component (supports both cutpay and policy modes)
+// Props interface for the InputForm component (cutpay only)
 interface InputFormProps {
   onPrev: () => void; // Function to go to the previous step
-  formType: "cutpay" | "policy"; // Type of form to render (required)
   editId?: number; // Optional ID for edit mode
 }
 
 const InputForm: React.FC<InputFormProps> = ({
   onPrev,
-  formType, // Now required parameter
   editId, // Optional ID for edit mode
 }) => {
   const router = useRouter();
@@ -113,29 +109,22 @@ const InputForm: React.FC<InputFormProps> = ({
   ]);
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
-  const submitPolicyMutation = useSubmitPolicy();
   const updateCutPayMutation = useUpdateCutPay();
 
-  const { data: userProfile } = useProfile();
 
   // Fetch existing cutpay data for edit mode
   const { data: existingCutpayData } = useCutPayById(
     editId || 0,
-    !!editId && formType === "cutpay"
+    !!editId
   );
 
-  // State for child ID auto-fill functionality in policy mode
-  const [selectedChildIdDetails, setSelectedChildIdDetails] = useState<
-    AdminChildId | ChildIdOption | null
+  // State for child ID auto-fill functionality
+  const [, setSelectedChildIdDetails] = useState<
+    AdminChildId | null
   >(null);
 
-  // State to store original running balance before calculations
-  const [originalRunningBalance, setOriginalRunningBalance] =
-    useState<number>(0);
 
-  // React Hook Form setup for form state management and validation
-  // Note: Currently uses CutPayFormSchema for both cutpay and policy modes
-  // TODO: Consider creating a policy-specific schema for stricter validation in policy mode
+  // React Hook Form setup for form state management and validation (cutpay only)
   const { control, handleSubmit, setValue, watch, reset } =
     useForm<CutPayFormSchemaType>({
       resolver: zodResolver(CutPayFormSchema),
@@ -162,7 +151,7 @@ const InputForm: React.FC<InputFormProps> = ({
   const registrationNo = watch("extracted_data.registration_number");
   const majorCategorisation = watch("extracted_data.major_categorisation");
   const planType = watch("extracted_data.plan_type");
-  const runningBalValue = watch("running_bal");
+
   const childIdValue = watch("admin_input.admin_child_id");
   const cutpayReceivedStatus = watch("cutpay_received_status");
   const cutPayAmount = watch("calculations.cut_pay_amount");
@@ -170,66 +159,37 @@ const InputForm: React.FC<InputFormProps> = ({
   const insurerCode = watch("admin_input.insurer_code");
   const brokerCode = watch("admin_input.broker_code");
 
-  // Additional watches for policy form calculations
-  const netPremium = watch("extracted_data.net_premium");
-  const agentCommissionPercent = watch(
-    "admin_input.agent_commission_given_percent"
-  );
+
 
   // Get form fields - using cutpay fields for both modes (cutpay form is working perfectly)
   const currentFormFields = formFields;
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
-    if (formType === "policy") {
-      setSubmissionSteps([
-        {
-          id: "create-policy",
-          label: "Creating policy transaction",
-          status: "pending",
-        },
-        {
-          id: "upload-policy",
-          label: "Uploading policy document",
-          status: "pending",
-        },
-        {
-          id: "upload-additional",
-          label: "Uploading additional documents",
-          status: "pending",
-        },
-        {
-          id: "cleanup-redirect",
-          label: "Cleaning up and redirecting",
-          status: "pending",
-        },
-      ]);
-    } else {
-      setSubmissionSteps([
-        {
-          id: "create-transaction",
-          label: "Creating cutpay transaction",
-          status: "pending",
-        },
-        {
-          id: "upload-policy",
-          label: "Uploading policy document",
-          status: "pending",
-        },
-        {
-          id: "upload-additional",
-          label: "Uploading additional documents",
-          status: "pending",
-        },
-        {
-          id: "cleanup-redirect",
-          label: "Cleaning up and redirecting",
-          status: "pending",
-        },
-      ]);
-    }
+    setSubmissionSteps([
+      {
+        id: "create-transaction",
+        label: "Creating cutpay transaction",
+        status: "pending",
+      },
+      {
+        id: "upload-policy",
+        label: "Uploading policy document",
+        status: "pending",
+      },
+      {
+        id: "upload-additional",
+        label: "Uploading additional documents",
+        status: "pending",
+      },
+      {
+        id: "cleanup-redirect",
+        label: "Cleaning up and redirecting",
+        status: "pending",
+      },
+    ]);
     setIsSubmitting(false);
-  }, [formType]);
+  }, []);
 
   // Effect to auto-calculate 'payment_by_office' based on 'payment_by' and 'gross_premium'
   // Also manage payment source visibility
@@ -263,7 +223,7 @@ const InputForm: React.FC<InputFormProps> = ({
 
   // Effect to populate form with existing cutpay data in edit mode
   useEffect(() => {
-    if (editId && existingCutpayData && formType === "cutpay") {
+    if (editId && existingCutpayData) {
       console.log("Populating form with existing cutpay data:", existingCutpayData);
 
       // Populate regular fields using the auto-generated mapping
@@ -283,7 +243,7 @@ const InputForm: React.FC<InputFormProps> = ({
         }
       });
     }
-  }, [editId, existingCutpayData, formType, setValue]);
+  }, [editId, existingCutpayData, setValue]);
 
   // Auto-fill plan type based on PDF extraction data
   useEffect(() => {
@@ -348,22 +308,7 @@ const InputForm: React.FC<InputFormProps> = ({
     useAdminChildIdList();
 
   // Fetching data for broker/insurer selection in policy forms
-  const { data: directInsurers, isLoading: directInsurersLoading } =
-    useInsurers();
-  const { data: brokersAndInsurers, isLoading: brokersAndInsurersLoading } =
-    useBrokersAndInsurers();
-
-  // Policy-specific child IDs hook - use the correct policy API with required parameters
-  const { data: policyChildIds, isLoading: policyChildIdsLoading } =
-    useChildIdOptions(
-      formType === "policy" && insurerCode
-        ? {
-            insurer_code: insurerCode,
-            ...(codeType === "Broker" &&
-              brokerCode && { broker_code: brokerCode }),
-          }
-        : undefined
-    );
+  // Removed policy-specific hooks (insurers/brokers via agentQuery and policy child IDs)
 
   // Dependent child IDs for cutpay forms based on insurer/broker selection
   const { data: availableChildIds, isLoading: availableChildIdsLoading } =
@@ -374,116 +319,49 @@ const InputForm: React.FC<InputFormProps> = ({
 
   // Auto-fill Insurance Company and Broker Name when Child ID is selected in policy mode
   useEffect(() => {
-    if (childIdValue) {
-      if (formType === "policy" && policyChildIds) {
-        // Handle policy child IDs (for agents)
-        const selectedChildId = policyChildIds.find(
-          (child) => child.child_id === childIdValue
+    if (childIdValue && adminChildIds) {
+      const selectedChildId = adminChildIds.find(
+        (child) => child.child_id === childIdValue
+      );
+      if (selectedChildId) {
+        setSelectedChildIdDetails(selectedChildId);
+        // Auto-fill Insurance Company (readonly)
+        setValue(
+          "admin_input.insurer_code",
+          selectedChildId.insurer.insurer_code,
+          {
+            shouldValidate: true,
+          }
         );
-        if (selectedChildId) {
-          setSelectedChildIdDetails(selectedChildId);
-          // For policy forms, just store the selected child details for payload
-          // Don't auto-fill or preserve any other fields - let user change them freely
-        }
-      } else if (formType === "cutpay" && adminChildIds) {
-        // Handle admin child IDs (for cutpay)
-        const selectedChildId = adminChildIds.find(
-          (child) => child.child_id === childIdValue
-        );
-        if (selectedChildId) {
-          setSelectedChildIdDetails(selectedChildId);
-          // Auto-fill Insurance Company (readonly)
+        // Auto-fill Broker Name (readonly) if available
+        if (selectedChildId.broker?.broker_code) {
           setValue(
-            "admin_input.insurer_code",
-            selectedChildId.insurer.insurer_code,
+            "admin_input.broker_code",
+            selectedChildId.broker.broker_code,
             {
               shouldValidate: true,
             }
           );
-          // Auto-fill Broker Name (readonly) if available
-          if (selectedChildId.broker?.broker_code) {
-            setValue(
-              "admin_input.broker_code",
-              selectedChildId.broker.broker_code,
-              {
-                shouldValidate: true,
-              }
-            );
-          } else {
-            setValue("admin_input.broker_code", null, {
-              shouldValidate: true,
-            });
-          }
+        } else {
+          setValue("admin_input.broker_code", null, {
+            shouldValidate: true,
+          });
         }
       }
     }
-  }, [
-    formType,
-    childIdValue,
-    adminChildIds,
-    policyChildIds,
-    setValue,
-    setSelectedChildIdDetails,
-  ]);
+  }, [childIdValue, adminChildIds, setValue, setSelectedChildIdDetails]);
 
   // Clear child ID when dependencies change (for dependent dropdown functionality)
   useEffect(() => {
-    if (formType === "cutpay") {
-      // Clear child ID when code type, insurer, or broker changes
-      setValue("admin_input.admin_child_id", null, { shouldValidate: true });
-    }
-    // For policy forms, we don't clear child ID when dependencies change
-    // User can freely change any field without restrictions
-  }, [codeType, insurerCode, brokerCode, formType, setValue]);
+    // Clear child ID when code type, insurer, or broker changes
+    setValue("admin_input.admin_child_id", null, { shouldValidate: true });
+  }, [codeType, insurerCode, brokerCode, setValue]);
 
-  // Auto-populate policy start and end dates for policy form
-  useEffect(() => {
-    if (formType === "policy") {
-      // Set start date to today if not already set
-      const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD format
-      setValue("start_date" as any, today, { shouldValidate: true });
+  // Removed policy start/end date handling
 
-      // Set end date to one year from today
-      const endDateObj = new Date();
-      endDateObj.setFullYear(endDateObj.getFullYear() + 1);
-      const formattedEndDate = endDateObj.toISOString().split("T")[0]; // YYYY-MM-DD format
-      setValue("end_date" as any, formattedEndDate, { shouldValidate: true });
-    }
-  }, [formType, setValue]); // Only run once when form loads
+  // Removed policy running balance adjustments
 
-  // Update running balance for policy form when Payment by InsureZeal is selected
-  useEffect(() => {
-    if (formType === "policy" && paymentBy === "InsureZeal") {
-      // Calculate the new running balance based on the formula
-      const totalAgentPayout =
-        (netPremium || 0) * ((agentCommissionPercent || 0) / 100);
-      const grossPremiumVal = grossPremium || 0;
-      const calculatedAmount = totalAgentPayout - grossPremiumVal;
-
-      // Get current running balance from form or use original balance
-      const currentRunningBalance = originalRunningBalance || 0;
-      const newRunningBalance = calculatedAmount + currentRunningBalance;
-
-      // Update the running balance field
-      setValue("running_bal", newRunningBalance, { shouldValidate: true });
-    }
-  }, [
-    formType,
-    paymentBy,
-    netPremium,
-    agentCommissionPercent,
-    grossPremium,
-    originalRunningBalance,
-    setValue,
-  ]);
-
-  // Initialize original running balance when form loads
-  useEffect(() => {
-    if (formType === "policy" && !originalRunningBalance) {
-      // Set initial original balance from current form value or 0
-      setOriginalRunningBalance(runningBalValue || 0);
-    }
-  }, [formType, originalRunningBalance, runningBalValue]);
+  // Removed policy original running balance init
 
   // Memoizing select options to prevent re-computation on every render
   const insurerOptions = useMemo(
@@ -515,76 +393,32 @@ const InputForm: React.FC<InputFormProps> = ({
   );
   // Dynamic child ID options based on form type and dependent selections
   const adminChildIdOptions = useMemo(() => {
-    if (formType === "cutpay") {
-      // Use dependent child IDs when code type, insurer, and broker are selected
-      if (codeType && insurerCode && (codeType === "Direct" || brokerCode)) {
-        return (
-          availableChildIds
-            ?.map((c: AdminChildId) => ({
-              value: c.child_id,
-              label: `${c.child_id} - ${c.manager_name}`,
-            }))
-            .filter((option) => option.value && option.value.trim() !== "") ||
-          []
-        );
-      }
-      // Fallback to all admin child IDs if dependencies not met
+    // Use dependent child IDs when code type, insurer, and broker are selected
+    if (codeType && insurerCode && (codeType === "Direct" || brokerCode)) {
       return (
-        adminChildIds
-          ?.map((a: AdminChildId) => ({
-            value: a.child_id,
-            label: `${a.child_id} - ${a.manager_name}`,
+        availableChildIds
+          ?.map((c: AdminChildId) => ({
+            value: c.child_id,
+            label: `${c.child_id} - ${c.manager_name}`,
           }))
-          .filter((option) => option.value && option.value.trim() !== "") || []
+          .filter((option) => option.value && option.value.trim() !== "") ||
+        []
       );
     }
-    return [];
-  }, [
-    formType,
-    codeType,
-    insurerCode,
-    brokerCode,
-    availableChildIds,
-    adminChildIds,
-  ]);
-
-  // Policy-specific child ID options for agents
-  const policyChildIdOptions = useMemo(
-    () =>
-      policyChildIds
-        ?.map((c: ChildIdOption) => ({
-          value: c.child_id,
-          label: `${c.child_id} - ${c.broker_name} (${c.insurance_company})`,
+    // Fallback to all admin child IDs if dependencies not met
+    return (
+      adminChildIds
+        ?.map((a: AdminChildId) => ({
+          value: a.child_id,
+          label: `${a.child_id} - ${a.manager_name}`,
         }))
-        .filter((option) => option.value && option.value.trim() !== "") || [],
-    [policyChildIds]
-  );
-
-  // Policy-specific insurer and broker options
-  const policyInsurerOptions = useMemo(() => {
-    if (formType !== "policy") return [];
-
-    const sourceInsurers =
-      codeType === "Broker" ? brokersAndInsurers?.insurers : directInsurers;
-
-    return (
-      sourceInsurers?.map((insurer) => ({
-        value: insurer.insurer_code,
-        label: `${insurer.name} (${insurer.insurer_code})`,
-      })) || []
+        .filter((option) => option.value && option.value.trim() !== "") || []
     );
-  }, [formType, codeType, directInsurers, brokersAndInsurers]);
+  }, [codeType, insurerCode, brokerCode, availableChildIds, adminChildIds]);
 
-  const policyBrokerOptions = useMemo(() => {
-    if (formType !== "policy" || codeType !== "Broker") return [];
+  // Removed policy-specific child ID options for agents
 
-    return (
-      brokersAndInsurers?.brokers?.map((broker) => ({
-        value: broker.broker_code,
-        label: `${broker.name} (${broker.broker_code})`,
-      })) || []
-    );
-  }, [formType, codeType, brokersAndInsurers]);
+  // Removed policy-specific insurer and broker options
 
   // Memoizing static select options
   const codeTypeOptions = useMemo(
@@ -977,242 +811,7 @@ const InputForm: React.FC<InputFormProps> = ({
     );
 
     try {
-      if (formType === "policy") {
-        // Handle policy submission
-        updateStepStatus("create-policy", "active");
-
-        // Calculate simple agent payout for policy (for display purposes)
-        const netPremium = data.extracted_data?.net_premium || 0;
-        const agentCommission =
-          data.admin_input?.agent_commission_given_percent || 0;
-        const totalAgentPayoutAmount = netPremium * (agentCommission / 100);
-        console.log(
-          "Policy mode - Agent payout amount:",
-          totalAgentPayoutAmount
-        );
-
-        // Construct the comprehensive policy payload
-        const policyPayload: SubmitPolicyPayload = {
-          // Required fields
-          policy_number: data.extracted_data?.policy_number || "",
-          policy_type: data.extracted_data?.plan_type || "",
-          pdf_file_name: data.policy_pdf_url
-            ? `policy_${data.extracted_data?.policy_number || Date.now()}.pdf`
-            : `policy_${Date.now()}.pdf`,
-          pdf_file_path:
-            data.policy_pdf_url || `uploads/policies/policy_${Date.now()}.pdf`,
-
-          // Agent and Child ID information
-          // For agents, use their user_id from profile; for admins, use selected agent
-          agent_id:
-            formType === "policy" && userProfile?.user_id
-              ? userProfile.user_id
-              : agents?.agents?.find(
-                  (a) => a.agent_code === data.admin_input?.agent_code
-                )?.id || "",
-          agent_code:
-            formType === "policy" && userProfile?.agent_code
-              ? userProfile.agent_code
-              : data.admin_input?.agent_code || "",
-          child_id: data.admin_input?.admin_child_id || "",
-          broker_name: selectedChildIdDetails
-            ? "broker" in selectedChildIdDetails
-              ? selectedChildIdDetails.broker?.name || ""
-              : selectedChildIdDetails.broker_name
-            : "",
-          insurance_company: selectedChildIdDetails
-            ? "insurer" in selectedChildIdDetails
-              ? selectedChildIdDetails.insurer?.name || ""
-              : selectedChildIdDetails.insurance_company
-            : "",
-
-          // Policy details from PDF extraction - use empty strings instead of undefined for string fields
-          formatted_policy_number:
-            data.extracted_data?.formatted_policy_number || "",
-          major_categorisation: data.extracted_data?.major_categorisation || "",
-          product_insurer_report:
-            data.extracted_data?.product_insurer_report || "",
-          product_type: data.extracted_data?.product_type || "",
-          plan_type: data.extracted_data?.plan_type || "",
-          customer_name: data.extracted_data?.customer_name || "",
-          customer_phone_number:
-            data.extracted_data?.customer_phone_number || "",
-          insurance_type: data.extracted_data?.major_categorisation || "",
-          vehicle_type: data.extracted_data?.product_insurer_report || "",
-          registration_number: data.extracted_data?.registration_number || "",
-          vehicle_class: data.extracted_data?.make_model || "",
-          vehicle_segment: data.extracted_data?.product_type || "",
-          make_model: data.extracted_data?.make_model || "",
-          model: data.extracted_data?.model || "",
-          vehicle_variant: data.extracted_data?.vehicle_variant || "",
-          gvw: data.extracted_data?.gvw || 0,
-          rto: data.extracted_data?.rto || "",
-          state: data.extracted_data?.state || "",
-          fuel_type: data.extracted_data?.fuel_type || "",
-          cc: data.extracted_data?.cc || 0,
-          age_year: data.extracted_data?.age_year || 0,
-          ncb: data.extracted_data?.ncb || "",
-          discount_percent: data.extracted_data?.discount_percent || 0,
-          business_type: data.extracted_data?.business_type || "",
-          seating_capacity: data.extracted_data?.seating_capacity || 0,
-          veh_wheels: data.extracted_data?.veh_wheels || 0,
-          is_private_car:
-            data.extracted_data?.major_categorisation
-              ?.toLowerCase()
-              .includes("private") || false,
-
-          // Premium information - use actual values instead of undefined
-          gross_premium: grossPremium || 0,
-          gst: data.extracted_data?.gst_amount || 0,
-          gst_amount: data.extracted_data?.gst_amount || 0,
-          net_premium: data.extracted_data?.net_premium || 0,
-          od_premium: data.extracted_data?.od_premium || 0,
-          tp_premium: data.extracted_data?.tp_premium || 0,
-
-          // Agent commission and payout - use actual values
-          agent_commission_given_percent: agentCommission || 0,
-          payment_by_office: data.admin_input?.payment_by_office || 0,
-          total_agent_payout_amount: totalAgentPayoutAmount || 0,
-
-          // Additional fields - use form values for policy-specific fields
-          code_type: data.admin_input?.code_type || "",
-          payment_by: data.admin_input?.payment_by || "",
-          payment_method:
-            data.admin_input?.payment_method && data.admin_input.payment_detail
-              ? `${data.admin_input.payment_method} - ${data.admin_input.payment_detail}`
-              : data.admin_input.payment_method || "",
-          notes: data.notes || "",
-          start_date:
-            (data as any).start_date ||
-            data.admin_input?.booking_date ||
-            new Date().toISOString().split("T")[0], // Form input or booking date or current date
-          end_date:
-            (data as any).end_date ||
-            ((data as any).start_date
-              ? new Date(
-                  new Date((data as any).start_date).getTime() +
-                    365 * 24 * 60 * 60 * 1000
-                )
-                  .toISOString()
-                  .split("T")[0]
-              : data.admin_input?.booking_date
-              ? new Date(
-                  new Date(data.admin_input.booking_date).getTime() +
-                    365 * 24 * 60 * 60 * 1000
-                )
-                  .toISOString()
-                  .split("T")[0]
-              : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-                  .toISOString()
-                  .split("T")[0]), // Form input or calculated from start_date or booking_date
-          ai_confidence_score:
-            Object.values(pdfExtractionData?.confidence_scores || {}).reduce(
-              (a, b) => a + b,
-              0
-            ) /
-              Object.keys(pdfExtractionData?.confidence_scores || {}).length ||
-            0,
-          manual_override: false,
-        };
-
-        console.log("=== Policy Submission Debug Info ===");
-        console.log("Form Data:", data);
-        console.log("Selected Child ID Details:", selectedChildIdDetails);
-        console.log("Agent Commission:", agentCommission);
-        console.log("Total Agent Payout:", totalAgentPayoutAmount);
-        console.log("Raw policy payload:", policyPayload);
-        console.log("====================================");
-
-        // Clean up empty strings to null for API compatibility (only for optional fields)
-        const cleanPayload = Object.fromEntries(
-          Object.entries(policyPayload)
-            .map(([key, value]) => {
-              // Keep required fields even if empty
-              const requiredFields = [
-                "policy_number",
-                "policy_type",
-                "pdf_file_path",
-                "pdf_file_name",
-              ];
-              if (requiredFields.includes(key)) {
-                return [key, value];
-              }
-              // For optional fields, convert empty strings to null, but keep 0 values
-              return [key, value === "" ? null : value];
-            })
-            .filter(([, value]) => value !== undefined) // Remove undefined values completely
-        ) as SubmitPolicyPayload;
-
-        console.log("=== Cleaned Payload Debug ===");
-        console.log("Cleaned policy payload:", cleanPayload);
-        console.log(
-          "Payload size (JSON):",
-          JSON.stringify(cleanPayload).length,
-          "characters"
-        );
-        console.log(
-          "JSON stringified payload:",
-          JSON.stringify(cleanPayload, null, 2)
-        );
-        console.log("============================");
-
-        // Validate required fields before submission
-        if (!policyPayload.policy_number) {
-          throw new Error("Policy number is required");
-        }
-        if (!policyPayload.policy_type) {
-          throw new Error("Policy type is required");
-        }
-        if (!policyPayload.pdf_file_path) {
-          throw new Error("PDF file path is required");
-        }
-        if (!policyPayload.pdf_file_name) {
-          throw new Error("PDF file name is required");
-        }
-
-        // Additional validation for better API compatibility
-        if (!policyPayload.agent_code) {
-          throw new Error("Agent code is required for policy submission");
-        }
-        if (!policyPayload.child_id) {
-          throw new Error("Child ID is required for policy submission");
-        }
-
-        console.log("Sending final payload to API:", cleanPayload);
-        await submitPolicyMutation.mutateAsync(cleanPayload);
-        updateStepStatus("create-policy", "completed");
-
-        // Handle document uploads
-        try {
-          // For policy, we can skip document uploads or implement simpler version
-          updateStepStatus("upload-policy", "completed");
-          updateStepStatus("upload-additional", "completed");
-
-          toast.success("🎉 Policy created successfully!");
-        } catch (uploadError) {
-          console.error("Policy document upload error:", uploadError);
-          toast.warning(
-            "⚠️ Policy created successfully, but documents could not be uploaded."
-          );
-        }
-
-        // Clean up and redirect
-        updateStepStatus("cleanup-redirect", "active");
-        try {
-          console.log("🧹 Cleaning up IndexedDB documents...");
-          await clearAllFromIndexedDB();
-          console.log("✅ IndexedDB cleanup completed");
-          updateStepStatus("cleanup-redirect", "completed");
-
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          console.log("🔄 Redirecting to policies list...");
-          router.push("/agent/policies");
-        } catch (cleanupError) {
-          console.error("❌ Cleanup error:", cleanupError);
-          updateStepStatus("cleanup-redirect", "failed");
-          router.push("/agent/policies");
-        }
-      } else {
+      {
         // Handle cutpay submission (existing logic)
         updateStepStatus("create-transaction", "active");
 
@@ -1376,14 +975,12 @@ const InputForm: React.FC<InputFormProps> = ({
       );
     } catch (error) {
       // Handle failure at the transaction creation step
-      const stepId =
-        formType === "policy" ? "create-policy" : "create-transaction";
-      updateStepStatus(stepId, "failed");
+      updateStepStatus("create-transaction", "failed");
       console.error("Submission error:", error);
       toast.error(
-        `Failed to create ${
-          formType === "policy" ? "policy" : "transaction"
-        }: ${error instanceof Error ? error.message : "Unknown error"}`
+        `Failed to create transaction: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
       );
     } finally {
       setIsSubmitting(false); // Ensure submission state is reset
@@ -1523,7 +1120,7 @@ const InputForm: React.FC<InputFormProps> = ({
             control={control}
             render={({ field: controllerField, fieldState }) => (
               <>
-                <div className="relative ">
+                <div className="relative w-fit">
                   {isReportingMonth ? (
                     <MonthYearPicker
                       value={controllerField.value as string}
@@ -1534,7 +1131,7 @@ const InputForm: React.FC<InputFormProps> = ({
                   ) : (
                     <Input
                       type="date"
-                      className="h-10"
+                      className="h-10 w-fit"
                       {...controllerField}
                       value={String(controllerField.value ?? "").split("T")[0]}
                       onChange={(e) => {
@@ -1562,19 +1159,15 @@ const InputForm: React.FC<InputFormProps> = ({
       let options = configOptions || [];
       // Dynamically assign options based on the field key
       if (key === "admin_input.insurer_code") {
-        // For policy forms, use policy-specific insurer options based on code type
-        options = formType === "policy" ? policyInsurerOptions : insurerOptions;
+        options = insurerOptions;
       }
       if (key === "admin_input.broker_code") {
-        // For policy forms, use policy-specific broker options; for cutpay use admin options
-        options = formType === "policy" ? policyBrokerOptions : brokerOptions;
+        options = brokerOptions;
       }
       if (key === "admin_input.agent_code") options = agentOptions;
       if (key === "admin_input.admin_child_id") {
-        // For policy forms, use policy child IDs (agent-specific)
-        // For cutpay forms, use admin child IDs (admin/superadmin access)
-        options =
-          formType === "policy" ? policyChildIdOptions : adminChildIdOptions;
+        // Use admin child IDs (admin/superadmin access)
+        options = adminChildIdOptions;
       }
       if (key === "admin_input.code_type") options = codeTypeOptions;
       if (key === "admin_input.payment_by") {
@@ -1610,19 +1203,11 @@ const InputForm: React.FC<InputFormProps> = ({
 
       // Check if the data for this select is currently loading
       const isLoading =
-        (key === "admin_input.insurer_code" &&
-          (formType === "policy"
-            ? directInsurersLoading || brokersAndInsurersLoading
-            : insurersLoading)) ||
-        (key === "admin_input.broker_code" &&
-          (formType === "policy"
-            ? brokersAndInsurersLoading
-            : brokersLoading)) ||
+        (key === "admin_input.insurer_code" && insurersLoading) ||
+        (key === "admin_input.broker_code" && brokersLoading) ||
         (key === "admin_input.agent_code" && agentsLoading) ||
         (key === "admin_input.admin_child_id" &&
-          (formType === "policy"
-            ? policyChildIdsLoading
-            : adminChildIdsLoading || availableChildIdsLoading));
+          (adminChildIdsLoading || availableChildIdsLoading));
 
       return (
         <div key={key} className="space-y-2">
@@ -1659,7 +1244,7 @@ const InputForm: React.FC<InputFormProps> = ({
                     value={(controllerField.value as string) ?? undefined}
                     disabled={disabled}
                   >
-                    <SelectTrigger className="h-10">
+                    <SelectTrigger className="h-10 w-fit">
                       <SelectValue
                         placeholder={
                           isLoading ? "Loading..." : `Select ${label}`
@@ -1690,7 +1275,7 @@ const InputForm: React.FC<InputFormProps> = ({
     // Render Textarea Input
     if (type === "textarea") {
       return (
-        <div key={key} className="space-y-2 col-span-2">
+        <div key={key} className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor={key} className="text-sm font-medium text-gray-700">
               {label}
@@ -1712,7 +1297,7 @@ const InputForm: React.FC<InputFormProps> = ({
                   }}
                   disabled={disabled}
                   rows={3}
-                  className="resize-none"
+                  className="resize-none w-fit"
                   placeholder={`Enter ${label.toLowerCase()}...`}
                 />
                 {fieldState.error && (
@@ -1771,7 +1356,7 @@ const InputForm: React.FC<InputFormProps> = ({
                   }
                 }}
                 disabled={disabled}
-                className={`h-10 ${disabled ? "bg-gray-50" : ""}`}
+                className={`h-10 w-fit ${disabled ? "bg-gray-50" : ""}`}
                 step={type === "number" ? "0.01" : undefined}
               />
               {fieldState.error && (
@@ -1834,21 +1419,16 @@ const InputForm: React.FC<InputFormProps> = ({
                       Extracted Data
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {currentFormFields
-                      .filter(f => {
-                        if (formType === "policy") {
-                          // Only show these 3 extracted fields for policy
-                          return f.section === "extracted" && (
-                            f.key === "extracted_data.policy_number" ||
-                            f.key === "extracted_data.start_date" || 
-                            f.key === "extracted_data.end_date"
-                          );
-                        }
-                        return f.section === "extracted";
-                      })
-                      .map(field => renderField(field))
-                    }
+                  <CardContent className="p-6">
+                    <div className="flex flex-wrap gap-4 items-start">
+                      {currentFormFields
+                        .filter(f => f.section === "extracted")
+                        .map(field => (
+                          <div key={field.key} className="space-y-2 flex-none w-fit">
+                            {renderField(field)}
+                          </div>
+                        ))}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -1881,10 +1461,7 @@ const InputForm: React.FC<InputFormProps> = ({
                       Input
                     </CardTitle>
                     {/* COMMENTED OUT: Running Balance Display */}
-                    {/* {(formType === "cutpay" &&
-                      typeof runningBalValue === "number") ||
-                    (formType === "policy" &&
-                      typeof runningBalValue === "number") ? (
+                    {/* {typeof runningBalValue === "number" ? (
                       <div className="text-right">
                         <Label className="text-sm font-medium text-gray-500">
                           Running Balance
@@ -1899,9 +1476,8 @@ const InputForm: React.FC<InputFormProps> = ({
                           <span className="text-xl">
                             ₹{runningBalValue.toFixed(2)}
                           </span>
-                          {/* Show additional info for policy form when Payment by InsureZeal */}
-                          {/* {formType === "policy" &&
-                            paymentBy === "InsureZeal" && (
+                          {/* Show additional info when Payment by InsureZeal */}
+                          {/* {paymentBy === "InsureZeal" && (
                               <div className="text-xs mt-1 font-normal">
                                 {(() => {
                                   const totalAgentPayout =
@@ -1936,10 +1512,8 @@ const InputForm: React.FC<InputFormProps> = ({
                                 })()}
                               </div>
                             )} */}
-                          {/* Show standard info for cutpay or policy without InsureZeal payment */}
-                          {/* {(formType === "cutpay" ||
-                            (formType === "policy" &&
-                              paymentBy !== "InsureZeal")) && (
+                          {/* Show standard info without InsureZeal payment */}
+                          {/* {paymentBy !== "InsureZeal" && (
                             <div className="text-xs mt-1 font-normal">
                               {(() => {
                                 if (runningBalValue > 0) {
@@ -1960,129 +1534,60 @@ const InputForm: React.FC<InputFormProps> = ({
                       </div>
                     ) : null} */}
                   </CardHeader>
-                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {currentFormFields
-                      .filter((f) => {
-                        if (formType === "policy") {
-                          // For policy mode: show essential fields for policy creation
-                          return (
-                            f.section === "admin" &&
-                            f.key !== "running_bal" &&
-                            (f.key === "admin_input.admin_child_id" ||
-                              f.key ===
-                                "admin_input.agent_commission_given_percent" ||
-                              f.key === "admin_input.code_type" ||
-                              f.key === "admin_input.insurer_code" ||
-                              f.key === "admin_input.broker_code" ||
-                              f.key === "admin_input.payment_by" ||
-                              f.key === "admin_input.payment_method" ||
-                              // Show payment_by_office only when payment_by is NOT "Agent"
-                              (f.key === "admin_input.payment_by_office" &&
-                                paymentBy !== "Agent") ||
-                              f.key === "notes")
+                  <CardContent className="p-6">
+                    <div className="flex flex-wrap gap-4 items-start">
+                      {currentFormFields
+                        .filter((f) => f.section === "admin" && f.key !== "running_bal")
+                        .reduce((acc, field) => {
+                          const renderedField = renderField(
+                            field as FormFieldConfig
                           );
-                        } else {
-                          // For cutpay mode: show all admin fields except running_bal
-                          return (
-                            f.section === "admin" && f.key !== "running_bal"
-                          );
-                        }
-                      })
-                      .reduce((acc, field) => {
-                        const renderedField = renderField(
-                          field as FormFieldConfig
-                        );
-                        if (renderedField) {
-                          acc.push(renderedField);
-                        }
+                          if (renderedField) {
+                            acc.push(
+                              <div key={field.key} className="space-y-2 flex-none w-fit">
+                                {renderedField}
+                              </div>
+                            );
+                          }
 
-                        if (
-                          formType === "cutpay" &&
-                          field.key === "admin_input.payment_by" &&
-                          paymentBy === "InsureZeal"
-                        ) {
-                          acc.push(
-                            <div
-                              className="space-y-2"
-                              key="cutpay_received_status_wrapper"
-                            >
-                              <Label className="text-sm font-medium text-gray-700">
-                                Cutpay Received Status
-                              </Label>
-                              <Controller
-                                name="cutpay_received_status"
-                                control={control}
-                                render={({
-                                  field: controllerField,
-                                  fieldState,
-                                }) => (
-                                  <>
-                                    <Select
-                                      onValueChange={controllerField.onChange}
-                                      value={
-                                        (controllerField.value as string) ??
-                                        undefined
-                                      }
-                                    >
-                                      <SelectTrigger className="h-10">
-                                        <SelectValue placeholder="Select status" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="No">No</SelectItem>
-                                        <SelectItem value="Yes">Yes</SelectItem>
-                                        <SelectItem value="Partial">
-                                          Partial
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    {fieldState.error && (
-                                      <p className="text-red-500 text-xs mt-1">
-                                        {fieldState.error.message}
-                                      </p>
-                                    )}
-                                  </>
-                                )}
-                              />
-                            </div>
-                          );
-
-                          // Add cutpay_received input field when status is "Yes" or "Partial"
                           if (
-                            cutpayReceivedStatus === "Yes" ||
-                            cutpayReceivedStatus === "Partial"
+                             field.key === "admin_input.payment_by" &&
+                             paymentBy === "InsureZeal"
                           ) {
                             acc.push(
                               <div
-                                className="space-y-2"
-                                key="cutpay_received_wrapper"
+                                className="space-y-2 flex-none w-fit"
+                                key="cutpay_received_status_wrapper"
                               >
                                 <Label className="text-sm font-medium text-gray-700">
-                                  Cutpay Received Amount
+                                  Cutpay Received Status
                                 </Label>
                                 <Controller
-                                  name="cutpay_received"
+                                  name="cutpay_received_status"
                                   control={control}
                                   render={({
                                     field: controllerField,
                                     fieldState,
                                   }) => (
                                     <>
-                                      <Input
-                                        type="number"
-                                        className="h-10"
-                                        {...controllerField}
-                                        value={String(
-                                          controllerField.value ?? ""
-                                        )}
-                                        onChange={(e) => {
-                                          const value = e.target.value;
-                                          const numValue =
-                                            value === "" ? null : Number(value);
-                                          controllerField.onChange(numValue);
-                                        }}
-                                        step="0.01"
-                                        placeholder="Enter received amount"
-                                      />
+                                      <Select
+                                        onValueChange={controllerField.onChange}
+                                        value={
+                                          (controllerField.value as string) ??
+                                          undefined
+                                        }
+                                      >
+                                        <SelectTrigger className="h-10 w-fit">
+                                          <SelectValue placeholder="Select status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="No">No</SelectItem>
+                                          <SelectItem value="Yes">Yes</SelectItem>
+                                          <SelectItem value="Partial">
+                                            Partial
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                       {fieldState.error && (
                                         <p className="text-red-500 text-xs mt-1">
                                           {fieldState.error.message}
@@ -2093,11 +1598,60 @@ const InputForm: React.FC<InputFormProps> = ({
                                 />
                               </div>
                             );
-                          }
-                        }
 
-                        return acc;
-                      }, [] as React.ReactNode[])}
+                            // Add cutpay_received input field when status is "Yes" or "Partial"
+                            if (
+                              cutpayReceivedStatus === "Yes" ||
+                              cutpayReceivedStatus === "Partial"
+                            ) {
+                              acc.push(
+                                <div
+                                  className="space-y-2 flex-none w-fit"
+                                  key="cutpay_received_wrapper"
+                                >
+                                  <Label className="text-sm font-medium text-gray-700">
+                                    Cutpay Received Amount
+                                  </Label>
+                                  <Controller
+                                    name="cutpay_received"
+                                    control={control}
+                                    render={({
+                                      field: controllerField,
+                                      fieldState,
+                                    }) => (
+                                      <>
+                                        <Input
+                                          type="number"
+                                          className="h-10 w-fit"
+                                          {...controllerField}
+                                          value={String(
+                                            controllerField.value ?? ""
+                                          )}
+                                          onChange={(e) => {
+                                            const value = e.target.value;
+                                            const numValue =
+                                              value === "" ? null : Number(value);
+                                            controllerField.onChange(numValue);
+                                          }}
+                                          step="0.01"
+                                          placeholder="Enter received amount"
+                                        />
+                                        {fieldState.error && (
+                                          <p className="text-red-500 text-xs mt-1">
+                                            {fieldState.error.message}
+                                          </p>
+                                        )}
+                                      </>
+                                    )}
+                                  />
+                                </div>
+                              );
+                            }
+                          }
+
+                          return acc;
+                        }, [] as React.ReactNode[])}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -2110,78 +1664,16 @@ const InputForm: React.FC<InputFormProps> = ({
                       Calculations
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {formType === "policy" ? (
-                      // For policy mode: show calculation based on payment_by selection
-                      <>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-gray-700">
-                            Total Agent Payout Amount
-                          </Label>
-                          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <div className="text-lg font-semibold text-green-800">
-                              ₹
-                              {(() => {
-                                const netPremium =
-                                  watch("extracted_data.net_premium") || 0;
-                                const agentCommission =
-                                  watch(
-                                    "admin_input.agent_commission_given_percent"
-                                  ) || 0;
-                                const totalAgentPayout =
-                                  netPremium * (agentCommission / 100);
-
-                                return totalAgentPayout.toFixed(2);
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-
-                        {paymentBy === "InsureZeal" && (
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium text-gray-700">
-                              Payment Calculation
-                            </Label>
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <div className="text-lg font-semibold text-blue-800">
-                                ₹
-                                {(() => {
-                                  const totalAgentPayout =
-                                    (netPremium || 0) *
-                                    ((agentCommissionPercent || 0) / 100);
-                                  const grossPremiumVal = grossPremium || 0;
-                                  const calculatedAmount =
-                                    totalAgentPayout - grossPremiumVal;
-                                  return calculatedAmount.toFixed(2);
-                                })()}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-2">
-                                {(() => {
-                                  const totalAgentPayout =
-                                    (netPremium || 0) *
-                                    ((agentCommissionPercent || 0) / 100);
-                                  const grossPremiumVal = grossPremium || 0;
-                                  const calculatedAmount =
-                                    totalAgentPayout - grossPremiumVal;
-                                  if (calculatedAmount > 0) {
-                                    return "This positive amount will be added to running balance (InsureZeal owes more to agent)";
-                                  } else if (calculatedAmount < 0) {
-                                    return "This negative amount will be added to running balance (Agent owes to InsureZeal)";
-                                  } else {
-                                    return "This transaction is balanced - no change to running balance";
-                                  }
-                                })()}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      // For cutpay mode: show all calculation fields
-                      currentFormFields
+                  <CardContent className="p-6">
+                    <div className="flex flex-wrap gap-4 items-start">
+                      {currentFormFields
                         .filter((f) => f.section === "calculation")
-                        .map((field) => renderField(field as FormFieldConfig))
-                    )}
+                        .map((field) => (
+                          <div key={field.key} className="space-y-2 flex-none w-fit">
+                            {renderField(field as FormFieldConfig)}
+                          </div>
+                        ))}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -2213,11 +1705,7 @@ const InputForm: React.FC<InputFormProps> = ({
           {/* Loading dialog shown during submission */}
           <LoadingDialog
             open={isSubmitting}
-            title={
-              formType === "policy"
-                ? "Creating Policy"
-                : "Creating Cutpay Transaction"
-            }
+            title={"Creating Cutpay Transaction"}
             steps={submissionSteps}
           />
         </form>

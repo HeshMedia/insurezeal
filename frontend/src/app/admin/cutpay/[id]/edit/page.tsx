@@ -178,7 +178,6 @@ export default function CutPayEditPage() {
         {/* Reusable InputForm for editing */}
         <InputForm 
           onPrev={handlePrev} 
-          formType="cutpay" 
           editId={cutpayId}
         />
       </div>

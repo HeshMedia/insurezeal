@@ -163,7 +163,6 @@ const CreateCutPayPage = () => {
       case 3:
         return (
           <InputForm 
-            formType="cutpay"
             onPrev={handlePreviousStep}
           />
         )
