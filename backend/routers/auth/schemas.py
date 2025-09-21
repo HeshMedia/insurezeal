@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from datetime import datetime
-import uuid
+
 
 # Request schemas
 class UserRegister(BaseModel):
@@ -11,15 +11,17 @@ class UserRegister(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+
 # Response schemas
 class UserResponse(BaseModel):
-    id: str  
-    user_id: str 
-    email: Optional[str] = None 
+    id: str
+    user_id: str
+    email: Optional[str] = None
     username: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -37,38 +39,45 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class AuthResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
-    message: Optional[str] = None 
+    message: Optional[str] = None
+
 
 class RegistrationResponse(BaseModel):
     message: str
     user_id: str
     email: str
     status: str = "pending_verification"
-    
+
+
 class TokenResponse(BaseModel):
     access_token: str
 
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
 
 class VerifyResetTokenRequest(BaseModel):
     access_token: str
     refresh_token: str
 
+
 class ResetPasswordRequest(BaseModel):
     new_password: str
     access_token: str
-    refresh_token: str  
+    refresh_token: str
 
 
 # Webhook schemas for Supabase Auth replication
 class SupabaseUserRecord(BaseModel):
     """Schema for Supabase auth.users record in webhook payload"""
+
     id: str  # UUID as string from Supabase
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -86,6 +95,7 @@ class SupabaseUserRecord(BaseModel):
 
 class SupabaseWebhookEvent(BaseModel):
     """Schema for Supabase webhook event payload"""
+
     type: str  # INSERT, UPDATE, DELETE
     table: str  # auth.users
     record: SupabaseUserRecord

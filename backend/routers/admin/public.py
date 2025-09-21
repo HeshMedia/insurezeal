@@ -1,7 +1,39 @@
 """
-Public admin routes that don't require authentication
-These are for one-time setup operations like creating the first superadmin
+Public Admin Routes for Insurezeal Backend API.
+
+This module provides public administrative endpoints that don't require authentication.
+These are primarily intended for one-time setup operations such as creating the
+first superadmin user and initial system configuration. These endpoints should
+be secured or removed in production environments.
+
+Key Features:
+- Superadmin promotion for initial system setup
+- Public user role management (temporary)
+- System bootstrap operations
+- Emergency administrative access
+
+Security Considerations:
+- These endpoints bypass normal authentication
+- Should be removed or secured after initial setup
+- Intended for development and initial deployment only
+- Include proper validation to prevent abuse
+
+Business Logic:
+- Initial superadmin creation for system bootstrap
+- Role elevation for authorized users
+- Integration with Supabase auth system
+- Database and authentication system synchronization
+
+Important Notes:
+- Remove or secure these endpoints in production
+- Use only for initial system setup
+- Monitor usage for security purposes
+- Implement proper audit logging
+
+TODO: Remove these routes after superadmin setup is complete
+TODO: Implement webhook integration for user role synchronization
 """
+
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -14,22 +46,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/public", tags=["Public Admin"])
 
-#TODO: ek baar webhook implement honge to idr aisa krna hai ki ab users.auth me to update ho hi sath me jo naya user table hai udr b update ho na role and ofc user_profile me bhi
-#TODO: ek baar superadmins sab bnajeynge tab ye route ko remove krna hai yaad rkahne ko TODO hai ye
+
+# TODO: ek baar webhook implement honge to idr aisa krna hai ki ab users.auth me to update ho hi sath me jo naya user table hai udr b update ho na role and ofc user_profile me bhi
+# TODO: ek baar superadmins sab bnajeynge tab ye route ko remove krna hai yaad rkahne ko TODO hai ye
 @router.post("/promote-to-superadmin", response_model=UserRoleUpdateResponse)
 async def promote_to_superadmin(
-    promotion_request: SuperadminPromotionRequest,
-    db: AsyncSession = Depends(get_db)
+    promotion_request: SuperadminPromotionRequest, db: AsyncSession = Depends(get_db)
 ):
     """
     Open route to promote a user to superadmin role.
     This is intended for initial setup and should be used sparingly.
-    
+
     Requires both user_id and email for verification to prevent accidental promotions.
     """
     from config import get_supabase_admin_client
     from uuid import UUID
-    
+
     try:
         updated_in_database = False
         updated_in_supabase = False
@@ -41,31 +73,33 @@ async def promote_to_superadmin(
                 .where(UserProfile.user_id == promotion_request.user_id)
             )
             user_data = result.first()
-            
+
             if not user_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"User with ID {promotion_request.user_id} not found in database"
+                    detail=f"User with ID {promotion_request.user_id} not found in database",
                 )
-            
+
             user_profile, user_email, user_record = user_data
-            
+
             if user_email != promotion_request.email:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email does not match the user record. Cannot promote to superadmin."
+                    detail="Email does not match the user record. Cannot promote to superadmin.",
                 )
 
             # Update UserProfile role
             user_profile.user_role = "superadmin"
-            
+
             # Update Users table role field
             user_record.role = "superadmin"
-            
+
             await db.commit()
             updated_in_database = True
-            logger.info(f"Updated role in both UserProfile and Users tables for user {promotion_request.user_id} to superadmin")
-            
+            logger.info(
+                f"Updated role in both UserProfile and Users tables for user {promotion_request.user_id} to superadmin"
+            )
+
         except HTTPException:
             raise
         except Exception as e:
@@ -74,37 +108,39 @@ async def promote_to_superadmin(
 
         try:
             supabase_admin = get_supabase_admin_client()
-            
-            logger.info(f"Attempting to update user {promotion_request.user_id} in Supabase auth.users")
-            
+
+            logger.info(
+                f"Attempting to update user {promotion_request.user_id} in Supabase auth.users"
+            )
+
             # Try to update Supabase auth.users metadata
             response = supabase_admin.auth.admin.update_user_by_id(
                 uid=str(promotion_request.user_id),
-                attributes={
-                    "user_metadata": {
-                        "role": "superadmin"
-                    }
-                }
+                attributes={"user_metadata": {"role": "superadmin"}},
             )
-            
+
             logger.info(f"Supabase update response received")
-            
+
             if response and response.user:
                 updated_in_supabase = True
-                logger.info(f"Successfully updated role in Supabase auth.users for user {promotion_request.user_id} to superadmin")
+                logger.info(
+                    f"Successfully updated role in Supabase auth.users for user {promotion_request.user_id} to superadmin"
+                )
             else:
-                logger.error(f"Failed to update role in Supabase for user {promotion_request.user_id}: No user in response")
-                
+                logger.error(
+                    f"Failed to update role in Supabase for user {promotion_request.user_id}: No user in response"
+                )
+
         except Exception as e:
             logger.error(f"Failed to update role in Supabase auth.users: {str(e)}")
             logger.error(f"Exception type: {type(e)}")
-            if hasattr(e, 'details'):
+            if hasattr(e, "details"):
                 logger.error(f"Supabase error details: {e.details}")
-            if hasattr(e, 'message'):
+            if hasattr(e, "message"):
                 logger.error(f"Supabase error message: {e.message}")
             # Don't fail the entire operation if Supabase update fails
             # The user can still work with the local database role
-        
+
         if updated_in_database and updated_in_supabase:
             success = True
             message = f"Successfully promoted user to superadmin in both local database and Supabase auth"
@@ -117,21 +153,21 @@ async def promote_to_superadmin(
         else:
             success = False
             message = "Failed to promote user to superadmin in both local database and Supabase auth"
-        
+
         return UserRoleUpdateResponse(
             success=success,
             message=message,
             user_id=promotion_request.user_id,
             new_role="superadmin",
             updated_in_supabase=updated_in_supabase,
-            updated_in_database=updated_in_database
+            updated_in_database=updated_in_database,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Unexpected error promoting user to superadmin: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while promoting the user to superadmin"
+            detail="An unexpected error occurred while promoting the user to superadmin",
         )
