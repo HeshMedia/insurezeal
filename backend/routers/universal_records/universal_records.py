@@ -30,7 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from config import get_db
-from dependencies.rbac import require_admin_read, require_admin_write, get_current_user
+from dependencies.rbac import require_admin_read, require_admin_write
+from routers.auth.auth import get_current_user
 from models import ReconciliationReport
 from . import helpers
 from .schemas import (

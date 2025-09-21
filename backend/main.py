@@ -24,7 +24,6 @@ from routers.mis.mis import router as mis_router
 from routers.universal_records.universal_records import (
     router as universal_records_router,
 )
-from routers.admin.quarterly_sheets import router as quarterly_sheets_router
 from utils.quarterly_scheduler import (
     startup_quarterly_system,
     shutdown_quarterly_system,
@@ -106,7 +105,6 @@ try:
     app.include_router(public_router)
     app.include_router(mis_router)
     app.include_router(universal_records_router)
-    app.include_router(quarterly_sheets_router)
 
     logger.info("All API routers registered successfully")
 except Exception as e:
