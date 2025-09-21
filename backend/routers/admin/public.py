@@ -41,13 +41,15 @@ from config import get_db
 from .schemas import SuperadminPromotionRequest, UserRoleUpdateResponse
 from models import UserProfile, Users
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin/public", tags=["Public Admin"])
+ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
+
+router = APIRouter(prefix="/admin/public", tags=["Public Admin"], include_in_schema=ENVIRONMENT == "dev")
 
 
-# TODO: ek baar webhook implement honge to idr aisa krna hai ki ab users.auth me to update ho hi sath me jo naya user table hai udr b update ho na role and ofc user_profile me bhi
 # TODO: ek baar superadmins sab bnajeynge tab ye route ko remove krna hai yaad rkahne ko TODO hai ye
 @router.post("/promote-to-superadmin", response_model=UserRoleUpdateResponse)
 async def promote_to_superadmin(
