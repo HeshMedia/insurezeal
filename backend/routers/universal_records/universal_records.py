@@ -104,7 +104,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_db
-from dependencies.rbac import get_current_user, require_admin_read, require_admin_write
+from dependencies.rbac import require_admin_read, require_admin_write
+from routers.auth.auth import get_current_user
 from models import ReconciliationReport
 
 from . import helpers
