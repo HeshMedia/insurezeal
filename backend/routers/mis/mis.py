@@ -1185,9 +1185,9 @@ async def get_my_mis_data(
                 oldest_quarter_sheet=oldest_quarter_sheet
             )
         
-        logger.info(f"Fetching quarterly MIS data for agent: {agent_code} (user: {user_id}) from Q{quarter}-{year}")
+        logger.info(f"Fetching quarterly MIS data for agent: {agent_code} (user: {user_id}), Q{quarter}-{year}")
         
-        # Get quarterly sheet data for the agent (MATCH = TRUE only)
+        # Get quarterly sheet data for records (as before)
         quarterly_result = await mis_helpers.get_quarterly_sheet_agent_filtered_data(
             agent_code=agent_code,
             quarter=quarter,
@@ -1196,6 +1196,33 @@ async def get_my_mis_data(
             page_size=page_size,
             match_only=True  # Only MATCH = TRUE records
         )
+        
+        # Get Summary sheet data for stats
+        summary_stats = None
+        try:
+            from utils.quarterly_sheets_manager import quarterly_manager
+            
+            # Get Summary sheet data for stats
+            summary_sheet = quarterly_manager.get_summary_sheet()
+            if summary_sheet:
+                summary_records = summary_sheet.get_all_records()
+                logger.info(f"Retrieved {len(summary_records)} records from Summary sheet for stats")
+                
+                # Find agent's data in Summary sheet
+                for record in summary_records:
+                    if str(record.get("Agent Code", "")).strip() == str(agent_code).strip():
+                        summary_stats = record
+                        break
+                        
+                if summary_stats:
+                    logger.info(f"Found Summary sheet data for agent: {agent_code}")
+                else:
+                    logger.warning(f"No Summary sheet data found for agent: {agent_code}")
+            else:
+                logger.warning("Summary sheet not found")
+        except Exception as summary_error:
+            logger.error(f"Error fetching Summary sheet data: {str(summary_error)}")
+            summary_stats = None
         
         if not quarterly_result:
             logger.warning(f"No quarterly MIS data found for agent: {agent_code} in Q{quarter}-{year}")
@@ -1244,13 +1271,32 @@ async def get_my_mis_data(
             }
             agent_records.append(AgentMISRecord(**mapped_record))
             
-        # Calculate stats from the quarterly data
-        stats = AgentMISStats(
-            number_of_policies=quarterly_result.get("total_count", 0),
-            running_balance=quarterly_result.get("stats", {}).get("running_balance", 0.0),
-            total_net_premium=quarterly_result.get("stats", {}).get("total_net_premium", 0.0),
-            commissionable_premium=quarterly_result.get("stats", {}).get("commissionable_premium", 0.0)
-        )
+        # Calculate stats - use Summary sheet data if available, otherwise use quarterly data
+        if summary_stats:
+            # Helper function to safely convert to float
+            def safe_float(value):
+                try:
+                    return float(str(value).replace(',', '')) if value and str(value).strip() else 0.0
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            # Use Summary sheet data for stats
+            stats = AgentMISStats(
+                number_of_policies=int(safe_float(summary_stats.get("Policy Count (True)", 0))),
+                running_balance=safe_float(summary_stats.get("Running Balance (True)", 0.0)),
+                total_net_premium=safe_float(summary_stats.get("Net Premium (True)", 0.0)),
+                commissionable_premium=safe_float(summary_stats.get("Commissionable Premium (True)", 0.0))
+            )
+            logger.info(f"Using Summary sheet stats for agent: {agent_code}")
+        else:
+            # Fallback to quarterly data stats
+            stats = AgentMISStats(
+                number_of_policies=quarterly_result.get("total_count", 0),
+                running_balance=quarterly_result.get("stats", {}).get("running_balance", 0.0),
+                total_net_premium=quarterly_result.get("stats", {}).get("total_net_premium", 0.0),
+                commissionable_premium=quarterly_result.get("stats", {}).get("commissionable_premium", 0.0)
+            )
+            logger.info(f"Using quarterly sheet stats for agent: {agent_code}")
         
         # Get the oldest quarter sheet name
         oldest_quarter_sheet = None
