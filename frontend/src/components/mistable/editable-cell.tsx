@@ -14,6 +14,7 @@ interface GenericEditableCellProps<T> extends CellContext<T, unknown> {
   columnConfig: ColumnConfig;
 }
 
+
 export function GenericEditableCell<T>({ 
   row, 
   column, 
@@ -498,13 +499,6 @@ export function GenericEditableCell<T>({
           className="absolute top-0 left-0 w-0 h-0 border-l-8 border-l-orange-400 border-t-8 border-t-orange-400"
           title="Pending change"
         />
-      )}
-      
-      {/* Multi-select indicator */}
-      {multiSelectState.selectedCells.length > 1 && isSelected && (
-        <div className="absolute top-1 right-1 bg-blue-500 text-white text-xs px-1 py-0.5 rounded shadow">
-          {multiSelectState.selectedCells.length}
-        </div>
       )}
       
       {/* Single drag fill handle on active bottom-right cell of selection (Excel-like) */}

@@ -1,106 +1,142 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// components/mistable/MIS-Table-ClientFiltered.tsx - Google Sheets Client-Side Filtering
-
 "use client";
 
-import { QuarterSheetSelect } from './QuarterSelector';
-import { exportRowsToCsv, exportRowsToXlsx } from '@/lib/utils/export-file';
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+
+import { useAuth } from '@/hooks/useAuth'; // or wherever your auth hook is
+
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   useReactTable,
   getCoreRowModel,
   flexRender,
   createColumnHelper,
   type ColumnDef,
-  type CellContext
-} from '@tanstack/react-table';
-import { useAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
-import { Button } from '@/components/ui/button';
-import { FilterableColumnHeader, GlobalSearchBar, FilterSummary } from './FilterableColumnHeader';
-import { useGoogleSheetsMIS } from '@/hooks/useGoogleSheetsMIS';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { 
-  Database, 
-  Save, 
-  RotateCcw,
-  FilterX,
-  FileSpreadsheet,
+  type CellContext,
+} from "@tanstack/react-table";
+import { useAtom } from "jotai";
+import { atomWithStorage } from "jotai/utils";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+import { QuarterSheetSelect } from "./QuarterSelector";
+import { MisToolbar } from "./ToolbarActions";
+import { FilterableColumnHeader, FilterSummary } from "./FilterableColumnHeader";
+import { useGoogleSheetsMIS, useBalanceSheetStats } from "@/hooks/useGoogleSheetsMIS";
+import { exportRowsToCsv, exportRowsToXlsx } from "@/lib/utils/export-file";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
+import { GenericEditableCell } from "./editable-cell";
+import { BalanceSheet } from "./BalanceSheet";
+import { BrokerSheet } from "./BrokerSheet";
+
+import {
+  multiSelectStateAtom,
+  unifiedViewModeAtom,
+  SelectedCell,
+} from "@/lib/atoms/google-sheets-mis";
+
+import {
+  Database,
+  BarChart3,
+  Table as TableIcon,
+  Building2,
+  Search,
   Maximize2,
   Minimize2,
-  BarChart3,
-  Table as TableIcon
-} from 'lucide-react';
-import { 
-  Table, 
-  TableHeader, 
-  TableBody, 
-  TableHead, 
-  TableRow, 
-  TableCell 
-} from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
-import { GenericEditableCell } from './editable-cell';
-import { BalanceSheet } from './BalanceSheet';
-import { 
-  multiSelectStateAtom,
-  SelectedCell
-} from '@/lib/atoms/google-sheets-mis';
-import { 
-  DataTableProps 
-} from './table-component.types';
+  FilterX,
+} from "lucide-react";
 
-// Generic pending updates atom factory
-const createPendingUpdatesAtom = (key: string) => 
+import { DataTableProps } from "./table-component.types";
+import { SuperAdminCharts } from '../superadmin/superadmin-charts';
+
+// ---------- Local storage atoms ----------
+const createPendingUpdatesAtom = (key: string) =>
   atomWithStorage<Record<string, Record<string, unknown>>>(`pendingUpdates_${key}`, {});
 
-function DataTableClientFiltered<T>({ 
-  config, 
-  onPendingChangesCount, 
+const createColumnSizingAtom = (key: string) =>
+  atomWithStorage<Record<string, number>>(`columnSizing_${key}`, {});
+
+
+// ---------- Main component ----------
+function DataTableClientFiltered<T>({
+  config,
+  onPendingChangesCount,
   clientFiltering: propClientFiltering,
   availableSheets = [],
   selectedSheet,
   onSheetChange,
-  loading: externalLoading
+  loading: externalLoading,
 }: DataTableProps<T> & { loading?: boolean }) {
-  // State management
+  // Core state
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null);
   const [multiSelectState, setMultiSelectState] = useAtom(multiSelectStateAtom);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showBalanceSheet, setShowBalanceSheet] = useState(false);
-  
-  // Create unique atom key
-  const atomKey = config.title?.replace(/\s+/g, '_').toLowerCase() || 
-    config.columns.map(c => c.id).join('-').substring(0, 50);
-  const pendingUpdatesAtom = useMemo(() => createPendingUpdatesAtom(atomKey), [atomKey]);
+  const [viewMode, setViewMode] = useAtom(unifiedViewModeAtom);
+  const [sharedSearch, setSharedSearch] = useState("");
+  const { userRole } = useAuth(); // Adjust based on your auth hook structure
+  const isSuperAdmin = userRole === 'superadmin';
+  // Resize indicator
+  const [resizeIndicator, setResizeIndicator] = useState<{
+    isActive: boolean;
+    columnId: string;
+    position: number;
+  } | null>(null);
+
+  // Stats for secondary views
+  const { data: balanceSheetData, loading: balanceSheetLoading } = useBalanceSheetStats();
+
+  // Storage keys
+  const baseAtomKey =
+    config.title?.replace(/\s+/g, "_").toLowerCase() ||
+    config.columns.map((c) => c.id).join("-").substring(0, 50);
+
+  const pendingUpdatesKey = selectedSheet ? `${baseAtomKey}_${selectedSheet}` : baseAtomKey;
+  const pendingUpdatesAtom = useMemo(() => createPendingUpdatesAtom(pendingUpdatesKey), [pendingUpdatesKey]);
   const [pendingUpdates, setPendingUpdates] = useAtom(pendingUpdatesAtom);
-  
-  // Use the client filtering passed from parent or fallback to hook
+
+  // Keep column sizing shared across quarters for consistency
+  const columnSizingKey = `global_mis_table_column_widths`;
+  const columnSizingAtom = useMemo(() => createColumnSizingAtom(columnSizingKey), []);
+  const [columnSizing, setColumnSizing] = useAtom(columnSizingAtom);
+
+  const handleResetColumnDimensions = useCallback(() => {
+    setColumnSizing({});
+    toast.success("Column dimensions reset to default");
+  }, [setColumnSizing]);
+
+  useEffect(() => {
+    onPendingChangesCount?.(Object.values(pendingUpdates).reduce((t, r) => t + Object.keys(r).length, 0));
+  }, [pendingUpdates, onPendingChangesCount]);
+
+  // Data hook for master sheet (client-side filtering)
   const {
     clientFiltering: hookClientFiltering,
-    fetchAllMasterSheetData, 
-    loading, 
+    fetchAllMasterSheetData,
+    loading,
     errors,
-    isReady 
+    isReady,
+    hasData,
   } = useGoogleSheetsMIS();
-  
+
   const clientFiltering = propClientFiltering || hookClientFiltering;
 
-  // Load all data on component mount only if no prop client filtering is provided
+  // Fetch all data once if needed
   useEffect(() => {
-    if (isReady && !propClientFiltering) {
+    if (isReady && !propClientFiltering && !hasData) {
       fetchAllMasterSheetData().catch(console.error);
     }
-  }, [isReady, fetchAllMasterSheetData, propClientFiltering]);
+  }, [isReady, fetchAllMasterSheetData, propClientFiltering, hasData]);
 
-  // Get filtered and sorted data from client-side filtering
+  // Client filtering API
+  const clientFilteringData = (clientFiltering || {}) as any;
   const {
     filteredData = [],
     paginatedData = { data: [], totalRecords: 0, totalPages: 0, currentPage: 1, pageSize: 50 },
-    filters = { columnFilters: {} },
-    handleGlobalSearch = () => {},
+    filters = { columnFilters: {}, globalSearch: "" },
     handleSort = () => {},
     handleColumnFilter = () => {},
     getColumnUniqueValues = () => [],
@@ -108,185 +144,267 @@ function DataTableClientFiltered<T>({
     handleClearAllFilters = () => {},
     isFiltered = false,
     totalRecords = 0,
-    filteredRecords = 0
-  } = clientFiltering || {};
+    filteredRecords = 0,
+  } = clientFilteringData;
 
-  
-  // Helper to create filterable header
-  const createFilterableHeader = (title: string, columnId: string) => {
-    const FilterableHeader = () => (
-      <FilterableColumnHeader
-        title={title}
-        columnId={columnId}
-        onSort={(colId) => handleSort(colId as never)}
-        onFilter={(colId, filter) => {
-          console.log('🔍 Filter applied:', { columnId: colId, filter });
-          
-          if (!filter) {
-            // Clear filter
-            handleColumnFilter(colId as never, new Set(), false);
-          } else {
-            switch (filter.type) {
-              case 'values':
-                const stringValues = (filter.values || []).map((v: unknown) => String(v));
-                const valueSet = new Set<string>(stringValues);
-                handleColumnFilter(colId as never, valueSet, true);
-                break;
-              case 'search':
-                // Use column search functionality
-                if (clientFiltering?.handleColumnSearch && filter.search) {
-                  clientFiltering.handleColumnSearch(colId as never, filter.search);
-                }
-                break;
-              case 'date_range':
-                if (clientFiltering?.handleDateRangeFilter && filter.dateRange?.start && filter.dateRange?.end) {
-                  // Type assertion to bypass the intersection type issue
-                  (clientFiltering.handleDateRangeFilter as (colId: string, start: Date, end: Date) => void)(
-                    colId, 
-                    new Date(filter.dateRange.start), 
-                    new Date(filter.dateRange.end)
-                  );
-                }
-                break;
-              case 'number_range':
-                if (clientFiltering?.handleNumberRangeFilter && filter.numberRange?.min !== undefined && filter.numberRange?.max !== undefined) {
-                  clientFiltering.handleNumberRangeFilter(colId, filter.numberRange.min, filter.numberRange.max);
-                }
-                break;
-            }
-          }
-        }}
-        getUniqueValues={() => getColumnUniqueValues(columnId as never)}
-        currentSort={null}
-        currentFilter={getColumnFilter ? (() => {
-          const filter = getColumnFilter(columnId as never);
-          if (filter instanceof Set && filter.size > 0) {
-            return { type: 'values' as const, values: Array.from(filter) };
-          }
-          return undefined;
-        })() : undefined}
-      />
-    );
-    FilterableHeader.displayName = `FilterableHeader-${title}`;
-    return FilterableHeader;
-  };
-  
-
-  
-  // Column definitions using TanStack Table
-  const columnHelper = createColumnHelper<T>();
-  const columns = useMemo(() => 
-    config.columns
-      .filter(colConfig => {
-        // Apply conditional hiding
-        if (colConfig.hidden) {
-          return !colConfig.hidden(filteredData[0], filteredData);
-        }
-        return true;
-      })
-      .map((colConfig): ColumnDef<T, any> => 
-        columnHelper.accessor(
-          // Use column ID directly as field accessor
-          colConfig.accessor || ((row: T) => (row as any)[colConfig.id]),
-          {
-            id: colConfig.id,
-            header: createFilterableHeader(colConfig.header, colConfig.id),
-            enableSorting: true,
-            size: colConfig.width,
-            cell: (cellContext: CellContext<T, unknown>) => {
-              if (colConfig.editable && config.enableBulkEdit) {
-                return <GenericEditableCell {...cellContext} columnConfig={colConfig} />;
-              }
-              
-              // Read-only cell
-              const value = cellContext.getValue();
-              if (colConfig.formatter) {
-                return (
-                  <div className="px-4 py-2">
-                    {colConfig.formatter(value, cellContext.row.original)}
-                  </div>
-                );
-              }
-              
-              // Default rendering based on kind
-              const renderValue = () => {
-                if (value === null || value === undefined || value === '') {
-                  return <span className="text-gray-400">N/A</span>;
-                }
-                
-                const safeValue = String(value);
-                
-                switch (colConfig.kind) {
-                  case 'currency':
-                    const numValue = Number(value);
-                    return `₹${isNaN(numValue) ? safeValue : numValue.toLocaleString()}`;
-                  case 'badge':
-                    return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{safeValue}</span>;
-                  case 'number':
-                    const num = Number(value);
-                    return isNaN(num) ? safeValue : num.toLocaleString();
-                  case 'date':
-                    const date = new Date(safeValue);
-                    return isNaN(date.getTime()) ? safeValue : date.toLocaleDateString();
-                  default:
-                    return safeValue;
-                }
-              };
-              
-              return (
-                <div className="px-4 py-2 font-medium text-gray-900">
-                  {renderValue()}
-                </div>
-              );
-            }
-          }
-        )
-      ), [config.columns, config.enableBulkEdit, filteredData]);
-  
-  // Cell update function
-  const updateDataById = useCallback((recordId: string, fieldId: string, value: unknown) => {
-    setPendingUpdates(prev => ({
-      ...prev,
-      [recordId]: {
-        ...prev[recordId],
-        [fieldId]: String(value)
+  // Route shared search to active view
+  useEffect(() => {
+    if (viewMode === "mis-table" && sharedSearch !== undefined) {
+      const handleGlobalSearch = clientFiltering?.handleGlobalSearch;
+      if (handleGlobalSearch) {
+        handleGlobalSearch(sharedSearch);
       }
-    }));
-  }, [setPendingUpdates]);
-  
+    }
+    // Note: BalanceSheet and BrokerSheet have their own internal search functionality
+  }, [sharedSearch, viewMode]); // Removed clientFiltering from dependencies to prevent infinite loop
+
+  // Column resize handler (with indicator)
+  const createCustomResizeHandler = useCallback((header: any) => {
+    return (event: React.MouseEvent) => {
+      const tableContainer = (event.currentTarget as HTMLElement).closest(".relative.overflow-auto");
+      if (!tableContainer) return;
+
+      const containerRect = (tableContainer as HTMLElement).getBoundingClientRect();
+      const startX = (event as React.MouseEvent).clientX;
+      const relativeStartX = startX - containerRect.left;
+      const columnId = header.id;
+
+      setResizeIndicator({ isActive: true, columnId, position: relativeStartX });
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const deltaX = e.clientX - startX;
+        const newPosition = relativeStartX + deltaX;
+        const constrainedPosition = Math.max(0, Math.min(newPosition, containerRect.width));
+        setResizeIndicator((prev) => (prev ? { ...prev, position: constrainedPosition } : null));
+      };
+      const handleMouseUp = () => {
+        setResizeIndicator(null);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+
+      header.getResizeHandler()(event);
+    };
+  }, []);
+
+  // Bulk column selection for editing
+  const handleColumnSelection = useCallback(
+    (columnId: string) => {
+      const allRows = filteredData;
+      if (allRows.length === 0) {
+        toast.error("No data available to select");
+        return;
+      }
+
+      const columnIndex = config.columns.findIndex((col) => col.id === columnId);
+      if (columnIndex === -1) {
+        toast.error("Column not found");
+        return;
+      }
+
+      const columnSelections: SelectedCell[] = (allRows as unknown[]).map((row: unknown, index: number) => {
+        const typedRow = row as T;
+        const rowId = config.idAccessor(typedRow);
+        return {
+          recordId: rowId,
+          fieldName: columnId,
+          rowIndex: index,
+          columnIndex,
+          currentValue: String((typedRow as Record<string, unknown>)[columnId] || ""),
+        };
+      });
+
+      setMultiSelectState({
+        selectedCells: columnSelections,
+        isSelecting: false,
+        selectionStart: columnSelections[0] || null,
+        dragFillSource: null,
+        isDragFilling: false,
+      });
+
+      setEditingCell({
+        rowIndex: 0,
+        columnId: columnId,
+      });
+
+      toast.success(`Selected ${columnSelections.length} cells in column "${columnId}" for bulk editing`);
+    },
+    [filteredData, config.idAccessor, config.columns, setMultiSelectState, setEditingCell]
+  );
+
+  // Header with filterable columns
+  const columnHelper = createColumnHelper<T>();
+  const columns = useMemo(
+    () =>
+      config.columns
+        .filter((colConfig) => {
+          if (colConfig.hidden) {
+            return !colConfig.hidden(filteredData[0] as T, filteredData as T[]);
+          }
+          return true;
+        })
+        .map(
+          (colConfig): ColumnDef<T, any> =>
+            columnHelper.accessor(colConfig.accessor || ((row: T) => (row as any)[colConfig.id]), {
+              id: colConfig.id,
+              header: (() => {
+                const FilterableHeader = () => (
+                  <FilterableColumnHeader
+                    title={colConfig.header}
+                    columnId={colConfig.id}
+                    onHeaderClick={handleColumnSelection}
+                    onSort={(colId) => handleSort(colId as never)}
+                    onFilter={(colId, filter) => {
+                      if (!filter) {
+                        handleColumnFilter(colId as never, new Set(), false);
+                      } else {
+                        switch (filter.type) {
+                          case "values": {
+                            const stringValues = (filter.values || []).map((v: unknown) => String(v));
+                            const valueSet = new Set<string>(stringValues);
+                            handleColumnFilter(colId as never, valueSet, true);
+                            break;
+                          }
+                          case "search": {
+                            if ((clientFiltering as any)?.handleColumnSearch && filter.search) {
+                              (clientFiltering as any).handleColumnSearch(colId as never, filter.search);
+                            }
+                            break;
+                          }
+                          case "date_range": {
+                            if ((clientFiltering as any)?.handleDateRangeFilter && filter.dateRange?.start && filter.dateRange?.end) {
+                              ((clientFiltering as any).handleDateRangeFilter as (colId: string, start: Date, end: Date) => void)(
+                                colId,
+                                new Date(filter.dateRange.start),
+                                new Date(filter.dateRange.end)
+                              );
+                            }
+                            break;
+                          }
+                          case "number_range": {
+                            if (
+                              (clientFiltering as any)?.handleNumberRangeFilter &&
+                              filter.numberRange?.min !== undefined &&
+                              filter.numberRange?.max !== undefined
+                            ) {
+                              (clientFiltering as any).handleNumberRangeFilter(colId, filter.numberRange.min, filter.numberRange.max);
+                            }
+                            break;
+                          }
+                        }
+                      }
+                    }}
+                    getUniqueValues={() => getColumnUniqueValues(colConfig.id as never)}
+                    currentSort={null}
+                    currentFilter={
+                      getColumnFilter
+                        ? (() => {
+                            const filter = getColumnFilter(colConfig.id as never);
+                            if (filter instanceof Set && filter.size > 0) {
+                              return { type: "values" as const, values: Array.from(filter) };
+                            }
+                            return undefined;
+                          })()
+                        : undefined
+                    }
+                  />
+                );
+                FilterableHeader.displayName = `FilterableHeader-${colConfig.header}`;
+                return FilterableHeader;
+              })(),
+              enableSorting: true,
+              enableResizing: true,
+              size: columnSizing[colConfig.id] || colConfig.width || 150,
+              cell: (cellContext: CellContext<T, unknown>) => {
+                if (colConfig.editable && config.enableBulkEdit) {
+                  return <GenericEditableCell {...cellContext} columnConfig={colConfig as any} />;
+                }
+
+                const value = cellContext.getValue();
+                if (colConfig.formatter) {
+                  return <div className="px-4 py-2">{colConfig.formatter(value as any, cellContext.row.original)}</div>;
+                }
+
+                const renderValue = () => {
+                  if (value === null || value === undefined || value === "") return <span className="text-gray-400">N/A</span>;
+                  const safeValue = String(value);
+                  switch (colConfig.kind) {
+                    case "currency": {
+                      const numValue = Number(value);
+                      return <span className="numeric">{`₹${isNaN(numValue) ? safeValue : numValue.toLocaleString()}`}</span>;
+                    }
+                    case "badge": {
+                      return (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {safeValue}
+                        </span>
+                      );
+                    }
+                    case "number": {
+                      const num = Number(value);
+                      return <span className="numeric">{isNaN(num) ? safeValue : num.toLocaleString()}</span>;
+                    }
+                    case "date": {
+                      const date = new Date(safeValue);
+                      return isNaN(date.getTime()) ? safeValue : date.toLocaleDateString();
+                    }
+                    default:
+                      return safeValue;
+                  }
+                };
+
+                return <div className="px-4 py-2 font-medium text-gray-900">{renderValue()}</div>;
+              },
+            })
+        ),
+    [config.columns, config.enableBulkEdit, filteredData, columnSizing, clientFiltering, handleColumnSelection, handleSort, handleColumnFilter, getColumnUniqueValues, getColumnFilter]
+  );
+
+  // Table instance
   const table = useReactTable({
-    data: filteredData as T[], // Use filteredData instead of paginatedData to show all records
+    data: filteredData as T[],
     columns,
     getCoreRowModel: getCoreRowModel(),
     enableSortingRemoval: false,
+    enableColumnResizing: true,
+    columnResizeMode: "onEnd" as const,
+    state: { columnSizing },
+    onColumnSizingChange: setColumnSizing,
+    defaultColumn: {
+      size: 150,
+      minSize: 120,
+      maxSize: 500,
+    },
     meta: {
-      updateDataById,
+      updateDataById: (recordId: string, fieldId: string, value: unknown) => {
+        setPendingUpdates((prev) => ({
+          ...prev,
+          [recordId]: {
+            ...prev[recordId],
+            [fieldId]: String(value),
+          },
+        }));
+      },
       editingCell,
       setEditingCell,
       pendingUpdates: pendingUpdates as any,
-      idAccessor: config.idAccessor
-    } as any
+      idAccessor: config.idAccessor,
+    } as any,
   });
-  
-  // Debug: Log column information
-  console.log(`🎯 Table rendering with ${columns.length} columns`, {
-    configColumnsLength: config.columns.length,
-    actualColumnsLength: columns.length,
-    tableColumnsLength: table.getAllColumns().length,
-    visibleColumnsLength: table.getVisibleLeafColumns().length,
-    dataLength: filteredData.length,
-    usingData: 'filteredData (all records)'
-  });
-  
-  // Bulk save functionality
+
+  // Bulk save
   const handleSaveChanges = useCallback(async () => {
     if (Object.keys(pendingUpdates).length === 0) {
       toast.info("No changes to save.");
       return;
     }
-
     const promise = (async () => {
-      const payload = config.saveAdapter.toUpdates(pendingUpdates);
+      const payload = config.saveAdapter.toUpdates(
+        pendingUpdates as Record<string, Record<string, string | number | boolean | null>>
+      );
       const mutateFn = config.saveAdapter.mutate();
       const result = await mutateFn(payload);
       setPendingUpdates({});
@@ -294,120 +412,93 @@ function DataTableClientFiltered<T>({
     })();
 
     toast.promise(promise, {
-      loading: 'Saving changes...',
-      success: (res) => `${res.successful_updates || 'Changes'} saved successfully!`,
+      loading: "Saving changes...",
+      success: (res) => `${(res as any).successful_updates || "Changes"} saved successfully!`,
       error: (err) => `Failed to save: ${err.message}`,
     });
-  }, [pendingUpdates, config.saveAdapter, config.columns, setPendingUpdates]);
+  }, [pendingUpdates, config.saveAdapter, setPendingUpdates]);
 
   const handleClearChanges = useCallback(() => {
     setPendingUpdates({});
     toast.success("All pending changes cleared");
   }, [setPendingUpdates]);
 
-  const pendingChangesCount = Object.keys(pendingUpdates).length;
-
-const computeExportRows = useCallback(() => {
-  // Choose dataset for export:
-  // Option A: export filtered view
-  const dataset = filteredData as any[];
-
-  // Optional: map/omit columns based on config.columns visibility
-  const visibleIds = table.getVisibleLeafColumns().map((c) => c.id);
-  const rows = dataset.map((row) => {
-    const out: Record<string, any> = {};
-    visibleIds.forEach((id) => {
-      out[id] = (row as any)[id];
+  const computeExportRows = useCallback(() => {
+    const dataset = filteredData as any[];
+    const visibleIds = table.getVisibleLeafColumns().map((c) => c.id);
+    const rows = dataset.map((row) => {
+      const out: Record<string, any> = {};
+      visibleIds.forEach((id) => {
+        out[id] = (row as any)[id];
+      });
+      return out;
     });
-    return out;
-  });
-  return rows;
-}, [filteredData, table]);
+    return rows;
+  }, [filteredData, table]);
 
-const handleExportCSV = useCallback(() => {
-  const rows = computeExportRows();
-  // Optional: custom headers order from visibleIds
-  const headers = table.getVisibleLeafColumns().map((c) => c.id);
-  exportRowsToCsv(rows, `${config.title || 'export'}.csv`, headers);
-}, [computeExportRows, table, config.title]);
+  const handleExportCSV = useCallback(() => {
+    const rows = computeExportRows();
+    const headers = table.getVisibleLeafColumns().map((c) => c.id);
+    exportRowsToCsv(rows, `${config.title || "export"}.csv`, headers);
+  }, [computeExportRows, table, config.title]);
 
-const handleExportXLSX = useCallback(() => {
-  const rows = computeExportRows();
-  exportRowsToXlsx(rows, `${config.title || 'export'}.xlsx`, (config.title || 'Sheet'));
-}, [computeExportRows, config.title]);
+  const handleExportXLSX = useCallback(() => {
+    const rows = computeExportRows();
+    exportRowsToXlsx(rows, `${config.title || "export"}.xlsx`, config.title || "Sheet");
+  }, [computeExportRows, config.title]);
 
-const handleToggleFullscreen = useCallback(() => {
-  setIsFullscreen(prev => !prev);
-}, []);
-
-const handleToggleBalanceSheet = useCallback(() => {
-  setShowBalanceSheet(prev => !prev);
-}, []);
-
-  
-  // Keyboard navigation for cell selection
+  // Keyboard nav (unchanged)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle Escape key for fullscreen mode
-      if (e.key === 'Escape' && isFullscreen) {
+      if (e.key === "Escape" && isFullscreen) {
         setIsFullscreen(false);
         return;
       }
-
-      // Only handle if no input/textarea is focused and cells are selected
       const activeElement = document.activeElement;
-      const isInputFocused = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA';
-      
+      const isInputFocused = activeElement?.tagName === "INPUT" || activeElement?.tagName === "TEXTAREA";
       if (isInputFocused || multiSelectState.selectedCells.length === 0) return;
 
       const currentSelection = multiSelectState.selectedCells;
       if (currentSelection.length === 0) return;
 
-      // Get the current active cell (last selected)
       const activeCell = currentSelection[currentSelection.length - 1];
       const allRows = table.getRowModel().rows;
       const allColumns = table.getAllColumns();
-      
+
       let newRowIndex = activeCell.rowIndex;
       let newColIndex = activeCell.columnIndex;
-      
-      // Handle arrow key navigation
+
       switch (e.key) {
-        case 'ArrowUp':
+        case "ArrowUp":
           e.preventDefault();
           newRowIndex = Math.max(0, activeCell.rowIndex - 1);
           break;
-        case 'ArrowDown':
+        case "ArrowDown":
           e.preventDefault();
           newRowIndex = Math.min(allRows.length - 1, activeCell.rowIndex + 1);
           break;
-        case 'ArrowLeft':
+        case "ArrowLeft":
           e.preventDefault();
           newColIndex = Math.max(0, activeCell.columnIndex - 1);
           break;
-        case 'ArrowRight':
+        case "ArrowRight":
           e.preventDefault();
           newColIndex = Math.min(allColumns.length - 1, activeCell.columnIndex + 1);
           break;
-        case 'Escape':
+        case "Escape":
           e.preventDefault();
-          // Clear selection on Escape
-          setMultiSelectState(prev => ({ ...prev, selectedCells: [] }));
+          setMultiSelectState((prev) => ({ ...prev, selectedCells: [] }));
           return;
         default:
-          // Handle typing on selected cells (printable characters)
           if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
             e.preventDefault();
-            // Start editing the active cell and apply to all selected cells
             const targetRow = allRows[activeCell.rowIndex];
             const targetColumn = allColumns[activeCell.columnIndex];
             if (targetRow && targetColumn) {
               setEditingCell({ rowIndex: activeCell.rowIndex, columnId: targetColumn.id });
-              
-              // Apply the typed character to all selected cells
               setTimeout(() => {
-                currentSelection.forEach(cell => {
-                  updateDataById(cell.recordId, cell.fieldName, e.key);
+                currentSelection.forEach((cell) => {
+                  (table.options.meta as any)?.updateDataById(cell.recordId, cell.fieldName, e.key);
                 });
               }, 0);
             }
@@ -415,10 +506,8 @@ const handleToggleBalanceSheet = useCallback(() => {
           return;
       }
 
-      // Create new cell data for the target position
       const targetRow = allRows[newRowIndex];
       const targetColumn = allColumns[newColIndex];
-      
       if (targetRow && targetColumn) {
         const targetRecordId = config.idAccessor(targetRow.original);
         const targetValue = (targetRow.original as any)[targetColumn.id];
@@ -427,22 +516,19 @@ const handleToggleBalanceSheet = useCallback(() => {
           fieldName: targetColumn.id,
           rowIndex: newRowIndex,
           columnIndex: newColIndex,
-          currentValue: String(targetValue || '')
+          currentValue: String(targetValue || ""),
         };
 
         if (e.shiftKey) {
-          // Shift+Arrow: Extend selection
           if (multiSelectState.selectionStart) {
             const start = multiSelectState.selectionStart;
             const end = newCellData;
-            
             const startRow = Math.min(start.rowIndex, end.rowIndex);
             const endRow = Math.max(start.rowIndex, end.rowIndex);
             const startCol = Math.min(start.columnIndex, end.columnIndex);
             const endCol = Math.max(start.columnIndex, end.columnIndex);
-            
+
             const rangeSelection: SelectedCell[] = [];
-            
             for (let rowIdx = startRow; rowIdx <= endRow; rowIdx++) {
               for (let colIdx = startCol; colIdx <= endCol; colIdx++) {
                 const row = allRows[rowIdx];
@@ -455,37 +541,28 @@ const handleToggleBalanceSheet = useCallback(() => {
                     fieldName: column.id,
                     rowIndex: rowIdx,
                     columnIndex: colIdx,
-                    currentValue: String(value || '')
+                    currentValue: String(value || ""),
                   });
                 }
               }
             }
-            
-            setMultiSelectState(prev => ({
-              ...prev,
-              selectedCells: rangeSelection
-            }));
+            setMultiSelectState((prev) => ({ ...prev, selectedCells: rangeSelection }));
           }
         } else {
-          // Arrow without Shift: Move selection
-          setMultiSelectState(prev => ({
+          setMultiSelectState((prev) => ({
             ...prev,
             selectedCells: [newCellData],
-            selectionStart: newCellData
+            selectionStart: newCellData,
           }));
         }
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [multiSelectState, table, config.idAccessor, setMultiSelectState, setEditingCell, updateDataById, isFullscreen, setIsFullscreen]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [multiSelectState, table, config.idAccessor, setMultiSelectState, setEditingCell, isFullscreen, setIsFullscreen]);
 
-  useEffect(() => {
-    onPendingChangesCount?.(pendingChangesCount);
-  }, [pendingChangesCount, onPendingChangesCount]);
-
-  // Loading state
+  // Loading
   if (loading.masterSheetData) {
     return (
       <div className="space-y-6 p-8 bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl">
@@ -502,7 +579,7 @@ const handleToggleBalanceSheet = useCallback(() => {
     );
   }
 
-  // Error state
+  // Error
   if (errors.masterSheetData) {
     return (
       <div className="flex items-center justify-center min-h-[400px] bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl">
@@ -514,266 +591,276 @@ const handleToggleBalanceSheet = useCallback(() => {
     );
   }
 
+  // UI
   return (
+    <div
+      className={cn(
+        "h-full flex flex-col rounded-xl border bg-background shadow-sm max-w-9xl",
+        (multiSelectState.isSelecting || multiSelectState.isDragFilling) && "select-none",
+        isFullscreen && "fixed inset-0 z-50 rounded-none border-0 shadow-none",
+        config.className
+      )}
+    >
+      {/* Header: view toggle + fullscreen + shared search */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+  <div className="flex items-center gap-3">
     <div className={cn(
-      "h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200",
-      (multiSelectState.isSelecting || multiSelectState.isDragFilling) && "select-none", // Prevent text selection during drag
-      isFullscreen && "fixed inset-0 z-50 rounded-none border-0 shadow-none",
-      config.className
-    )}>
-    {/* Header */}
-<div className="bg-white border-b border-gray-200">
-  {/* Toggle Button - Fixed Position */}
-  <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
-    <div className="flex justify-center">
-      <div className="inline-flex items-center bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-        <Button
-          variant={!showBalanceSheet ? "default" : "ghost"}
-          onClick={() => !showBalanceSheet || handleToggleBalanceSheet()}
-          className={cn(
-            "h-8 px-3 text-sm font-medium rounded-md transition-all",
-            !showBalanceSheet ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
-          )}
-        >
-          <TableIcon className="mr-2 h-4 w-4" />
-          MIS Table
-        </Button>
-        <Button
-          variant={showBalanceSheet ? "default" : "ghost"}
-          onClick={() => showBalanceSheet || handleToggleBalanceSheet()}
-          className={cn(
-            "h-8 px-3 text-sm font-medium rounded-md transition-all",
-            showBalanceSheet ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
-          )}
-        >
-          <BarChart3 className="mr-2 h-4 w-4" />
-          Balance Sheet
-        </Button>
-      </div>
+  "flex items-center gap-2 min-w-0 flex-1",
+  viewMode === "super-admin-reports" && "invisible"
+)}>
+  <div className="relative max-w-[360px] w-full">
+    <Input
+      value={sharedSearch}
+      onChange={(e) => setSharedSearch(e.target.value)}
+      placeholder={
+        viewMode === "mis-table"
+          ? config.searchPlaceholder || "Search across all fields..."
+          : viewMode === "balance-sheet"
+          ? "Search agent code…"
+          : "Search broker name…"
+      }
+      className="h-9 pr-8"
+    />
+    <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+      <Search className="h-4 w-4 text-muted-foreground" />
     </div>
   </div>
+  {sharedSearch && (
+    <Button
+      variant="ghost"
+      onClick={() => setSharedSearch("")}
+      className="h-9 px-2"
+      title="Clear search"
+    >
+      <FilterX className="h-4 w-4" />
+    </Button>
+  )}
+</div>
 
-  <div className="px-6 py-3">
-    <div className="flex items-center justify-between gap-4 flex-wrap">
-      {/* Left cluster: title + meta */}
-      {!showBalanceSheet && (
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 bg-blue-100 rounded-lg shrink-0">
-            <Database className="h-5 w-5 text-blue-600" />
-          </div>
-          <div className="min-w-0">
-            {config.title && (
-              <h1 className="text-base font-semibold text-gray-900 truncate">
-                {config.title}
-              </h1>
-            )}
-            <div className="flex items-center gap-3 mt-0.5">
-              <span className="text-xs text-gray-500">
-                {totalRecords} records • {filteredRecords} filtered
-              </span>
-              {pendingChangesCount > 0 && (
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100 rounded-md">
-                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                  <span className="text-amber-700 text-xs font-medium">
-                    {pendingChangesCount} pending
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+    {/* CENTER: View toggle */}
+    {/* CENTER: View toggle */}
+<div className="flex-1 flex items-center justify-center">
+  <div className="inline-flex items-center bg-white rounded-lg p-1 shadow-sm border border-gray-200">
+    <Button
+      variant={viewMode === "mis-table" ? "default" : "ghost"}
+      onClick={() => setViewMode("mis-table")}
+      className={cn(
+        "h-8 px-3 text-sm font-medium rounded-md transition-all",
+        viewMode === "mis-table" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
       )}
-
-      {/* Middle cluster: quarter dropdown + export buttons */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {!showBalanceSheet && availableSheets && availableSheets.length > 0 && (
-          <QuarterSheetSelect
-            availableSheets={availableSheets}
-            selectedSheet={selectedSheet}
-            onSheetChange={onSheetChange}
-            loading={externalLoading || loading.masterSheetData}
-            className="h-9"
-          />
-        )}
-
-        {!showBalanceSheet && (
-          <>
-            <Button
-              variant="secondary"
-              onClick={handleExportCSV}
-              className="h-9 px-3 text-sm font-medium"
-              title="Export all filtered rows to CSV"
-            >
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Export CSV
-            </Button>
-
-            <Button
-              variant="secondary"
-              onClick={handleExportXLSX}
-              className="h-9 px-3 text-sm font-medium"
-              title="Export all filtered rows to Excel (.xlsx)"
-            >
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Export Excel
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Right cluster: actions */}
-      {!showBalanceSheet && (
-        <div className="flex items-center gap-2">
-          {isFiltered && (
-            <Button
-              variant="ghost"
-              onClick={handleClearAllFilters}
-              className="h-9 px-3 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-            >
-              <FilterX className="mr-2 h-4 w-4" />
-              Clear Filters
-            </Button>
-          )}
-
-          {config.enableBulkEdit && (
-            <>
-              {pendingChangesCount > 0 && (
-                <Button
-                  variant="ghost"
-                  onClick={handleClearChanges}
-                  className="h-9 px-3 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Clear Changes
-                </Button>
-              )}
-
-              <Button
-                onClick={handleSaveChanges}
-                disabled={pendingChangesCount === 0}
-                variant={pendingChangesCount > 0 ? "default" : "secondary"}
-                className={cn(
-                  "h-9 px-4 text-sm font-medium transition-colors",
-                  pendingChangesCount > 0
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                )}
-              >
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-                {pendingChangesCount > 0 && (
-                  <span className="ml-2 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
-                    {pendingChangesCount}
-                  </span>
-                )}
-              </Button>
-            </>
-          )}
-
-          <Button
-            variant="ghost"
-            onClick={handleToggleFullscreen}
-            className="h-9 px-3 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-            title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-          >
-            {isFullscreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
+    >
+      <TableIcon className="mr-2 h-4 w-4" />
+      MIS Table
+    </Button>
+    <Button
+      variant={viewMode === "balance-sheet" ? "default" : "ghost"}
+      onClick={() => setViewMode("balance-sheet")}
+      className={cn(
+        "h-8 px-3 text-sm font-medium rounded-md transition-all",
+        viewMode === "balance-sheet" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
       )}
+    >
+      <BarChart3 className="mr-2 h-4 w-4" />
+      Balance Sheet
+    </Button>
+    <Button
+      variant={viewMode === "broker-sheet" ? "default" : "ghost"}
+      onClick={() => setViewMode("broker-sheet")}
+      className={cn(
+        "h-8 px-3 text-sm font-medium rounded-md transition-all",
+        viewMode === "broker-sheet" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
+      )}
+    >
+      <Building2 className="mr-2 h-4 w-4" />
+      Broker Sheet
+    </Button>
+    {/* Super Admin Reports - Only show for super admin users */}
+    {isSuperAdmin && (
+      <Button
+        variant={viewMode === "super-admin-reports" ? "default" : "ghost"}
+        onClick={() => setViewMode("super-admin-reports")}
+        className={cn(
+          "h-8 px-3 text-sm font-medium rounded-md transition-all",
+          viewMode === "super-admin-reports" ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:text-gray-900"
+        )}
+      >
+        <Database className="mr-2 h-4 w-4" />
+        Reports
+      </Button>
+    )}
+  </div>
+</div>
+
+
+    {/* RIGHT: Fullscreen */}
+    <div className="flex items-center justify-end flex-1">
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => setIsFullscreen((p) => !p)}
+        title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        className="h-8 w-8 ml-auto"
+      >
+        {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+      </Button>
     </div>
   </div>
 </div>
 
-{/* Search and Filter Controls */}
-{!showBalanceSheet && (
-  <div className="bg-gray-50 border-b border-gray-200">
-    <div className="px-6 py-2.5">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        {/* Compact search bar */}
-        <div className="flex-1 min-w-[220px] max-w-[520px]">
-          <GlobalSearchBar
-            value={filters.globalSearch || ""}
-            onChange={handleGlobalSearch}
-            placeholder={config.searchPlaceholder || "Search across all fields..."}
-          />
-        </div>
 
-        {isFiltered && (
-          <FilterSummary
-            stats={{
-              totalRecords,
-              totalFilteredRecords: filteredRecords,
-              activeFilters:
-                Object.keys(filters.columnFilters).length +
-                (filters.globalSearch ? 1 : 0),
-            }}
-            onClearAll={handleClearAllFilters}
-          />
-        )}
-      </div>
-    </div>
-  </div>
-)}
-
-
-      {/* Content */}
-      {showBalanceSheet ? (
-        <div className="flex-1">
-          <BalanceSheet />
-        </div>
-      ) : (
-        <div className="flex-1 relative overflow-auto">
-          <div className="min-w-max">
-            <Table className="w-full bg-white border-collapse">
-              <TableHeader className="sticky top-0 z-10">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={`header-group-${headerGroup.id}`} className="border-b border-gray-200 bg-gray-50">
-                    {headerGroup.headers.map((header) => (
-                      <TableHead 
-                        key={`header-${header.id}`} 
-                        className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-r border-gray-200 last:border-r-0"
-                        style={{ width: header.getSize() }}
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody className="bg-white">
-                {table.getRowModel().rows.map((row, index) => (
-                  <TableRow 
-                    key={`${config.idAccessor(row.original)}-${index}`} 
-                    className={cn(
-                      "transition-colors duration-200 border-b border-gray-100 hover:bg-gray-50",
-                      index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                    )}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell 
-                        key={`cell-${cell.id}-${config.idAccessor(row.original)}`} 
-                        className="p-0 whitespace-nowrap text-sm text-slate-800 border-r border-gray-200 last:border-r-0"
-                      >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            
-            {/* Results summary */}
-            <div className="h-12 flex justify-center items-center bg-white border-t border-gray-200">
-              <div className="text-sm text-gray-600">
-                Showing {paginatedData.data.length} of {filteredRecords} records
+        {/* Title/meta + quarter + toolbar (MIS only) */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          {viewMode === "mis-table" && (
+            <div className="flex items-center px-4 py-2 gap-3 min-w-0">
+              <div className="p-2 bg-blue-100 rounded-lg shrink-0">
+                <Database className="h-5 w-5 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                {config.title && <h1 className="text-base font-semibold text-gray-900 truncate">{config.title}</h1>}
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-xs text-gray-500">
+                    {totalRecords} records • {filteredRecords} filtered
+                  </span>
+                  {Object.values(pendingUpdates).length > 0 && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-100 rounded-md">
+                      <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                      <span className="text-amber-700 text-xs font-medium">
+                        {Object.values(pendingUpdates).reduce((t, r) => t + Object.keys(r).length, 0)} pending
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+          )}
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {viewMode === "mis-table" && !!availableSheets.length && (
+              <QuarterSheetSelect
+                availableSheets={availableSheets}
+                selectedSheet={selectedSheet}
+                onSheetChange={onSheetChange}
+                loading={externalLoading || loading.masterSheetData}
+                className="h-9"
+              />
+            )}
+
+            {viewMode === "mis-table" && (
+              <MisToolbar
+                isFiltered={isFiltered}
+                onClearFilters={handleClearAllFilters}
+                onResetColumns={handleResetColumnDimensions}
+                onExportCSV={handleExportCSV}
+                onExportXLSX={handleExportXLSX}
+                onSaveChanges={handleSaveChanges}
+                onClearChanges={handleClearChanges}
+                pendingChangesCount={
+                  config.enableBulkEdit ? Object.values(pendingUpdates).reduce((t, r) => t + Object.keys(r).length, 0) : 0
+                }
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={() => setIsFullscreen(prev => !prev)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Optional: MIS filter summary only (shared search replaces GlobalSearchBar) */}
+      {viewMode === "mis-table" && isFiltered && (
+        <div className="bg-gray-50 border-b border-gray-200">
+          <div className="px-6 py-2.5">
+            <div className="flex items-center justify-end">
+              <FilterSummary
+                stats={{
+                  totalRecords,
+                  totalFilteredRecords: filteredRecords,
+                  activeFilters: Object.keys(filters.columnFilters || {}).length + ((filters as any)?.globalSearch ? 1 : 0),
+                }}
+                onClearAll={handleClearAllFilters}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      {viewMode === "balance-sheet" ? (
+        <div className="flex-1">
+    <BalanceSheet sharedSearchQuery={sharedSearch} />
+  </div>
+) : viewMode === "broker-sheet" ? (
+  <div className="flex-1">
+    <BrokerSheet data={balanceSheetData?.broker_data || []} loading={balanceSheetLoading} sharedSearchQuery={sharedSearch} />
+  </div>
+) : viewMode === "super-admin-reports" ? (
+   <div className="flex-1 overflow-auto min-h-0">
+    <SuperAdminCharts />
+  </div>
+      ) : (
+        <div className="flex-1 relative overflow-auto">
+          {resizeIndicator?.isActive && (
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-50 pointer-events-none"
+              style={{ left: resizeIndicator.position, transform: "translateX(-1px)" }}
+            />
+          )}
+
+          <Table className="w-full bg-white border-collapse table-auto" style={{ width: table.getCenterTotalSize(), tableLayout: "fixed" }}>
+            <TableHeader className="sticky top-0 z-10">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={`header-group-${headerGroup.id}`} className="border-b border-gray-200 bg-gray-50">
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={`header-${header.id}`}
+                      className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-r border-gray-200 last:border-r-0 relative"
+                      style={{ width: header.getSize() }}
+                    >
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      {header.column.getCanResize() && (
+                        <div
+                          onMouseDown={createCustomResizeHandler(header)}
+                          onTouchStart={header.getResizeHandler()}
+                          className={cn(
+                            "absolute -right-1 top-0 h-full w-3 cursor-col-resize select-none touch-none z-10",
+                            "flex items-center justify-center",
+                            header.column.getIsResizing() ? "bg-blue-500/20" : "hover:bg-blue-400/20"
+                          )}
+                        >
+                          <div className="w-0.5 h-4 bg-gray-400 hover:bg-blue-500 transition-colors" />
+                        </div>
+                      )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+
+            <TableBody className="bg-white">
+              {table.getRowModel().rows.map((row, index) => (
+                <TableRow
+                  key={`${config.idAccessor(row.original)}-${index}`}
+                  className={cn(
+                    "transition-colors duration-200 border-b border-gray-100 hover:bg-gray-50",
+                    index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                  )}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={`cell-${cell.id}-${config.idAccessor(row.original)}`}
+                      className="p-0 whitespace-nowrap text-sm text-slate-800 border-r border-gray-200 last:border-r-0"
+                      style={{ width: cell.column.getSize() }}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+
+          <div className="h-12 flex justify-center items-center bg-white border-t border-gray-200">
+            <div className="text-sm text-gray-600">Showing {paginatedData.data.length} of {filteredRecords} records</div>
           </div>
         </div>
       )}

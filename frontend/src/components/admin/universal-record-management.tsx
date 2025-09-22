@@ -48,6 +48,8 @@ import {
   Info,
   FileUp,
   FileSearch,
+  Plus,
+  X,
 } from "lucide-react";
 import {
   useUniversalInsurersList,
@@ -59,6 +61,7 @@ import {
 import {
   UniversalUploadResponse,
   UniversalPreviewResponse,
+  UniversalUploadParams,
 } from "@/types/universalrecords.types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -71,6 +74,9 @@ export function UniversalRecordManagement({
   className?: string;
 }) {
   const [selectedInsurer, setSelectedInsurer] = useState<string>("");
+  const [quarterYearPairs, setQuarterYearPairs] = useState<{quarter: string, year: string}[]>([]);
+  const [tempQuarter, setTempQuarter] = useState<string>("");
+  const [tempYear, setTempYear] = useState<string>("");
   const { data: insurersData, isLoading: isLoadingInsurers } =
     useUniversalInsurersList();
 
@@ -97,40 +103,144 @@ export function UniversalRecordManagement({
         <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl text-slate-800">
-              Select Insurer
+              Configuration
             </CardTitle>
             <CardDescription className="text-slate-600">
-              Choose an insurer to begin managing records and data
-              reconciliation.
+              Choose an insurer and optionally select target quarters and years for upload.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Select
-              onValueChange={setSelectedInsurer}
-              value={selectedInsurer}
-              disabled={isLoadingInsurers}
-            >
-              <SelectTrigger className="w-full max-w-md h-12 text-base border-slate-200 focus:border-slate-400 focus:ring-slate-400">
-                <SelectValue
-                  placeholder={
-                    isLoadingInsurers
-                      ? "Loading insurers..."
-                      : "Select an insurer to begin"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {insurersData?.insurers.map((insurer) => (
-                  <SelectItem
-                    key={insurer}
-                    value={insurer}
-                    className="text-base py-3"
-                  >
-                    {insurer}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Insurer Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Insurer *
+                </label>
+                <Select
+                  onValueChange={setSelectedInsurer}
+                  value={selectedInsurer}
+                  disabled={isLoadingInsurers}
+                >
+                  <SelectTrigger className="w-full h-12 text-base border-slate-200 focus:border-slate-400 focus:ring-slate-400">
+                    <SelectValue
+                      placeholder={
+                        isLoadingInsurers
+                          ? "Loading insurers..."
+                          : "Select an insurer"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {insurersData?.insurers.map((insurer) => (
+                      <SelectItem
+                        key={insurer}
+                        value={insurer}
+                        className="text-base py-3"
+                      >
+                        {insurer}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Quarter Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Target Quarters & Years (Optional)
+                </label>
+                
+                {/* Add New Pair Section */}
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Select onValueChange={setTempQuarter} value={tempQuarter}>
+                      <SelectTrigger className="flex-1 h-10 text-sm">
+                        <SelectValue placeholder="Quarter" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Q1</SelectItem>
+                        <SelectItem value="2">Q2</SelectItem>
+                        <SelectItem value="3">Q3</SelectItem>
+                        <SelectItem value="4">Q4</SelectItem>
+                      </SelectContent>
+                    </Select>
+                 <Select onValueChange={setTempYear} value={tempYear}>
+                  <SelectTrigger className="flex-1 h-10 text-sm">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {Array.from({ length: new Date().getFullYear() - 1999 }, (_, i) => {
+                      const y = String(new Date().getFullYear() - i);
+                      return <SelectItem key={y} value={y}>{y}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+
+                    
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (tempQuarter && tempYear && !quarterYearPairs.some(p => p.quarter === tempQuarter && p.year === tempYear)) {
+                          setQuarterYearPairs([...quarterYearPairs, { quarter: tempQuarter, year: tempYear }]);
+                          setTempQuarter("");
+                          setTempYear("");
+                        }
+                      }}
+                      disabled={!tempQuarter || !tempYear || quarterYearPairs.some(p => p.quarter === tempQuarter && p.year === tempYear)}
+                      className="h-10 px-3"
+                      title={
+                        !tempQuarter || !tempYear 
+                          ? "Select both quarter and year"
+                          : quarterYearPairs.some(p => p.quarter === tempQuarter && p.year === tempYear)
+                          ? "This quarter-year pair is already added"
+                          : "Add quarter-year pair"
+                      }
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Display Selected Pairs as Tags */}
+                  {quarterYearPairs.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {quarterYearPairs.map((pair, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="px-3 py-1 bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                        >
+                          Q{pair.quarter}-{pair.year}
+                          <button
+                            onClick={() => {
+                              setQuarterYearPairs(quarterYearPairs.filter((_, i) => i !== index));
+                            }}
+                            className="ml-2 hover:text-blue-900"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {quarterYearPairs.length === 0 && (
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p className="text-slate-400">Add quarter-year pairs to target specific periods</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Selection Summary */}
+            {selectedInsurer && quarterYearPairs.length > 0 && (
+              <Alert className="mt-4 border-blue-200 bg-blue-50">
+                <Info className="h-5 w-5 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  <strong>Configuration:</strong> Will process {selectedInsurer} records for {quarterYearPairs.map(p => `Q${p.quarter}-${p.year}`).join(', ')}
+                </AlertDescription>
+              </Alert>
+            )}
           </CardContent>
         </Card>
 
@@ -168,7 +278,10 @@ export function UniversalRecordManagement({
 
               <div className="p-6">
                 <TabsContent value="upload" className="mt-0">
-                  <FileUploadTab selectedInsurer={selectedInsurer} />
+                  <FileUploadTab 
+                    selectedInsurer={selectedInsurer} 
+                    quarterYearPairs={quarterYearPairs}
+                  />
                 </TabsContent>
                 <TabsContent value="dashboard" className="mt-0">
                   <ReconciliationDashboardTab
@@ -209,7 +322,13 @@ function EmptyState({
   );
 }
 
-function FileUploadTab({ selectedInsurer }: { selectedInsurer: string }) {
+function FileUploadTab({ 
+  selectedInsurer, 
+  quarterYearPairs 
+}: { 
+  selectedInsurer: string;
+  quarterYearPairs: {quarter: string, year: string}[];
+}) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] =
     useState<UniversalUploadResponse | null>(null);
@@ -261,10 +380,18 @@ function FileUploadTab({ selectedInsurer }: { selectedInsurer: string }) {
   const handleUpload = async () => {
     if (!selectedFile || !selectedInsurer) return;
     try {
-      const result = await uploadMutation.mutateAsync({
+      const uploadParams: UniversalUploadParams = {
         file: selectedFile,
         insurer_name: selectedInsurer,
-      });
+      };
+      
+      // Add quarters and years parameters if selected
+      if (quarterYearPairs.length > 0) {
+        uploadParams.quarters = quarterYearPairs.map(p => p.quarter).join(',');
+        uploadParams.years = quarterYearPairs.map(p => p.year).join(',');
+      }
+      
+      const result = await uploadMutation.mutateAsync(uploadParams);
       setUploadResult(result);
       toast.success(result.message || "File processed successfully!");
     } catch (error: unknown) {
@@ -415,6 +542,11 @@ function FileUploadTab({ selectedInsurer }: { selectedInsurer: string }) {
                 <CardDescription className="mt-1">
                   Preview the file to check mappings or proceed directly to
                   upload and process.
+                  {quarterYearPairs.length > 0 && (
+                    <span className="block mt-2 text-blue-600 font-medium">
+                      Target: {quarterYearPairs.map(p => `Q${p.quarter}-${p.year}`).join(', ')}
+                    </span>
+                  )}
                 </CardDescription>
               </div>
             </div>

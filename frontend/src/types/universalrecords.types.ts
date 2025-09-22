@@ -24,6 +24,8 @@ export interface UniversalPreviewResponse {
 export interface UniversalUploadParams {
   file: File;
   insurer_name: string;
+  quarters?: string;
+  years?: string;
 }
 
 // A type for values within a record, to avoid using 'any'

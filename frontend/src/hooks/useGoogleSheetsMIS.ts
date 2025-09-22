@@ -16,9 +16,9 @@ import {
   googleSheetsSetFiltersStateAtom
 } from "@/lib/atoms/google-sheets-mis";
 import { googleSheetsMISService } from "@/lib/services/google-sheets-mis.service";
-import { MasterSheetListParams, MasterSheetStats, BulkUpdateRequest } from "@/types/mis.types";
+import { MasterSheetListParams, BulkUpdateRequest } from "@/types/mis.types";
 import { useAtom } from "jotai";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useClientSideFiltering } from "./useClientSideFiltering";
 
 /**
@@ -502,47 +502,164 @@ export function useGoogleSheetsPendingUpdates() {
 }
 
 /**
- * Hook for managing Balance Sheet / Summary Statistics data
+ * Hook for managing Balance Sheet / Summary Statistics data with caching
  */
 export function useBalanceSheetStats() {
-  const [data, setData] = useState<MasterSheetStats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [dataState, setDataState] = useAtom(googleSheetsMISDataStateAtom);
+  const [loadingState, setLoadingState] = useAtom(googleSheetsMISLoadingStateAtom);
+  const [errorState, setErrorState] = useAtom(googleSheetsMISErrorStateAtom);
 
   const service = googleSheetsMISService;
 
+  // Check if data is fresh (less than 5 minutes old)
+  const isDataFresh = useMemo(() => {
+    if (!dataState.stats || !dataState.lastUpdated) return false;
+    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+    return Date.now() - dataState.lastUpdated.getTime() < fiveMinutes;
+  }, [dataState.stats, dataState.lastUpdated]);
+
   /**
-   * Fetch balance sheet statistics
+   * Fetch balance sheet statistics with caching
    */
-  const fetchBalanceSheetStats = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchBalanceSheetStats = useCallback(async (forceRefresh = false) => {
+    // If data is fresh and not forcing refresh, return cached data
+    if (!forceRefresh && isDataFresh && dataState.stats) {
+      return;
+    }
+
+    setLoadingState(prev => ({ ...prev, masterSheetStats: true }));
+    setErrorState(prev => ({ ...prev, masterSheetStats: null }));
 
     try {
       const result = await service.fetchBalanceSheetStats();
-      setData(result);
+      
+      setDataState(prev => ({
+        ...prev,
+        stats: result,
+        lastUpdated: new Date(),
+      }));
+
+      // Store in localStorage as backup
+      localStorage.setItem('balance_sheet_stats', JSON.stringify({
+        data: result,
+        timestamp: Date.now(),
+      }));
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch balance sheet data';
-      setError(errorMessage);
+      setErrorState(prev => ({ ...prev, masterSheetStats: errorMessage }));
       console.error('Balance sheet fetch error:', error);
+
+      // Try to load from localStorage on error
+      try {
+        const cached = localStorage.getItem('balance_sheet_stats');
+        if (cached) {
+          const parsedCache = JSON.parse(cached);
+          const cacheAge = Date.now() - parsedCache.timestamp;
+          const oneHour = 60 * 60 * 1000; // 1 hour
+
+          // Use cached data if it's less than 1 hour old
+          if (cacheAge < oneHour && parsedCache.data) {
+            setDataState(prev => ({
+              ...prev,
+              stats: parsedCache.data,
+              lastUpdated: new Date(parsedCache.timestamp),
+            }));
+            console.log('Loaded balance sheet data from cache due to network error');
+          }
+        }
+      } catch (cacheError) {
+        console.error('Error loading cached balance sheet data:', cacheError);
+      }
     } finally {
-      setLoading(false);
+      setLoadingState(prev => ({ ...prev, masterSheetStats: false }));
     }
-  }, [service]);
+  }, [service, isDataFresh, dataState.stats, setDataState, setLoadingState, setErrorState]);
 
   /**
-   * Refresh data
+   * Refresh data (force refresh)
    */
   const refresh = useCallback(() => {
-    fetchBalanceSheetStats();
+    fetchBalanceSheetStats(true);
   }, [fetchBalanceSheetStats]);
 
+  // Load cached data on mount if no fresh data exists
+  useEffect(() => {
+    if (!dataState.stats && !loadingState.masterSheetStats) {
+      try {
+        const cached = localStorage.getItem('balance_sheet_stats');
+        if (cached) {
+          const parsedCache = JSON.parse(cached);
+          const cacheAge = Date.now() - parsedCache.timestamp;
+          const fiveMinutes = 5 * 60 * 1000;
+
+          // If cache is fresh, use it and don't fetch
+          if (cacheAge < fiveMinutes && parsedCache.data) {
+            setDataState(prev => ({
+              ...prev,
+              stats: parsedCache.data,
+              lastUpdated: new Date(parsedCache.timestamp),
+            }));
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cached balance sheet data on mount:', error);
+      }
+
+      // Fetch fresh data if no valid cache
+      fetchBalanceSheetStats();
+    }
+  }, [dataState.stats, loadingState.masterSheetStats, fetchBalanceSheetStats, setDataState]);
+
   return {
-    data,
-    loading,
-    error,
+    data: dataState.stats,
+    loading: loadingState.masterSheetStats,
+    error: errorState.masterSheetStats,
     fetchBalanceSheetStats,
     refresh,
-    isReady: data !== null && !loading,
+    isReady: dataState.stats !== null && !loadingState.masterSheetStats,
+    isDataFresh,
+    lastUpdated: dataState.lastUpdated,
+  };
+}
+
+/**
+ * Hook for managing Broker Sheet Statistics data with caching
+ * Note: Broker sheet data is included in the balance sheet stats API response
+ */
+export function useBrokerSheetStats() {
+  const balanceSheetStats = useBalanceSheetStats();
+
+  // Extract broker sheet data from the balance sheet stats response
+  const brokerData = useMemo(() => {
+    if (!balanceSheetStats.data) return null;
+    
+    const stats = balanceSheetStats.data;
+    
+    // Check if broker sheet data exists in the response
+    if (stats.broker_data && stats.broker_headers) {
+      return {
+        sheet_name: stats.broker_sheet_name || "Broker Sheet",
+        total_rows: stats.broker_total_rows || 0,
+        total_columns: stats.broker_total_columns || 0,
+        headers: stats.broker_headers || [],
+        data: stats.broker_data || [],
+        last_updated: stats.broker_last_updated || "",
+      };
+    }
+    
+    return null;
+  }, [balanceSheetStats.data]);
+
+  return {
+    data: brokerData,
+    loading: balanceSheetStats.loading,
+    error: balanceSheetStats.error,
+    refresh: balanceSheetStats.refresh,
+    fetchBrokerSheetStats: balanceSheetStats.fetchBalanceSheetStats,
+    isReady: brokerData !== null && !balanceSheetStats.loading,
+    isDataFresh: balanceSheetStats.isDataFresh,
+    lastUpdated: balanceSheetStats.lastUpdated,
   };
 }

@@ -21,6 +21,7 @@ interface FilterableColumnHeaderProps {
   columnId: string;
   onSort: (columnId: string, direction: 'asc' | 'desc' | null) => void;
   onFilter: (columnId: string, filter: ColumnFilter | null) => void;
+  onHeaderClick?: (columnId: string) => void;
   getUniqueValues: () => string[];
   currentSort?: { direction: 'asc' | 'desc' } | null;
   currentFilter?: ColumnFilter;
@@ -31,6 +32,7 @@ export function FilterableColumnHeader({
   columnId,
   onSort,
   onFilter,
+  onHeaderClick,
   getUniqueValues,
   currentSort,
   currentFilter
@@ -45,24 +47,39 @@ export function FilterableColumnHeader({
     }
   };
 
+  const handleColumnNameDoubleClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onHeaderClick?.(columnId);
+  };
+
   const hasFilter = currentFilter && Object.keys(currentFilter).length > 0;
 
   return (
     <div className="flex items-center justify-between w-full">
-      <Button
-        variant="ghost"
-        onClick={handleSort}
-        className="h-auto p-0 font-bold text-slate-700 hover:text-slate-900 hover:bg-transparent flex-1 justify-start"
-      >
-        {title}
-        {currentSort?.direction === "asc" ? (
-          <ArrowUp className="ml-2 h-4 w-4" />
-        ) : currentSort?.direction === "desc" ? (
-          <ArrowDown className="ml-2 h-4 w-4" />
-        ) : (
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        )}
-      </Button>
+      <div className="flex items-center flex-1">
+        <span
+          onDoubleClick={handleColumnNameDoubleClick}
+          className="font-bold text-slate-700 hover:text-slate-900 cursor-pointer select-none flex-1"
+          title="Double-click to select all cells in this column for editing"
+        >
+          {title}
+        </span>
+        <Button
+          variant="ghost"
+          onClick={handleSort}
+          className="h-auto p-1 ml-2 hover:bg-slate-100"
+          title="Click to sort column"
+        >
+          {currentSort?.direction === "asc" ? (
+            <ArrowUp className="h-4 w-4" />
+          ) : currentSort?.direction === "desc" ? (
+            <ArrowDown className="h-4 w-4" />
+          ) : (
+            <ArrowUpDown className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
       
       <ColumnFilterDropdown
         columnId={columnId}
