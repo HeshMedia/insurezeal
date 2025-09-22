@@ -12,7 +12,6 @@ import {
   UpdateAgentConfigRequest,
   BulkPostCutpayRequest,
   BulkPostCutpayResponse,
-  PolicyDetailsResponse,
 } from '@/types/cutpay.types'
 
 // Query keys
