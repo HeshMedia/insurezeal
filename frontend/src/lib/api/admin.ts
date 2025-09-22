@@ -3,7 +3,6 @@ import {
   AgentListResponse,
   AgentListParams,
   AgentDetails,
-  AdminStats,
   ChildRequest,
   ChildRequestListResponse,
   ChildRequestListParams,
@@ -85,12 +84,6 @@ export const adminApi = {
       const response = await apiClient.get(`/admin/agents/${agentCode}/po-paid`)
       return response.data
     }
-  },
-
-  // Admin Stats
-  getStats: async (): Promise<AdminStats> => {
-    const response = await apiClient.get('/admin/agent-stats')
-    return response.data
   },
 
   // Child Request APIs

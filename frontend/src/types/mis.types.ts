@@ -73,6 +73,7 @@ export interface MasterSheetRecord {
 // Balance Sheet / Summary Stats Types
 export interface BalanceSheetRecord {
   'Agent Code': string;
+  
   'Running Balance (True)': string;
   'Net Premium (True)': string;
   'Commissionable Premium (True)': string;
@@ -81,6 +82,15 @@ export interface BalanceSheetRecord {
   'Net Premium (True&False)': string;
   'Commissionable Premium (True&False)': string;
   'Policy Count (True&False)': string;
+}
+
+// Broker Sheet Data Types
+export interface BrokerSheetRecord {
+  'Broker Name': string;
+  'Total Receivable from Broker': string;
+  'As per Broker PO AMT': string;
+  'IS - Payment Pending (Broker PO AMT)': string;
+  'IS - Invoice Pending (Total Receivable from Broker)': string;
 }
 
 // View modes for balance sheet display
@@ -181,6 +191,13 @@ export interface MasterSheetStats {
   headers: string[];
   data: BalanceSheetRecord[];
   last_updated: string;
+  // Broker sheet data
+  broker_sheet_name: string;
+  broker_total_rows: number;
+  broker_total_columns: number;
+  broker_headers: string[];
+  broker_data: BrokerSheetRecord[];
+  broker_last_updated: string;
 }
 
 // Parameters for exporting master sheet data

@@ -1,4 +1,5 @@
 import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 import { MasterSheetStats, MasterSheetListParams } from '@/types/mis.types';
 import { QuarterlySheetRecord } from '@/types/admin-mis.types';
 
@@ -374,3 +375,12 @@ export const clearSheetDataAtom = atom(
     }
   }
 );
+
+// Unified view mode for all three components (MIS table, balance sheet, broker sheet)
+export type ViewMode = 'mis-table' | 'balance-sheet' | 'broker-sheet' | 'super-admin-reports';
+
+export const unifiedViewModeAtom = atom<ViewMode>('mis-table');
+
+// Persisting atoms for stats data to prevent refetching
+export const balanceSheetStatsAtom = atomWithStorage<MasterSheetStats | null>('balance_sheet_stats_cache', null);
+export const brokerSheetStatsAtom = atomWithStorage<MasterSheetStats | null>('broker_sheet_stats_cache', null);

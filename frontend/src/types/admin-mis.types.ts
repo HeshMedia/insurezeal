@@ -102,4 +102,6 @@ export interface AdvancedFilterOptions {
   plan_type?: string;
   rto?: string;
   cluster?: string;
+  // Index signature to allow dynamic property access
+  [key: string]: string | number | boolean | null | undefined;
 }

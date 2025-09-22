@@ -112,3 +112,39 @@ export interface SuperAdminResponse<T = Record<string, unknown>> {
   data: T
   message?: string
 }
+
+
+export interface PromoteAgentResponse {
+  success: boolean;
+  message: string;
+  user_id: string;
+  new_role: string;
+  updated_in_supabase: boolean;
+  updated_in_database: boolean;
+}
+
+export interface AgentListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+}
+
+export interface Agent {
+  id: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile_number: string | null;
+  agent_code: string;
+  user_role: 'agent' | 'admin' | 'superadmin';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentsListResponse {
+  agents: Agent[];
+  total_count: number;
+  page: number;
+  page_size: number;
+}
