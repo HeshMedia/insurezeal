@@ -427,7 +427,7 @@ async def assign_child_id(
                 detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'",
             )
 
-        admin_user_id = current_user["user_id"]
+        admin_user_id = str(current_user["user_id"])  # Ensure it's a string
 
         # Use model_dump() for Pydantic V2 compatibility and exclude None values
         assignment_dict = assignment_data.model_dump(exclude_none=False)
@@ -542,7 +542,7 @@ async def reject_child_request(
                 detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'",
             )
 
-        admin_user_id = current_user["user_id"]
+        admin_user_id = str(current_user["user_id"])  # Ensure it's a string
         child_request = await admin_helpers.reject_child_request(
             db=db,
             request_id=request_id,
@@ -653,7 +653,7 @@ async def suspend_child_id(
                 detail=f"Invalid request ID format. Expected valid UUID, got: '{request_id}'",
             )
 
-        admin_user_id = current_user["user_id"]
+        admin_user_id = str(current_user["user_id"])  # Ensure it's a string
 
         child_request = await admin_helpers.suspend_child_id(
             db=db,

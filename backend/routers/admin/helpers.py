@@ -563,7 +563,11 @@ class AdminHelpers:
                 logger.warning("Password field not found in assignment data")
 
             child_request.status = "accepted"
-            child_request.approved_by = uuid.UUID(admin_user_id)
+            # Convert admin_user_id to UUID if it's a string, otherwise use as-is
+            if isinstance(admin_user_id, str):
+                child_request.approved_by = uuid.UUID(admin_user_id)
+            else:
+                child_request.approved_by = admin_user_id
             child_request.approved_at = datetime.utcnow()
             child_request.updated_at = datetime.utcnow()
 
@@ -647,7 +651,11 @@ class AdminHelpers:
 
             child_request.status = "rejected"
             child_request.admin_notes = admin_notes
-            child_request.approved_by = uuid.UUID(admin_user_id)
+            # Convert admin_user_id to UUID if it's a string, otherwise use as-is
+            if isinstance(admin_user_id, str):
+                child_request.approved_by = uuid.UUID(admin_user_id)
+            else:
+                child_request.approved_by = admin_user_id
             child_request.approved_at = datetime.utcnow()
             child_request.updated_at = datetime.utcnow()
 
@@ -714,7 +722,11 @@ class AdminHelpers:
 
             child_request.status = "suspended"
             child_request.admin_notes = admin_notes
-            child_request.approved_by = uuid.UUID(admin_user_id)
+            # Convert admin_user_id to UUID if it's a string, otherwise use as-is
+            if isinstance(admin_user_id, str):
+                child_request.approved_by = uuid.UUID(admin_user_id)
+            else:
+                child_request.approved_by = admin_user_id
             child_request.approved_at = datetime.utcnow()
             child_request.updated_at = datetime.utcnow()
 
