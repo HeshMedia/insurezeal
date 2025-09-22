@@ -19,17 +19,70 @@ logger = logging.getLogger(__name__)
 
 class AdminHelpers:
     """
-    Helper functions for admin operations
+    Comprehensive Administrative Operations Helper Class
 
-    FUNCTIONS:
-    - require_admin() - Check admin access
-    - get_all_agents() - Get paginated agent list
-    - get_agent_by_id() - Get specific agent
-    - get_agent_documents() - Get agent's documents
-    - get_agent_with_documents() - Get agent profile with documents
-    - delete_agent() - Delete agent and all data
-    - get_admin_statistics() - Get dashboard statistics
-    - get_user_email_from_supabase() - Get email from Supabase
+    Provides sophisticated business logic and data operations for administrative
+    functions across the InsureZeal platform. This class serves as the core
+    engine for admin-level operations including agent management, child ID
+    request processing, statistical reporting, and universal record reconciliation.
+
+    Key Capabilities:
+
+    **Agent Management**:
+    - Paginated agent listing with search and filtering
+    - Detailed agent profile retrieval with document associations
+    - Complete agent deletion with data cleanup and referential integrity
+    - Supabase integration for email retrieval and user management
+    - Comprehensive validation and error handling
+
+    **Child ID Request Processing**:
+    - Advanced child ID request workflow management
+    - Approval and rejection processes with detailed reasoning
+    - Child ID assignment with availability validation
+    - Suspension and reactivation capabilities
+    - Google Sheets synchronization for external reporting
+    - Complex broker-insurer relationship validation
+
+    **Statistical Analysis**:
+    - Real-time dashboard statistics for administrative insights
+    - Agent performance metrics and platform usage analytics
+    - Child ID request analytics with status breakdowns
+    - Comprehensive reporting for business intelligence
+
+    **Universal Record Reconciliation**:
+    - Advanced CSV processing for insurance data reconciliation
+    - Policy and cut-pay data synchronization
+    - Duplicate detection and intelligent data merging
+    - Multi-format data parsing with error handling
+    - Comprehensive audit trail for data operations
+
+    **Security & Access Control**:
+    - Role-based access validation for admin operations
+    - Secure data handling with proper authorization checks
+    - Comprehensive audit logging for compliance
+    - Input validation and sanitization for all operations
+
+    **Integration Features**:
+    - Supabase Admin Client for user management operations
+    - Google Sheets API integration for external data sync
+    - Database relationship management with proper joins
+    - Transaction handling with rollback capabilities
+
+    **Performance Optimizations**:
+    - Efficient pagination for large datasets
+    - Optimized database queries with proper indexing
+    - Lazy loading for related entities
+    - Batch processing for bulk operations
+    - Memory-efficient CSV processing
+
+    **Data Integrity**:
+    - Comprehensive validation for all data operations
+    - Proper handling of database constraints and relationships
+    - Transactional operations with proper error handling
+    - Data consistency checks across multiple tables
+
+    This helper class abstracts complex administrative business logic,
+    ensuring consistent, secure, and efficient operations across the platform.
     """
 
     def __init__(self):

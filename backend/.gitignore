@@ -153,9 +153,6 @@ dmypy.json
 ehthumbs.db
 Thumbs.db
 
-# Alembic
-alembic.ini
-
 # AWS Lambda deployment
 lambda_deployment.zip
 
@@ -192,3 +189,4 @@ terraform.tfvars
 google_sheets.json
 credentials/
 
+.ruff_cache/

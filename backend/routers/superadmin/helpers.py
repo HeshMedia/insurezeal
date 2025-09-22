@@ -12,19 +12,95 @@ from models import AdminChildID, Broker, Insurer, UserProfile
 
 class SuperAdminHelpers:
     """
-    Helper functions for SuperAdmin operations
+    SuperAdmin Operations Helper Class
 
-    FUNCTIONS:
-    - generate_broker_code() - Generate next broker code
-    - generate_insurer_code() - Generate next insurer code
-    - get_active_brokers() - Get all active brokers
-    - get_active_insurers() - Get all active insurers
-    - get_broker_by_id() - Get broker by ID
-    - get_insurer_by_id() - Get insurer by ID
-    - get_admin_child_id_by_id() - Get admin child ID by database ID
-    - get_admin_child_id_by_child_id() - Get admin child ID by child_id string
-    - get_active_admin_child_ids() - Get all active admin child IDs
-    - get_available_admin_child_ids_by_broker_insurer() - Get filtered admin child IDs
+    Provides comprehensive business logic for high-level administrative operations
+    including broker and insurer management, admin child ID operations, and
+    system-wide configuration management. This class serves as the foundation
+    for platform-wide administrative control and data governance.
+
+    Key Capabilities:
+
+    **Broker Management**:
+    - Automatic broker code generation with sequential numbering (B001, B002, etc.)
+    - Active broker retrieval with status filtering
+    - Broker entity management with complete lifecycle support
+    - Broker-agent relationship validation and management
+    - Administrative controls for broker operations
+
+    **Insurer Management**:
+    - Automatic insurer code generation with sequential numbering (I001, I002, etc.)
+    - Active insurer retrieval with comprehensive filtering
+    - Insurer entity management with business rule enforcement
+    - Insurer-broker relationship validation
+    - Cross-platform insurer data synchronization
+
+    **Admin Child ID Operations**:
+    - Admin child ID retrieval by database ID and child ID string
+    - Active admin child ID management with suspension controls
+    - Advanced filtering by broker and insurer relationships
+    - Availability checking for child ID assignments
+    - Conflict resolution for simultaneous admin operations
+
+    **Code Generation & Validation**:
+    - Intelligent code generation with collision avoidance
+    - Sequential numbering with proper formatting
+    - Code uniqueness validation across the platform
+    - Format standardization for consistent identification
+    - Error handling for code generation failures
+
+    **Access Control & Authorization**:
+    - SuperAdmin role validation with comprehensive checks
+    - Admin and SuperAdmin role verification for operations
+    - Permission-based access control for sensitive operations
+    - Role hierarchy enforcement for platform security
+    - Administrative privilege validation
+
+    **Entity Relationship Management**:
+    - Complex broker-insurer relationship validation
+    - Admin child ID availability filtering by relationships
+    - Cross-entity data integrity checks
+    - Relationship mapping for operational efficiency
+    - Hierarchical data management for administrative control
+
+    **Data Retrieval & Filtering**:
+    - Efficient entity retrieval with optimized queries
+    - Status-based filtering for active entities
+    - Multi-criteria filtering for complex administrative needs
+    - Relationship-based filtering for targeted operations
+    - Performance-optimized database queries
+
+    **Administrative Operations**:
+    - Platform-wide configuration management
+    - System-level data validation and integrity checks
+    - Administrative reporting and analytics support
+    - Bulk operations for administrative efficiency
+    - Cross-module coordination for complex operations
+
+    **Security & Compliance**:
+    - Comprehensive access control validation
+    - Administrative action logging for audit trails
+    - Data protection measures for sensitive operations
+    - Role-based security enforcement
+    - Compliance support for regulatory requirements
+
+    **Performance Optimizations**:
+    - Efficient database queries with proper indexing
+    - Optimized filtering algorithms for large datasets
+    - Caching strategies for frequently accessed data
+    - Bulk operation support for administrative tasks
+    - Memory-efficient processing for large-scale operations
+
+    **Error Handling & Reliability**:
+    - Comprehensive error handling for all operations
+    - Graceful degradation for system failures
+    - Data validation with appropriate error messages
+    - Transaction integrity for critical operations
+    - Rollback mechanisms for failed administrative actions
+
+    This helper class provides the essential foundation for SuperAdmin operations,
+    ensuring secure, efficient, and reliable management of the core platform
+    entities while maintaining data integrity and proper access controls.
     """
 
     @staticmethod

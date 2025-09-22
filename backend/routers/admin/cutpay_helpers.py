@@ -269,7 +269,111 @@ async def validate_and_resolve_codes(
 
 
 class CutPayHelpers:
-    """Helper class for cut pay operations with new flow support"""
+    """
+    Comprehensive Cut Pay (Commission) Management Helper Class
+
+    Provides sophisticated business logic for managing insurance commission
+    payments, cut pay calculations, and related financial operations within
+    the InsureZeal platform. This class handles the complex workflows involved
+    in commission processing, payment tracking, and financial reporting.
+
+    Key Capabilities:
+
+    **Cut Pay Transaction Management**:
+    - Complete cut pay transaction lifecycle management
+    - Transaction retrieval with comprehensive filtering and pagination
+    - Update operations with data validation and integrity checks
+    - Soft deletion with proper audit trail maintenance
+    - Status tracking throughout the commission payment process
+
+    **Commission Calculation Engine**:
+    - Advanced commission calculation algorithms
+    - Support for multiple commission structures and rates
+    - Automatic calculation based on policy premiums and terms
+    - Configurable commission rules for different brokers and insurers
+    - Real-time calculation updates with validation
+
+    **Financial Data Processing**:
+    - Comprehensive financial data validation and processing
+    - Support for multiple currency formats and calculations
+    - Automatic amount formatting and validation
+    - Financial reconciliation and audit trail maintenance
+    - Quarter-based financial reporting and analysis
+
+    **Dropdown Data Management**:
+    - Dynamic dropdown population for form interfaces
+    - Filtered dropdown options based on user permissions and context
+    - Real-time data updates for dependent dropdown fields
+    - Broker and insurer relationship management for dropdowns
+    - Administrative data caching for performance optimization
+
+    **Statistical Analysis & Reporting**:
+    - Comprehensive cut pay statistics and analytics
+    - Performance metrics for commission tracking
+    - Time-based analysis with quarterly and yearly breakdowns
+    - Agent and broker performance analytics
+    - Financial trend analysis for business intelligence
+
+    **Data Export & Integration**:
+    - CSV export functionality for external reporting
+    - Configurable export formats for different stakeholders
+    - Data formatting for Google Sheets integration
+    - Bulk export operations for administrative purposes
+    - Custom report generation with filtering capabilities
+
+    **Broker & Insurer Code Resolution**:
+    - Intelligent broker code to ID resolution
+    - Insurer code validation and ID mapping
+    - Cross-referential data validation for entity relationships
+    - Code format validation and standardization
+    - Administrative code management and updates
+
+    **Data Validation & Integrity**:
+    - Comprehensive cut pay data validation
+    - Business rule enforcement for commission calculations
+    - Cross-field validation for logical consistency
+    - Financial amount validation with appropriate limits
+    - Date validation for policy and payment periods
+
+    **Quarter Management**:
+    - Automatic quarter calculation based on booking dates
+    - Quarter-based data organization and reporting
+    - Quarter sheet preparation for Google Sheets integration
+    - Cross-quarter data analysis and comparison
+    - Quarter-specific filtering and analytics
+
+    **Google Sheets Integration**:
+    - Complete sheets data preparation for external reporting
+    - Real-time synchronization with Google Sheets
+    - Update handling for existing sheet records
+    - Conflict resolution for concurrent sheet updates
+    - Performance optimization for large dataset operations
+
+    **Relationship Management**:
+    - Complex broker-insurer-agent relationship validation
+    - Admin child ID association and verification
+    - Cross-entity data consistency checks
+    - Hierarchical data management for administrative control
+    - Relationship mapping for operational efficiency
+
+    **Performance Optimizations**:
+    - Efficient database queries with proper joins and indexing
+    - Pagination support for large transaction datasets
+    - Optimized filtering algorithms for complex searches
+    - Caching strategies for frequently accessed data
+    - Bulk operations for administrative efficiency
+
+    **Security & Compliance**:
+    - Financial data protection with appropriate security measures
+    - Access control validation for sensitive commission data
+    - Audit trail maintenance for regulatory compliance
+    - Data encryption for sensitive financial information
+    - Role-based access control for financial operations
+
+    This helper class serves as the financial engine of the InsureZeal platform,
+    providing comprehensive commission management capabilities while ensuring
+    data integrity, security, and compliance with financial regulations.
+    """
 
     async def get_cutpay_by_id(
         self, db: AsyncSession, cutpay_id: int

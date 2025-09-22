@@ -1,5 +1,71 @@
 """
-SuperAdmin router for managing brokers, insurers, and admin child IDs
+SuperAdmin Administration Router
+
+This module provides comprehensive SuperAdmin functionality for managing core
+platform entities including brokers, insurers, and admin child IDs. SuperAdmins
+have the highest level of access in the InsureZeal platform and can perform
+administrative operations across all aspects of the system.
+
+Key Features:
+1. **Broker Management**: Complete CRUD operations for insurance brokers
+   - Create new brokers with auto-generated broker codes (B001, B002, etc.)
+   - Update broker information (name, address, RM, GST details)
+   - View individual brokers or list all active brokers
+   - Manage broker status and relationships
+
+2. **Insurer Management**: Full lifecycle management of insurance companies
+   - Create new insurers with auto-generated insurer codes (I001, I002, etc.)
+   - Update insurer information and contact details
+   - View individual insurers or list all active insurers
+   - Manage insurer partnerships and integrations
+
+3. **Admin Child ID Management**: Advanced management of admin-owned child IDs
+   - Create new admin child IDs for specific broker-insurer combinations
+   - View available child IDs filtered by insurer and broker
+   - Update child ID details and assignments
+   - Suspend/unsuspend child IDs for operational control
+   - Soft delete child IDs while maintaining data integrity
+
+4. **User Role Management**: Promotion and role assignment capabilities
+   - Promote agents to admin role with dual database/Supabase updates
+   - Comprehensive role validation and error handling
+   - Maintain role consistency across authentication systems
+
+Business Logic:
+- Auto-increment coding system for brokers (B001-B999) and insurers (I001-I999)
+- Strict role-based access control with granular permissions
+- Soft deletion patterns to maintain referential integrity
+- Comprehensive validation of broker-insurer relationships
+- Dual-system updates for role changes (database + Supabase)
+
+Security Features:
+- Multiple RBAC permission checks for different operations
+- SuperAdmin-only operations for sensitive management functions
+- Input validation and sanitization for all data operations
+- Proper error handling with appropriate HTTP status codes
+- UUID validation for user ID operations
+
+Integration Points:
+- Supabase Admin Client for user metadata management
+- SQLAlchemy async operations with proper transaction handling
+- Role-based access control through dependency injection
+- Comprehensive error handling with rollback mechanisms
+
+Database Relationships:
+- Broker ↔ AdminChildID (one-to-many)
+- Insurer ↔ AdminChildID (one-to-many)
+- UserProfile role management with UUID references
+- Soft deletion with is_active flags
+
+Performance Considerations:
+- Efficient queries with selectinload for related entities
+- Proper indexing on frequently queried fields (codes, IDs)
+- Pagination support for large datasets
+- Optimized filtering for available child IDs
+
+This router serves as the administrative backbone of the InsureZeal platform,
+providing SuperAdmins with powerful tools to manage the core entities that
+enable the insurance brokerage operations.
 """
 
 from typing import List, Optional

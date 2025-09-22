@@ -16,14 +16,103 @@ logger = logging.getLogger(__name__)
 
 class MISHelpers:
     """
-    Helper functions for MIS operations
+    Management Information System (MIS) Helper Class
 
-    FUNCTIONS:
-    - get_master_sheet_data() - Get paginated data from master sheet
-    - bulk_update_master_sheet() - Update multiple fields in master sheet
-    - get_master_sheet_stats() - Get statistics from master sheet
-    - _convert_row_to_record() - Convert sheet row to record object
-    - _find_record_row() - Find row number for a record ID
+    Provides comprehensive business intelligence and data analytics capabilities
+    through sophisticated Google Sheets integration. This class serves as the
+    core engine for MIS operations, enabling real-time data analysis, reporting,
+    and business intelligence across the InsureZeal platform.
+
+    Key Capabilities:
+
+    **Master Sheet Management**:
+    - Paginated master sheet data retrieval with advanced filtering
+    - Multi-criteria search across all data fields
+    - Sophisticated filtering by multiple field values
+    - Sorting capabilities with ascending/descending order
+    - Bulk update operations for mass data corrections
+    - Real-time statistics and analytics generation
+
+    **Quarterly Data Analysis**:
+    - Quarterly sheet data extraction with time-based filtering
+    - Agent-specific quarterly performance tracking
+    - Comparative analysis across different quarters
+    - Trend analysis for business growth insights
+    - Bulk quarterly data updates for administrative operations
+
+    **Agent-Specific MIS Operations**:
+    - Comprehensive agent MIS data retrieval
+    - Agent performance tracking and analytics
+    - Agent summary data with key metrics
+    - Agent-specific quarterly data filtering
+    - Cross-referential data validation for agent records
+
+    **Broker Intelligence**:
+    - Broker sheet data extraction and analysis
+    - Broker performance metrics and comparisons
+    - Broker-agent relationship analytics
+    - Cross-broker performance benchmarking
+
+    **Advanced Search & Filtering**:
+    - Multi-field search with intelligent ranking
+    - Complex filtering with support for multiple values per field
+    - Date range filtering for time-based analysis
+    - Status-based filtering for operational insights
+    - Configurable sorting with custom field priorities
+
+    **Data Transformation & Processing**:
+    - Intelligent row-to-record conversion with type validation
+    - Data sanitization and format standardization
+    - Missing data handling with appropriate defaults
+    - Cross-field validation for data integrity
+    - Error-tolerant data processing with comprehensive logging
+
+    **Bulk Operations**:
+    - Mass update capabilities for administrative efficiency
+    - Batch processing for large dataset operations
+    - Transaction-like operations with error handling
+    - Validation before bulk updates to prevent data corruption
+    - Rollback capabilities for failed operations
+
+    **Statistical Analysis**:
+    - Real-time statistics generation from live data
+    - Key performance indicators (KPI) calculation
+    - Trend analysis with historical data comparison
+    - Performance metrics for dashboard displays
+    - Custom analytics based on business requirements
+
+    **Google Sheets Integration**:
+    - Seamless integration with Google Sheets API
+    - Worksheet management with automatic creation
+    - Header validation and dynamic sheet structure
+    - Rate limiting and error handling for API operations
+    - Efficient data retrieval with minimal API calls
+
+    **Performance Optimizations**:
+    - Intelligent pagination for large datasets
+    - Caching strategies for frequently accessed data
+    - Efficient filtering algorithms to minimize processing time
+    - Batch operations to reduce API call overhead
+    - Memory-efficient data processing for large sheets
+
+    **Data Integrity & Validation**:
+    - Comprehensive data validation before updates
+    - Cross-referential integrity checks
+    - Format validation for critical fields
+    - Business rule enforcement during data operations
+    - Audit trail maintenance for all changes
+
+    **Error Handling & Reliability**:
+    - Graceful handling of Google Sheets API failures
+    - Comprehensive error logging for debugging
+    - Fallback mechanisms for service unavailability
+    - Data recovery procedures for failed operations
+    - User-friendly error messages with actionable guidance
+
+    This helper class represents the backbone of the InsureZeal MIS system,
+    providing sophisticated data analytics and business intelligence capabilities
+    through seamless Google Sheets integration while maintaining high performance,
+    reliability, and data integrity standards.
     """
 
     def __init__(self):

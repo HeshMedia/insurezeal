@@ -17,15 +17,98 @@ logger = logging.getLogger(__name__)
 
 class UserHelpers:
     """
-    Helper functions for user operations
+    Comprehensive User Operations Helper Class
 
-    FUNCTIONS:
-    - upload_profile_image() - Profile image upload
-    - delete_profile_image() - Profile image deletion
-    - generate_agent_code() - Generate unique agent codes
-    - get_user_documents() - Retrieve user's documents
-    - upload_and_save_document() - Unified document upload + save
-    - delete_document_completely() - Unified document deletion
+    Provides sophisticated business logic for user profile management, document
+    handling, file operations, and agent code generation. This class serves as
+    the core engine for user-centric operations across the InsureZeal platform,
+    integrating multiple storage systems and ensuring data consistency.
+
+    Key Capabilities:
+
+    **Profile Image Management**:
+    - Advanced profile image upload with comprehensive validation
+    - Support for multiple image formats (JPEG, PNG, GIF, WebP)
+    - File size validation with configurable limits (up to 5MB)
+    - AWS S3 integration with CloudFront CDN optimization
+    - Automatic content type detection and validation
+    - Secure image deletion with proper cleanup
+
+    **Document Management System**:
+    - Comprehensive document upload with type validation
+    - Support for multiple document formats (PDF, JPEG, PNG)
+    - Atomic upload operations ensuring storage-database consistency
+    - Document categorization with enum-based type system
+    - User-specific document organization and retrieval
+    - Complete document deletion with storage cleanup
+
+    **Agent Code Generation**:
+    - Intelligent sequential agent code generation (IZ0001, IZ0002, etc.)
+    - Uniqueness validation across the entire platform
+    - Automatic collision detection and resolution
+    - Consistent formatting with zero-padded numbering
+    - Database-driven sequential numbering system
+
+    **File Storage Operations**:
+    - Dual storage system support (AWS S3 and Supabase Storage)
+    - Intelligent storage selection based on file type and requirements
+    - Secure file upload with comprehensive validation
+    - File cleanup mechanisms for failed operations
+    - Content type validation and automatic detection
+
+    **Data Consistency & Integrity**:
+    - Atomic operations ensuring data consistency across systems
+    - Transaction management with proper rollback mechanisms
+    - Cross-system synchronization for file and database operations
+    - Comprehensive error handling with cleanup procedures
+    - Audit trail maintenance for all user operations
+
+    **Security Features**:
+    - File type validation preventing malicious uploads
+    - File size restrictions for security and performance
+    - User-specific access control for document operations
+    - Secure URL generation for file access
+    - Input sanitization and validation for all operations
+
+    **Storage Integration**:
+    - AWS S3 integration with CloudFront CDN distribution
+    - Supabase Storage integration for alternative file hosting
+    - Intelligent key generation for organized file storage
+    - Public URL generation with proper access controls
+    - Storage bucket management with environment-based configuration
+
+    **Error Handling & Recovery**:
+    - Comprehensive error handling with detailed logging
+    - Graceful degradation for storage service failures
+    - Cleanup mechanisms for partial operation failures
+    - User-friendly error messages with actionable guidance
+    - Recovery procedures for corrupted or incomplete operations
+
+    **Performance Optimizations**:
+    - Efficient file upload handling with streaming support
+    - Optimized database queries for document retrieval
+    - Lazy loading for storage client initialization
+    - Memory-efficient file processing for large documents
+    - Batch operations for multiple document handling
+
+    **Document Lifecycle Management**:
+    - Complete document lifecycle from upload to deletion
+    - Version control preparation for future enhancements
+    - Document metadata management with comprehensive tracking
+    - User activity logging for audit and compliance
+    - Document categorization for organized retrieval
+
+    **Cross-Platform Compatibility**:
+    - Support for multiple storage backends
+    - Environment-specific configuration management
+    - Fallback mechanisms for service unavailability
+    - Consistent API interface regardless of storage backend
+    - Future-proof design for additional storage integrations
+
+    This helper class provides the essential foundation for user operations,
+    ensuring secure, efficient, and reliable management of user profiles,
+    documents, and related data while maintaining the highest standards of
+    data integrity and user experience.
     """
 
     def __init__(self):

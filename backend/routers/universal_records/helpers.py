@@ -1,8 +1,88 @@
 """
-Universal Records Helper Functions
+Universal Records Helper Functions Module
 
-This module provides helper functions for processing universal records with
-insurer-specific mapping and reconciliation logic.
+This comprehensive module provides sophisticated business logic for processing
+universal insurance records with advanced insurer-specific mapping capabilities,
+intelligent data reconciliation, and seamless Google Sheets integration. It
+serves as the core engine for transforming diverse insurance data formats into
+standardized, actionable information across the InsureZeal platform.
+
+Key Capabilities:
+
+**Advanced Data Processing**:
+- Multi-format date parsing with intelligent format detection
+- Support for various date formats from different insurance companies
+- Robust data normalization and standardization algorithms
+- Intelligent field value transformation and validation
+- Error-tolerant parsing with comprehensive fallback mechanisms
+
+**Insurer Mapping Management**:
+- Dynamic insurer-specific header mapping system
+- CSV-based mapping configuration with fallback support
+- Real-time mapping validation and error detection
+- Support for multiple insurer data formats and structures
+- Automatic mapping discovery and configuration loading
+
+**Data Reconciliation & Processing**:
+- Sophisticated duplicate detection algorithms
+- Policy number normalization across different formats
+- Intelligent record comparison with configurable tolerance
+- Master sheet and quarterly sheet synchronization
+- Cross-referential data validation and integrity checks
+
+**CSV Processing & Transformation**:
+- Robust CSV parsing with encoding detection
+- Preview functionality with mapping application
+- Batch processing for large dataset operations
+- Memory-efficient streaming for large files
+- Comprehensive error handling and validation
+
+**Google Sheets Integration**:
+- Seamless synchronization with master and quarterly sheets
+- Intelligent data transformation for sheet-specific formats
+- Batch update operations with performance optimization
+- Reconciliation report generation with detailed analytics
+- Real-time data synchronization with conflict resolution
+
+**Data Quality & Validation**:
+- Comprehensive field validation with business rules
+- Data quality scoring and improvement recommendations
+- Duplicate prevention with configurable matching criteria
+- Cross-field validation for logical consistency
+- Audit trail maintenance for all data operations
+
+**Reconciliation & Reporting**:
+- Advanced reconciliation algorithms with change tracking
+- Detailed reconciliation summaries with statistics
+- Change detection with before/after comparisons
+- Performance metrics and processing statistics
+- Comprehensive error reporting and resolution guidance
+
+**Performance Optimizations**:
+- Efficient batch processing for large datasets
+- Memory-optimized algorithms for resource management
+- Intelligent caching for frequently accessed mappings
+- Parallel processing support for complex operations
+- Optimized database queries with proper indexing
+
+**Error Handling & Reliability**:
+- Comprehensive error handling with detailed logging
+- Graceful degradation for partial data failures
+- Recovery mechanisms for corrupted or incomplete data
+- User-friendly error messages with actionable guidance
+- Robust validation at every processing stage
+
+**Business Intelligence Features**:
+- Processing statistics and performance analytics
+- Data quality metrics and improvement tracking
+- Trend analysis for data processing efficiency
+- Reconciliation success rates and error analysis
+- Operational insights for process optimization
+
+This module represents the sophisticated data processing backbone of the
+InsureZeal platform, enabling seamless integration of diverse insurance data
+sources while maintaining the highest standards of data quality, integrity,
+and operational efficiency.
 """
 
 import csv

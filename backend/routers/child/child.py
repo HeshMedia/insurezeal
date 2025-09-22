@@ -1,3 +1,45 @@
+"""
+Child ID Management Router for Insurezeal Backend API.
+
+This module handles child ID request management for insurance agents, providing
+functionality for requesting, tracking, and managing child IDs from insurance
+companies and brokers. Child IDs are unique identifiers that agents use to
+create policies with specific insurance companies through broker relationships.
+
+Key Features:
+- Child ID request creation and submission
+- Broker and insurer dropdown data for request forms
+- Request status tracking and history
+- User-specific child ID request management
+- Integration with admin approval workflows
+- Google Sheets synchronization for external tracking
+- Real-time status updates and notifications
+
+Business Logic:
+- Child ID request workflow management
+- Broker-insurer relationship validation
+- Request eligibility and capacity checking
+- Status progression tracking (pending → approved/rejected)
+- Integration with policy creation workflows
+- Commission structure association
+- Geographic region and branch management
+
+User Operations:
+- Submit new child ID requests
+- View personal request history and status
+- Access approved child IDs for policy creation
+- Update contact and preference information
+- Track request progress and approval timeline
+- Access broker and insurer information
+
+Integration Points:
+- Admin System: For request approval and management
+- Policy System: For using approved child IDs in policy creation
+- Google Sheets: For external tracking and reporting
+- Broker System: For relationship validation and capacity
+- Notification System: For status updates and communications
+"""
+
 import logging
 import uuid
 from typing import Any, Dict, List
@@ -21,11 +63,25 @@ from routers.child.schemas import (
 )
 from utils.google_sheets import google_sheets_sync
 
+# FastAPI Router Configuration for Child ID Management
+# Handles user-facing child ID operations without prefix (direct routes)
+# Tags: Groups endpoints in API documentation under child ID section
 router = APIRouter(tags=["User Child ID Routes"])
+
+# HTTP Bearer Token Security for User Authentication
+# Ensures all child ID operations require valid user login
 security = HTTPBearer()
+
+# Child ID Helper Instance
+# Provides business logic for child ID request operations
 child_helpers = ChildHelpers()
+
+# Authentication Helper Instance
+# Provides user authentication and validation utilities
 auth_helpers = AuthHelpers()
 
+# Logger Configuration
+# Tracks child ID operations, requests, and status changes
 logger = logging.getLogger(__name__)
 
 

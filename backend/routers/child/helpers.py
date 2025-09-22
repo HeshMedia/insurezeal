@@ -14,19 +14,74 @@ logger = logging.getLogger(__name__)
 
 class ChildHelpers:
     """
-    Helper functions for child ID management operations
+    Child ID Request Management Helper Class
 
-    FUNCTIONS:
-    - create_child_id_request() - Create new child ID request
-    - get_user_child_requests() - Get user's child ID requests
-    - get_child_request_by_id() - Get specific child ID request
-    - get_all_child_requests() - Get all child ID requests (admin)
-    - approve_child_request() - Approve child ID request
-    - reject_child_request() - Reject child ID request
-    - suspend_child_id() - Suspend active child ID
-    - generate_child_id() - Generate unique child ID
-    - get_active_brokers() - Get active brokers for dropdown
-    - get_active_insurers() - Get active insurers for dropdown
+    Provides comprehensive business logic for managing child ID requests,
+    broker-insurer relationships, and the complete child ID lifecycle within
+    the InsureZeal platform. This class handles the complex workflows involved
+    in child ID assignment and management for insurance agents.
+
+    Key Capabilities:
+
+    **Child ID Request Lifecycle**:
+    - Creation of new child ID requests with comprehensive validation
+    - Request retrieval with filtering by user, status, broker, and insurer
+    - Approval process with child ID assignment and availability checking
+    - Rejection handling with detailed reasoning and audit trails
+    - Status updates and transition management throughout the lifecycle
+
+    **Broker & Insurer Management**:
+    - Validation of broker codes with active status verification
+    - Validation of insurer codes with business rule compliance
+    - Retrieval of active brokers and insurers for dropdown populations
+    - Relationship validation between brokers and insurers
+    - Code format validation and existence checking
+
+    **Child ID Assignment Logic**:
+    - Intelligent child ID generation with uniqueness validation
+    - Assignment of available child IDs to approved requests
+    - Conflict resolution for simultaneous assignment attempts
+    - Child ID suspension and reactivation capabilities
+    - Tracking of child ID usage and availability status
+
+    **Advanced Filtering & Search**:
+    - Multi-criteria filtering for child ID requests
+    - Pagination support for large datasets
+    - Date range filtering for administrative reporting
+    - Status-based filtering for workflow management
+    - User-specific request retrieval with privacy controls
+
+    **Statistical Analysis**:
+    - Child ID usage statistics and analytics
+    - Request approval/rejection ratios
+    - Broker and insurer performance metrics
+    - Time-based analysis for operational insights
+    - Status distribution reporting for management dashboards
+
+    **Data Validation & Security**:
+    - Comprehensive input validation for all operations
+    - UUID format validation and conversion
+    - Business rule enforcement for child ID assignments
+    - Access control validation for administrative operations
+    - Data integrity checks across related entities
+
+    **Integration Features**:
+    - Database relationship management with proper joins
+    - Transaction handling with rollback capabilities
+    - Error handling with detailed logging and audit trails
+    - Performance optimization for query operations
+    - Lazy loading for related entity data
+
+    **Workflow Management**:
+    - Request status tracking throughout the approval process
+    - Administrative approval workflows with proper authorization
+    - Notification triggers for status changes
+    - Audit trail maintenance for compliance requirements
+    - Bulk operations for administrative efficiency
+
+    This helper class encapsulates the complex business logic required for
+    managing child ID requests, ensuring data integrity, proper validation,
+    and seamless workflow execution across the platform.
     """
 
     def __init__(self):

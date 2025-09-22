@@ -1,3 +1,107 @@
+"""
+User Profile and Document Management Router
+
+This module provides comprehensive user profile management functionality including
+personal information updates, document management, profile image handling, and
+agent code assignment. It serves as the primary interface for users to manage
+their personal data and professional documentation within the InsureZeal platform.
+
+Key Features:
+1. **Profile Management**: Complete user profile lifecycle management
+   - Retrieve current user profile with comprehensive information
+   - Update personal details including contact information and preferences
+   - Profile validation with business rule enforcement
+   - Real-time profile synchronization across platform components
+
+2. **Profile Image Management**: Advanced image handling with cloud storage
+   - Upload profile images with AWS S3 integration
+   - Automatic image optimization and format validation
+   - CloudFront CDN integration for fast image delivery
+   - Secure presigned URL generation for direct uploads
+   - Profile image deletion with storage cleanup
+
+3. **Document Management**: Comprehensive document handling system
+   - Upload various document types (licenses, certifications, ID proofs)
+   - Document categorization and metadata management
+   - AWS S3 storage with secure access patterns
+   - Document versioning and history tracking
+   - Bulk document operations for efficiency
+
+4. **Agent Code Management**: Professional identification system
+   - Individual agent code assignment with validation
+   - Bulk agent code assignment for administrative operations
+   - Agent code uniqueness validation across the platform
+   - Integration with broker-agent relationship management
+   - Audit trail for all agent code assignments
+
+5. **Document Security**: Enterprise-grade document security
+   - Secure document uploads with virus scanning preparation
+   - Access control based on user ownership and roles
+   - Document encryption at rest and in transit
+   - Audit logging for all document operations
+   - Compliance with data protection regulations
+
+Business Logic:
+- Comprehensive profile validation with business rules
+- Document type validation and categorization
+- Agent code generation and uniqueness enforcement
+- Profile image optimization and storage management
+- Cross-platform synchronization for profile updates
+
+File Management Features:
+- AWS S3 integration with proper bucket organization
+- CloudFront CDN for optimized content delivery
+- Presigned URL generation for secure direct uploads
+- Automatic content type detection and validation
+- File size and format restrictions for security
+
+Security Features:
+- User authentication and authorization for all operations
+- Document access control based on ownership
+- Secure file upload with validation and sanitization
+- Personal data protection and privacy compliance
+- Comprehensive audit logging for regulatory compliance
+
+Integration Points:
+- AWS S3 for scalable file storage
+- CloudFront CDN for global content delivery
+- User authentication system integration
+- Profile synchronization across platform components
+- Document management with metadata tracking
+
+Performance Considerations:
+- Efficient file uploads with direct S3 integration
+- CloudFront caching for fast image and document delivery
+- Optimized database queries for profile operations
+- Lazy loading of document metadata
+- Batch operations for bulk assignments
+
+Data Validation:
+- Comprehensive input validation for all profile fields
+- File type and size validation for uploads
+- Email format validation and uniqueness checks
+- Phone number format validation with country code support
+- Agent code format validation and uniqueness enforcement
+
+Error Handling:
+- Graceful handling of upload failures with retry mechanisms
+- Comprehensive error messages for validation failures
+- Rollback mechanisms for failed operations
+- Detailed logging for debugging and audit purposes
+- User-friendly error responses with actionable guidance
+
+Audit and Compliance:
+- Complete audit trail for all profile and document operations
+- Data retention policies for regulatory compliance
+- Privacy controls for sensitive personal information
+- GDPR compliance features for data protection
+- Secure document deletion with proper cleanup
+
+This router serves as the foundation for user identity and document management,
+enabling users to maintain their professional profiles and documentation while
+ensuring security, compliance, and optimal user experience.
+"""
+
 import logging
 import os
 from datetime import datetime

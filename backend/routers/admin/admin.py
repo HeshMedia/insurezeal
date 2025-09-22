@@ -1,3 +1,83 @@
+"""
+Admin Management Router
+
+This module provides comprehensive administrative functionality for managing agents,
+child ID requests, and platform operations. Admins serve as the operational backbone
+of the InsureZeal platform, handling day-to-day management of agent relationships
+and child ID request workflows.
+
+Key Features:
+1. **Agent Management**: Complete lifecycle management of insurance agents
+   - List all agents with pagination and filtering capabilities
+   - View detailed agent profiles including contact information and performance metrics
+   - Delete agent accounts with proper data cleanup and relationship management
+   - Promote agents to admin status with dual system updates (database + Supabase)
+
+2. **Child ID Request Management**: Comprehensive workflow for child ID assignments
+   - View all child ID requests with advanced filtering (status, broker, insurer, date range)
+   - Assign available child IDs to approved requests with validation
+   - Reject requests with detailed reasoning and documentation
+   - Suspend/unsuspend child IDs for operational control
+   - Handle complex broker-insurer relationship validations
+
+3. **Statistical Dashboard**: Business intelligence and operational metrics
+   - Real-time agent statistics and performance indicators
+   - Child ID request analytics and operational insights
+   - Platform usage metrics and trend analysis
+   - Performance tracking for administrative decision-making
+
+4. **Role Management**: Secure promotion and role assignment workflows
+   - Promote qualified agents to admin status
+   - Dual-system role synchronization (local database + Supabase auth)
+   - Comprehensive validation and rollback mechanisms
+   - Audit logging for all role changes
+
+Business Logic:
+- Complex child ID assignment logic with availability validation
+- Broker-insurer relationship verification before assignments
+- Google Sheets synchronization for external reporting
+- Comprehensive error handling with detailed logging
+- Transactional operations with proper rollback mechanisms
+
+Security Features:
+- Role-based access control with granular permissions
+- Admin-only operations with proper authentication
+- Input validation and sanitization for all operations
+- UUID format validation for user operations
+- Comprehensive error handling with appropriate HTTP status codes
+
+Integration Points:
+- Google Sheets API for data synchronization and external reporting
+- Supabase Admin Client for user metadata management
+- Child ID request helpers for business logic delegation
+- Admin helpers for complex operational tasks
+- SQLAlchemy async operations with proper relationship loading
+
+Database Operations:
+- Efficient pagination for large agent datasets
+- Complex joins for comprehensive data retrieval
+- Soft deletion patterns to maintain referential integrity
+- Transaction management with proper commit/rollback handling
+- Optimized queries with selectinload for related entities
+
+Workflow Management:
+- Child ID request status transitions (pending → assigned/rejected)
+- Google Sheets synchronization after major operations
+- Email notifications for status changes (via external services)
+- Audit trail maintenance for all administrative actions
+- Complex validation chains for data integrity
+
+Performance Considerations:
+- Pagination support for large datasets
+- Efficient filtering with proper indexing
+- Lazy loading of related entities where appropriate
+- Query optimization for complex reporting operations
+- Caching strategies for frequently accessed data
+
+This router serves as the operational control center for platform administrators,
+providing comprehensive tools to manage the insurance brokerage ecosystem effectively.
+"""
+
 import logging
 import uuid
 from typing import Optional

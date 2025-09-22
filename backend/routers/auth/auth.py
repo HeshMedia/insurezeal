@@ -1,3 +1,44 @@
+"""
+Authentication Router for Insurezeal Backend API.
+
+This module handles all authentication-related operations for the insurance platform,
+including user registration, login, token management, password operations, and
+integration with Supabase authentication system. It provides secure access control
+and user session management across the entire platform.
+
+Key Features:
+- User registration with automatic profile creation
+- Secure login with JWT token generation
+- Password reset and recovery workflows
+- Supabase webhook integration for user sync
+- Agent code generation and assignment
+- Multi-role authentication (agent, admin, superadmin)
+- Token validation and user session management
+
+Security Features:
+- JWT token-based authentication
+- Secure password hashing via Supabase
+- Rate limiting on sensitive endpoints
+- Input validation and sanitization
+- CORS protection and secure headers
+- Password strength requirements
+
+Business Logic:
+- Automatic agent code generation for new users
+- User profile creation with default role assignment
+- Database and Supabase user synchronization
+- Role-based access control preparation
+- Email verification workflows
+- Password recovery with secure token validation
+
+Integration Points:
+- Supabase: External authentication service
+- Database: User profile and session storage
+- RBAC System: Role-based access control
+- Email Service: Password recovery notifications
+- User Management: Profile creation and updates
+"""
+
 import logging
 import uuid
 from datetime import datetime
@@ -30,9 +71,17 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+# FastAPI Router Configuration
+# Handles all authentication endpoints with /auth prefix
+# Tags: Used for API documentation grouping in OpenAPI/Swagger
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+# HTTP Bearer Token Security Scheme
+# Used for JWT token validation in protected endpoints
 security = HTTPBearer()
+
+# Supabase Client Instance
+# Handles external authentication operations and user management
 supabase = get_supabase_client()
 
 
@@ -42,9 +91,43 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get current user from JWT token (optimized)
-    - Uses role from JWT if available (new users)
-    - Falls back to DB for users without role in JWT (existing users)
+    Extract and validate current user from JWT token with role resolution.
+
+    This function serves as the primary authentication dependency for protected
+    endpoints. It validates JWT tokens, extracts user information, and resolves
+    user roles through an optimized two-tier approach.
+
+    Authentication Flow:
+    1. Extract JWT token from Authorization header
+    2. Verify token validity with Supabase
+    3. Check for role in JWT payload (new users)
+    4. Fallback to database lookup for role (existing users)
+    5. Store user context in request state for RBAC
+
+    Args:
+        request: FastAPI request object for state management
+        credentials: HTTP Bearer token from Authorization header
+        db: Database session for user profile lookup
+
+    Returns:
+        dict: Current user information containing:
+            - user_id: Unique user identifier (UUID)
+            - email: User's email address
+            - role: User's role (agent, admin, superadmin)
+
+    Raises:
+        HTTPException 401: Invalid or expired token
+        HTTPException 404: User profile not found in database
+
+    Usage:
+        Used as FastAPI dependency injection for protected routes
+        Automatically validates tokens and provides user context
+
+    Security:
+        - Validates JWT signature and expiration
+        - Prevents token replay attacks
+        - Ensures user exists in system
+        - Provides role-based access control foundation
     """
     token = credentials.credentials
     supabase_user = auth_helpers.verify_token(token)

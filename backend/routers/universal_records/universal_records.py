@@ -1,8 +1,96 @@
 """
-Universal Records Router
+Universal Records Management Router
 
-This router handles universal record uploads with insurer-specific mapping
-for data reconciliation and system synchronization.
+This module provides comprehensive functionality for managing universal insurance
+records with sophisticated insurer-specific mapping capabilities for data
+reconciliation and system synchronization. It serves as the central hub for
+processing insurance data from multiple sources and formats.
+
+Key Features:
+1. **Insurer Mapping Management**: Dynamic header mapping system
+   - Retrieve available insurer configurations with header mappings
+   - Support for multiple insurance companies with different data formats
+   - Flexible mapping system to handle varying CSV structures
+   - Standardized output format for consistent data processing
+
+2. **CSV Processing & Preview**: Advanced file handling with validation
+   - Preview CSV files with insurer-specific mapping applied
+   - Real-time data transformation and validation
+   - Support for large file uploads with efficient streaming
+   - Error detection and reporting for data quality assurance
+   - Header mapping validation before processing
+
+3. **Universal Record Upload**: Sophisticated data ingestion system
+   - Upload CSV files with automatic insurer mapping application
+   - Comprehensive data validation and error handling
+   - Duplicate detection and prevention mechanisms
+   - Batch processing for large datasets with performance optimization
+   - Detailed upload reporting with success/failure metrics
+
+4. **Template Management**: Standardized format distribution
+   - Download universal record templates for data consistency
+   - Support for different insurer formats and requirements
+   - Comprehensive field documentation and validation rules
+   - Version control for template updates and changes
+
+5. **Reconciliation System**: Advanced data verification and reporting
+   - Comprehensive reconciliation summary with detailed metrics
+   - Cross-reference validation between different data sources
+   - Automated discrepancy detection and reporting
+   - Historical reconciliation tracking and audit trails
+   - Performance metrics for data quality assessment
+
+6. **Mapping Configuration**: Dynamic configuration management
+   - Retrieve specific insurer mapping configurations
+   - Support for custom field mappings and transformations
+   - Validation rules for different data types and formats
+   - Flexible configuration updates without system downtime
+
+Business Logic:
+- Dynamic header mapping system for different insurer data formats
+- Comprehensive data validation with business rule enforcement
+- Duplicate prevention across multiple upload sessions
+- Reconciliation algorithms for data consistency verification
+- Performance optimization for large-scale data processing
+
+Data Processing Features:
+- CSV parsing with encoding detection and error handling
+- Field mapping with type conversion and validation
+- Batch processing with progress tracking and error reporting
+- Memory-efficient streaming for large file uploads
+- Comprehensive logging for audit and debugging purposes
+
+Security Features:
+- Admin-only access control for sensitive operations
+- File upload validation with size and type restrictions
+- Input sanitization for CSV data processing
+- Secure file handling with temporary storage cleanup
+- Comprehensive error handling without data exposure
+
+Integration Points:
+- ReconciliationReport model for audit tracking
+- Helper functions for complex business logic
+- File streaming capabilities for large dataset handling
+- Database integration for persistent storage
+- External insurer API integration preparation
+
+Performance Considerations:
+- Streaming file uploads to handle large datasets efficiently
+- Memory optimization for CSV processing operations
+- Batch processing with configurable chunk sizes
+- Database query optimization for reconciliation operations
+- Caching strategies for frequently accessed mapping configurations
+
+Error Handling:
+- Comprehensive validation with detailed error messages
+- Graceful handling of malformed CSV files
+- Rollback mechanisms for failed upload operations
+- Detailed error logging for debugging and audit purposes
+- User-friendly error responses with actionable guidance
+
+This router serves as the backbone for insurance data management, enabling
+seamless integration of data from multiple insurance companies while maintaining
+data quality and consistency across the InsureZeal platform.
 """
 
 import csv

@@ -1,3 +1,55 @@
+"""
+Management Information System (MIS) Router for Insurezeal Backend API.
+
+This module provides comprehensive MIS functionality for the insurance platform,
+offering data aggregation, reporting, analysis, and business intelligence
+capabilities. It handles complex data operations for management reporting
+and strategic decision-making across all platform operations.
+
+Key Features:
+- Master sheet data management and synchronization
+- Quarterly reporting and data aggregation
+- Agent performance tracking and analytics
+- Policy data analysis and trends
+- Financial reporting and commission tracking
+- Data export capabilities in multiple formats
+- Real-time dashboard data and statistics
+- Bulk data operations and updates
+
+Business Intelligence:
+- Policy performance metrics and KPIs
+- Agent productivity and commission analysis
+- Insurance company and broker performance
+- Regional and temporal trend analysis
+- Revenue and growth tracking
+- Customer acquisition and retention metrics
+- Market share and competitive analysis
+
+Data Operations:
+- Large dataset pagination and filtering
+- Real-time data synchronization
+- Automated report generation
+- Data validation and quality checking
+- Performance optimization for complex queries
+- Bulk update operations for efficiency
+- Historical data analysis and comparison
+
+Administrative Functions:
+- Data governance and quality control
+- Report scheduling and automation
+- User access control for sensitive data
+- Audit trails for data modifications
+- Backup and recovery procedures
+- Performance monitoring and optimization
+
+Integration Points:
+- Google Sheets: External reporting and collaboration
+- Policy System: Operational data aggregation
+- Admin System: Management oversight and control
+- Financial System: Commission and payment tracking
+- Analytics Platform: Advanced data analysis
+"""
+
 import csv
 import io
 import logging
@@ -31,9 +83,17 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+# FastAPI Router Configuration for Management Information System
+# Handles all MIS endpoints with /mis prefix for data analytics and reporting
+# Tags: Groups endpoints under MIS section in API documentation
 router = APIRouter(prefix="/mis", tags=["MIS - Management Information System"])
+
+# HTTP Bearer Token Security for Administrative Access
+# Ensures MIS operations require proper authentication and authorization
 security = HTTPBearer()
 
+# MIS Helper Instance
+# Provides complex data operations, analytics, and reporting functionality
 mis_helpers = MISHelpers()
 
 

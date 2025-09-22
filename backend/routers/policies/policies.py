@@ -1,3 +1,54 @@
+"""
+Policy Management Router for Insurezeal Backend API.
+
+This module provides comprehensive policy management functionality for the insurance
+platform, including policy creation, document processing, AI-powered data extraction,
+and policy lifecycle management. It handles the core business operations related
+to insurance policies with advanced automation and validation features.
+
+Key Features:
+- AI-powered PDF policy document extraction using Google Gemini
+- Policy creation with automatic data validation
+- File upload and storage integration with AWS S3
+- Policy search, filtering, and pagination
+- Child ID and agent assignment management
+- Commission calculation and financial tracking
+- Policy status tracking and lifecycle management
+- Export functionality for reporting and analysis
+
+Business Operations:
+- Policy document processing and data extraction
+- Insurance company and broker integration
+- Agent assignment and commission tracking
+- Policy validation and compliance checking
+- Financial calculations and reporting
+- Document storage and retrieval
+- Policy lifecycle management from creation to completion
+
+AI Integration:
+- Automatic data extraction from policy PDFs
+- Insurance company recognition and standardization
+- Policy type identification and categorization
+- Data validation and error correction
+- OCR capabilities for scanned documents
+
+Technical Features:
+- Asynchronous file processing
+- Multi-format document support
+- Advanced search and filtering
+- Pagination for large datasets
+- Role-based access control
+- Comprehensive error handling and logging
+- Performance optimization for bulk operations
+
+Security:
+- User authentication and authorization
+- Role-based permission checking
+- Secure file upload validation
+- Data privacy and protection
+- Audit logging for all operations
+"""
+
 import json
 import logging
 import traceback
@@ -37,9 +88,21 @@ from routers.policies.schemas import (
 )
 from utils.s3_utils import build_cloudfront_url, build_key, generate_presigned_put_url
 
+# FastAPI Router Configuration for Policy Management
+# Handles all policy-related endpoints with /policies prefix
+# Tags: Used for API documentation grouping and organization
 router = APIRouter(prefix="/policies", tags=["Policies"])
+
+# HTTP Bearer Token Security for Authentication
+# Ensures all policy operations require valid user authentication
 security = HTTPBearer()
+
+# Policy Helper Instance
+# Provides business logic and database operations for policy management
 policy_helpers = PolicyHelpers()
+
+# Logger Configuration
+# Tracks policy operations, errors, and business events
 logger = logging.getLogger(__name__)
 
 require_policy_read = require_permission("policies", "read")

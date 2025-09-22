@@ -17,6 +17,92 @@ logger = logging.getLogger(__name__)
 
 
 class PolicyHelpers:
+    """
+    Comprehensive Policy Management Helper Class
+
+    Provides sophisticated business logic for insurance policy management with
+    AI-powered document processing, file handling, and complete policy lifecycle
+    management. This class integrates cutting-edge AI technology with traditional
+    insurance operations to streamline policy processing and data extraction.
+
+    Key Capabilities:
+
+    **AI-Powered Document Processing**:
+    - Advanced PDF text extraction using specialized PDF processing utilities
+    - Google Gemini AI integration for intelligent data extraction
+    - Automated policy information extraction from insurance documents
+    - Smart data validation and format conversion
+    - Error handling for AI processing failures with fallback mechanisms
+
+    **File Management & Storage**:
+    - AWS S3 integration for secure policy document storage
+    - CloudFront CDN integration for optimized document delivery
+    - Support for various file formats with automatic content type detection
+    - Unique filename generation to prevent conflicts
+    - Efficient handling of file uploads from both UploadFile objects and raw bytes
+
+    **Policy Lifecycle Management**:
+    - Complete policy creation with comprehensive validation
+    - Policy retrieval with advanced filtering and pagination
+    - Policy updates with data integrity checks
+    - Soft deletion patterns to maintain audit trails
+    - Status tracking throughout the policy lifecycle
+
+    **Child ID Integration**:
+    - Child ID availability checking and assignment
+    - Agent-child ID relationship validation
+    - Broker and insurer relationship management
+    - Child ID conflict resolution for simultaneous requests
+    - Availability filtering based on user permissions and status
+
+    **Agent & User Management**:
+    - Agent profile retrieval and validation
+    - User-policy relationship management
+    - Available agent listing for policy assignment
+    - Role-based access control for policy operations
+    - User activity tracking for audit purposes
+
+    **Data Processing & Validation**:
+    - Intelligent date string conversion with multiple format support
+    - Data type validation and sanitization
+    - Default value assignment for optional fields
+    - Business rule enforcement for policy data integrity
+    - Cross-field validation for complex business logic
+
+    **Advanced Filtering & Search**:
+    - Multi-criteria policy filtering by various attributes
+    - Date range filtering for time-based analysis
+    - Status-based filtering for workflow management
+    - Agent and insurer filtering for targeted operations
+    - Pagination support for large policy datasets
+
+    **Integration Features**:
+    - Database relationship management with proper joins
+    - Transaction handling with rollback capabilities
+    - Comprehensive error handling with detailed logging
+    - Performance optimization for query operations
+    - Lazy loading for related entity data
+
+    **Security & Compliance**:
+    - Secure file handling with proper validation
+    - Access control validation for policy operations
+    - Data encryption for sensitive policy information
+    - Audit trail maintenance for compliance requirements
+    - Privacy controls for personal data protection
+
+    **Performance Optimizations**:
+    - Efficient file upload handling with streaming
+    - Optimized database queries with proper indexing
+    - Caching strategies for frequently accessed data
+    - Bulk operations for administrative efficiency
+    - Memory-efficient processing for large documents
+
+    This helper class represents the core of the InsureZeal policy management
+    system, combining traditional insurance operations with modern AI technology
+    to provide a comprehensive, efficient, and intelligent policy processing
+    solution.
+    """
+
     @staticmethod
     def _convert_date_strings(policy_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert date strings from AI extraction to proper date objects"""
