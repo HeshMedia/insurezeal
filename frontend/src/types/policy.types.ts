@@ -108,14 +108,15 @@ export interface UploadPolicyPdfResponse {
   pdf_file_path: string;
   pdf_file_name: string;
   message: string;
+  upload_url?: string;
 }
 
 export interface SubmitPolicyPayload {
   // Required fields according to API
   policy_number: string;
   policy_type: string;
-  pdf_file_path: string;
-  pdf_file_name: string;
+  pdf_file_path?: string;
+  pdf_file_name?: string;
   
   // Agent and Child ID information
   agent_id?: string;
@@ -185,6 +186,12 @@ export interface SubmitPolicyPayload {
   manual_override?: boolean;
 }
 
+export interface PolicyCreateResponse {
+  id: string;
+  policy_number: string;
+  message: string;
+}
+
 export interface UpdatePolicyPayload {
   agent_id?: string;
   agent_code?: string;
@@ -237,4 +244,11 @@ export interface ChildIdOptionsParams {
   insurer_code: string;
   broker_code?: string;
   agent_id?: string;
+}
+
+export interface CheckPolicyNumberResponse {
+  policy_number: string;
+  is_duplicate: boolean;
+  message: string;
+  existing_policy_id?: string;
 }

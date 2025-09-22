@@ -4,8 +4,6 @@ import { useAtom } from 'jotai'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
 import { 
   FileText, 
   Upload, 
@@ -132,8 +130,6 @@ const CreateCutPayPage = () => {
     }
   ]
 
-  const progressPercentage = (currentStep / steps.length) * 100
-
   const handleNextStep = () => {
     if (currentStep < steps.length) {
       setCurrentStep(currentStep + 1)
@@ -163,7 +159,6 @@ const CreateCutPayPage = () => {
       case 3:
         return (
           <InputForm 
-            formType="cutpay"
             onPrev={handlePreviousStep}
           />
         )
@@ -176,25 +171,13 @@ const CreateCutPayPage = () => {
     <div className="min-h-screen ">
       <div className=" mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-4">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New CutPay Transaction</h1>
           <p className="text-muted-foreground">Follow the steps below to create a new cutpay transaction</p>
         </div>
 
         {/* Progress Section */}
-        <Card className="mb-8 border-gray-200 shadow-l bg-white/80 backdrop-blur-sm">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between mb-4">
-              <CardTitle className="text-xl">Progress</CardTitle>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                Step {currentStep} of {steps.length}
-              </Badge>
-            </div>
-            <Progress 
-              value={progressPercentage} 
-              className="h-3 bg-gray-100"
-            />
-          </CardHeader>
+        <Card className="mb-8">
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {steps.map((step, index) => (
@@ -265,7 +248,7 @@ const CreateCutPayPage = () => {
         {/* Main Content */}
         <Card className="border-none shadow-xl bg-white/90 backdrop-blur-sm">
           <CardHeader className="border-b bg-gradient-to-r from-blue-500/10 to-indigo-500/10">
-            <CardTitle className="flex items-center space-x-2">
+            <CardTitle className="flex items-center space-x-2 ">
               <span>Step {currentStep}: {steps[currentStep - 1]?.title}</span>
               {(loadingStates.extracting || loadingStates.uploadingToIndexedDB) && (
                 <Loader2 className="h-5 w-5 animate-spin text-blue-500" />

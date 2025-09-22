@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import React, { useMemo } from 'react'
@@ -14,7 +15,6 @@ import {
   Legend,
   ScatterChart,
   Scatter,
-  LineChart,
   Line,
   ComposedChart,
 } from 'recharts'
@@ -252,7 +252,7 @@ export function AgentPerformanceCharts({ data }: AgentPerformanceChartsProps) {
                 <Legend />
                 <Bar 
                   dataKey="totalRunningBalance" 
-                  fill={(entry) => entry >= 0 ? "#82ca9d" : "#ff7c7c"} 
+                  // fill={(entry: number) => entry >= 0 ? "#82ca9d" : "#ff7c7c"} 
                   name="Running Balance"
                 />
               </BarChart>

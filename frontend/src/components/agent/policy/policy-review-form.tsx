@@ -4,10 +4,10 @@ import { useMemo, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAtom } from "jotai";
-import { PolicyReviewFormSchema, PolicyReviewFormSchemaType } from "./policy-form-schema";
-import { pdfExtractionDataAtom, policyPdfUrlAtom } from "@/lib/atoms/cutpay";
+import { PolicyReviewFormSchema, PolicyReviewFormSchemaType } from "@/components/agent/policy/policy-form-schema";
+import { pdfExtractionDataAtom } from "@/lib/atoms/cutpay";
 import { useInsurers, useBrokersAndInsurers, useChildIdRequests } from "@/hooks/agentQuery";
-import { useSubmitPolicy } from "@/hooks/policyQuery";
+import { useSubmitPolicy, useUploadPolicyPdf } from "@/hooks/policyQuery";
 import { useProfile } from "@/hooks/profileQuery";
 import DocumentViewer from "@/components/forms/documentviewer";
 import { Mosaic, type MosaicNode } from "react-mosaic-component";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { SubmitPolicyPayload } from "@/types/policy.types";
 import { useRouter } from 'next/navigation'
+import { getFromIndexedDB } from '@/lib/utils/indexeddb'
 
 
 type SimpleInsurer = { insurer_code: string; name: string };
@@ -32,8 +33,8 @@ interface PolicyReviewFormProps {
 
 const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
   const [pdfExtractionData] = useAtom(pdfExtractionDataAtom);
-  const [policyPdfUrl] = useAtom(policyPdfUrlAtom);
   const submitPolicyMutation = useSubmitPolicy();
+  const uploadPolicyMutation = useUploadPolicyPdf();
   const { data: userProfile } = useProfile();
   const [isViewerOpen, setIsViewerOpen] = useState(true);
   const router = useRouter()
@@ -54,8 +55,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
     resolver: zodResolver(PolicyReviewFormSchema),
     defaultValues: {
       policy_number: pdfExtractionData?.extracted_data?.policy_number || "",
-      start_date: pdfExtractionData?.extracted_data?.start_date || null,
-      end_date: pdfExtractionData?.extracted_data?.end_date || null,
       code_type: "Direct",
       insurer_code: "",
       broker_code: null,
@@ -114,19 +113,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
       }));
   }, [myRequests, insurerCode, brokerCode, codeType]);
 
-  // Autofill start/end if missing (today + 1 year)
-  useEffect(() => {
-    if (!form.getValues("start_date")) {
-      const today = new Date().toISOString().split("T")[0];
-      form.setValue("start_date", today, { shouldValidate: true });
-    }
-    if (!form.getValues("end_date")) {
-      const end = new Date();
-      end.setFullYear(end.getFullYear() + 1);
-      form.setValue("end_date", end.toISOString().split("T")[0], { shouldValidate: true });
-    }
-  }, [form]);
-
   // Simple calculation preview
   const netPremium = Number(pdfExtractionData?.extracted_data?.net_premium || 0);
   const grossPremium = Number(pdfExtractionData?.extracted_data?.gross_premium || 0);
@@ -144,10 +130,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
 
   const onSubmit = async (values: PolicyReviewFormSchemaType) => {
     try {
-      if (!policyPdfUrl) {
-        toast.error("Policy PDF missing. Please upload in Step 1.");
-        return;
-      }
+      // Proceed even if preview URL is absent; we'll read the file from IndexedDB
 
       const extracted = pdfExtractionData?.extracted_data || {};
 
@@ -175,8 +158,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
       const payload: SubmitPolicyPayload = {
         policy_number: values.policy_number,
         policy_type: extracted.plan_type || "Policy",
-        pdf_file_path: policyPdfUrl,
-        pdf_file_name: `policy_${values.policy_number || Date.now()}.pdf`,
 
         // Agent context (optional)
         agent_id: userProfile?.user_id || undefined,
@@ -212,6 +193,8 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         business_type: extracted.business_type || undefined,
         seating_capacity: extracted.seating_capacity || undefined,
         veh_wheels: extracted.veh_wheels || undefined,
+        start_date: extracted.start_date || undefined,
+        end_date: extracted.end_date || undefined,
 
         // Premium
         gross_premium: extracted.gross_premium || undefined,
@@ -229,17 +212,30 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         payment_by: values.payment_by,
         payment_method: values.payment_method || undefined,
         notes: values.notes || undefined,
-
-        // Dates
-        start_date: values.start_date || undefined,
-        end_date: values.end_date || undefined,
-
         // AI metadata
         ai_confidence_score: aiConfidenceScore,
         manual_override: false,
       };
 
-      await submitPolicyMutation.mutateAsync(payload);
+      const created = await submitPolicyMutation.mutateAsync(payload);
+
+      // After creation, upload the policy PDF using presigned URL
+      const stored = await getFromIndexedDB('policy_pdf')
+      if (stored?.content) {
+        try {
+          await uploadPolicyMutation.mutateAsync({
+            file: stored.content,
+            policy_id: created.id,
+            document_type: 'policy_pdf',
+          })
+        } catch (e) {
+          const message = e instanceof Error ? e.message : 'Failed to upload policy PDF'
+          toast.warning(message)
+        }
+      } else {
+        toast.warning('Policy created, but PDF not found in IndexedDB for upload')
+      }
+
       toast.success("Policy created successfully");
       router.push("/agent/policies");
       onSuccess();
@@ -284,35 +280,11 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                           control={form.control}
                           render={({ field, fieldState }) => (
                             <>
-                              <Input {...field} className="h-10 w-fit" />
+                              <Input {...field} className="h-10 w-fit" disabled/>
                               {fieldState.error && (
                                 <p className="text-xs text-red-500 mt-1">{fieldState.error.message}</p>
                               )}
                             </>
-                          )}
-                        />
-                      </div>
-
-                      {/* Start Date */}
-                      <div className="space-y-2 flex-none w-fit">
-                        <Label className="text-sm font-medium text-gray-700">Policy Start Date</Label>
-                        <Controller
-                          name="start_date"
-                          control={form.control}
-                          render={({ field }) => (
-                            <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
-                          )}
-                        />
-                      </div>
-
-                      {/* End Date */}
-                      <div className="space-y-2 flex-none w-fit">
-                        <Label className="text-sm font-medium text-gray-700">Policy End Date</Label>
-                        <Controller
-                          name="end_date"
-                          control={form.control}
-                          render={({ field }) => (
-                            <Input className="h-10 w-fit" type="date" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
                           )}
                         />
                       </div>
@@ -447,8 +419,9 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                       )}
 
                       {/* Payment By Office */}
+                      {paymentBy == "InsureZeal" && (
                       <div className="space-y-2 flex-none w-fit">
-                        <Label className="text-sm font-medium text-gray-700">Payment By Office</Label>
+                        <Label className="text-sm font-medium text-gray-700">Payment By InsureZeal</Label>
                         <Controller
                           name="payment_by_office"
                           control={form.control}
@@ -457,6 +430,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                           )}
                         />
                       </div>
+                          )}
 
                       {/* Agent Commission % */}
                       <div className="space-y-2 flex-none w-fit">

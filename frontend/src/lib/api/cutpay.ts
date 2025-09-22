@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAuthenticatedClient } from './client'
 import {
   CutPayTransaction,
@@ -15,6 +16,8 @@ import {
   UpdateAgentConfigRequest,
   BulkPostCutpayRequest,
   BulkPostCutpayResponse,
+  PolicyDetailsResponse,
+  CutPayDatabaseResponse,
 } from '@/types/cutpay.types'
 
 // Create axios instance with Supabase authentication
@@ -105,22 +108,65 @@ export const cutpayApi = {
     return response.data
   },
 
-  // Upload policy document
+  // New policy-based endpoints
+  getByPolicy: async (params: { policy_number: string; quarter: number; year: number }): Promise<PolicyDetailsResponse> => {
+    const response = await apiClient.get('/cutpay/policy-details', { params })
+    return response.data
+  },
+
+  updateByPolicy: async (
+    params: { policy_number: string; quarter: number; year: number },
+    data: CreateCutpayTransactionCutpayPostRequest
+  ): Promise<CutPayDatabaseResponse> => {
+    const response = await apiClient.put('/cutpay/policy-update', data, { params })
+    return response.data
+  },
+
+  deleteByPolicy: async (params: { policy_number: string; quarter: number; year: number }): Promise<any> => {
+    const response = await apiClient.delete('/cutpay/policy-delete', { params })
+    return response.data
+  },
+
+  // Upload policy document using presigned URL flow
   uploadDocument: async (
-    cutpayId: number, 
-    file: File, 
+    cutpayId: number,
+    file: File,
     documentType: string = 'policy_pdf'
   ): Promise<CutPayDocumentUploadResponse> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('document_type', documentType)
-    
-    const response = await apiClient.post(`/cutpay/${cutpayId}/upload-document`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    const contentType = file.type || 'application/pdf'
+
+    // Build form body as x-www-form-urlencoded per API spec
+    const body = new URLSearchParams()
+    body.append('filename', file.name)
+    body.append('content_type', contentType)
+
+    // For main policy, send policy_pdf; for others, mark as additional_documents
+    const docCategory = documentType === 'policy_pdf' ? 'policy_pdf' : 'additional_documents'
+    body.append('document_type', docCategory)
+    // API requires 'type' always; for main policy use 'policy_pdf' as type key
+    body.append('type', documentType || 'policy_pdf')
+
+    // Request presigned URL (no file upload here)
+    const presignResp = await apiClient.post('/cutpay/upload-document', body, {
+      params: { cutpay_id: cutpayId },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
-    return response.data
+
+    const data = presignResp.data as CutPayDocumentUploadResponse & { upload_url?: string }
+
+    // Upload binary directly to S3 if upload_url provided
+    if (data.upload_url) {
+      const putRes = await fetch(data.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      })
+      if (!putRes.ok) {
+        throw new Error(`Failed to upload document to storage (status ${putRes.status})`)
+      }
+    }
+
+    return data
   },
 
   // Extract PDF data

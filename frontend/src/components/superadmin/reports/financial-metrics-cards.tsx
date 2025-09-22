@@ -42,12 +42,6 @@ export function FinancialMetricsCards({ stats }: FinancialMetricsCardsProps) {
     return new Intl.NumberFormat('en-IN').format(num)
   }
 
-  const getGrowthIndicator = (value: number) => {
-    if (value > 0) return 'positive'
-    if (value < 0) return 'negative'
-    return 'neutral'
-  }
-
   const metrics = [
     {
       title: "Total Policies",

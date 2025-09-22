@@ -4,11 +4,11 @@ import React from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
 import { ReportsFilterState } from '@/components/superadmin/reports/reports-dashboard'
 
 interface ReportsFiltersProps {
   filters: ReportsFilterState
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onFilterChange: (key: keyof ReportsFilterState, value: any) => void
   filterOptions: {
     reportingMonths: string[]

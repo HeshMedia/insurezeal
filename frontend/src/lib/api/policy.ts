@@ -12,6 +12,8 @@ import {
   SubmitPolicyPayload,
   UpdatePolicyPayload,
   UploadPolicyPdfResponse,
+  CheckPolicyNumberResponse,
+  PolicyCreateResponse,
 } from "@/types/policy.types";
 
 
@@ -30,18 +32,44 @@ export const extractPdfData = async (file: File): Promise<ExtractPdfDataResponse
 export const uploadPolicyPdf = async (payload: {
   file: File;
   policy_id: string;
+  document_type?: 'policy_pdf' | 'additional';
+  type?: string; // key for additional documents
 }): Promise<UploadPolicyPdfResponse> => {
-  const formData = new FormData();
-  formData.append("file", payload.file);
-  formData.append("policy_id", payload.policy_id);
-  const { data } = await apiClient.post("/policies/upload", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return data;
+  const contentType = payload.file.type || 'application/pdf'
+  const body = new URLSearchParams()
+  body.append('policy_id', payload.policy_id)
+  body.append('filename', payload.file.name)
+  body.append('content_type', contentType)
+
+  const documentType = payload.document_type ?? 'policy_pdf'
+  const docCategory = documentType === 'policy_pdf' ? 'policy_pdf' : 'additional_documents'
+  body.append('document_type', docCategory)
+  // API requires 'type' always; for main policy we can pass 'policy_pdf'
+  body.append('type', (documentType === 'policy_pdf' ? 'policy_pdf' : (payload.type || 'additional_document')))
+
+  // Request presigned URL
+  const presign = await apiClient.post('/policies/upload', body, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  })
+
+  const data = presign.data as UploadPolicyPdfResponse & { upload_url?: string }
+
+  if (data.upload_url) {
+    const putRes = await fetch(data.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: payload.file,
+    })
+    if (!putRes.ok) {
+      throw new Error(`Failed to upload policy document (status ${putRes.status})`)
+    }
+  }
+
+  return data
 };
 
 // Submit policy (backend will derive quarter/year from dates internally; if required, extend signature)
-export const submitPolicy = async (payload: SubmitPolicyPayload): Promise<Policy> => {
+export const submitPolicy = async (payload: SubmitPolicyPayload): Promise<PolicyCreateResponse> => {
   const { data } = await apiClient.post("/policies/submit", payload);
   return data;
 };
@@ -269,4 +297,23 @@ export const getAgentPolicies = async ({
 }): Promise<ListPoliciesResponse> => {
   const { data } = await apiClient.get(`/policies/agent/${agentCode}`, { params });
   return data;
+};
+
+export const checkPolicyNumberDuplicate = async ({
+  policy_number,
+  exclude_policy_id,
+}: {
+  policy_number: string;
+  exclude_policy_id?: string | null;
+}): Promise<CheckPolicyNumberResponse> => {
+  const { data } = await apiClient.get(
+    "/policies/helpers/check-policy-number",
+    {
+      params: {
+        policy_number,
+        ...(exclude_policy_id ? { exclude_policy_id } : {}),
+      },
+    }
+  );
+  return data as CheckPolicyNumberResponse;
 };

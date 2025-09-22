@@ -9,7 +9,7 @@ import { Clock, CheckCircle, XCircle, AlertCircle, FileText, Search, Eye } from 
 import { useChildIdRequests } from "@/hooks/agentQuery"
 import { ChildIdStatus as StatusType } from "@/types/agent.types"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ChildIdRequestDetails } from "./child-id-request-details"
+import { ChildIdRequestDetails } from "@/components/agent/child-id/child-id-request-details"
 
 interface ChildIdStatusProps {
   searchTerm?: string
