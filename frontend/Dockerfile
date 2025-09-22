@@ -1,47 +1,96 @@
-# syntax=docker/dockerfile:1.7
-
-# ------------------------
-# 1) Builder: install deps and build Next.js app
-# ------------------------
-FROM node:22-alpine AS deps
+FROM oven/bun:1.2-alpine AS base
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install libc compat for some native packages
-RUN apk add --no-cache libc6-compat
+# Install dependencies (cached)
+FROM base AS deps
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --ci
 
-# Copy only lockfiles and package manifest first for better caching
-COPY package.json bun.lock* ./
-
-# Use corepack to ensure correct package manager (bun) if needed, else npm
-RUN corepack enable && \
-    if [ -f bun.lock ]; then \
-      corepack prepare bun@latest --activate && bun install --frozen-lockfile; \
-    else \
-      npm ci; \
-    fi
-
-# Copy the rest of the app
-COPY . .
-
-# Build the Next.js app
-RUN bun run build
-
-# ------------------------
-# 2) Runner: use Next.js standalone output
-# ------------------------
-FROM node:22-alpine AS runner
+# Build the Next.js app (standalone)
+FROM base AS builder
 WORKDIR /app
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-# Next.js standalone output includes all production node_modules in .next/standalone
-COPY --from=deps /app/.next/standalone ./
-COPY --from=deps /app/.next/static ./.next/static
-COPY --from=deps /app/public ./public
+# Build-time public envs (compiled into client bundles)
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_GOOGLE_SHEETS_ID
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL
+ARG NEXT_PUBLIC_GOOGLE_PRIVATE_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_GOOGLE_SHEETS_ID=$NEXT_PUBLIC_GOOGLE_SHEETS_ID \
+    NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL=$NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL \
+    NEXT_PUBLIC_GOOGLE_PRIVATE_KEY=$NEXT_PUBLIC_GOOGLE_PRIVATE_KEY
 
-# Expose default Next.js port
+# Build-time server envs (optional)
+ARG GOOGLE_SHEETS_ID
+ARG GOOGLE_CLIENT_EMAIL
+ARG GOOGLE_PRIVATE_KEY
+ENV GOOGLE_SHEETS_ID=$GOOGLE_SHEETS_ID \
+    GOOGLE_CLIENT_EMAIL=$GOOGLE_CLIENT_EMAIL \
+    GOOGLE_PRIVATE_KEY=$GOOGLE_PRIVATE_KEY
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN bun run build
+
+# Runtime image
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Non-root user
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
+
+# Runtime envs (can be overridden with -e at docker run)
+ENV PORT=3000
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+ARG NEXT_PUBLIC_SITE_URL
+ARG NEXT_PUBLIC_GOOGLE_SHEETS_ID
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL
+ARG NEXT_PUBLIC_GOOGLE_PRIVATE_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_PUBLIC_GOOGLE_SHEETS_ID=$NEXT_PUBLIC_GOOGLE_SHEETS_ID \
+    NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL=$NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL \
+    NEXT_PUBLIC_GOOGLE_PRIVATE_KEY=$NEXT_PUBLIC_GOOGLE_PRIVATE_KEY
+
+ARG GOOGLE_SHEETS_ID
+ARG GOOGLE_CLIENT_EMAIL
+ARG GOOGLE_PRIVATE_KEY
+ENV GOOGLE_SHEETS_ID=$GOOGLE_SHEETS_ID \
+    GOOGLE_CLIENT_EMAIL=$GOOGLE_CLIENT_EMAIL \
+    GOOGLE_PRIVATE_KEY=$GOOGLE_PRIVATE_KEY
+
+# Public assets
+COPY --from=builder /app/public ./public
+
+# Prepare .next directory for static assets
+RUN mkdir -p ./.next \
+  && chown -R nextjs:nodejs ./.next
+
+# Standalone server and static assets
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+USER nextjs
 EXPOSE 3000
 
-# Coolify will use this default start command
-CMD ["node", "server.js"]
+# Start Next.js standalone server with Bun
+CMD ["bun", "server.js"]
 
 
