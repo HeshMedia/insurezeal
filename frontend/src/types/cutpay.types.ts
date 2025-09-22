@@ -249,6 +249,7 @@ export interface CutPayDocumentUploadResponse {
   document_type: string
   upload_status: string
   message: string
+  upload_url?: string
 }
 
 // Cutpay calculation request

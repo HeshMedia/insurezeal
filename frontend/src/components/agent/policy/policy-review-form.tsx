@@ -5,9 +5,9 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAtom } from "jotai";
 import { PolicyReviewFormSchema, PolicyReviewFormSchemaType } from "@/components/agent/policy/policy-form-schema";
-import { pdfExtractionDataAtom, policyPdfUrlAtom } from "@/lib/atoms/cutpay";
+import { pdfExtractionDataAtom } from "@/lib/atoms/cutpay";
 import { useInsurers, useBrokersAndInsurers, useChildIdRequests } from "@/hooks/agentQuery";
-import { useSubmitPolicy } from "@/hooks/policyQuery";
+import { useSubmitPolicy, useUploadPolicyPdf } from "@/hooks/policyQuery";
 import { useProfile } from "@/hooks/profileQuery";
 import DocumentViewer from "@/components/forms/documentviewer";
 import { Mosaic, type MosaicNode } from "react-mosaic-component";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { SubmitPolicyPayload } from "@/types/policy.types";
 import { useRouter } from 'next/navigation'
+import { getFromIndexedDB } from '@/lib/utils/indexeddb'
 
 
 type SimpleInsurer = { insurer_code: string; name: string };
@@ -32,8 +33,8 @@ interface PolicyReviewFormProps {
 
 const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
   const [pdfExtractionData] = useAtom(pdfExtractionDataAtom);
-  const [policyPdfUrl] = useAtom(policyPdfUrlAtom);
   const submitPolicyMutation = useSubmitPolicy();
+  const uploadPolicyMutation = useUploadPolicyPdf();
   const { data: userProfile } = useProfile();
   const [isViewerOpen, setIsViewerOpen] = useState(true);
   const router = useRouter()
@@ -129,10 +130,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
 
   const onSubmit = async (values: PolicyReviewFormSchemaType) => {
     try {
-      if (!policyPdfUrl) {
-        toast.error("Policy PDF missing. Please upload in Step 1.");
-        return;
-      }
+      // Proceed even if preview URL is absent; we'll read the file from IndexedDB
 
       const extracted = pdfExtractionData?.extracted_data || {};
 
@@ -160,8 +158,6 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
       const payload: SubmitPolicyPayload = {
         policy_number: values.policy_number,
         policy_type: extracted.plan_type || "Policy",
-        pdf_file_path: policyPdfUrl,
-        pdf_file_name: `policy_${values.policy_number || Date.now()}.pdf`,
 
         // Agent context (optional)
         agent_id: userProfile?.user_id || undefined,
@@ -221,7 +217,25 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         manual_override: false,
       };
 
-      await submitPolicyMutation.mutateAsync(payload);
+      const created = await submitPolicyMutation.mutateAsync(payload);
+
+      // After creation, upload the policy PDF using presigned URL
+      const stored = await getFromIndexedDB('policy_pdf')
+      if (stored?.content) {
+        try {
+          await uploadPolicyMutation.mutateAsync({
+            file: stored.content,
+            policy_id: created.id,
+            document_type: 'policy_pdf',
+          })
+        } catch (e) {
+          const message = e instanceof Error ? e.message : 'Failed to upload policy PDF'
+          toast.warning(message)
+        }
+      } else {
+        toast.warning('Policy created, but PDF not found in IndexedDB for upload')
+      }
+
       toast.success("Policy created successfully");
       router.push("/agent/policies");
       onSuccess();
@@ -405,8 +419,9 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                       )}
 
                       {/* Payment By Office */}
+                      {paymentBy == "InsureZeal" && (
                       <div className="space-y-2 flex-none w-fit">
-                        <Label className="text-sm font-medium text-gray-700">Payment By Office</Label>
+                        <Label className="text-sm font-medium text-gray-700">Payment By InsureZeal</Label>
                         <Controller
                           name="payment_by_office"
                           control={form.control}
@@ -415,6 +430,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                           )}
                         />
                       </div>
+                          )}
 
                       {/* Agent Commission % */}
                       <div className="space-y-2 flex-none w-fit">

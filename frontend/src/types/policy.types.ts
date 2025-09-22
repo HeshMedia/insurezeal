@@ -108,14 +108,15 @@ export interface UploadPolicyPdfResponse {
   pdf_file_path: string;
   pdf_file_name: string;
   message: string;
+  upload_url?: string;
 }
 
 export interface SubmitPolicyPayload {
   // Required fields according to API
   policy_number: string;
   policy_type: string;
-  pdf_file_path: string;
-  pdf_file_name: string;
+  pdf_file_path?: string;
+  pdf_file_name?: string;
   
   // Agent and Child ID information
   agent_id?: string;
@@ -183,6 +184,12 @@ export interface SubmitPolicyPayload {
   // AI and manual override
   ai_confidence_score?: number;
   manual_override?: boolean;
+}
+
+export interface PolicyCreateResponse {
+  id: string;
+  policy_number: string;
+  message: string;
 }
 
 export interface UpdatePolicyPayload {
