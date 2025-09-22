@@ -3,13 +3,16 @@ Public admin routes that don't require authentication
 These are for one-time setup operations like creating the first superadmin
 """
 
-from fastapi import APIRouter, HTTPException, status, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from config import get_db
-from .schemas import SuperadminPromotionRequest, UserRoleUpdateResponse
-from models import UserProfile, Users
 import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import get_db
+from models import UserProfile, Users
+
+from .schemas import SuperadminPromotionRequest, UserRoleUpdateResponse
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +32,6 @@ async def promote_to_superadmin(
     Requires both user_id and email for verification to prevent accidental promotions.
     """
     from config import get_supabase_admin_client
-    from uuid import UUID
 
     try:
         updated_in_database = False

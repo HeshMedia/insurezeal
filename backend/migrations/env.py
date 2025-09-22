@@ -1,9 +1,9 @@
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
-from alembic import context
-from dotenv import load_dotenv
 import os
 import sys
+from logging.config import fileConfig
+
+from alembic import context
+from dotenv import load_dotenv
 
 # Add the parent directory to the Python path so we can import config and models
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -12,7 +12,6 @@ load_dotenv()
 
 from config import get_sync_engine
 from models import Base
-
 
 config = context.config
 

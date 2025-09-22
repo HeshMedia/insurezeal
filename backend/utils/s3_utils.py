@@ -1,19 +1,19 @@
-import uuid
 import mimetypes
-from urllib.parse import urlparse
+import uuid
 from typing import Optional
+from urllib.parse import urlparse
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
-from botocore.config import Config
 
 from config import (
+    AWS_ACCESS_KEY_ID,
     AWS_REGION,
     AWS_S3_BUCKET,
-    CLOUDFRONT_DOMAIN,
-    AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
+    CLOUDFRONT_DOMAIN,
     PRESIGNED_URL_EXPIRES_SECONDS,
 )
 

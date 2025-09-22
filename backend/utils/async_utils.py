@@ -1,5 +1,5 @@
 import asyncio
-from typing import Callable, Any
+from typing import Any, Callable
 
 
 async def run_sync_in_threadpool(

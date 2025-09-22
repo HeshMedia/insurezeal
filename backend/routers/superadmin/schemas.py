@@ -2,11 +2,12 @@
 Schemas for SuperAdmin routes
 """
 
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
 from datetime import datetime
-from uuid import UUID
 from enum import Enum
+from typing import List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserRoleEnum(str, Enum):

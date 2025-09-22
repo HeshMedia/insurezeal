@@ -1,14 +1,16 @@
-import uuid
-from supabase import Client
-from fastapi import HTTPException, status
-from config import (
-    get_supabase_client,
-    get_supabase_admin_client,
-    JWT_SECRET_KEY,
-    JWT_ALGORITHM,
-)
 import logging
+import uuid
+
 import jwt
+from fastapi import HTTPException, status
+from supabase import Client
+
+from config import (
+    JWT_ALGORITHM,
+    JWT_SECRET_KEY,
+    get_supabase_admin_client,
+    get_supabase_client,
+)
 
 logger = logging.getLogger(__name__)
 

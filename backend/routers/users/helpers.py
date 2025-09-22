@@ -1,14 +1,15 @@
-from fastapi import HTTPException, status, UploadFile
-from supabase import Client
-from config import get_supabase_admin_client, get_supabase_storage
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from models import UserProfile, UserDocument
-import uuid
-import os
-from typing import List, Optional, Dict, Any
 import logging
-from datetime import datetime, date
+import os
+import uuid
+from typing import List
+
+from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from supabase import Client
+
+from config import get_supabase_admin_client, get_supabase_storage
+from models import UserDocument, UserProfile
 from routers.users.schemas import DocumentTypeEnum
 
 logger = logging.getLogger(__name__)
@@ -65,10 +66,10 @@ class UserHelpers:
             await file.seek(0)
 
             from utils.s3_utils import (
-                build_key,
                 build_cloudfront_url,
-                put_object,
+                build_key,
                 guess_content_type,
+                put_object,
             )
 
             filename = file.filename or "image.jpg"

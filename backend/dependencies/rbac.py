@@ -3,11 +3,9 @@ RBAC dependencies for FastAPI routes
 Role-based access control implemented as dependencies that run after authentication
 """
 
-from fastapi import Depends, HTTPException, status, Request
-from typing import Dict, Any
 import logging
 
-from routers.auth.auth import get_current_user
+from fastapi import HTTPException, Request, status
 
 logger = logging.getLogger(__name__)
 

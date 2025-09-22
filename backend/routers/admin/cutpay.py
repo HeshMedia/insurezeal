@@ -3,81 +3,69 @@ CutPay Router - Comprehensive API endpoints for CutPay flow
 Implements all endpoints as described in CUTPAY_FLOW_DETAILED_README.md
 """
 
+import json
+import logging
+import traceback
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
-    status,
-    Query,
-    UploadFile,
     File,
     Form,
-)
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func
-from sqlalchemy.orm import selectinload, attributes
-from typing import Optional, List, Dict, Any
-from datetime import date, datetime
-from uuid import UUID
-import json
-import logging
-import traceback
-import os
-import logging
-import io
-import csv
-import traceback
-import uuid
-import os
-import json
-
-from config import get_db, AWS_S3_BUCKET
-from ..auth.auth import get_current_user
-from dependencies.rbac import require_admin_cutpay
-from models import (
-    CutPay,
-    Insurer,
-    Broker,
-    ChildIdRequest,
-    AdminChildID,
-    CutPayAgentConfig,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
 )
 from fastapi.concurrency import run_in_threadpool
-from .cutpay_schemas import (
-    CutPayCreate,
-    CutPayUpdate,
-    CutPayResponse,
-    CutPayDatabaseResponse,
-    ExtractedPolicyData,
-    CalculationRequest,
-    CalculationResult,
-    DropdownOptions,
-    FilteredDropdowns,
-    DocumentUploadResponse,
-    ExtractionResponse,
-    ExportRequest,
-    DashboardStats,
-    BulkUpdateRequest,
-    BulkUpdateResponse,
-    CutPayAgentConfigCreate,
-    CutPayAgentConfigUpdate,
-    CutPayAgentConfigResponse,
-    AgentPOResponse,
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import attributes
+
+from config import get_db
+from dependencies.rbac import require_admin_cutpay
+from models import (
+    Broker,
+    CutPay,
+    CutPayAgentConfig,
+    Insurer,
 )
+
+from ..auth.auth import get_current_user
 from .cutpay_helpers import (
+    auto_populate_relationship_data,
     calculate_commission_amounts,
+    database_cutpay_response,
     get_dropdown_options,
     get_filtered_dropdowns,
-    auto_populate_relationship_data,
-    validate_cutpay_data,
-    validate_and_resolve_codes,
-    validate_and_resolve_codes_with_names,
-    resolve_broker_code_to_id,
-    resolve_insurer_code_to_id,
     prepare_complete_sheets_data,
     prepare_complete_sheets_data_for_update,
-    database_cutpay_response,
+    resolve_broker_code_to_id,
+    resolve_insurer_code_to_id,
+    validate_and_resolve_codes,
+    validate_and_resolve_codes_with_names,
+    validate_cutpay_data,
+)
+from .cutpay_schemas import (
+    AgentPOResponse,
+    BulkUpdateRequest,
+    BulkUpdateResponse,
+    CalculationRequest,
+    CalculationResult,
+    CutPayAgentConfigCreate,
+    CutPayAgentConfigResponse,
+    CutPayAgentConfigUpdate,
+    CutPayCreate,
+    CutPayDatabaseResponse,
+    CutPayUpdate,
+    DocumentUploadResponse,
+    DropdownOptions,
+    ExtractedPolicyData,
+    ExtractionResponse,
+    FilteredDropdowns,
 )
 
 logger = logging.getLogger(__name__)
@@ -1759,8 +1747,8 @@ async def upload_policy_document(
             )
 
         from utils.s3_utils import (
-            build_key,
             build_cloudfront_url,
+            build_key,
             generate_presigned_put_url,
         )
 

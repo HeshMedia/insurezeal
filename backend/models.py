@@ -1,28 +1,26 @@
-from sqlalchemy import (
-    Boolean,
-    String,
-    Text,
-    DateTime,
-    SmallInteger,
-    Integer,
-    CheckConstraint,
-    PrimaryKeyConstraint,
-    UniqueConstraint,
-    Index,
-    Computed,
-    text,
-    ForeignKey,
-    Column,
-    Numeric,
-    Date,
-    func,
-)
-from sqlalchemy.dialects.postgresql import UUID, JSONB, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.ext.declarative import declarative_base
-from typing import Optional
 import uuid
 from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    PrimaryKeyConstraint,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 Base = declarative_base()
 

@@ -1,9 +1,11 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import List, Optional, Dict, Any
-from datetime import datetime, date
-from routers.users.schemas import GenderEnum, EducationLevelEnum
+from datetime import date, datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field
+
+from routers.users.schemas import EducationLevelEnum, GenderEnum
 
 
 # Child ID related schemas for admin management

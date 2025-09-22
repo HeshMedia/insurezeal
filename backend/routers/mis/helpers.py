@@ -1,19 +1,15 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any, List, Optional
 import logging
+import time
+from typing import Any, Dict, List, Optional
+
 from utils.google_sheets import google_sheets_sync
+
 from .schemas import (
-    MasterSheetRecord,
-    MasterSheetResponse,
-    AgentMISRecord,
-    AgentMISResponse,
-    AgentMISStats,
     BulkUpdateField,
     BulkUpdateResult,
-    BulkUpdateResponse,
+    MasterSheetRecord,
+    MasterSheetResponse,
 )
-import time
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 

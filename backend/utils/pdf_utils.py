@@ -1,10 +1,11 @@
-from unstract.llmwhisperer import LLMWhispererClientV2
-from unstract.llmwhisperer.client_v2 import LLMWhispererClientException
-from typing import Optional
+import io
 import logging
 import os
-import io
-import tempfile
+from typing import Optional
+
+from unstract.llmwhisperer import LLMWhispererClientV2
+from unstract.llmwhisperer.client_v2 import LLMWhispererClientException
+
 from config import LLMWHISPERER_API_KEY
 
 logger = logging.getLogger(__name__)

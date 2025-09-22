@@ -1,36 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Header, Response
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+import uuid
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import get_db, get_supabase_client
 from models import UserProfile, Users
-import uuid
-from datetime import datetime
-from .schemas import (
-    UserRegister,
-    UserLogin,
-    AuthResponse,
-    UserResponse,
-    RegistrationResponse,
-    TokenResponse,
-    ForgotPasswordRequest,
-    VerifyResetTokenRequest,
-    ResetPasswordRequest,
-    SupabaseWebhookEvent,
-)
-from .helpers import auth_helpers
-from utils.model_utils import model_data_from_orm
-from typing import Optional
-from datetime import datetime
-import logging
-import os
-import uuid
-import hmac
-import hashlib
-import json
 
 # Import user_helpers for agent code generation
 from routers.users.helpers import user_helpers
+from utils.model_utils import model_data_from_orm
+
+from .helpers import auth_helpers
+from .schemas import (
+    AuthResponse,
+    ForgotPasswordRequest,
+    RegistrationResponse,
+    ResetPasswordRequest,
+    SupabaseWebhookEvent,
+    TokenResponse,
+    UserLogin,
+    UserRegister,
+    UserResponse,
+    VerifyResetTokenRequest,
+)
 
 logger = logging.getLogger(__name__)
 

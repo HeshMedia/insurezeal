@@ -1,8 +1,9 @@
-from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class ChildIdStatusEnum(str, Enum):

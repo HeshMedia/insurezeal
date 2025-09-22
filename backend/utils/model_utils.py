@@ -2,9 +2,9 @@
 Utility functions for model serialization and data conversion
 """
 
-from typing import Dict, Any
 import uuid
-from datetime import datetime, date
+from datetime import datetime
+from typing import Any, Dict
 
 
 def convert_uuids_to_strings(

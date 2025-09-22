@@ -9,24 +9,22 @@ import csv
 import io
 import logging
 import os
-import uuid
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, date
-from decimal import Decimal, InvalidOperation
 import re
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
-from fastapi import HTTPException, status
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
-from models import Policy, CutPay, ReconciliationReport
-from utils.google_sheets import sync_policy_to_master_sheet, sync_cutpay_to_master_sheet
+from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models import ReconciliationReport
+
 from .schemas import (
-    UniversalRecordProcessingReport,
-    UniversalRecordProcessingStats,
-    RecordChangeDetail,
-    InsurerMappingConfig,
     CSVPreviewResponse,
     ReconciliationSummaryResponse,
+    RecordChangeDetail,
+    UniversalRecordProcessingReport,
+    UniversalRecordProcessingStats,
 )
 
 logger = logging.getLogger(__name__)
@@ -565,9 +563,9 @@ async def process_universal_record_csv(
 
         # Import Google Sheets utility functions
         from utils.google_sheets import (
+            add_master_sheet_record,
             get_master_sheet_data,
             update_master_sheet_record,
-            add_master_sheet_record,
         )
 
         # Get existing master sheet data for this insurer

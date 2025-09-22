@@ -1,24 +1,25 @@
-from typing import Dict, Any, List
-from fastapi import Depends, HTTPException, APIRouter, status, Query, Path
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
+import uuid
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import get_db
 from routers.auth.auth import get_current_user
-from routers.child.helpers import ChildHelpers
 from routers.auth.helpers import AuthHelpers
+from routers.child.helpers import ChildHelpers
 from routers.child.schemas import (
-    ChildIdResponse,
-    ChildIdRequestCreate,
-    ChildIdRequestList,
-    ChildIdSummary,
-    InsurerDropdownResponse,
     BrokerDropdownResponse,
     BrokerInsurerDropdownResponse,
+    ChildIdRequestCreate,
+    ChildIdRequestList,
+    ChildIdResponse,
+    ChildIdSummary,
+    InsurerDropdownResponse,
 )
 from utils.google_sheets import google_sheets_sync
-import uuid
 
 router = APIRouter(tags=["User Child ID Routes"])
 security = HTTPBearer()
@@ -154,7 +155,7 @@ async def create_child_id_request(
             db=db, user_id=user_id, request_data=request_data.dict()
         )
 
-        from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+        from utils.model_utils import convert_uuids_to_strings, model_data_from_orm
 
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
 
@@ -235,7 +236,7 @@ async def get_my_child_requests(
 
         formatted_requests = []
         for req in result["child_requests"]:
-            from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+            from utils.model_utils import convert_uuids_to_strings, model_data_from_orm
 
             req_dict = convert_uuids_to_strings(model_data_from_orm(req))
 
@@ -299,7 +300,7 @@ async def get_child_request_details(
                 detail="Child ID request not found",
             )
 
-        from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+        from utils.model_utils import convert_uuids_to_strings, model_data_from_orm
 
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
 
@@ -346,7 +347,7 @@ async def get_active_child_ids(
 
         formatted_responses = []
         for req in active_requests:
-            from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+            from utils.model_utils import convert_uuids_to_strings, model_data_from_orm
 
             req_dict = convert_uuids_to_strings(model_data_from_orm(req))
 

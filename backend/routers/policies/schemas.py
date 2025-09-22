@@ -1,8 +1,8 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List
 from datetime import date, datetime
+from typing import List, Optional
 from uuid import UUID
-import json
+
+from pydantic import BaseModel, Field
 
 # =============================================================================
 # SIMPLIFIED SCHEMAS FOR DATABASE STORAGE

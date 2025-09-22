@@ -1,17 +1,17 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, desc, or_
-from sqlalchemy.orm import selectinload
-from sqlalchemy.exc import IntegrityError
-from models import Policy, UserProfile, ChildIdRequest, Broker, Insurer
-from fastapi import HTTPException, status, UploadFile
-from typing import Optional, Dict, Any, List, Tuple
 import logging
 import uuid
-from datetime import datetime, date
-from utils.pdf_utils import PDFProcessor
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+from fastapi import HTTPException, UploadFile, status
+from sqlalchemy import and_, desc, func, or_, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models import Broker, ChildIdRequest, Insurer, Policy, UserProfile
 from utils.ai_utils import gemini_extractor
 from utils.model_utils import model_data_from_orm
-from config import get_supabase_admin_client, SUPABASE_STORAGE_BUCKET
+from utils.pdf_utils import PDFProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class PolicyHelpers:
             )
             unique_filename = f"policies/{user_id}/{uuid.uuid4()}.{file_extension}"
             file_content = await file.read()
-            from utils.s3_utils import put_object, build_cloudfront_url
+            from utils.s3_utils import build_cloudfront_url, put_object
 
             put_object(
                 key=unique_filename, body=file_content, content_type="application/pdf"
@@ -68,7 +68,7 @@ class PolicyHelpers:
         try:
             file_extension = filename.split(".")[-1] if "." in filename else "pdf"
             unique_filename = f"policies/{user_id}/{uuid.uuid4()}.{file_extension}"
-            from utils.s3_utils import put_object, build_cloudfront_url
+            from utils.s3_utils import build_cloudfront_url, put_object
 
             put_object(
                 key=unique_filename, body=file_content, content_type="application/pdf"

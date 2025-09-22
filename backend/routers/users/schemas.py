@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List, Literal, Dict
-from datetime import datetime, date
+from datetime import date, datetime
 from enum import Enum
+from typing import Dict, List, Optional
+
+from pydantic import BaseModel, EmailStr, Field, validator
 
 
 class GenderEnum(str, Enum):

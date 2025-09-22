@@ -2,10 +2,12 @@
 Helper functions for SuperAdmin routes
 """
 
-from sqlalchemy.orm import Session
+from typing import List, Optional
+
 from sqlalchemy import desc
-from models import Broker, Insurer, AdminChildID, UserProfile
-from typing import Optional, List
+from sqlalchemy.orm import Session
+
+from models import AdminChildID, Broker, Insurer, UserProfile
 
 
 class SuperAdminHelpers:

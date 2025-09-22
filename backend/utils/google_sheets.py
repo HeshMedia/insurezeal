@@ -1,12 +1,11 @@
-import json
-import os
-from typing import List, Dict, Any, Optional
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
-import logging
+
 from config import GOOGLE_SHEETS_CREDENTIALS, GOOGLE_SHEETS_DOCUMENT_ID
-from .quarterly_sheets_manager import quarterly_manager
 
 logger = logging.getLogger(__name__)
 
@@ -1014,9 +1013,10 @@ google_sheets_sync = GoogleSheetsSync()
 async def resolve_insurer_broker_names(cutpay_data: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve insurer_id and broker_id to their respective names"""
     try:
-        from config import AsyncSessionLocal
-        from models import Insurer, Broker
         from sqlalchemy import select
+
+        from config import AsyncSessionLocal
+        from models import Broker, Insurer
 
         async with AsyncSessionLocal() as db:
             # Resolve insurer name

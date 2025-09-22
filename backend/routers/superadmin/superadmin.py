@@ -2,41 +2,44 @@
 SuperAdmin router for managing brokers, insurers, and admin child IDs
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from sqlalchemy.orm import selectinload
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from config import get_db
-from models import Broker, Insurer, AdminChildID, UserProfile
-from routers.auth.auth import get_current_user
 from dependencies.rbac import (
-    require_superadmin_brokers_write,
-    require_brokers_read,
-    require_superadmin_insurers_write,
-    require_insurers_read,
-    require_superadmin_admin_child_ids_write,
     require_admin_child_ids_read,
-    require_superadmin_admin_child_ids_update,
+    require_brokers_read,
+    require_insurers_read,
     require_superadmin_admin_child_ids_delete,
+    require_superadmin_admin_child_ids_update,
+    require_superadmin_admin_child_ids_write,
     require_superadmin_brokers_insurers_list,
     require_superadmin_brokers_update,
+    require_superadmin_brokers_write,
     require_superadmin_insurers_update,
+    require_superadmin_insurers_write,
     require_superadmin_write,
 )
+from models import AdminChildID, Broker, Insurer, UserProfile
+from routers.auth.auth import get_current_user
+
+from . import schemas
 from .schemas import (
+    AdminChildIDCreate,
+    AdminChildIDResponse,
+    AdminChildIDUpdate,
     BrokerCreate,
+    BrokerInsurerListResponse,
     BrokerResponse,
     BrokerUpdate,
     InsurerCreate,
     InsurerResponse,
     InsurerUpdate,
-    AdminChildIDCreate,
-    AdminChildIDResponse,
-    AdminChildIDUpdate,
-    BrokerInsurerListResponse,
 )
-from . import schemas
 
 router = APIRouter(prefix="/superadmin", tags=["SuperAdmin"])
 
@@ -517,8 +520,9 @@ async def promote_agent_to_admin_superadmin(
     Promote an agent to admin role (SuperAdmin only).
     Updates both database and Supabase metadata.
     """
-    from config import get_supabase_admin_client
     from uuid import UUID
+
+    from config import get_supabase_admin_client
 
     try:
         # Validate user_id format

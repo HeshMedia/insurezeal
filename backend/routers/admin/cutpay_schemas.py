@@ -1,8 +1,8 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any
 from datetime import date, datetime
-from decimal import Decimal
+from typing import Any, Dict, List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field, validator
 
 # =============================================================================
 # EXTRACTED DATA SCHEMAS

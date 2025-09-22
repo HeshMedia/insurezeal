@@ -1,22 +1,22 @@
-from fastapi import FastAPI
+import logging
+import os
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi import Request, HTTPException
-import os
-import logging
 
-from routers.auth.auth import router as auth_router
-from routers.users.users import router as users_router
 from routers.admin.admin import router as admin_router
-from routers.child.child import router as child_router
-from routers.policies.policies import router as policies_router
-from routers.superadmin.superadmin import router as superadmin_router
 from routers.admin.cutpay import router as cutpay_router
 from routers.admin.public import router as public_router
+from routers.auth.auth import router as auth_router
+from routers.child.child import router as child_router
 from routers.mis.mis import router as mis_router
+from routers.policies.policies import router as policies_router
+from routers.superadmin.superadmin import router as superadmin_router
 from routers.universal_records.universal_records import (
     router as universal_records_router,
 )
+from routers.users.users import router as users_router
 
 # Setup detailed logging
 logging.basicConfig(level=logging.INFO)

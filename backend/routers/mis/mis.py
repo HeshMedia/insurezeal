@@ -1,38 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from fastapi.responses import StreamingResponse, JSONResponse
-from fastapi.security import HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+import csv
+import io
+import logging
 from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import get_db
-from routers.auth.auth import get_current_user
 from dependencies.rbac import (
     require_admin_read,
     require_admin_write,
     require_permission,
 )
+from routers.auth.auth import get_current_user
+
+from .helpers import MISHelpers
 from .schemas import (
-    MasterSheetResponse,
-    MasterSheetRecord,
-    BulkUpdateRequest,
-    BulkUpdateResponse,
-    MasterSheetStatsResponse,
-    AgentMISResponse,
     AgentMISRecord,
+    AgentMISResponse,
     AgentMISStats,
+    MasterSheetResponse,
+    MasterSheetStatsResponse,
+    PolicyDocumentsResponse,
     QuarterlySheetUpdateRequest,
     QuarterlySheetUpdateResponse,
-    PolicyDocumentsResponse,
 )
-from .helpers import MISHelpers
-from typing import Optional, Dict, Any
-import logging
-import csv
-import io
-import tempfile
-import zipfile
-import zipfile
-import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -994,8 +989,8 @@ async def export_quarterly_sheet_data(
             )
 
         elif format == "csv":
-            import zipfile
             import tempfile
+            import zipfile
 
             # Create a temporary zip file with CSV files for each sheet
             temp_dir = tempfile.mkdtemp()
@@ -1063,8 +1058,9 @@ async def export_quarterly_sheet_data(
 
         elif format == "xlsx":
             try:
-                import pandas as pd
                 import tempfile
+
+                import pandas as pd
 
                 # Create temporary Excel file
                 temp_dir = tempfile.mkdtemp()
@@ -1118,8 +1114,9 @@ async def export_quarterly_sheet_data(
                 )
                 # Fallback to simple XLSX using openpyxl directly
                 try:
-                    from openpyxl import Workbook
                     import tempfile
+
+                    from openpyxl import Workbook
 
                     # Create temporary Excel file using openpyxl directly
                     temp_dir = tempfile.mkdtemp()
@@ -1369,6 +1366,7 @@ async def get_my_mis_data(
 
         # Get the agent's code from UserProfile table
         from sqlalchemy import select
+
         from models import UserProfile
 
         query = select(UserProfile.agent_code).where(UserProfile.user_id == user_id)
@@ -1634,7 +1632,7 @@ async def get_policy_documents(
     **Access:** Requires admin read permissions
     """
     try:
-        from models import Policy, CutPay
+        from models import CutPay, Policy
 
         # Search in Policy table
         policy_stmt = select(Policy.policy_pdf_url, Policy.additional_documents).where(

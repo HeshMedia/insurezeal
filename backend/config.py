@@ -1,11 +1,13 @@
+import logging
 import os
+
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base, UserProfile
-from supabase import create_client, Client
-import logging
+from supabase import Client, create_client
+
+from models import Base
 
 # Setup detailed logging
 logging.basicConfig(level=logging.INFO)

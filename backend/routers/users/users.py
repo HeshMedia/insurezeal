@@ -1,29 +1,31 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from config import get_db
-from models import UserProfile, UserDocument
-from routers.auth.auth import get_current_user
-from .schemas import (
-    UserProfileUpdate,
-    UserProfileResponse,
-    ProfileImageUpload,
-    DocumentUpload,
-    DocumentUploadResponse,
-    DocumentListResponse,
-)
-from .helpers import user_helpers
-from utils.model_utils import model_data_from_orm
-from typing import Optional
 import logging
 import os
 from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi.security import HTTPBearer
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import get_db
+from models import UserDocument, UserProfile
+from routers.auth.auth import get_current_user
+from utils.model_utils import model_data_from_orm
 from utils.s3_utils import (
-    build_key,
     build_cloudfront_url,
+    build_key,
     generate_presigned_put_url,
     guess_content_type,
+)
+
+from .helpers import user_helpers
+from .schemas import (
+    DocumentListResponse,
+    DocumentUploadResponse,
+    ProfileImageUpload,
+    UserProfileResponse,
+    UserProfileUpdate,
 )
 
 logger = logging.getLogger(__name__)

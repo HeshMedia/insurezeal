@@ -1,7 +1,7 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, Dict, Any
 from datetime import datetime
-import uuid
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel, EmailStr
 
 
 # Request schemas

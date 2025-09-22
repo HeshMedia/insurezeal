@@ -1,50 +1,41 @@
-from typing import Dict, Any, List, Optional
+import json
+import logging
+import traceback
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from fastapi import (
-    Depends,
-    HTTPException,
     APIRouter,
-    status,
-    Query,
-    UploadFile,
+    Depends,
     File,
     Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
 )
-from fastapi.responses import StreamingResponse
 from fastapi.concurrency import run_in_threadpool
-from pydantic import Field
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import logging
-import uuid
-import traceback
-import json
+from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from datetime import date, datetime
-import io
 
 from config import get_db
+from dependencies.rbac import require_permission
 from routers.auth.auth import get_current_user
 from routers.policies.helpers import PolicyHelpers
 from routers.policies.schemas import (
-    PolicyResponse,
-    PolicyCreateRequest,
-    PolicyUpdate,
-    PolicySummary,
-    PolicyListResponse,
-    PolicyUploadResponse,
+    AgentOption,
     AIExtractionResponse,
     ChildIdOption,
-    AgentOption,
-    PolicyNumberCheckResponse,
-    PolicySummaryResponse,
+    PolicyCreateRequest,
     PolicyCreateResponse,
     PolicyDatabaseResponse,
+    PolicyNumberCheckResponse,
+    PolicySummaryResponse,
+    PolicyUpdate,
+    PolicyUploadResponse,
 )
-from dependencies.rbac import require_permission
-from utils.google_sheets import google_sheets_sync
-from utils.s3_utils import build_key, build_cloudfront_url, generate_presigned_put_url
-from utils.quarterly_sheets_manager import quarterly_manager
-
+from utils.s3_utils import build_cloudfront_url, build_key, generate_presigned_put_url
 
 router = APIRouter(prefix="/policies", tags=["Policies"])
 security = HTTPBearer()
@@ -311,11 +302,11 @@ async def submit_policy(
 
         # Save full data to Google Sheets using our helper function
         try:
-            from utils.quarterly_sheets_manager import quarterly_manager
             from routers.policies.helpers import (
                 prepare_complete_policy_sheets_data,
                 validate_and_resolve_codes_with_names,
             )
+            from utils.quarterly_sheets_manager import quarterly_manager
 
             # Resolve broker and insurer names from codes
             broker_id, insurer_id, broker_name, insurer_name = (
@@ -427,7 +418,8 @@ async def list_policies(
         return quarter, year
 
     try:
-        from sqlalchemy import select, and_, extract
+        from sqlalchemy import and_, extract, select
+
         from models import Policy
         from routers.policies.helpers import database_policy_response
 
@@ -549,7 +541,8 @@ async def get_policy_transaction_by_policy_number(
         insurer_name = ""
 
         try:
-            from sqlalchemy import select, desc
+            from sqlalchemy import desc, select
+
             from models import Policy
             from routers.policies.helpers import database_policy_response
 
@@ -737,7 +730,8 @@ async def update_policy_transaction_by_policy_number(
         )
         async with db.begin():
             # Get the existing record by policy number
-            from sqlalchemy import select, desc
+            from sqlalchemy import desc, select
+
             from models import Policy
 
             result = await db.execute(
@@ -838,11 +832,11 @@ async def update_policy_transaction_by_policy_number(
         logger.info(
             f"Step 2: Starting quarterly Google Sheets sync for policy '{policy_number}' in '{quarter_sheet_name}' with ALL fields."
         )
-        from utils.quarterly_sheets_manager import quarterly_manager
         from routers.policies.helpers import (
             prepare_complete_policy_sheets_data_for_update,
             validate_and_resolve_codes_with_names,
         )
+        from utils.quarterly_sheets_manager import quarterly_manager
 
         # Resolve broker and insurer names from codes if provided in update data
         broker_id, insurer_id, broker_name, insurer_name = (
@@ -965,7 +959,8 @@ async def delete_policy_transaction_by_policy_number(
         )
 
         # Get the existing record by policy number
-        from sqlalchemy import select, desc
+        from sqlalchemy import desc, select
+
         from models import Policy
 
         result = await db.execute(

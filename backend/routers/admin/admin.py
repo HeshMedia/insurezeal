@@ -1,41 +1,40 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+import logging
+import uuid
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from config import get_db
-from routers.auth.auth import get_current_user
 from dependencies.rbac import (
     require_admin_agents,
     require_admin_agents_delete,
-    require_admin_read,
-    require_admin_write,
-    require_admin_stats,
     require_admin_child_requests,
     require_admin_child_requests_update,
+    require_admin_stats,
+    require_admin_write,
 )
-from .schemas import (
-    AgentListResponse,
-    AgentDetailResponse,
-    DeleteAgentResponse,
-    AgentSummary,
-    AdminStatsResponse,
-    ChildIdRequestList,
-    ChildIdResponse,
-    ChildIdAssignment,
-    ChildIdStatusUpdate,
-)
+from models import UserProfile, Users
+from routers.auth.auth import get_current_user
+from routers.child.helpers import ChildHelpers
+from utils.google_sheets import google_sheets_sync
+from utils.model_utils import convert_uuids_to_strings, model_data_from_orm
+
 from . import schemas
 from .helpers import AdminHelpers
-from routers.child.helpers import ChildHelpers
-from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
-from utils.google_sheets import google_sheets_sync
-from models import UserProfile, Users
-from typing import Optional
-import logging
-import io
-import csv
-import uuid
+from .schemas import (
+    AdminStatsResponse,
+    AgentDetailResponse,
+    AgentListResponse,
+    AgentSummary,
+    ChildIdAssignment,
+    ChildIdRequestList,
+    ChildIdResponse,
+    ChildIdStatusUpdate,
+    DeleteAgentResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +323,7 @@ async def get_child_request_by_id(
                 detail="Child ID request not found",
             )
 
-        from utils.model_utils import model_data_from_orm, convert_uuids_to_strings
+        from utils.model_utils import convert_uuids_to_strings, model_data_from_orm
 
         req_dict = convert_uuids_to_strings(model_data_from_orm(child_request))
         req_dict["insurer_id"] = None  # Add insurer_id to the response dictionary
@@ -762,8 +761,9 @@ async def promote_agent_to_admin(
     Promote an agent to admin role. Only accessible by existing admins.
     Updates both database and Supabase metadata.
     """
-    from config import get_supabase_admin_client
     from uuid import UUID
+
+    from config import get_supabase_admin_client
 
     try:
         # Validate user_id format

@@ -5,28 +5,27 @@ This router handles universal record uploads with insurer-specific mapping
 for data reconciliation and system synchronization.
 """
 
-import io
 import csv
+import io
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Query
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select, desc
 
 from config import get_db
-from dependencies.rbac import require_admin_read, require_admin_write, get_current_user
+from dependencies.rbac import get_current_user, require_admin_read, require_admin_write
 from models import ReconciliationReport
+
 from . import helpers
 from .schemas import (
-    UniversalRecordUploadResponse,
     AvailableInsurersResponse,
-    InsurerSelectionRequest,
-    CSVPreviewRequest,
     CSVPreviewResponse,
     ReconciliationSummaryResponse,
+    UniversalRecordUploadResponse,
 )
-
 
 router = APIRouter(prefix="/universal-records", tags=["Universal Records"])
 logger = logging.getLogger(__name__)

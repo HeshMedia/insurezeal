@@ -1,9 +1,11 @@
-import google.generativeai as genai
 import json
-from typing import Dict, Any, Optional
 import logging
 import os
+from typing import Any, Dict, Optional
+
+import google.generativeai as genai
 import requests
+
 from utils.pdf_utils import PDFProcessor
 
 logger = logging.getLogger(__name__)
