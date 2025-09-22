@@ -3,7 +3,7 @@
 import { useState } from "react";
 import PolicyPdfUpload from "@/components/forms/policy-pdf-upload";
 import AdditionalDocumentsUpload, { DocumentTypeConfig } from "@/components/forms/additional-documents-upload";
-import PolicyReviewForm from "./policy-review-form";
+import PolicyReviewForm from "@/components/agent/policy/policy-review-form";
 import { useExtractPdfData } from "@/hooks/policyQuery";
 import { FileText } from "lucide-react";
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 
 import { useCutPayList } from "@/hooks/cutpayQuery"
@@ -14,12 +15,9 @@ import { CutPayListParams, CutPayTransaction } from "@/types/cutpay.types"
 import { cn } from "@/lib/utils"
 import { 
   Search, 
-  Filter, 
-  Download, 
   MoreHorizontal, 
   Eye, 
   Edit,
-  DollarSign,
   Calendar,
   ArrowLeft,
   ArrowRight,
@@ -37,8 +35,8 @@ import {
 
 function CutPayCard({ cutpay, onViewDetails, onEdit }: { 
   cutpay: CutPayTransaction; 
-  onViewDetails: (id: number) => void;
-  onEdit: (id: number) => void;
+  onViewDetails: () => void;
+  onEdit: () => void;
 }) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -86,15 +84,12 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() => onViewDetails(cutpay.id)}
-                className="cursor-pointer"
-              >
+              <DropdownMenuItem onClick={onViewDetails} className="cursor-pointer">
                 <Eye className="h-4 w-4 mr-2" />
                 View Details
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => onEdit(cutpay.id)}
+                onClick={onEdit}
                 className="cursor-pointer"
               >
                 <Edit className="h-4 w-4 mr-2" />
@@ -129,7 +124,7 @@ function CutPayCard({ cutpay, onViewDetails, onEdit }: {
         </div>
         <div className="mt-5 pt-4 border-t border-gray-100">
           <Button
-            onClick={() => onViewDetails(cutpay.id)}
+            onClick={onViewDetails}
             className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-sm"
             size="sm"
           >
@@ -149,6 +144,7 @@ export function CutPayManagement() {
     skip: 0
   })
   const [searchQuery, setSearchQuery] = useState("")
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 20
@@ -183,12 +179,26 @@ export function CutPayManagement() {
     setCurrentPage(newPage)
   }
 
-  const handleViewDetails = (cutpayId: number) => {
-    router.push(`/admin/cutpay/${cutpayId}`)
+  const computeQuarterYear = (dateStr?: string | null) => {
+    const d = dateStr ? new Date(dateStr) : new Date()
+    const year = d.getFullYear()
+    const month = d.getMonth() + 1
+    const quarter = Math.ceil(month / 3)
+    return { quarter, year }
   }
 
-  const handleEdit = (cutpayId: number) => {
-    router.push(`/admin/cutpay/${cutpayId}/edit`)
+  const handleViewDetails = (cutpay: CutPayTransaction) => {
+    const { quarter, year } = computeQuarterYear(cutpay.booking_date || cutpay.created_at)
+    const policy = cutpay.policy_number || ''
+    const query = `?policy=${encodeURIComponent(policy)}&q=${quarter}&y=${year}`
+    router.push(`/admin/cutpay/${cutpay.id}${query}`)
+  }
+
+  const handleEdit = (cutpay: CutPayTransaction) => {
+    const { quarter, year } = computeQuarterYear(cutpay.booking_date || cutpay.created_at)
+    const policy = cutpay.policy_number || ''
+    const query = `?policy=${encodeURIComponent(policy)}&q=${quarter}&y=${year}`
+    router.push(`/admin/cutpay/${cutpay.id}/edit${query}`)
   }
 
   const handleCreateNew = () => {
@@ -206,15 +216,25 @@ export function CutPayManagement() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className=" mx-auto space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">CutPay Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900">CutPay Management</h1>
             <p className="text-gray-600 mt-1">Manage cutpay transactions and monitor payments</p>
           </div>
+          
           <div className="flex gap-3">
+            {/* Search dialog trigger button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSearchOpen(true)}
+              aria-label="Search"
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="w-[120px]">
@@ -247,103 +267,45 @@ export function CutPayManagement() {
           </div>
         </div>
       </div>
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Transactions</CardTitle>
-            <div className="p-2 bg-slate-100 rounded-lg">
-              <CreditCard className="h-4 w-4 text-slate-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-gray-900">
-              {totalTransactions}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Total cutpay transactions</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Recent Transactions</CardTitle>
-            <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-gray-900">
-              {cutpayTransactions?.filter(t => {
-                const transactionDate = new Date(t.created_at)
-                const thirtyDaysAgo = new Date()
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-                return transactionDate > thirtyDaysAgo
-              }).length || 0}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Last 30 days</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Amount</CardTitle>
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <DollarSign className="h-4 w-4 text-blue-600" />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="text-2xl font-bold text-gray-900">
-              ₹{cutpayTransactions?.reduce((sum, t) => sum + (t.cut_pay_amount || 0), 0).toLocaleString('en-IN') || '0'}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Total cut pay amount</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters and Search */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
+      {/* Search Dialog */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="!top-[25%] left-[80%]">
+          <DialogHeader>
+            <DialogTitle>Search CutPay Transactions</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col sm:flex-row gap-3 mt-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="Search by policy number, agent code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10 border-gray-200 focus:border-green-400 focus:ring-green-400"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch();
+                    setIsSearchOpen(false);
+                  }
+                }}
+                className="pl-10"
               />
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleSearch} variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
-                <Search className="h-4 w-4 mr-2" />
-                Search
-              </Button>
-              <Button variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
-              <Button variant="outline" className="shrink-0 border-gray-200 hover:bg-gray-50">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </div>
+            <Button
+              variant="default"
+              onClick={() => {
+                handleSearch();
+                setIsSearchOpen(false);
+              }}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Search
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       {/* Transactions Grid/List */}
-      <Card className="bg-white border border-gray-200 shadow-sm rounded-xl">
-        <CardHeader className="pb-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold text-gray-900">Transactions</CardTitle>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Page size: {pageSize}</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <div className="">
+        <div>
           {isLoading ? (
             <div className={cn(
               "grid gap-4",
@@ -391,8 +353,8 @@ export function CutPayManagement() {
                 <CutPayCard
                   key={cutpay.id}
                   cutpay={cutpay}
-                  onViewDetails={handleViewDetails}
-                  onEdit={handleEdit}
+                  onViewDetails={() => handleViewDetails(cutpay)}
+                  onEdit={() => handleEdit(cutpay)}
                 />
               ))}
             </div>
@@ -429,8 +391,8 @@ export function CutPayManagement() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

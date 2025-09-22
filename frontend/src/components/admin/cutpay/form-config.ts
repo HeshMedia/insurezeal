@@ -77,13 +77,13 @@ export const formFields: FormFieldConfig[] = [
   //  Admin Input (in order) - Some have autocalculated tag
   { key: 'admin_input.booking_date', label: 'Booking Date', type: 'date', section: 'admin' },
   { key: 'admin_input.reporting_month', label: 'Reporting Month', type: 'date', section: 'admin' },
+  { key: 'admin_input.agent_code', label: 'Agent Code', type: 'select', section: 'admin' },
+  { key: 'admin_input.payout_on', label: 'Payout On', type: 'select', section: 'admin' },
 
   { key: 'admin_input.code_type', label: 'Code Type', type: 'select', section: 'admin' },
   { key: 'admin_input.insurer_code', label: 'Insurer Code', type: 'select', section: 'admin' },
   { key: 'admin_input.broker_code', label: 'Broker Code', type: 'select', section: 'admin' },
   { key: 'admin_input.admin_child_id', label: 'Child ID', type: 'select', section: 'admin' },
-  { key: 'admin_input.agent_code', label: 'Agent Code', type: 'select', section: 'admin' },
-  { key: 'admin_input.payout_on', label: 'Payout On', type: 'select', section: 'admin' },
   { key: 'admin_input.incoming_grid_percent', label: 'Incoming Grid %', type: 'number', section: 'admin' },
   { key: 'admin_input.extra_grid', label: 'Incoming Extra Grid %', type: 'number', section: 'admin' },
   { key: 'admin_input.agent_commission_given_percent', label: 'Agent Commission %', type: 'number', section: 'admin' },

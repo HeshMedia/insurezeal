@@ -24,6 +24,8 @@ export const cutpayKeys = {
   list: (params?: CutPayListParams) => [...cutpayAllKey, 'list', params] as const,
   details: () => [...cutpayAllKey, 'detail'] as const,
   detail: (id: number) => [...cutpayAllKey, 'detail', id] as const,
+  policyDetail: (policy_number: string, quarter: number, year: number) =>
+    [...cutpayAllKey, 'policy-detail', { policy_number, quarter, year }] as const,
   agentPoPaid: (agentCode: string) => [...cutpayAllKey, 'agent-po-paid', agentCode] as const,
   agentConfigs: {
     all: agentConfigsAllKey,
@@ -117,6 +119,55 @@ export const useDeleteCutPay = () => {
     },
     onError: (error) => {
       console.error('Failed to delete cutpay transaction:', error)
+    },
+  })
+}
+
+// Get cutpay details by policy number and quarter/year
+export const useCutPayByPolicy = (
+  policy_number: string | undefined,
+  quarter: number | undefined,
+  year: number | undefined,
+  enabled = true
+) => {
+  return useQuery({
+    queryKey: policy_number && quarter && year ? cutpayKeys.policyDetail(policy_number, quarter, year) : ['cutpay', 'policy-detail', 'disabled'],
+    queryFn: () => cutpayApi.getByPolicy({ policy_number: policy_number as string, quarter: quarter as number, year: year as number }),
+    enabled: enabled && !!policy_number && !!quarter && !!year,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  })
+}
+
+// Update cutpay transaction by policy
+export const useUpdateCutPayByPolicy = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ params, data }: { params: { policy_number: string; quarter: number; year: number }; data: CreateCutpayTransactionCutpayPostRequest }) =>
+      cutpayApi.updateByPolicy(params, data),
+    onSuccess: (data, variables) => {
+      // Invalidate lists and the specific policy detail
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.policyDetail(variables.params.policy_number, variables.params.quarter, variables.params.year) })
+    },
+    onError: (error) => {
+      console.error('Failed to update cutpay transaction by policy:', error)
+    },
+  })
+}
+
+// Delete cutpay transaction by policy
+export const useDeleteCutPayByPolicy = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (params: { policy_number: string; quarter: number; year: number }) => cutpayApi.deleteByPolicy(params),
+    onSuccess: (_, params) => {
+      queryClient.invalidateQueries({ queryKey: cutpayKeys.lists() })
+      queryClient.removeQueries({ queryKey: cutpayKeys.policyDetail(params.policy_number, params.quarter, params.year) })
+    },
+    onError: (error) => {
+      console.error('Failed to delete cutpay transaction by policy:', error)
     },
   })
 }

@@ -1,1 +1,1 @@
-Heshmedia 
+Insurezeal - Insurance Platform SaaS for Agents to Request Child IDs, Upload Policies they sell, For Admins to make cutpays, Manage Agents and their records, View and edit MIS, Upload universal records  and Superadmins to manage and supervise their entire business.

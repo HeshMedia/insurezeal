@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { ChildIdRequestDetails } from '@/components/agent/child-id-request-details'
+import { ChildIdRequestDetails } from '@/components/agent/child-id/child-id-request-details'
 
 export default function ChildIdDetailsPage() {
   const params = useParams()
