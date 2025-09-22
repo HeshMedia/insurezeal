@@ -108,6 +108,7 @@ logger = logging.getLogger(__name__)
 require_policy_read = require_permission("policies", "read")
 require_policy_write = require_permission("policies", "write")
 require_policy_manage = require_permission("policies", "manage")
+require_quarterly_sheets_write = require_permission("admin/quarterly-sheets", "write")
 
 
 @router.post("/extract-pdf-data", response_model=AIExtractionResponse)
@@ -1341,4 +1342,135 @@ async def get_agent_options(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch agent options",
+        )
+
+
+@router.post("/create-quarter-sheet")
+async def create_quarter_sheet(
+    quarter: int = Query(..., ge=1, le=4, description="Quarter number (1-4)"),
+    year: int = Query(..., ge=2020, le=2030, description="Year (e.g., 2025)"),
+    current_user=Depends(get_current_user),
+    _rbac_check=Depends(require_quarterly_sheets_write),
+):
+    """
+    Manually create a new quarter sheet with template headers and formulas.
+    
+    **Requires admin or superadmin permission**
+    
+    - **quarter**: Quarter number (1, 2, 3, or 4)
+    - **year**: Year for the quarter sheet (e.g., 2025)
+    
+    Creates a new quarterly Google Sheet with:
+    - Headers copied from Master Template
+    - Sample data row with formulas
+    - Proper formatting (frozen headers, bold styling)
+    """
+    try:
+        from utils.quarterly_sheets_manager import quarterly_manager
+        
+        logger.info(f"User {current_user.get('user_id')} requesting to create Q{quarter}-{year} sheet")
+        
+        # Create the quarter sheet with template
+        result = await run_in_threadpool(
+            quarterly_manager.create_quarter_sheet_with_template,
+            quarter,
+            year
+        )
+        
+        if result.get("success"):
+            logger.info(f"Successfully created quarter sheet: {result.get('message')}")
+            return {
+                "success": True,
+                "message": result.get("message"),
+                "details": {
+                    "sheet_name": result.get("sheet_name"),
+                    "quarter": quarter,
+                    "year": year,
+                    "rows_copied": result.get("rows_copied"),
+                    "columns": result.get("columns"),
+                    "created_by": current_user.get("user_id")
+                }
+            }
+        else:
+            logger.error(f"Failed to create quarter sheet: {result.get('error')}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "Failed to create quarter sheet")
+            )
+    
+    except Exception as e:
+        logger.error(f"Error creating quarter sheet Q{quarter}-{year}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create quarter sheet: {str(e)}"
+        )
+
+
+@router.post(
+    "/test-formula-copying",
+    response_model=Dict[str, Any],
+    summary="Test formula copying functionality",
+    description="Debug endpoint to test formula copying mechanism"
+)
+async def test_formula_copying(
+    sheet_name: Optional[str] = Query(None, description="Sheet name to test on (defaults to current quarter)"),
+    target_row: Optional[int] = Query(None, description="Target row number (defaults to next empty row)"),
+    current_user=Depends(get_current_user),
+    _rbac_check=Depends(require_quarterly_sheets_write),
+):
+    """
+    Test the formula copying functionality for debugging purposes.
+    
+    **Requires admin or superadmin permission**
+    
+    - **sheet_name**: Optional sheet name to test on (defaults to current quarter sheet)
+    - **target_row**: Optional target row number (defaults to next empty row)
+    
+    Returns detailed information about the formula copying process including:
+    - Number of formulas found in template row
+    - Number of formulas successfully copied
+    - Examples of formulas copied
+    - Any errors encountered
+    """
+    try:
+        from utils.quarterly_sheets_manager import quarterly_manager
+        
+        logger.info(f"User {current_user.get('user_id')} testing formula copying on sheet '{sheet_name}' row {target_row}")
+        
+        # Test the formula copying
+        result = await run_in_threadpool(
+            quarterly_manager.test_formula_copying,
+            sheet_name,
+            target_row
+        )
+        
+        if result.get("success"):
+            logger.info(f"Formula copying test completed: {result.get('test_summary')}")
+            return {
+                "success": True,
+                "message": "Formula copying test completed successfully",
+                "test_results": result,
+                "tested_by": current_user.get("user_id")
+            }
+        else:
+            logger.error(f"Formula copying test failed: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error"),
+                "traceback": result.get("traceback"),
+                "tested_by": current_user.get("user_id")
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in test_formula_copying endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to test formula copying: {str(e)}"
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating quarter sheet: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create quarter sheet: {str(e)}"
         )

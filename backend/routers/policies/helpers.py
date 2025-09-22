@@ -1147,6 +1147,7 @@ def prepare_complete_policy_sheets_data(
             "Agent_PO_AMT": 0,
             "Agent_Extra%": 0,
             "Agent_Extr_Amount": 0,
+            "Agent Total PO Amount": getattr(policy_data, "total_agent_commission_amount", 0) or 0,
             "Payment By Office": getattr(policy_data, "payment_by_office", 0) or 0,
             "PO Paid To Agent": getattr(policy_data, "total_agent_payout_amount", 0)
             or 0,
@@ -1163,6 +1164,10 @@ def prepare_complete_policy_sheets_data(
             "As per Broker PO AMT": 0,
             "PO% Diff Broker": 0,
             "PO AMT Diff Broker": 0,
+            "Actual Agent PO%": getattr(
+                policy_data, "agent_commission_given_percent", 0
+            )
+            or 0,
             "As per Agent Payout%": 0,
             "As per Agent Payout Amount": 0,
             "PO% Diff Agent": 0,
@@ -1172,16 +1177,6 @@ def prepare_complete_policy_sheets_data(
             "Remarks": getattr(policy_data, "notes", "") or "",
             "Match": "FALSE",
             "Agent Code": getattr(policy_data, "agent_code", "") or "",
-        }
-    )
-
-    return sheets_data
-    sheets_data.update(
-        {
-            "Match": "FALSE",  # Default to FALSE for new records
-            "Verified": "FALSE",  # Default verification status
-            "Status": "ACTIVE",  # Default status
-            "Created At": datetime.now().isoformat(),
         }
     )
 

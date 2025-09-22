@@ -66,6 +66,404 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Failed to initialize Google Sheets client: {str(e)}")
 
+    def _col_to_a1(self, col_num: int) -> str:
+        """
+        Convert column number to A1 notation (1->A, 26->Z, 27->AA, etc.)
+        
+        Args:
+            col_num: Column number (1-based)
+            
+        Returns:
+            A1 notation string (e.g., 'A', 'Z', 'AA')
+        """
+        result = ""
+        while col_num > 0:
+            col_num -= 1  # Convert to 0-based
+            result = chr(col_num % 26 + ord('A')) + result
+            col_num //= 26
+        return result
+
+    def _copy_formulas_only_to_row(self, worksheet: gspread.Worksheet, target_row: int) -> bool:
+        """
+        Copy formulas from row 2 (template row) to target row, intelligently determining
+        which columns should get formulas vs. preserve data values.
+        
+        Args:
+            worksheet: The worksheet to operate on
+            target_row: The row number to copy formulas to
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get the number of columns we're working with
+            headers = self.create_quarterly_sheet_headers()
+            num_columns = len(headers)
+            last_col = self._col_to_a1(num_columns)
+            
+            # Get all values and formulas from row 2 (template row)
+            template_row = 2
+            
+            # Get the range of data (use our actual column count)
+            template_range = f"A{template_row}:{last_col}{template_row}"
+            
+            logger.info(f"🔍 Getting formulas from template range: {template_range}")
+            
+            # Get formulas from template row
+            try:
+                template_formulas = worksheet.batch_get([template_range], 
+                                                      value_render_option='FORMULA')[0]
+                if not template_formulas or not template_formulas[0]:
+                    logger.warning(f"⚠️ No formulas found in template row {template_row}")
+                    return True  # Not an error, just no formulas to copy
+                    
+                template_formula_row = template_formulas[0]
+                logger.info(f"📊 Found template row with {len(template_formula_row)} cells")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not get formulas from template row {template_row}: {str(e)}")
+                return True  # Continue without formulas
+            
+            # Get current values from target row to preserve data
+            target_range = f"A{target_row}:{last_col}{target_row}"
+            try:
+                current_values = worksheet.batch_get([target_range])[0]
+                if not current_values or not current_values[0]:
+                    logger.info(f"ℹ️ Target row {target_row} is empty, will populate with formulas where appropriate")
+                    current_value_row = [""] * num_columns  # Create empty row
+                else:
+                    current_value_row = current_values[0]
+                    logger.info(f"📋 Target row {target_row} has {len(current_value_row)} existing values")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not get current values from target row {target_row}: {str(e)}")
+                current_value_row = [""] * num_columns  # Create empty row
+            
+            # Identify which columns typically contain formulas vs data
+            formula_column_keywords = [
+                'running balance', 'running bal', 'balance', 'total', 'amount', 
+                'percentage', 'percent', '%', 'calculation', 'calc', 'computed',
+                'sum', 'subtotal', 'grand total', 'net', 'gross', 'commission',
+                'brokerage', 'fee', 'charge', 'due', 'outstanding', 'difference',
+                'variance', 'match', 'status', 'receivable', 'payable', 'gst',
+                'diff', 'extra', 'actual', 'paid', 'invoice'
+            ]
+            
+            # Prepare update data with intelligent formula vs data preservation
+            update_row = []
+            formulas_copied = 0
+            data_preserved = 0
+            
+            logger.info(f"🧮 Processing {len(template_formula_row)} columns for formula/data decision")
+            
+            for i, template_cell in enumerate(template_formula_row):
+                current_value = current_value_row[i] if i < len(current_value_row) else ""
+                header_name = headers[i].lower() if i < len(headers) else f"column_{i+1}"
+                
+                # Check if this column likely contains formulas based on header name
+                is_likely_formula_column = any(keyword in header_name for keyword in formula_column_keywords)
+                
+                # Log the decision process for first few columns and formula columns
+                if i < 5 or is_likely_formula_column:
+                    logger.debug(f"Column {i+1} '{headers[i] if i < len(headers) else 'Unknown'}': template='{str(template_cell)[:30]}', current='{str(current_value)[:30]}', formula_column={is_likely_formula_column}")
+                
+                # Decision logic for formula vs data
+                if template_cell and str(template_cell).startswith('='):
+                    # Template has a formula
+                    if is_likely_formula_column:
+                        # This is likely a calculated column - always use formula
+                        updated_formula = self._update_formula_references(template_cell, template_row, target_row)
+                        update_row.append(updated_formula)
+                        formulas_copied += 1
+                        if i < 10:  # Log first 10 for debugging
+                            logger.info(f"✅ Column {i+1} ({header_name}): Applied original template formula")
+                    elif not current_value or str(current_value).strip() == "":
+                        # Data column but empty - use formula as fallback
+                        updated_formula = self._update_formula_references(template_cell, template_row, target_row)
+                        update_row.append(updated_formula)
+                        formulas_copied += 1
+                        if i < 10:
+                            logger.info(f"🔄 Column {i+1} ({header_name}): Applied original template formula (empty data)")
+                    elif str(current_value).startswith('='):
+                        # Current value is already a formula - update it
+                        updated_formula = self._update_formula_references(template_cell, template_row, target_row)
+                        update_row.append(updated_formula)
+                        formulas_copied += 1
+                        if i < 10:
+                            logger.info(f"🔄 Column {i+1} ({header_name}): Updated existing formula with original template")
+                    else:
+                        # Data column with actual data - preserve the data
+                        update_row.append(current_value)
+                        data_preserved += 1
+                        if i < 10:
+                            logger.info(f"📝 Column {i+1} ({header_name}): Preserved data: '{str(current_value)[:20]}'")
+                else:
+                    # Template doesn't have a formula - preserve current value or use empty
+                    if i < len(current_value_row):
+                        update_row.append(current_value)
+                        if current_value and str(current_value).strip():
+                            data_preserved += 1
+                    else:
+                        update_row.append("")
+            
+            # Update the target row with intelligent formula/data handling
+            if update_row:
+                logger.info(f"🚀 Updating row {target_row} with {len(update_row)} values")
+                worksheet.update(target_range, [update_row], value_input_option="USER_ENTERED")
+                
+                logger.info(f"✅ Successfully updated row {target_row}:")
+                logger.info(f"   📊 Original template formulas copied: {formulas_copied}")
+                logger.info(f"   📄 Data values preserved: {data_preserved}")
+                logger.info(f"   🎯 Total columns processed: {len(update_row)}")
+                
+                # Log some examples of what was applied
+                formula_examples = []
+                for i, cell in enumerate(update_row[:10]):  # First 10 columns
+                    if cell and str(cell).startswith('='):
+                        header = headers[i] if i < len(headers) else f"Col{i+1}"
+                        formula_examples.append(f"{header}: {str(cell)[:30]}")
+                
+                if formula_examples:
+                    logger.info(f"   🧮 Original formula examples: {'; '.join(formula_examples[:3])}")
+                
+                return True
+            else:
+                logger.warning(f"❌ No data to update in row {target_row}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Error copying formulas to row {target_row}: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+
+    def _update_formula_references(self, formula: str, source_row: int, target_row: int) -> str:
+        """
+        Update row references in a formula when copying from source_row to target_row.
+        Preserves original formula structure exactly as in template.
+        
+        Args:
+            formula: The original formula (e.g., "=B2+C2*$D$2")
+            source_row: The row the formula was copied from
+            target_row: The row the formula is being copied to
+            
+        Returns:
+            Updated formula with row references adjusted, preserving original structure
+        """
+        try:
+            import re
+            
+            # Pattern to match cell references (e.g., A1, B2, $C$3, etc.)
+            # This matches: optional $, letters, optional $, numbers
+            pattern = r'(\$?)([A-Z]+)(\$?)(\d+)'
+            
+            def replace_reference(match):
+                dollar1, col_letters, dollar2, row_num = match.groups()
+                row_num = int(row_num)
+                
+                # If row is absolute ($), don't change it
+                if dollar2:
+                    return match.group(0)
+                
+                # If the row number matches the source row, update it to target row
+                if row_num == source_row:
+                    row_num = target_row
+                # Otherwise, adjust relative references
+                elif row_num > source_row:
+                    # Relative reference below the source - adjust by the difference
+                    row_num = row_num + (target_row - source_row)
+                
+                return f"{dollar1}{col_letters}{dollar2}{row_num}"
+            
+            updated_formula = re.sub(pattern, replace_reference, formula)
+            
+            # REMOVED: Formula improvements - preserve original formula exactly as in template
+            # updated_formula = self._improve_formula_for_text_handling(updated_formula)
+            
+            logger.debug(f"Formula updated: {formula} -> {updated_formula}")
+            return updated_formula
+            
+        except Exception as e:
+            logger.warning(f"Could not update formula references for '{formula}': {str(e)}")
+            return formula  # Return original formula if update fails
+
+    def _improve_formula_for_text_handling(self, formula: str) -> str:
+        """
+        Improve formulas to handle text values and empty cells properly.
+        
+        Args:
+            formula: The formula to improve
+            
+        Returns:
+            Improved formula with better error handling
+        """
+        try:
+            # Handle common problematic patterns
+            
+            # Pattern 1: Simple arithmetic operations that might encounter text
+            # Example: =BB2-BA2-AU2+BC2 becomes =IFERROR(IFNA(BB2,0)-IFNA(BA2,0)-IFNA(AU2,0)+IFNA(BC2,0),0)
+            if "=" in formula and any(op in formula for op in ["+", "-", "*", "/"]):
+                # Check if it's a simple arithmetic formula without existing error handling
+                if not any(func in formula.upper() for func in ["IFERROR", "IFNA", "ISERROR", "ISBLANK"]):
+                    # Extract cell references
+                    import re
+                    cell_pattern = r'([A-Z]+\d+)'
+                    cells = re.findall(cell_pattern, formula)
+                    
+                    if len(cells) >= 2 and len(formula) < 100:  # Only process simple formulas
+                        # Wrap the entire formula in IFERROR
+                        inner_formula = formula[1:]  # Remove the = sign
+                        
+                        # Replace each cell reference with IFNA(cell,0) to handle text/empty values
+                        for cell in set(cells):  # Use set to avoid duplicates
+                            inner_formula = inner_formula.replace(cell, f"IFNA({cell},0)")
+                        
+                        improved_formula = f"=IFERROR({inner_formula},0)"
+                        logger.info(f"Improved formula: {formula} -> {improved_formula}")
+                        return improved_formula
+            
+            # Pattern 2: Division operations that might cause #DIV/0 errors
+            if "/" in formula and "IFERROR" not in formula.upper():
+                # Wrap in IFERROR to handle division by zero
+                improved_formula = f"=IFERROR({formula[1:]},0)"
+                logger.info(f"Added division error handling: {formula} -> {improved_formula}")
+                return improved_formula
+            
+            return formula
+            
+        except Exception as e:
+            logger.warning(f"Could not improve formula '{formula}': {str(e)}")
+            return formula
+
+    def create_quarter_sheet_with_template(self, quarter: int, year: int) -> Dict[str, Any]:
+        """
+        Manually create a new quarter sheet and copy template headers and formulas from master sheet.
+        
+        Args:
+            quarter: Quarter number (1-4)
+            year: Year (e.g., 2025)
+            
+        Returns:
+            Dict with success status and details
+        """
+        try:
+            quarter_name = self.get_quarterly_sheet_name(quarter, year)
+            
+            # Check if sheet already exists
+            if self.sheet_exists(quarter_name):
+                return {
+                    "success": False,
+                    "error": f"Quarter sheet '{quarter_name}' already exists",
+                    "sheet_name": quarter_name
+                }
+            
+            # Create the new quarter sheet
+            logger.info(f"Creating new quarter sheet: {quarter_name}")
+            new_sheet = self.spreadsheet.add_worksheet(
+                title=quarter_name, 
+                rows=1000, 
+                cols=len(self.create_quarterly_sheet_headers())
+            )
+            
+            # Get the Master Template sheet
+            try:
+                master_sheet = self.spreadsheet.worksheet("Master Template")
+            except gspread.WorksheetNotFound:
+                # Try to find any sheet with "template" in the name
+                all_sheets = self.spreadsheet.worksheets()
+                master_sheet = None
+                for sheet in all_sheets:
+                    if "template" in sheet.title.lower() or "master" in sheet.title.lower():
+                        master_sheet = sheet
+                        break
+                
+                if not master_sheet:
+                    logger.warning("No master template sheet found, creating sheet with headers only")
+                    # Just add headers if no template is found
+                    headers = self.create_quarterly_sheet_headers()
+                    new_sheet.update("A1:1", [headers], value_input_option="USER_ENTERED")
+                    return {
+                        "success": True,
+                        "message": f"Created quarter sheet '{quarter_name}' with headers only (no template found)",
+                        "sheet_name": quarter_name,
+                        "rows_copied": 1
+                    }
+            
+            # Copy first 2 rows (headers + sample data) from master template
+            num_columns = len(self.create_quarterly_sheet_headers())
+            last_col = self._col_to_a1(num_columns)
+            
+            # Get headers (row 1)
+            headers_range = f"A1:{last_col}1"
+            try:
+                headers_data = master_sheet.batch_get([headers_range])[0]
+                if headers_data:
+                    new_sheet.update(headers_range, headers_data, value_input_option="USER_ENTERED")
+                    logger.info(f"Copied headers to {quarter_name}")
+            except Exception as e:
+                logger.warning(f"Could not copy headers from master template: {str(e)}")
+                # Fallback to programmatic headers
+                headers = self.create_quarterly_sheet_headers()
+                new_sheet.update("A1:1", [headers], value_input_option="USER_ENTERED")
+            
+            # Get sample data and formulas (row 2)
+            sample_range = f"A2:{last_col}2"
+            try:
+                # Get both values and formulas from row 2
+                sample_values = master_sheet.batch_get([sample_range])[0]
+                sample_formulas = master_sheet.batch_get([sample_range], value_render_option='FORMULA')[0]
+                
+                if sample_formulas and sample_formulas[0]:
+                    # Use formulas if available, otherwise use values
+                    sample_data = []
+                    for i, (value, formula) in enumerate(zip(
+                        sample_values[0] if sample_values and sample_values[0] else [],
+                        sample_formulas[0] if sample_formulas and sample_formulas[0] else []
+                    )):
+                        if formula and isinstance(formula, str) and formula.startswith('='):
+                            # Preserve original formula exactly as in template
+                            sample_data.append(formula)  # Use original formula unchanged
+                        else:
+                            sample_data.append(str(value) if value else "")  # Use value as string
+                    
+                    new_sheet.update(sample_range, [sample_data], value_input_option="USER_ENTERED")
+                    logger.info(f"Copied sample data and original template formulas to {quarter_name}")
+                elif sample_values and sample_values[0]:
+                    # Just copy values if no formulas
+                    new_sheet.update(sample_range, sample_values, value_input_option="USER_ENTERED")
+                    logger.info(f"Copied sample data to {quarter_name}")
+                    
+            except Exception as e:
+                logger.warning(f"Could not copy sample data from master template: {str(e)}")
+            
+            # Format the sheet (freeze header row, set basic formatting)
+            try:
+                # Freeze the first row (headers)
+                new_sheet.freeze(rows=1)
+                
+                # Make header row bold
+                new_sheet.format(f"A1:{last_col}1", {
+                    "textFormat": {"bold": True},
+                    "backgroundColor": {"red": 0.9, "green": 0.9, "blue": 0.9}
+                })
+                
+                logger.info(f"Applied formatting to {quarter_name}")
+            except Exception as e:
+                logger.warning(f"Could not apply formatting to {quarter_name}: {str(e)}")
+            
+            return {
+                "success": True,
+                "message": f"Successfully created quarter sheet '{quarter_name}' with template",
+                "sheet_name": quarter_name,
+                "rows_copied": 2,
+                "columns": num_columns
+            }
+            
+        except Exception as e:
+            logger.error(f"Error creating quarter sheet Q{quarter}-{year}: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Failed to create quarter sheet: {str(e)}"
+            }
+
     def get_current_quarter_info(
         self, target_date: Optional[date] = None
     ) -> Tuple[str, int, int]:
@@ -655,23 +1053,28 @@ class QuarterlySheetManager:
 
             # Find next empty row
             next_row = self._find_next_empty_row(current_sheet)
+            logger.info(f"Found next empty row: {next_row} in quarter sheet")
 
             # First, add the actual record data
             range_notation = f"A{next_row}:{self._col_to_a1(len(headers))}{next_row}"
+            logger.info(f"Inserting policy data to range: {range_notation}")
             current_sheet.update(
                 range_notation, [row_data], value_input_option="USER_ENTERED"
             )
+            logger.info(f"Successfully inserted policy data to row {next_row}")
 
             # Then, copy ONLY the formulas from row 2 to the new row (preserving our data)
             logger.info(
-                f"DEBUG: About to copy formulas to new record at row {next_row}"
+                f"Starting formula copy process from template row 2 to row {next_row}"
             )
             formula_copy_success = self._copy_formulas_only_to_row(
                 current_sheet, next_row
-            )  # Data rows only
-            logger.info(
-                f"DEBUG: Formula copy to new record row {next_row} success: {formula_copy_success}"
             )
+            
+            if formula_copy_success:
+                logger.info(f"✅ Formula copy to row {next_row} completed successfully")
+            else:
+                logger.warning(f"⚠️ Formula copy to row {next_row} failed or had issues")
 
             quarter_name, quarter, year = self.get_current_quarter_info()
 
@@ -789,6 +1192,116 @@ class QuarterlySheetManager:
         except Exception as e:
             logger.error(f"Error finding next empty row: {str(e)}")
             return 2
+
+    def test_formula_copying(self, sheet_name: Optional[str] = None, target_row: Optional[int] = None) -> Dict[str, Any]:
+        """
+        Test formula copying functionality - useful for debugging
+        
+        Args:
+            sheet_name: Optional sheet name to test on (defaults to current quarter)
+            target_row: Optional target row (defaults to next empty row)
+            
+        Returns:
+            Test results with detailed information
+        """
+        try:
+            # Get the worksheet to test on
+            if sheet_name:
+                try:
+                    worksheet = self.spreadsheet.worksheet(sheet_name)
+                except gspread.WorksheetNotFound:
+                    return {
+                        "success": False,
+                        "error": f"Sheet '{sheet_name}' not found"
+                    }
+            else:
+                worksheet = self.get_current_quarter_sheet()
+                if not worksheet:
+                    return {
+                        "success": False,
+                        "error": "Could not get current quarter sheet"
+                    }
+                sheet_name = worksheet.title
+            
+            # Determine target row
+            if not target_row:
+                target_row = self._find_next_empty_row(worksheet)
+            
+            logger.info(f"🧪 Testing formula copying on sheet '{sheet_name}', row {target_row}")
+            
+            # Get current state of the worksheet
+            headers = self.create_quarterly_sheet_headers()
+            num_columns = len(headers)
+            last_col = self._col_to_a1(num_columns)
+            
+            # Get template row (row 2) formulas
+            template_range = f"A2:{last_col}2"
+            try:
+                template_formulas = worksheet.batch_get([template_range], 
+                                                      value_render_option='FORMULA')[0]
+                template_formula_row = template_formulas[0] if template_formulas else []
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Could not read template formulas: {str(e)}"
+                }
+            
+            # Count formulas in template
+            template_formula_count = sum(1 for cell in template_formula_row if str(cell).startswith('='))
+            
+            # Add some test data to the target row first
+            test_data = ["Test Policy"] + [""] * (num_columns - 1)  # Just put something in first column
+            target_range = f"A{target_row}:{last_col}{target_row}"
+            worksheet.update(target_range, [test_data], value_input_option="USER_ENTERED")
+            
+            # Now test the formula copying
+            formula_copy_result = self._copy_formulas_only_to_row(worksheet, target_row)
+            
+            # Check the results
+            try:
+                result_formulas = worksheet.batch_get([target_range], 
+                                                    value_render_option='FORMULA')[0]
+                result_formula_row = result_formulas[0] if result_formulas else []
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Could not read result formulas: {str(e)}"
+                }
+            
+            result_formula_count = sum(1 for cell in result_formula_row if str(cell).startswith('='))
+            
+            # Create detailed report
+            formula_examples = []
+            for i, (template_cell, result_cell) in enumerate(zip(template_formula_row, result_formula_row)):
+                if str(template_cell).startswith('=') or str(result_cell).startswith('='):
+                    header_name = headers[i] if i < len(headers) else f"Col{i+1}"
+                    formula_examples.append({
+                        "column": i + 1,
+                        "header": header_name,
+                        "template": str(template_cell),
+                        "result": str(result_cell),
+                        "copied": str(result_cell).startswith('=')
+                    })
+            
+            return {
+                "success": True,
+                "sheet_name": sheet_name,
+                "target_row": target_row,
+                "template_formulas_found": template_formula_count,
+                "result_formulas_copied": result_formula_count,
+                "formula_copy_success": formula_copy_result,
+                "formula_examples": formula_examples[:10],  # First 10 for brevity
+                "test_summary": f"Copied {result_formula_count}/{template_formula_count} formulas to row {target_row}"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error testing formula copying: {str(e)}")
+            import traceback
+            return {
+                "success": False,
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
 
     def check_quarter_transition(self) -> Dict[str, Any]:
         """

@@ -1014,7 +1014,7 @@ async def process_universal_record_csv(
                 "unmapped_headers": unmapped_headers,
                 "total_records": len(mapped_records),
             },
-            processed_by_user_id=admin_user_id,
+            processed_by_user_id=str(admin_user_id),  # Convert UUID to string
         )
 
         # Save reconciliation report to database for persistence
@@ -1136,7 +1136,7 @@ async def process_universal_record_csv_to_quarterly_sheets(
                     "unmapped_headers": unmapped_headers,
                     "total_records": 0,
                 },
-                processed_by_user_id=admin_user_id,
+                processed_by_user_id=str(admin_user_id),  # Convert UUID to string
             )
 
         # Deduplicate records within the CSV by policy number
@@ -1384,7 +1384,7 @@ async def process_universal_record_csv_to_quarterly_sheets(
                 ],
                 "quarter_processing_details": quarter_processing_details,
             },
-            processed_by_user_id=admin_user_id,
+            processed_by_user_id=str(admin_user_id),  # Convert UUID to string
         )
 
         # Save reconciliation report to database for persistence
