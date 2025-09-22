@@ -24,7 +24,7 @@ RUN corepack enable && \
 COPY . .
 
 # Build the Next.js app
-RUN npm run build
+RUN bun run build
 
 # ------------------------
 # 2) Runner: use Next.js standalone output
