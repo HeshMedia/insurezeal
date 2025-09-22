@@ -1119,7 +1119,6 @@ async def export_quarterly_sheet_data(
         elif format == "xlsx":
             try:
                 import tempfile
-
                 import pandas as pd
 
                 # Create temporary Excel file
