@@ -112,6 +112,7 @@ from . import helpers
 from .schemas import (
     AvailableInsurersResponse,
     CSVPreviewResponse,
+    ComprehensiveReconciliationResponse,
     ReconciliationSummaryResponse,
     UniversalRecordUploadResponse,
 )
@@ -517,6 +518,154 @@ async def download_universal_record_template(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate template",
+        )
+
+
+@router.get("/reconciliation", response_model=list[ComprehensiveReconciliationResponse])
+async def get_comprehensive_reconciliation_reports(
+    insurer_name: Optional[str] = None,
+    limit: int = Query(default=50, le=1000, description="Maximum number of records to return"),
+    offset: int = Query(default=0, ge=0, description="Number of records to skip"),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check=Depends(require_admin_read),
+):
+    """
+    Get comprehensive reconciliation reports with field-specific variation tracking
+
+    **Admin only endpoint**
+
+    Provides detailed reconciliation data showing:
+    - Record ID (UUID)
+    - Insurer name and code
+    - Upload/processing date
+    - Number of new records added
+    - Field-specific variation counts for all 72 master sheet headers
+    - Null values for fields with no variations
+
+    **Parameters:**
+    - `insurer_name`: Optional filter by specific insurer
+    - `limit`: Maximum number of records to return (default: 50, max: 1000)
+    - `offset`: Number of records to skip for pagination (default: 0)
+
+    **Returns:**
+    - List of comprehensive reconciliation reports with field variation details
+    """
+
+    try:
+        # Build query with optional insurer filter
+        query = select(ReconciliationReport).order_by(desc(ReconciliationReport.created_at))
+        
+        if insurer_name:
+            query = query.where(ReconciliationReport.insurer_name == insurer_name)
+        
+        # Apply pagination
+        query = query.offset(offset).limit(limit)
+        
+        result = await db.execute(query)
+        reports = result.scalars().all()
+        
+        if not reports:
+            return []
+        
+        # Convert database records to response format
+        response_data = []
+        for report in reports:
+            # Build the response using all the field variations from the model
+            report_data = ComprehensiveReconciliationResponse(
+                id=str(report.id),
+                insurer_name=report.insurer_name,
+                insurer_code=report.insurer_code,
+                created_at=report.created_at,
+                total_records_processed=report.total_records_processed,
+                total_records_updated=report.total_records_updated,
+                new_records_added=report.new_records_added,
+                data_variance_percentage=float(report.data_variance_percentage),
+                
+                # All 72 field variation columns
+                reporting_month_variations=report.reporting_month_variations,
+                child_id_variations=report.child_id_variations,
+                insurer_broker_code_variations=report.insurer_broker_code_variations,
+                policy_start_date_variations=report.policy_start_date_variations,
+                policy_end_date_variations=report.policy_end_date_variations,
+                booking_date_variations=report.booking_date_variations,
+                broker_name_variations=report.broker_name_variations,
+                insurer_name_variations=report.insurer_name_variations,
+                major_categorisation_variations=report.major_categorisation_variations,
+                product_variations=report.product_variations,
+                product_type_variations=report.product_type_variations,
+                plan_type_variations=report.plan_type_variations,
+                gross_premium_variations=report.gross_premium_variations,
+                gst_amount_variations=report.gst_amount_variations,
+                net_premium_variations=report.net_premium_variations,
+                od_premium_variations=report.od_premium_variations,
+                tp_premium_variations=report.tp_premium_variations,
+                policy_number_variations=report.policy_number_variations,
+                formatted_policy_number_variations=report.formatted_policy_number_variations,
+                registration_no_variations=report.registration_no_variations,
+                make_model_variations=report.make_model_variations,
+                model_variations=report.model_variations,
+                vehicle_variant_variations=report.vehicle_variant_variations,
+                gvw_variations=report.gvw_variations,
+                rto_variations=report.rto_variations,
+                state_variations=report.state_variations,
+                cluster_variations=report.cluster_variations,
+                fuel_type_variations=report.fuel_type_variations,
+                cc_variations=report.cc_variations,
+                age_year_variations=report.age_year_variations,
+                ncb_variations=report.ncb_variations,
+                discount_percentage_variations=report.discount_percentage_variations,
+                business_type_variations=report.business_type_variations,
+                seating_capacity_variations=report.seating_capacity_variations,
+                veh_wheels_variations=report.veh_wheels_variations,
+                customer_name_variations=report.customer_name_variations,
+                customer_number_variations=report.customer_number_variations,
+                commissionable_premium_variations=report.commissionable_premium_variations,
+                incoming_grid_percentage_variations=report.incoming_grid_percentage_variations,
+                receivable_from_broker_variations=report.receivable_from_broker_variations,
+                extra_grid_variations=report.extra_grid_variations,
+                extra_amount_receivable_from_broker_variations=report.extra_amount_receivable_from_broker_variations,
+                total_receivable_from_broker_variations=report.total_receivable_from_broker_variations,
+                claimed_by_variations=report.claimed_by_variations,
+                payment_by_variations=report.payment_by_variations,
+                payment_mode_variations=report.payment_mode_variations,
+                cut_pay_amount_received_from_agent_variations=report.cut_pay_amount_received_from_agent_variations,
+                already_given_to_agent_variations=report.already_given_to_agent_variations,
+                actual_agent_po_percentage_variations=report.actual_agent_po_percentage_variations,
+                agent_po_amt_variations=report.agent_po_amt_variations,
+                agent_extra_percentage_variations=report.agent_extra_percentage_variations,
+                agent_extr_amount_variations=report.agent_extr_amount_variations,
+                agent_total_po_amount_variations=report.agent_total_po_amount_variations,
+                payment_by_office_variations=report.payment_by_office_variations,
+                po_paid_to_agent_variations=report.po_paid_to_agent_variations,
+                running_bal_variations=report.running_bal_variations,
+                total_receivable_from_broker_include_18_gst_variations=report.total_receivable_from_broker_include_18_gst_variations,
+                iz_total_po_percentage_variations=report.iz_total_po_percentage_variations,
+                as_per_broker_po_percentage_variations=report.as_per_broker_po_percentage_variations,
+                as_per_broker_po_amt_variations=report.as_per_broker_po_amt_variations,
+                po_percentage_diff_broker_variations=report.po_percentage_diff_broker_variations,
+                po_amt_diff_broker_variations=report.po_amt_diff_broker_variations,
+                actual_agent_po_percentage_alt_variations=report.actual_agent_po_percentage_alt_variations,
+                as_per_agent_payout_percentage_variations=report.as_per_agent_payout_percentage_variations,
+                as_per_agent_payout_amount_variations=report.as_per_agent_payout_amount_variations,
+                po_percentage_diff_agent_variations=report.po_percentage_diff_agent_variations,
+                po_amt_diff_agent_variations=report.po_amt_diff_agent_variations,
+                invoice_status_variations=report.invoice_status_variations,
+                invoice_number_variations=report.invoice_number_variations,
+                remarks_variations=report.remarks_variations,
+                match_variations=report.match_variations,
+                agent_code_variations=report.agent_code_variations,
+            )
+            
+            response_data.append(report_data)
+        
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching comprehensive reconciliation reports: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch comprehensive reconciliation reports",
         )
 
 

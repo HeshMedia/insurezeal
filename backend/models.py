@@ -564,12 +564,8 @@ class ReconciliationReport(Base):
 
     # Report Metadata
     insurer_name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    report_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="universal_record"
-    )  # Type of reconciliation
-    file_name: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True
-    )  # Original file name
+    insurer_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    
 
     # Processing Statistics
     total_records_processed: Mapped[int] = mapped_column(
@@ -578,42 +574,89 @@ class ReconciliationReport(Base):
     total_records_updated: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
-    total_records_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    total_records_skipped: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    total_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    processing_time_seconds: Mapped[Numeric] = mapped_column(
-        Numeric(10, 3), nullable=False, default=0.0
-    )
+     # New Records Counter - tracks only completely new rows added
+    new_records_added: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Field-Specific Variation Tracking (72 columns based on master sheet headers)
+    # Each field tracks the number of variations/updates found during upload
+    reporting_month_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    child_id_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  
+    insurer_broker_code_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    policy_start_date_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    policy_end_date_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    booking_date_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    broker_name_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    insurer_name_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    major_categorisation_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    product_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    product_type_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    plan_type_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gross_premium_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gst_amount_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    net_premium_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    od_premium_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    tp_premium_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    policy_number_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    formatted_policy_number_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    registration_no_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    make_model_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    model_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vehicle_variant_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gvw_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rto_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    state_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cluster_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fuel_type_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cc_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    age_year_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ncb_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    discount_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    business_type_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    seating_capacity_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    veh_wheels_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    customer_name_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    customer_number_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    commissionable_premium_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    incoming_grid_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    receivable_from_broker_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    extra_grid_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    extra_amount_receivable_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_receivable_from_broker_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    claimed_by_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    payment_by_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    payment_mode_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cut_pay_amount_received_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    already_given_to_agent_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    actual_agent_po_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    agent_po_amt_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    agent_extra_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    agent_extra_amount_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    agent_total_po_amount_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    payment_by_office_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    po_paid_to_agent_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    running_bal_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_receivable_gst_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    iz_total_po_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    as_per_broker_po_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    as_per_broker_po_amt_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    po_percentage_diff_broker_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    po_amt_diff_broker_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    actual_agent_po_percentage_2_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    as_per_agent_payout_percentage_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    as_per_agent_payout_amount_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    po_percentage_diff_agent_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    po_amt_diff_agent_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    invoice_status_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    invoice_number_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    remarks_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    match_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    agent_code_variations: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Reconciliation Metrics
     data_variance_percentage: Mapped[Numeric] = mapped_column(
         Numeric(5, 2), nullable=False, default=0.0
     )
-    coverage_percentage: Mapped[Numeric] = mapped_column(
-        Numeric(5, 2), nullable=False, default=0.0
-    )
-
-    # Detailed Data
-    field_changes: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True
-    )  # Field-level change counts
-    error_details: Mapped[Optional[list]] = mapped_column(
-        JSONB, nullable=True
-    )  # List of errors
-    change_details: Mapped[Optional[list]] = mapped_column(
-        JSONB, nullable=True
-    )  # Detailed change log
-    file_info: Mapped[Optional[dict]] = mapped_column(
-        JSONB, nullable=True
-    )  # Original headers, unmapped headers, etc.
-
-    # Processing Status
-    status: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="completed"
-    )  # completed, failed, partial
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+   
 
     # Audit fields
     processed_by: Mapped[UUID] = mapped_column(
@@ -637,7 +680,7 @@ class ReconciliationReport(Base):
     # Constraints
     __table_args__ = (
         Index("idx_reconciliation_reports_insurer", "insurer_name"),
+        Index("idx_reconciliation_reports_insurer_code", "insurer_code"),
         Index("idx_reconciliation_reports_created_at", "created_at"),
         Index("idx_reconciliation_reports_processed_by", "processed_by"),
-        Index("idx_reconciliation_reports_status", "status"),
     )
