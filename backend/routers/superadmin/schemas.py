@@ -1,6 +1,7 @@
 """
 Schemas for SuperAdmin routes
 """
+
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
@@ -10,6 +11,7 @@ from enum import Enum
 
 class UserRoleEnum(str, Enum):
     """Valid user roles"""
+
     SUPERADMIN = "superadmin"
     ADMIN = "admin"
     AGENT = "agent"
@@ -17,11 +19,13 @@ class UserRoleEnum(str, Enum):
 
 class AgentToAdminPromotionRequest(BaseModel):
     """Schema for promoting an agent to admin (superadmin only)"""
+
     user_id: UUID = Field(..., description="UUID of the agent to promote to admin")
 
 
 class UserRoleUpdateResponse(BaseModel):
     """Response schema for role update"""
+
     success: bool
     message: str
     user_id: UUID
@@ -47,7 +51,7 @@ class BrokerResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -71,7 +75,7 @@ class InsurerResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -110,11 +114,11 @@ class AdminChildIDResponse(BaseModel):
     is_suspended: bool
     created_at: datetime
     updated_at: datetime
-    
+
     # Nested relationships with broker and insurer details
     insurer: InsurerResponse
     broker: Optional[BrokerResponse] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -136,5 +140,6 @@ class AdminChildIDUpdate(BaseModel):
 
 class BrokerInsurerListResponse(BaseModel):
     """Response for dropdown lists"""
+
     brokers: List[BrokerResponse]
     insurers: List[InsurerResponse]

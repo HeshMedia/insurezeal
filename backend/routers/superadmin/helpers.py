@@ -1,6 +1,7 @@
 """
 Helper functions for SuperAdmin routes
 """
+
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from models import Broker, Insurer, AdminChildID, UserProfile
@@ -10,7 +11,7 @@ from typing import Optional, List
 class SuperAdminHelpers:
     """
     Helper functions for SuperAdmin operations
-    
+
     FUNCTIONS:
     - generate_broker_code() - Generate next broker code
     - generate_insurer_code() - Generate next insurer code
@@ -55,47 +56,58 @@ class SuperAdminHelpers:
     @staticmethod
     def get_broker_by_id(db: Session, broker_id: int) -> Optional[Broker]:
         """Get broker by ID"""
-        return db.query(Broker).filter(Broker.id == broker_id, Broker.is_active == True).first()
+        return (
+            db.query(Broker)
+            .filter(Broker.id == broker_id, Broker.is_active == True)
+            .first()
+        )
 
     @staticmethod
     def get_insurer_by_id(db: Session, insurer_id: int) -> Optional[Insurer]:
         """Get insurer by ID"""
-        return db.query(Insurer).filter(Insurer.id == insurer_id, Insurer.is_active == True).first()
+        return (
+            db.query(Insurer)
+            .filter(Insurer.id == insurer_id, Insurer.is_active == True)
+            .first()
+        )
 
     @staticmethod
-    def get_admin_child_id_by_id(db: Session, child_id_id: int) -> Optional[AdminChildID]:
+    def get_admin_child_id_by_id(
+        db: Session, child_id_id: int
+    ) -> Optional[AdminChildID]:
         """Get admin child ID by database ID"""
         return db.query(AdminChildID).filter(AdminChildID.id == child_id_id).first()
 
     @staticmethod
-    def get_admin_child_id_by_child_id(db: Session, child_id: str) -> Optional[AdminChildID]:
+    def get_admin_child_id_by_child_id(
+        db: Session, child_id: str
+    ) -> Optional[AdminChildID]:
         """Get admin child ID by child_id string"""
         return db.query(AdminChildID).filter(AdminChildID.child_id == child_id).first()
 
     @staticmethod
     def get_active_admin_child_ids(db: Session) -> List[AdminChildID]:
         """Get all active admin child IDs"""
-        return db.query(AdminChildID).filter(
-            AdminChildID.is_active == True,
-            AdminChildID.is_suspended == False
-        ).all()
+        return (
+            db.query(AdminChildID)
+            .filter(AdminChildID.is_active == True, AdminChildID.is_suspended == False)
+            .all()
+        )
 
     @staticmethod
     def get_available_admin_child_ids_by_broker_insurer(
-        db: Session, 
-        insurer_id: int, 
-        broker_id: Optional[int] = None
+        db: Session, insurer_id: int, broker_id: Optional[int] = None
     ) -> List[AdminChildID]:
         """Get available admin child IDs filtered by insurer and optionally broker"""
         query = db.query(AdminChildID).filter(
             AdminChildID.is_active == True,
             AdminChildID.is_suspended == False,
-            AdminChildID.insurer_id == insurer_id
+            AdminChildID.insurer_id == insurer_id,
         )
-        
+
         if broker_id:
             query = query.filter(AdminChildID.broker_id == broker_id)
-        
+
         return query.all()
 
     @staticmethod

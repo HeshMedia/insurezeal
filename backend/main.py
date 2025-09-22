@@ -14,7 +14,9 @@ from routers.superadmin.superadmin import router as superadmin_router
 from routers.admin.cutpay import router as cutpay_router
 from routers.admin.public import router as public_router
 from routers.mis.mis import router as mis_router
-from routers.universal_records.universal_records import router as universal_records_router
+from routers.universal_records.universal_records import (
+    router as universal_records_router,
+)
 
 # Setup detailed logging
 logging.basicConfig(level=logging.INFO)
@@ -29,10 +31,11 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/apidocs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
 )
 
 logger.info("--- FastAPI application starting up ---")
+
 
 # Add startup and shutdown events
 @app.on_event("startup")
@@ -40,15 +43,17 @@ async def startup_event():
     """Application startup event"""
     logger.info("Application startup completed successfully")
 
-@app.on_event("shutdown") 
+
+@app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown event"""
     logger.info("Application shutdown completed successfully")
 
+
 logger.info("Configuring CORS middleware...")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,31 +64,31 @@ logger.info("Importing and including routers...")
 try:
     app.include_router(auth_router)
     logger.info("Included auth_router.")
-    
+
     app.include_router(users_router)
     logger.info("Included users_router.")
-    
+
     app.include_router(admin_router)
     logger.info("Included admin_router.")
-    
+
     app.include_router(superadmin_router)
     logger.info("Included superadmin_router.")
-    
+
     app.include_router(child_router)
     logger.info("Included child_router.")
-    
+
     app.include_router(policies_router)
     logger.info("Included policies_router.")
-    
+
     app.include_router(cutpay_router)
     logger.info("Included cutpay_router.")
-    
+
     app.include_router(public_router)
     logger.info("Included public_router.")
-    
+
     app.include_router(mis_router)
     logger.info("Included mis_router.")
-    
+
     app.include_router(universal_records_router)
     logger.info("Included universal_records_router.")
 
@@ -93,10 +98,11 @@ except Exception as e:
     logger.critical(f"FATAL: Failed to import or include routers: {e}", exc_info=True)
     raise
 
+
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):
     openapi_url = "/openapi.json"
-    
+
     return HTMLResponse(
         f"""
 <!doctype html>
@@ -120,6 +126,7 @@ async def api_documentation(request: Request):
   </body>
 </html>"""
     )
+
 
 @app.get("/", response_class=HTMLResponse)
 def home():
@@ -155,14 +162,17 @@ def home():
     </html>
     """
 
+
 @app.get("/health")
 def health_check():
     """Health check endpoint for monitoring"""
     return {"status": "healthy", "service": "insurezeal-api"}
+
 
 logger.info("--- FastAPI application startup complete ---")
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="0.0.0.0", port=8000)
