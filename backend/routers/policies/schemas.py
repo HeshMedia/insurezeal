@@ -8,10 +8,8 @@ import json
 # SIMPLIFIED SCHEMAS FOR DATABASE STORAGE
 # =============================================================================
 
-
 class PolicySummaryResponse(BaseModel):
     """Simplified response for policy summaries from database"""
-
     id: UUID
     policy_number: str
     child_id: Optional[str] = None
@@ -24,15 +22,13 @@ class PolicySummaryResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     quarter: Optional[str] = None  # Quarter calculated from created_at (Q1, Q2, Q3, Q4)
-    year: Optional[int] = None  # Year calculated from created_at
-
+    year: Optional[int] = None     # Year calculated from created_at
+    
     class Config:
         from_attributes = True
 
-
 class CutPaySummaryResponse(BaseModel):
     """Simplified response for cutpay summaries from database"""
-
     id: int
     policy_number: Optional[str] = None
     child_id_request_id: Optional[UUID] = None
@@ -47,31 +43,25 @@ class CutPaySummaryResponse(BaseModel):
     policy_end_date: Optional[date] = None
     created_at: datetime
     updated_at: datetime
-
+    
     class Config:
         from_attributes = True
 
-
 class PolicyCreateResponse(BaseModel):
     """Response after creating a policy"""
-
     id: UUID
     policy_number: str
     message: str
 
-
 class CutPayCreateResponse(BaseModel):
     """Response after creating a cutpay"""
-
     id: int
     policy_number: Optional[str] = None
     message: str
 
-
 # =============================================================================
 # FRONTEND SCHEMAS (UNCHANGED FOR NOW)
 # =============================================================================
-
 
 class PolicyBase(BaseModel):
     # Agent & Child Info
@@ -82,7 +72,7 @@ class PolicyBase(BaseModel):
     broker_name: Optional[str] = None
     insurer_code: Optional[str] = None  # Used to lookup insurance_company from database
     insurance_company: Optional[str] = None
-
+    
     # Basic Policy Information
     policy_number: str
     formatted_policy_number: Optional[str] = None
@@ -92,11 +82,11 @@ class PolicyBase(BaseModel):
     plan_type: Optional[str] = None  # Comp, STP, SAOD
     customer_name: Optional[str] = None
     customer_phone_number: Optional[str] = None
-
+    
     # Legacy field names for backward compatibility
     policy_type: str
     insurance_type: Optional[str] = None
-
+    
     # Vehicle Details
     vehicle_type: Optional[str] = None
     registration_number: Optional[str] = None
@@ -116,7 +106,7 @@ class PolicyBase(BaseModel):
     business_type: Optional[str] = None
     seating_capacity: Optional[int] = None
     veh_wheels: Optional[int] = None
-
+    
     # Premium Details
     gross_premium: Optional[float] = None
     gst: Optional[float] = None
@@ -124,36 +114,29 @@ class PolicyBase(BaseModel):
     net_premium: Optional[float] = None
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
-
+    
     # Agent Commission Fields (only one for policies now)
     agent_commission_given_percent: Optional[float] = None
-
+    
     # Agent Financial Tracking Fields
-    payment_by_office: Optional[float] = Field(
-        None, description="Amount paid by office"
-    )
-    total_agent_payout_amount: Optional[float] = Field(
-        None, description="Total amount to be paid out to agent"
-    )
-    running_bal: Optional[float] = Field(
-        None,
-        description="Running balance for agent financial tracking (calculated by frontend)",
-    )
-
+    payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
+    total_agent_payout_amount: Optional[float] = Field(None, description="Total amount to be paid out to agent")
+    running_bal: Optional[float] = Field(None, description="Running balance for agent financial tracking (calculated by frontend)")
+    
     # Additional Policy Configuration
     code_type: Optional[str] = None  # Direct, Broker, Child ID
     payment_by: Optional[str] = None  # Agent, InsureZeal
     payment_method: Optional[str] = None
     cluster: Optional[str] = None
-
+    
     # Additional fields
     notes: Optional[str] = None
-
+    
     # Dates
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     booking_date: Optional[date] = None  # Added missing booking date field
-
+    
     # Commission and Financial Calculation Fields (for Google Sheets)
     commissionable_premium: Optional[float] = None
     incoming_grid_percent: Optional[float] = None
@@ -183,21 +166,19 @@ class PolicyBase(BaseModel):
     invoice_number: Optional[str] = None
     remarks: Optional[str] = None
     match: Optional[str] = None
-
+    
     # Reporting fields
     reporting_month: Optional[str] = None  # mmm'yy format
     payout_on: Optional[str] = None
 
-
 class PolicyCreateRequest(PolicyBase):
     """Schema for creating a new policy with all possible fields from frontend"""
-
     pdf_file_path: str = Field(..., description="Supabase URL of the uploaded PDF")
     pdf_file_name: str = Field(..., description="Original filename of the PDF")
-
+    
     ai_confidence_score: Optional[float] = None
     manual_override: Optional[bool] = False
-
+    
     class Config:
         json_schema_extra = {
             "example": {
@@ -209,6 +190,7 @@ class PolicyCreateRequest(PolicyBase):
                 "broker_name": "Sample Broker",
                 "insurer_code": "INS001",  # Used to lookup insurance_company from database
                 "insurance_company": "Sample Insurance Co",
+                
                 # Basic Policy Information (required)
                 "policy_number": "POL123456789",
                 "formatted_policy_number": "POL-123456789",
@@ -218,9 +200,11 @@ class PolicyCreateRequest(PolicyBase):
                 "plan_type": "Comprehensive",
                 "customer_name": "John Doe",
                 "customer_phone_number": "9876543210",
+                
                 # Legacy field names for backward compatibility (required)
                 "policy_type": "Motor",
                 "insurance_type": "Comprehensive",
+                
                 # Vehicle Details (optional)
                 "vehicle_type": "Car",
                 "registration_number": "MH01AB1234",
@@ -240,6 +224,7 @@ class PolicyCreateRequest(PolicyBase):
                 "business_type": "Private",
                 "seating_capacity": 5,
                 "veh_wheels": 4,
+                
                 # Premium Details (optional)
                 "gross_premium": 15000.00,
                 "gst": 2700.00,
@@ -247,23 +232,29 @@ class PolicyCreateRequest(PolicyBase):
                 "net_premium": 12300.00,
                 "od_premium": 8500.00,
                 "tp_premium": 3800.00,
+                
                 # Agent Commission Fields
                 "agent_commission_given_percent": 15.0,
+                
                 # Agent Financial Tracking Fields
                 "payment_by_office": 5000.00,
                 "total_agent_payout_amount": 2000.00,
                 "running_bal": 1500.00,
+                
                 # Additional Policy Configuration
                 "code_type": "Child ID",
                 "payment_by": "Agent",
                 "payment_method": "Cash",
                 "cluster": "West",
+                
                 # Additional fields
                 "notes": "Customer preferred comprehensive coverage",
+                
                 # Dates (optional)
                 "start_date": "2025-01-01",
                 "end_date": "2026-01-01",
                 "booking_date": "2025-01-01",
+                
                 # Commission and Financial Fields (optional - for advanced users)
                 "commissionable_premium": 12300.00,
                 "incoming_grid_percent": 15.0,
@@ -274,28 +265,27 @@ class PolicyCreateRequest(PolicyBase):
                 "claimed_by": "Agent",
                 "reporting_month": "Jan'25",
                 "payout_on": "Monthly",
+
                 # File Info (required)
                 "pdf_file_path": "https://supabase.url/path/to/file.pdf",
                 "pdf_file_name": "policy.pdf",
+                
                 # AI Metadata (optional)
                 "ai_confidence_score": 0.85,
-                "manual_override": False,
+                "manual_override": False
             }
         }
-
 
 # =============================================================================
 # CUTPAY SCHEMAS (FOR FRONTEND COMPATIBILITY)
 # =============================================================================
 
-
 class CutPayBase(BaseModel):
     """Base CutPay schema with all frontend fields"""
-
     # Document URLs
     policy_pdf_url: Optional[str] = None
     additional_documents: Optional[dict] = None
-
+    
     # Basic Policy Information
     policy_number: Optional[str] = None
     formatted_policy_number: Optional[str] = None
@@ -305,14 +295,14 @@ class CutPayBase(BaseModel):
     plan_type: Optional[str] = None
     customer_name: Optional[str] = None
     customer_phone_number: Optional[str] = None
-
+    
     # Premium & Financial Details
     gross_premium: Optional[float] = None
     net_premium: Optional[float] = None
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
     gst_amount: Optional[float] = None
-
+    
     # Vehicle Details
     registration_number: Optional[str] = None
     make_model: Optional[str] = None
@@ -329,40 +319,36 @@ class CutPayBase(BaseModel):
     business_type: Optional[str] = None
     seating_capacity: Optional[int] = None
     veh_wheels: Optional[int] = None
-
+    
     # Transaction Configuration
     reporting_month: Optional[str] = None
     booking_date: Optional[date] = None
     agent_code: Optional[str] = None
     code_type: Optional[str] = None
-
+    
     # Commission Configuration
     incoming_grid_percent: Optional[float] = None
     agent_commission_given_percent: Optional[float] = None
     extra_grid: Optional[float] = None
     commissionable_premium: Optional[float] = None
-
+    
     # Payment Configuration
     payment_by: Optional[str] = None
     payment_method: Optional[str] = None
     payout_on: Optional[str] = None
     agent_extra_percent: Optional[float] = None
     payment_by_office: Optional[float] = None
-
+    
     # All other fields...
     notes: Optional[str] = None
 
-
 class CutPayCreateRequest(CutPayBase):
     """Schema for creating CutPay from frontend"""
-
     pass
-
 
 # =============================================================================
 # LEGACY COMPATIBILITY SCHEMAS
 # =============================================================================
-
 
 class PolicyUpdate(BaseModel):
     agent_id: Optional[UUID] = None
@@ -391,10 +377,8 @@ class PolicyUpdate(BaseModel):
     end_date: Optional[date] = None
     manual_override: Optional[bool] = None
 
-
 class PolicyResponse(PolicyBase):
     """Full response for detailed view (will be changed to use Google Sheets later)"""
-
     id: UUID
     uploaded_by: UUID
     pdf_file_name: str
@@ -406,10 +390,8 @@ class PolicyResponse(PolicyBase):
     class Config:
         from_attributes = True
 
-
 class PolicySummary(BaseModel):
     """Legacy summary for list view"""
-
     id: UUID
     policy_number: str
     policy_type: str
@@ -425,7 +407,6 @@ class PolicySummary(BaseModel):
     class Config:
         from_attributes = True
 
-
 class PolicyListResponse(BaseModel):
     policies: List[PolicySummary]
     total_count: int
@@ -433,11 +414,9 @@ class PolicyListResponse(BaseModel):
     page_size: int
     total_pages: int
 
-
 class PolicyUploadResponse(BaseModel):
     """Response after PDF upload and AI extraction"""
-
-    policy_id: Optional[UUID] = None
+    policy_id: Optional[UUID] = None  
     extracted_data: dict
     confidence_score: Optional[float] = None
     pdf_file_path: str  # Keep for backward compatibility in API response
@@ -445,35 +424,27 @@ class PolicyUploadResponse(BaseModel):
     message: str
     upload_url: Optional[str] = None
 
-
 class AIExtractionResponse(BaseModel):
     """Response from AI extraction"""
-
     extracted_data: dict
     confidence_score: float
     success: bool
     message: str
 
-
 class ChildIdOption(BaseModel):
     """Child ID options for dropdown"""
-
     child_id: str
     broker_name: str
     insurance_company: str
 
-
 class AgentOption(BaseModel):
     """Agent options for admin dropdown"""
-
     agent_id: UUID
     agent_code: str
     full_name: str
 
-
 class PolicyUpdate(BaseModel):
     """Schema for updating an existing policy with selective fields"""
-
     # Agent & Child Info
     agent_id: Optional[UUID] = None
     agent_code: Optional[str] = None
@@ -482,7 +453,7 @@ class PolicyUpdate(BaseModel):
     broker_name: Optional[str] = None
     insurer_code: Optional[str] = None  # Used to lookup insurance_company from database
     insurance_company: Optional[str] = None
-
+    
     # Basic Policy Information
     policy_number: Optional[str] = None
     formatted_policy_number: Optional[str] = None
@@ -492,11 +463,11 @@ class PolicyUpdate(BaseModel):
     plan_type: Optional[str] = None  # Comp, STP, SAOD
     customer_name: Optional[str] = None
     customer_phone_number: Optional[str] = None
-
+    
     # Legacy field names for backward compatibility
     policy_type: Optional[str] = None
     insurance_type: Optional[str] = None
-
+    
     # Vehicle Details
     vehicle_type: Optional[str] = None
     registration_number: Optional[str] = None
@@ -516,7 +487,7 @@ class PolicyUpdate(BaseModel):
     business_type: Optional[str] = None
     seating_capacity: Optional[int] = None
     veh_wheels: Optional[int] = None
-
+    
     # Premium Details
     gross_premium: Optional[float] = None
     gst: Optional[float] = None
@@ -524,36 +495,29 @@ class PolicyUpdate(BaseModel):
     net_premium: Optional[float] = None
     od_premium: Optional[float] = None
     tp_premium: Optional[float] = None
-
+    
     # Agent Commission Fields (only one for policies now)
     agent_commission_given_percent: Optional[float] = None
-
+    
     # Agent Financial Tracking Fields
-    payment_by_office: Optional[float] = Field(
-        None, description="Amount paid by office"
-    )
-    total_agent_payout_amount: Optional[float] = Field(
-        None, description="Total amount to be paid out to agent"
-    )
-    running_bal: Optional[float] = Field(
-        None,
-        description="Running balance for agent financial tracking (calculated by frontend)",
-    )
-
+    payment_by_office: Optional[float] = Field(None, description="Amount paid by office")
+    total_agent_payout_amount: Optional[float] = Field(None, description="Total amount to be paid out to agent")
+    running_bal: Optional[float] = Field(None, description="Running balance for agent financial tracking (calculated by frontend)")
+    
     # Additional Policy Configuration
     code_type: Optional[str] = None  # Direct, Broker, Child ID
     payment_by: Optional[str] = None  # Agent, InsureZeal
     payment_method: Optional[str] = None
     cluster: Optional[str] = None
-
+    
     # Additional fields
     notes: Optional[str] = None
-
+    
     # Dates
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     booking_date: Optional[date] = None  # Added missing booking date field
-
+    
     # Commission and Financial Calculation Fields (for Google Sheets)
     commissionable_premium: Optional[float] = None
     incoming_grid_percent: Optional[float] = None
@@ -583,23 +547,21 @@ class PolicyUpdate(BaseModel):
     invoice_number: Optional[str] = None
     remarks: Optional[str] = None
     match: Optional[str] = None
-
+    
     # Reporting fields
     reporting_month: Optional[str] = None  # mmm'yy format
     payout_on: Optional[str] = None
-
+    
     # Document URLs
     policy_pdf_url: Optional[str] = None
     additional_documents: Optional[str] = None
-
+    
     # AI Metadata
     ai_confidence_score: Optional[float] = None
     manual_override: Optional[bool] = None
 
-
 class PolicyDatabaseResponse(BaseModel):
     """Response model showing only database-stored fields for policies"""
-
     id: str  # UUID converted to string
     policy_number: str
     child_id: Optional[str] = None
@@ -611,14 +573,12 @@ class PolicyDatabaseResponse(BaseModel):
     policy_end_date: Optional[str] = None  # ISO date string
     created_at: str  # ISO datetime string
     updated_at: Optional[str] = None  # ISO datetime string
-
+    
     class Config:
         from_attributes = True
 
-
 class PolicyNumberCheckResponse(BaseModel):
     """Response for policy number duplicate check"""
-
     policy_number: str
     is_duplicate: bool
     message: str
