@@ -599,11 +599,18 @@ class ChildHelpers:
 
             # Agent filter: Only return child IDs assigned to this agent
             if agent_id:
-                if isinstance(agent_id, uuid.UUID):
-                    agent_uuid = agent_id
-                else:
-                    agent_uuid = uuid.UUID(agent_id)
-                conditions.append(ChildIdRequest.user_id == agent_uuid)
+                try:
+                    if isinstance(agent_id, uuid.UUID):
+                        agent_uuid = agent_id
+                    else:
+                        agent_uuid = uuid.UUID(agent_id)
+                    conditions.append(ChildIdRequest.user_id == agent_uuid)
+                except ValueError as uuid_error:
+                    logger.error(
+                        f"Invalid UUID format for agent_id: '{agent_id}' - Type: {type(agent_id)} - Error: {str(uuid_error)}"
+                    )
+                    # Skip agent filtering if UUID is invalid rather than failing the entire request
+                    logger.warning(f"Skipping agent filter due to invalid UUID: {agent_id}")
 
             # Build query with proper joins
             if broker_code:
