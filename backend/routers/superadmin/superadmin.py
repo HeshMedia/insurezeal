@@ -418,17 +418,19 @@ async def get_available_admin_child_ids(
             detail=f"Invalid insurer code: {insurer_code}",
         )
 
+    # Base query: Always filter by the specified insurer
     query = (
         select(AdminChildID)
         .options(selectinload(AdminChildID.insurer), selectinload(AdminChildID.broker))
         .where(
             AdminChildID.is_active == True,
             AdminChildID.is_suspended == False,
-            AdminChildID.insurer_id == insurer.id,
+            AdminChildID.insurer_id == insurer.id,  # Always filter by insurer
         )
     )
 
     if broker_code:
+        # When broker_code is provided, find admin child IDs with that specific broker + insurer combination
         broker_result = await db.execute(
             select(Broker).where(Broker.broker_code == broker_code)
         )
@@ -439,6 +441,9 @@ async def get_available_admin_child_ids(
                 detail=f"Invalid broker code: {broker_code}",
             )
         query = query.where(AdminChildID.broker_id == broker.id)
+    else:
+        # When no broker_code is provided, return admin child IDs for the insurer with NO broker assigned
+        query = query.where(AdminChildID.broker_id.is_(None))
 
     result = await db.execute(query)
     return result.scalars().all()
