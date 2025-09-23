@@ -1,20 +1,17 @@
 // admin-mis-table.config.tsx - React component with Google Sheets client-side filtering
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import DataTableClientFiltered from './MIS-Table-ClientFiltered';
 import { useGoogleSheetsMIS } from '@/hooks/useGoogleSheetsMIS';
-import { ColumnConfig, TableConfig, DataSource, SaveAdapter } from './table-component.types';
-import { BulkUpdateRequest } from '@/types/mis.types';
-import { QuarterlySheetRecord } from '@/types/admin-mis.types';
+import type { TableConfig, DataSource, SaveAdapter, UpdatePayload, UpdateResponse, ColumnConfig } from './table-component.types';
+import type { BulkUpdateRequest } from '@/types/mis.types';
+import type { QuarterlySheetRecord } from '@/types/admin-mis.types';
+import type {
+  MasterSheetColumnConfig
+} from '@/types/admin-mis-table.types';
 
 
 // Extract all field paths from the MasterSheetRecord type
 export type MasterSheetFieldPath = string;
-
-export interface MasterSheetColumnConfig extends ColumnConfig {
-  key: MasterSheetFieldPath;
-  section: 'basic' | 'customer' | 'vehicle' | 'financial' | 'payment' | 'tracking' | 'administrative';
-  tag?: 'readonly' | 'editable' | 'calculated' | 'status';
-}
 
 // Dynamic column configuration generator
 export const generateDynamicColumns = (sampleData: unknown[]): MasterSheetColumnConfig[] => {
@@ -34,6 +31,24 @@ export const generateDynamicColumns = (sampleData: unknown[]): MasterSheetColumn
   
   // Generate columns for all keys without categorization
   return allKeys.map((key) => {
+    // Smart width calculation based on key name patterns
+    let width = 150; // Default width (increased from 120 to provide better initial spacing)
+    
+    // Wider columns for certain types of data
+    if (key.toLowerCase().includes('name') || key.toLowerCase().includes('address')) {
+      width = 200;
+    } else if (key.toLowerCase().includes('description') || key.toLowerCase().includes('note')) {
+      width = 250;
+    } else if (key.toLowerCase().includes('phone') || key.toLowerCase().includes('email')) {
+      width = 180;
+    } else if (key.toLowerCase().includes('date')) {
+      width = 130; // Increased to accommodate filter controls
+    } else if (key.toLowerCase().includes('amount') || key.toLowerCase().includes('premium')) {
+      width = 140; // Increased to accommodate filter controls
+    } else if (key.length > 20) {
+      width = 200; // Wider columns for long headers
+    }
+    
     return {
       key: key,
       id: key,
@@ -43,7 +58,7 @@ export const generateDynamicColumns = (sampleData: unknown[]): MasterSheetColumn
       tag: 'editable',
       editable: true,
       enableSorting: true,
-      width: key.length > 20 ? 200 : undefined, // Wider columns for long headers
+      width: width, // Use calculated width
     } as MasterSheetColumnConfig;
   });
 };
@@ -150,6 +165,7 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
     section: 'basic', 
     tag: 'editable',
     editable: true,
+    enableSorting: true,
     options: [
       { value: 'Motor', label: 'Motor' },
       { value: 'Life', label: 'Life' },
@@ -174,6 +190,7 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
     section: 'basic', 
     tag: 'editable',
     editable: true,
+    enableSorting: true,
     options: [
       { value: 'Private Car', label: 'Private Car' },
       { value: 'Individual', label: 'Individual' },
@@ -191,6 +208,7 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
     section: 'basic', 
     tag: 'editable',
     editable: true,
+    enableSorting: true,
     options: [
       { value: 'Comp', label: 'Comprehensive' },
       { value: 'STP', label: 'STP' },
@@ -267,7 +285,8 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
     kind: 'text', 
     section: 'vehicle', 
     tag: 'editable',
-    editable: true
+    editable: true,
+    enableSorting: true
   },
   { 
     key: 'Invoice Status', 
@@ -277,6 +296,7 @@ export const masterSheetColumnConfigs: MasterSheetColumnConfig[] = [
     section: 'administrative', 
     tag: 'status',
     editable: true,
+    enableSorting: true,
     options: [
       { value: 'Pending', label: 'Pending' },
       { value: 'pending payment', label: 'Pending Payment' },
@@ -345,9 +365,9 @@ export function MasterSheetTableWrapper() {
             const quarterSheets = sheetNames.filter(isQuarterSheet);
             console.log('📊 Quarter sheets found:', quarterSheets);
             
-            // Auto-select the first quarter sheet if none selected, otherwise first available sheet
-            if (!selectedSheet && sheetNames.length > 0) {
-              const sheetToSelect = quarterSheets.length > 0 ? quarterSheets[0] : sheetNames[0];
+            // Auto-select the latest quarter sheet if none selected, otherwise first available sheet
+            if (sheetNames.length > 0) {
+              const sheetToSelect = quarterSheets.length > 0 ? quarterSheets[quarterSheets.length - 1] : sheetNames[0];
               setSelectedSheet(sheetToSelect);
               console.log('🎯 Auto-selected sheet:', sheetToSelect);
             }
@@ -357,22 +377,20 @@ export function MasterSheetTableWrapper() {
           console.error('❌ Failed to fetch sheet info:', error);
         });
     }
-  }, [isReady, getSheetInfo, sheetInfo, selectedSheet]);
+  }, [isReady, sheetInfo, getSheetInfo]); // Keep getSheetInfo but remove selectedSheet from dependency
 
   // Load data when component mounts or when sheet changes
   useEffect(() => {
-    if (isReady && !loading.masterSheetData && selectedSheet) {
-      if (!hasLoadedData) {
-        // Initial load - load from the selected sheet
-        setHasLoadedData(true);
-        console.log(`🚀 Initial data load from sheet: ${selectedSheet}`);
-        fetchSheetData(selectedSheet).catch(console.error);
-      }
+    if (isReady && !loading.masterSheetData && selectedSheet && !hasLoadedData) {
+      // Initial load - load from the selected sheet
+      setHasLoadedData(true);
+      console.log(`🚀 Initial data load from sheet: ${selectedSheet}`);
+      fetchSheetData(selectedSheet).catch(console.error);
     }
-  }, [isReady, hasLoadedData, loading.masterSheetData, selectedSheet, fetchSheetData]);
+  }, [isReady, loading.masterSheetData, selectedSheet, hasLoadedData, fetchSheetData]);
 
-  // Handle sheet change
-  const handleSheetChange = async (sheetName: string) => {
+  // Handle sheet change with useCallback to prevent recreation
+  const handleSheetChange = useCallback(async (sheetName: string) => {
     console.log('📄 Switching to sheet:', sheetName);
     setSelectedSheet(sheetName);
     
@@ -385,10 +403,10 @@ export function MasterSheetTableWrapper() {
       console.error(`❌ Failed to load data from sheet "${sheetName}":`, error);
       // Show error to user but don't prevent sheet selection
     }
-  };
+  }, [fetchSheetData]);
 
   // Use client-side filtered data for Google Sheets-style filtering
-  const dataSource: DataSource = {
+  const dataSource: DataSource<QuarterlySheetRecord> = {
     useList: () => ({
       data: { pages: [{ records: clientFiltering.paginatedData.data || [] }] },
       error: errors.masterSheetData ? new Error(errors.masterSheetData) : null,
@@ -401,19 +419,25 @@ export function MasterSheetTableWrapper() {
 
   // Save adapter for bulk updates
   const saveAdapter: SaveAdapter = {
-    toUpdates: (pendingUpdates: Record<string, Record<string, unknown>>) => {
+    toUpdates: (pendingUpdates: Record<string, Record<string, string | number | boolean | null>>) => {
       // Flatten all field updates into individual update requests
-      const allUpdates: { id: string; [key: string]: unknown }[] = [];
+      const allUpdates: { 
+        id: string; 
+        record_id?: string;
+        field_name?: string;
+        new_value?: string | number | boolean | null;
+        old_value?: string | number | boolean | null;
+      }[] = [];
       
       console.log('📝 Processing pending updates:', pendingUpdates);
       
       Object.entries(pendingUpdates).forEach(([recordId, changes]) => {
-        Object.entries(changes as Record<string, unknown>).forEach(([fieldName, newValue]) => {
+        Object.entries(changes).forEach(([fieldName, newValue]) => {
           allUpdates.push({
             id: `${recordId}_${fieldName}`,
             record_id: recordId,
             field_name: fieldName,
-            new_value: String(newValue)
+            new_value: newValue
           });
         });
       });
@@ -421,7 +445,7 @@ export function MasterSheetTableWrapper() {
       console.log('🔄 Transformed updates:', allUpdates);
       return { updates: allUpdates };
     },
-    mutate: () => async (payload: unknown): Promise<{ successful_updates?: number; [key: string]: unknown }> => {
+    mutate: () => async (payload: UpdatePayload): Promise<UpdateResponse> => {
       if (!selectedSheet) {
         throw new Error('No sheet selected for updates');
       }
@@ -431,11 +455,15 @@ export function MasterSheetTableWrapper() {
       
       // Convert BulkUpdateResponse to expected format
       return {
-        successful_updates: result.successful_updates,
+        successful_updates: result.successful_updates || 0,
         total_updates: result.total_updates,
         failed_updates: result.failed_updates,
         message: result.message,
-        results: result.results,
+        results: result.results?.map(item => ({
+          id: `${item.record_id}_${item.field_name}`,
+          success: item.success,
+          error: item.error_message
+        })),
         processing_time_seconds: result.processing_time_seconds
       };
     }
@@ -456,11 +484,13 @@ export function MasterSheetTableWrapper() {
     className: "h-full",
     columns: dynamicColumns.map((config: MasterSheetColumnConfig) => ({
       ...config,
-      accessor: (row: unknown) => {
-        const record = row as QuarterlySheetRecord;
-        return record[config.key as keyof QuarterlySheetRecord];
-      }
-    })),
+      accessor: (row: QuarterlySheetRecord) => {
+        return row[config.key as keyof QuarterlySheetRecord];
+      },
+      hidden: config.hidden ? (row: QuarterlySheetRecord, allData: QuarterlySheetRecord[]) => {
+        return config.hidden!(row as unknown as Record<string, string | number | boolean | null>, allData as unknown as Record<string, string | number | boolean | null>[]);
+      } : undefined
+    } as ColumnConfig<QuarterlySheetRecord>)),
     pageSize: 1000, // Load more records at once for better client-side filtering
     enableSearch: true,
     enableBulkEdit: true,
@@ -479,13 +509,55 @@ export function MasterSheetTableWrapper() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col min-h-[100vh] bg-white">
       <DataTableClientFiltered 
         config={adminTableConfig}
         onPendingChangesCount={(count: number) => {
           console.log(`${count} pending changes`);
         }}
-        clientFiltering={clientFiltering}
+        clientFiltering={{
+          ...clientFiltering,
+          paginatedData: {
+            data: clientFiltering.paginatedData.data,
+            page: clientFiltering.paginatedData.currentPage,
+            pageSize: clientFiltering.paginatedData.pageSize,
+            totalPages: clientFiltering.paginatedData.totalPages
+          },
+          filteredStats: {
+            totalRecords: clientFiltering.rawData.length,
+            filteredRecords: clientFiltering.filteredData.length,
+            visibleRecords: clientFiltering.paginatedData.data.length
+          },
+          columnValues: Object.fromEntries(clientFiltering.columnValues),
+          filters: Object.fromEntries(
+            Array.from(clientFiltering.filters.columnFilters).map(([key, filter]) => [
+              key as string, 
+              {
+                type: 'values' as const,
+                values: filter.selectedValues ? Array.from(filter.selectedValues) : undefined,
+                search: filter.searchTerm
+              }
+            ])
+          ),
+          getColumnUniqueValues: (column: string) => {
+            return clientFiltering.getColumnUniqueValues(column as keyof QuarterlySheetRecord);
+          },
+          getColumnFilter: (column: string) => {
+            const filter = clientFiltering.getColumnFilter(column as keyof QuarterlySheetRecord);
+            if (filter) {
+              return {
+                type: 'values' as const,
+                values: filter.selectedValues ? Array.from(filter.selectedValues) : undefined,
+                search: filter.searchTerm
+              };
+            }
+            return undefined;
+          },
+          getFilterSummary: () => {
+            const summary = clientFiltering.getFilterSummary();
+            return Array.isArray(summary) ? summary.join(', ') : summary;
+          }
+        }}
         availableSheets={availableSheets}
         selectedSheet={selectedSheet}
         onSheetChange={handleSheetChange}

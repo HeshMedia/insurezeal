@@ -10,19 +10,53 @@ import {
 import { useChildIdRequests, useActiveChildIds } from "@/hooks/agentQuery"
 import { AgentMISTable } from "@/components/agent/dashboard-mis-table/agent-mis-table"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AgentStatsCards } from "./agent-stats-cards"
+import { agentApi } from '@/lib/api/agent'
+import { AgentMISStats } from '@/types/agent.types'
 
 
 export function AgentOverview() {
   const { data: requestsData, isLoading: requestsLoading } = useChildIdRequests({ page: 1, page_size: 50 })
   const { data: activeChildIds, isLoading: activeLoading } = useActiveChildIds()
-  // State to store MIS stats from the table
-  const [misStats, setMisStats] = useState<{
-    number_of_policies: number;
-    running_balance: number;
-    total_net_premium: number;
-  } | null>(null)
+  
+  // State to store overall MIS stats (not quarter-specific)
+  const [overallStats, setOverallStats] = useState<AgentMISStats | null>(null)
+  const [, setStatsLoading] = useState(true)
+
+  // Fetch overall stats on component mount (current quarter data for overall stats)
+  useEffect(() => {
+    const fetchOverallStats = async () => {
+      try {
+        setStatsLoading(true)
+        // Get current quarter/year for overall stats
+        const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3)
+        const currentYear = new Date().getFullYear()
+        
+        const response = await agentApi.mis.getAgentMISData({
+          quarter: currentQuarter,
+          year: currentYear,
+          page: 1,
+          page_size: 1 // We only need the stats, not the records
+        })
+        
+        setOverallStats(response.stats)
+      } catch (error) {
+        console.error('Failed to fetch overall stats:', error)
+        // Set default stats if fetch fails
+        setOverallStats({
+          number_of_policies: 0,
+          running_balance: 0,
+          total_net_premium: 0,
+          commissionable_premium: 0
+        })
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+
+    fetchOverallStats()
+  }, []) // Only run once on mount
 
   const stats = {
     totalRequests: requestsData?.total_count || 0,
@@ -59,63 +93,36 @@ export function AgentOverview() {
       <AgentStatsCards stats={{ 
         activeChildIds: stats.activeChildIds, 
         pendingRequests: stats.pendingRequests,
-        number_of_policies: misStats?.number_of_policies || 0,
-        running_balance: misStats?.running_balance || 0,
-        total_net_premium: misStats?.total_net_premium || 0,
-      }} totalBalance={misStats?.running_balance || 0} />
+        number_of_policies: overallStats?.number_of_policies || 0,
+        running_balance: overallStats?.running_balance || 0,
+        total_net_premium: overallStats?.total_net_premium || 0,
+        commissionable_premium: overallStats?.commissionable_premium || 0,
+      }} totalBalance={overallStats?.running_balance || 0} />
 
 
       {/* MIS Table Section */}
-      {stats.activeChildIds > 0 ? (
-        <Card className="border border-gray-200">
-          <CardHeader className="border-b border-gray-200 bg-gray-50/50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl font-bold text-gray-900">
-                    My Business Data (MIS)
-                  </CardTitle>
-                  <p className="text-sm text-gray-600 mt-1">
-                    View your policy data and commission details
-                  </p>
-                </div>
+      <Card className="border border-gray-200">
+        <CardHeader className="border-b border-gray-200 bg-gray-50/50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
+                <BarChart3 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <CardTitle className="text-xl font-bold text-gray-900">
+                  My Business Data (MIS)
+                </CardTitle>
+                <p className="text-sm text-gray-600 mt-1">
+                  View your policy data and commission details
+                </p>
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <AgentMISTable 
-              onStatsUpdate={setMisStats}
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border border-orange-200 bg-orange-50/30">
-          <CardContent className="p-6 text-center">
-            <BarChart3 className="h-12 w-12 text-orange-600 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-orange-900 mb-2">
-              No Business Data Available
-            </h3>
-            <p className="text-orange-700 mb-4">
-              You need at least one approved child ID to view your MIS data and business statistics.
-            </p>
-            {stats.totalRequests === 0 ? (
-              <Link href="/agent/child-id?tab=new-request">
-                <Button className="bg-orange-600 hover:bg-orange-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Request Your First Child ID
-                </Button>
-              </Link>
-            ) : (
-              <p className="text-sm text-orange-600">
-                Your child ID requests are pending approval.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <AgentMISTable />
+        </CardContent>
+      </Card>
       
       {/* Welcome Message - Only show if no requests at all */}
       {stats.totalRequests === 0 && (

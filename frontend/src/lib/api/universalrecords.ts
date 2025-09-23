@@ -38,8 +38,11 @@ export const universalRecordsApi = {
     const client = await createAuthenticatedClient();
     const formData = new FormData();
     formData.append('file', params.file);
+    const queryParams: Record<string, string> = { insurer_name: params.insurer_name };
+    if (params.quarters) queryParams.quarters = params.quarters;
+    if (params.years) queryParams.years = params.years;
     const response = await client.post('/universal-records/upload', formData, {
-      params: { insurer_name: params.insurer_name },
+      params: queryParams,
     });
     return response.data;
   },

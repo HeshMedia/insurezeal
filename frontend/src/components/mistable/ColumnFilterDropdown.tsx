@@ -1,4 +1,3 @@
-// components/ui/ColumnFilterDropdown.tsx - Google Sheets-style column filter dropdown
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -19,22 +18,7 @@ import {
   Hash, 
   Check
 } from 'lucide-react';
-
-interface ColumnFilter {
-  type: 'values' | 'search' | 'date_range' | 'number_range';
-  values?: string[];
-  search?: string;
-  dateRange?: { start?: string; end?: string };
-  numberRange?: { min?: number; max?: number };
-}
-
-interface ColumnFilterDropdownProps {
-  columnId: string;
-  onFilter: (columnId: string, filter: ColumnFilter | null) => void;
-  getUniqueValues: () => string[];
-  currentFilter?: ColumnFilter;
-  children: React.ReactNode;
-}
+import { ColumnFilter, ColumnFilterDropdownProps } from './table-component.types';
 
 export function ColumnFilterDropdown({
   columnId,
