@@ -343,6 +343,23 @@ function FileUploadTab({
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    console.log('🔍 handleFileSelect triggered');
+    console.log('📁 Event target:', event.target);
+    console.log('📁 Files array:', event.target.files);
+    console.log('📁 Files length:', event.target.files?.length);
+      // Comprehensive file debugging
+    if (!file) {
+      console.log('❌ No file selected');
+      return;
+    }
+    console.log('🔍 File Selection Debug:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: new Date(file.lastModified).toISOString(),
+      instanceof: file instanceof File,
+      isBlob: file instanceof Blob
+    });
     if (file) {
       if (
         !file.name.toLowerCase().endsWith(".csv") &&
