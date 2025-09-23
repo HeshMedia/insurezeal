@@ -17,10 +17,7 @@ import {
   Phone,
   MapPin,
   FileText,
-  Briefcase,
-  DollarSign,
-  Shield,
-  BarChart3
+  Briefcase
 } from 'lucide-react'
 
 export default function AgentDetailPage() {
@@ -177,56 +174,7 @@ export default function AgentDetailPage() {
           </div>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Running Balance</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    ₹{agent.running_balance ? agent.running_balance.toLocaleString('en-IN') : '0'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Shield className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Total Net Premium</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    ₹{agent.total_net_premium ? agent.total_net_premium.toLocaleString('en-IN') : '0'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border border-gray-200 shadow-sm">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Number Of Policies</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {agent.number_of_policies ? agent.number_of_policies.toLocaleString('en-IN') : '0'}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
 
         {/* Detailed Information */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
