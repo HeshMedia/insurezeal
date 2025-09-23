@@ -2,18 +2,18 @@
 
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
 import { AgentOverview } from '@/components/agent/agent-overview'
-import { useAuth } from '@/hooks/useAuth'
-import { Badge } from '@/components/ui/badge'
+// import { useAuth } from '@/hooks/useAuth'
+// import { Badge } from '@/components/ui/badge'
 
 export default function AgentDashboard() {
 
- const { user } = useAuth()
+//  const { user } = useAuth()
 
   return (
     <DashboardWrapper requiredRole="agent">
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
@@ -27,7 +27,7 @@ export default function AgentDashboard() {
               Active Agent
             </Badge>
           </div>
-        </div>
+        </div> */}
 
         {/* Agent Overview */}
         <AgentOverview 

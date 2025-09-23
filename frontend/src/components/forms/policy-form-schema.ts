@@ -6,8 +6,8 @@ export const PolicyFormSchema = z
     // PDF and policy identification
     policy_number: z.string().min(1, "Policy number is required"),
     policy_type: z.string().min(1, "Policy type is required"),
-    pdf_file_name: z.string().optional(),
-    pdf_file_path: z.string().optional(),
+    pdf_file_name: z.string().min(1, "PDF file name is required"),
+    pdf_file_path: z.string().min(1, "PDF file path is required"),
 
     // Agent and organizational info
     agent_id: z.string().optional(),

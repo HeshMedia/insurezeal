@@ -166,7 +166,7 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-white" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">MIS Data</h2>
+            <h2 className="text-xl font-bold text-gray-900">My Business Data (MIS)            </h2>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">

@@ -293,6 +293,41 @@ const CreatePolicyPage = () => {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Loading Overlay - Data Extraction Dialog */}
+        <AnimatePresence>
+          {(loadingStates.extracting || loadingStates.uploadingToIndexedDB) && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"
+            >
+              <Card className="w-96 border-none shadow-2xl">
+                <CardContent className="pt-6">
+                  <div className="text-center space-y-4">
+                    <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        Hold tight! We&apos;re extracting data...
+                      </h3>
+                      <p className="text-muted-foreground">
+                        {loadingStates.extracting && "Analyzing your policy document..."}
+                        {loadingStates.uploadingToIndexedDB && "Storing documents locally..."}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center space-x-2 text-sm text-muted-foreground">
+                      <Database className="h-4 w-4" />
+                      <span>Processing in progress.</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )

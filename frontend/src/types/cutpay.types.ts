@@ -2,6 +2,7 @@
 
 // Extracted data from policy document
 export interface ExtractedPolicyData {
+  insurance_company: string | null | undefined
   policy_number?: string | null
   formatted_policy_number?: string | null
   major_categorisation?: string | null
@@ -39,6 +40,9 @@ export interface ExtractedPolicyData {
   is_private_car?: boolean | null
   start_date?: string | null
   end_date?: string | null
+  // AI-detected insurer and broker names for validation
+  ai_detected_insurer_name?: string | null
+  ai_detected_broker_name?: string | null
 }
 
 // PDF extraction response
