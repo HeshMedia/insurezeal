@@ -490,6 +490,24 @@ async def list_policies(
         # Build query with optional quarter/year filtering
         query = select(Policy)
 
+        # Role-based access control: agents see only their own policies
+        user_role = current_user.get("role", "agent")
+        if user_role not in ["admin", "superadmin"]:
+            # Fetch the agent_code for the current user from UserProfile
+            from models import UserProfile
+
+            agent_code_result = await db.execute(
+                select(UserProfile.agent_code).where(UserProfile.user_id == current_user["user_id"])  # type: ignore[index]
+            )
+            agent_code = agent_code_result.scalar_one_or_none()
+
+            if not agent_code:
+                # No agent_code associated; return empty list
+                return []
+
+            # Restrict to policies belonging to this agent
+            query = query.where(Policy.agent_code == agent_code)
+
         # Apply date-based filtering if quarter/year are provided
         if quarter is not None or year is not None:
             filters = []
