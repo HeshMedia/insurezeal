@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -43,11 +42,9 @@ import {
   Clock,
   Eye,
   Loader2,
-  LayoutDashboard,
   TableProperties,
   Info,
   FileUp,
-  FileSearch,
   Plus,
   X,
 } from "lucide-react";
@@ -56,7 +53,6 @@ import {
   useUploadUniversalRecord,
   useDownloadUniversalTemplate,
   usePreviewUniversalRecord,
-  useReconciliationSummary,
 } from "@/hooks/universalQuery";
 import {
   UniversalUploadResponse,
@@ -258,14 +254,6 @@ export function UniversalRecordManagement({
                     File Upload
                   </TabsTrigger>
                   <TabsTrigger
-                    value="dashboard"
-                    disabled={!selectedInsurer}
-                    className="py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                  >
-                    <LayoutDashboard className="w-4 h-4 mr-2" />
-                    Dashboard
-                  </TabsTrigger>
-                  <TabsTrigger
                     value="mappings"
                     disabled={!selectedInsurer}
                     className="py-3 px-4 text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm"
@@ -281,11 +269,6 @@ export function UniversalRecordManagement({
                   <FileUploadTab 
                     selectedInsurer={selectedInsurer} 
                     quarterYearPairs={quarterYearPairs}
-                  />
-                </TabsContent>
-                <TabsContent value="dashboard" className="mt-0">
-                  <ReconciliationDashboardTab
-                    selectedInsurer={selectedInsurer}
                   />
                 </TabsContent>
                 <TabsContent value="mappings" className="mt-0">
@@ -826,152 +809,7 @@ function PreviewDialogContent({
   );
 }
 
-function ReconciliationDashboardTab({
-  selectedInsurer,
-}: {
-  selectedInsurer: string;
-}) {
-  const { data, isLoading, error } = useReconciliationSummary({
-    insurer_name: selectedInsurer,
-  });
 
-  if (!selectedInsurer) {
-    return (
-      <EmptyState
-        title="No Insurer Selected"
-        description="Please select an insurer to view its reconciliation dashboard."
-        icon={Info}
-      />
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-24">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-slate-600 mx-auto" />
-          <p className="text-slate-600">Loading reconciliation data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert variant="destructive" className="max-w-2xl mx-auto">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error.message}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  if (!data) {
-    return (
-      <EmptyState
-        title="No Summary Data"
-        description={`No reconciliation summary is available for ${selectedInsurer}.`}
-        icon={FileSearch}
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-8 max-w-6xl mx-auto">
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="bg-slate-50/50">
-          <CardTitle className="text-xl text-slate-800">
-            Overall Data Health
-          </CardTitle>
-          <CardDescription>
-            Key metrics for data quality and coverage.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid gap-8 md:grid-cols-2">
-            <ProgressCard
-              title="System Data Coverage"
-              description="Percentage of policies in the uploaded file that are also in our system."
-              value={data.coverage_percentage}
-            />
-            <ProgressCard
-              title="Data Variance"
-              description="Percentage of data fields that do not match for overlapping policies."
-              value={data.data_variance_percentage}
-              isVariance
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Matches"
-          value={data.total_matches}
-          variant="success"
-        />
-        <StatCard
-          title="Total Mismatches"
-          value={data.total_mismatches}
-          variant="error"
-        />
-        <StatCard
-          title="Missing in System"
-          value={data.total_missing_in_system}
-          variant="warning"
-        />
-        <StatCard
-          title="Missing in File"
-          value={data.total_missing_in_universal}
-          variant="info"
-        />
-      </div>
-
-      <Card className="border-slate-200 shadow-sm">
-        <CardHeader className="bg-slate-50/50">
-          <CardTitle className="text-xl text-slate-800">
-            Top Mismatched Fields
-          </CardTitle>
-          <CardDescription>
-            Fields with the highest number of discrepancies.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="overflow-hidden rounded-lg border border-slate-200">
-            <Table>
-              <TableHeader className="bg-slate-50">
-                <TableRow>
-                  <TableHead className="font-semibold text-slate-700 py-4">
-                    Field Name
-                  </TableHead>
-                  <TableHead className="text-right font-semibold text-slate-700 py-4">
-                    Mismatch Count
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.top_mismatched_fields.map((field) => (
-                  <TableRow
-                    key={field.field_name}
-                    className="hover:bg-slate-50"
-                  >
-                    <TableCell className="font-medium py-4">
-                      {field.field_name}
-                    </TableCell>
-                    <TableCell className="text-right py-4 font-medium text-red-600">
-                      {field.mismatch_count}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-// #endregion
 
 // #region Insurer Mappings Tab
 function InsurerMappingsTab({ selectedInsurer }: { selectedInsurer: string }) {
@@ -1034,53 +872,3 @@ function StatCard({
     </Card>
   );
 }
-
-function ProgressCard({
-  title,
-  description,
-  value,
-  isVariance = false,
-}: {
-  title: string;
-  description: string;
-  value: number;
-  isVariance?: boolean;
-}) {
-  const getColor = () => {
-    if (isVariance) {
-      if (value > 20) return "bg-red-500";
-      if (value > 5) return "bg-amber-500";
-      return "bg-green-500";
-    }
-    return "bg-slate-900";
-  };
-
-  const getTextColor = () => {
-    if (isVariance) {
-      if (value > 20) return "text-red-700";
-      if (value > 5) return "text-amber-700";
-      return "text-green-700";
-    }
-    return "text-slate-900";
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-baseline">
-        <h4 className="text-lg font-semibold text-slate-900">{title}</h4>
-        <span className={cn("text-2xl font-bold", getTextColor())}>
-          {value.toFixed(1)}%
-        </span>
-      </div>
-      <div className="space-y-2">
-        <Progress value={value} className="h-3" />
-        <div
-          className={cn("w-full h-3 rounded-full", getColor())}
-          style={{ width: `${value}%` }}
-        />
-      </div>
-      <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
-    </div>
-  );
-}
-// #endregion

@@ -27,6 +27,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
+import { AiOutlineReconciliation } from "react-icons/ai";
+
 
 const superAdminNavItems = [
   {
@@ -53,6 +55,11 @@ const superAdminNavItems = [
     title: "MIS & Reports",
     url: "/superadmin/mis-reports",
     icon: FileSpreadsheet,
+  },
+  {
+    title: "Reconciliation",
+    url: "/superadmin/reconcillation",
+    icon: AiOutlineReconciliation,
   },
   {
     title: "Settings",
