@@ -685,7 +685,8 @@ async def get_policy_transaction_by_policy_number(
                         # Find the row with matching policy number
                         found_policy_data = None
 
-                        for row_data in all_values[1:]:
+                        # Skip header (row 1) and dummy/formula row (row 2)
+                        for row_data in all_values[2:]:
                             if policy_col_index < len(row_data):
                                 cell_value = row_data[policy_col_index].strip()
                                 if cell_value == policy_number.strip():
@@ -1115,7 +1116,8 @@ async def delete_policy_transaction_by_policy_number(
                     # Find the row with matching policy number
                     found_row_index = -1
 
-                    for row_index, row_data in enumerate(all_values[1:], start=2):
+                    # Skip header (row 1) and dummy/formula row (row 2)
+                    for row_index, row_data in enumerate(all_values[2:], start=3):
                         if policy_col_index < len(row_data):
                             cell_value = row_data[policy_col_index].strip()
                             if cell_value == policy_number.strip():

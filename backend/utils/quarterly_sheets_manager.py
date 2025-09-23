@@ -1433,9 +1433,10 @@ class QuarterlySheetManager:
 
             # Find the row with matching policy number
             target_row = -1
+            # Skip header (row 1) and dummy/formula row (row 2)
             for row_index, row_data in enumerate(
-                all_values[1:], start=2
-            ):  # Skip header row
+                all_values[2:], start=3
+            ):
                 if policy_col_index < len(row_data):
                     if row_data[policy_col_index].strip() == policy_number.strip():
                         target_row = row_index
