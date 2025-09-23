@@ -224,11 +224,11 @@ async def upload_universal_record(
     insurer_name: str = None,
     quarters: str = Query(
         ...,
-        description="Comma-separated quarters (1-4) to target for upload. Example: '1,2' for Q1 and Q2",
+        description="Quarter (1-4) to target for upload. Only a single quarter is permitted.",
     ),
     years: str = Query(
         ...,
-        description="Comma-separated years corresponding to quarters. Example: '2025,2025' for both quarters in 2025",
+        description="Year corresponding to the quarter (e.g., '2025'). Only a single year is permitted.",
     ),
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -296,14 +296,21 @@ async def upload_universal_record(
                 detail="insurer_name parameter is required",
             )
 
-        # Parse and validate quarters and years
+        # Parse and validate quarters and years (single target only)
         try:
             quarter_list = [int(q.strip()) for q in quarters.split(",")]
             year_list = [int(y.strip()) for y in years.split(",")]
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="quarters and years must be comma-separated integers",
+                detail="quarter and year must be integers",
+            )
+
+        # Enforce only one quarter/year target at a time
+        if len(quarter_list) != 1 or len(year_list) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only one quarter and one year may be provided. Remove additional values.",
             )
 
         if len(quarter_list) != len(year_list):
