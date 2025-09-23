@@ -100,7 +100,7 @@ export function AgentOverview() {
 
 
       {/* MIS Table Section */}
-      <Card className="border border-gray-200">
+      <Card className="border border-gray-200 !p-0">
         <CardContent className="p-0">
           <AgentMISTable />
         </CardContent>

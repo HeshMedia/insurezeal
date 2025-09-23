@@ -55,9 +55,15 @@ import {
   FormFieldPath,
 } from "../admin/cutpay/form-config";
 import Calculations from "../admin/cutpay/calculations";
-import { Loader2 } from "lucide-react";
+import { Loader2, Info } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
 import { editModeFieldMappings, specialFieldMappings } from '@/components/admin/cutpay/form-config';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Props interface for the InputForm component (cutpay only)
 interface InputFormProps {
@@ -362,6 +368,35 @@ const InputForm: React.FC<InputFormProps> = ({
     // Clear child ID when code type, insurer, or broker changes
     setValue("admin_input.admin_child_id", null, { shouldValidate: true });
   }, [codeType, insurerCode, brokerCode, setValue]);
+
+  // Helper function to determine if child ID should be disabled
+  const getChildIdDisabledState = () => {
+    if (!codeType) {
+      return {
+        disabled: true,
+        tooltip: "Please select Code Type first"
+      };
+    }
+    
+    if (codeType === "Direct" && !insurerCode) {
+      return {
+        disabled: true,
+        tooltip: "Please select Insurer Code first"
+      };
+    }
+    
+    if (codeType === "Broker" && (!insurerCode || !brokerCode)) {
+      return {
+        disabled: true,
+        tooltip: "Please select both Insurer Code and Broker Code first"
+      };
+    }
+    
+    return {
+      disabled: false,
+      tooltip: null
+    };
+  };
 
   // Removed policy start/end date handling
 
@@ -1005,15 +1040,15 @@ const InputForm: React.FC<InputFormProps> = ({
     // Get current payout_on value for conditional rendering
     const payoutOn = watch("admin_input.payout_on");
 
-    // Skip payment method field if payment is by Agent
-    if (key === "admin_input.payment_method" && paymentBy === "Agent") {
+    // Skip payment method field if payment is by Agent or not InsureZeal
+    if (key === "admin_input.payment_method" && paymentBy !== "InsureZeal") {
       return null;
     }
 
     // Skip payment detail field if payment is by Agent or no payment method is selected
     if (
       key === "admin_input.payment_detail" &&
-      (paymentBy === "Agent" || !watch("admin_input.payment_method"))
+      (paymentBy !== "InsureZeal" || !watch("admin_input.payment_method"))
     ) {
       return null;
     }
@@ -1026,10 +1061,10 @@ const InputForm: React.FC<InputFormProps> = ({
       return null;
     }
 
-    // Skip payment_by_office field if payment_by is "Agent"
+    // Skip payment_by_office field if payment_by is not "InsureZeal"
     if (
       key === "admin_input.payment_by_office" &&
-      watch("admin_input.payment_by") === "Agent"
+      watch("admin_input.payment_by") !== "InsureZeal"
     ) {
       return null;
     }
@@ -1214,6 +1249,71 @@ const InputForm: React.FC<InputFormProps> = ({
         (key === "admin_input.agent_code" && agentsLoading) ||
         (key === "admin_input.admin_child_id" &&
           (adminChildIdsLoading || availableChildIdsLoading));
+
+      // Special handling for child ID field with dependency validation
+      if (key === "admin_input.admin_child_id") {
+        const childIdState = getChildIdDisabledState();
+        
+        return (
+          <div key={key} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Label htmlFor={key} className="text-sm font-medium text-gray-700">
+                  {label}
+                </Label>
+                {childIdState.disabled && childIdState.tooltip && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-gray-400" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{childIdState.tooltip}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+              {renderTag()}
+            </div>
+            <Controller
+              name={key as any}
+              control={control}
+              render={({ field: controllerField, fieldState }) => (
+                <>
+                  <Select
+                    onValueChange={controllerField.onChange}
+                    value={(controllerField.value as string) ?? undefined}
+                    disabled={disabled || childIdState.disabled}
+                  >
+                    <SelectTrigger className="h-10 w-fit">
+                      <SelectValue
+                        placeholder={
+                          isLoading ? "Loading..." : 
+                          childIdState.disabled ? "Select dependencies first" :
+                          `Select ${label}`
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {fieldState.error && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {fieldState.error.message}
+                    </p>
+                  )}
+                </>
+              )}
+            />
+          </div>
+        );
+      }
 
       return (
         <div key={key} className="space-y-2">

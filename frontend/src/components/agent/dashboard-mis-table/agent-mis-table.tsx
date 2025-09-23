@@ -1,14 +1,14 @@
-'use client'
+"use client";
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
   flexRender,
-} from '@tanstack/react-table'
-import { agentApi } from '@/lib/api/agent'
-import { AgentMISResponse } from '@/types/agent.types'
-import { columns as columnDefs } from './columns'
+} from "@tanstack/react-table";
+import { agentApi } from "@/lib/api/agent";
+import { AgentMISResponse } from "@/types/agent.types";
+import { columns as columnDefs } from "./columns";
 import {
   Table,
   TableBody,
@@ -16,43 +16,45 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { RefreshCw, Loader2, Calendar, TrendingUp } from 'lucide-react'
-import { useInView } from 'react-intersection-observer'
-import { cn } from '@/lib/utils'
-import { useInfiniteQuery } from '@tanstack/react-query'
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Loader2, Calendar, TrendingUp } from "lucide-react";
+import { useInView } from "react-intersection-observer";
+import { cn } from "@/lib/utils";
+import { useInfiniteQuery } from "@tanstack/react-query";
 
 interface AgentMISTableProps {
   onStatsUpdate?: (stats: {
-    number_of_policies: number
-    running_balance: number
-    total_net_premium: number
-  }) => void
+    number_of_policies: number;
+    running_balance: number;
+    total_net_premium: number;
+  }) => void;
 }
 
 // Helper function to get current quarter
 const getCurrentQuarter = (): number => {
-  const month = new Date().getMonth() + 1 // getMonth() returns 0-11
-  return Math.ceil(month / 3)
-}
+  const month = new Date().getMonth() + 1; // getMonth() returns 0-11
+  return Math.ceil(month / 3);
+};
 
 // Helper function to get current year
 const getCurrentYear = (): number => {
-  return new Date().getFullYear()
-}
+  return new Date().getFullYear();
+};
 
 export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
-  const [selectedQuarter, setSelectedQuarter] = useState<number>(getCurrentQuarter())
-  const [selectedYear, setSelectedYear] = useState<number>(getCurrentYear())
+  const [selectedQuarter, setSelectedQuarter] = useState<number>(
+    getCurrentQuarter()
+  );
+  const [selectedYear, setSelectedYear] = useState<number>(getCurrentYear());
 
   const {
     data,
@@ -63,59 +65,62 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
     isLoading,
     refetch,
   } = useInfiniteQuery<AgentMISResponse, Error>({
-    queryKey: ['agent-mis', selectedQuarter, selectedYear],
+    queryKey: ["agent-mis", selectedQuarter, selectedYear],
     queryFn: async (context: { pageParam?: unknown }) => {
-      const pageParam = typeof context.pageParam === 'number' ? context.pageParam : 1
+      const pageParam =
+        typeof context.pageParam === "number" ? context.pageParam : 1;
       return agentApi.mis.getAgentMISData({
         quarter: selectedQuarter,
         year: selectedYear,
         page: pageParam,
         page_size: 50,
-      })
+      });
     },
     initialPageParam: 1,
-    getNextPageParam: lastPage =>
+    getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
+  });
 
-  })
-
-  const { ref, inView } = useInView()
+  const { ref, inView } = useInView();
 
   // Trigger fetching next page when sentinel comes into view
   useEffect(() => {
     if (inView && hasNextPage) {
-      fetchNextPage()
+      fetchNextPage();
     }
-  }, [inView, hasNextPage, fetchNextPage])
+  }, [inView, hasNextPage, fetchNextPage]);
 
-  const records = useMemo(() => data?.pages.flatMap(page => page.records) ?? [], [data])
-  const stats = useMemo(() => data?.pages?.[0]?.stats ?? null, [data])
+  const records = useMemo(
+    () => data?.pages.flatMap((page) => page.records) ?? [],
+    [data]
+  );
+  const stats = useMemo(() => data?.pages?.[0]?.stats ?? null, [data]);
 
   useEffect(() => {
     if (stats && onStatsUpdate) {
-      onStatsUpdate(stats)
+      onStatsUpdate(stats);
     }
-  }, [stats, onStatsUpdate])
+  }, [stats, onStatsUpdate]);
 
   const table = useReactTable({
     data: records,
     columns: columnDefs,
     getCoreRowModel: getCoreRowModel(),
-  })
+  });
 
   const handleRefresh = () => {
-    refetch()
-  }
+    refetch();
+  };
 
   // Generate year options (current year and previous 4 years)
   const yearOptions = useMemo(() => {
-    const currentYear = getCurrentYear()
-    const years = []
+    const currentYear = getCurrentYear();
+    const years = [];
     for (let i = 0; i < 5; i++) {
-      years.push(currentYear - i)
+      years.push(currentYear - i);
     }
-    return years
-  }, [])
+    return years;
+  }, []);
 
   if (isLoading && !data) {
     return (
@@ -135,14 +140,16 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
           ))}
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[400px] bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl">
         <div className="text-center p-8 bg-white rounded-xl shadow-lg border border-red-100">
-          <div className="text-red-600 text-xl font-bold mb-2">⚠️ Error Loading Data</div>
+          <div className="text-red-600 text-xl font-bold mb-2">
+            ⚠️ Error Loading Data
+          </div>
           <div className="text-red-500 text-sm mb-4">{error.message}</div>
           <Button
             onClick={handleRefresh}
@@ -154,7 +161,7 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -166,16 +173,20 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-white" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">My Business Data (MIS)            </h2>
+            <h2 className="text-xl font-bold text-gray-900">
+              My Business Data (MIS){" "}
+            </h2>
           </div>
-          
+
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
             {/* Quarter Selection */}
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700">Quarter:</label>
-              <Select 
-                value={selectedQuarter.toString()} 
+              <label className="text-sm font-medium text-gray-700">
+                Quarter:
+              </label>
+              <Select
+                value={selectedQuarter.toString()}
                 onValueChange={(value) => setSelectedQuarter(parseInt(value))}
               >
                 <SelectTrigger className="w-24">
@@ -193,8 +204,8 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
             {/* Year Selection */}
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">Year:</label>
-              <Select 
-                value={selectedYear.toString()} 
+              <Select
+                value={selectedYear.toString()}
                 onValueChange={(value) => setSelectedYear(parseInt(value))}
               >
                 <SelectTrigger className="w-20">
@@ -229,7 +240,7 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
         <div className="min-w-full">
           <Table className="w-full bg-white border-collapse">
             <TableHeader className="sticky top-0 z-10 bg-gray-50">
-              {table.getHeaderGroups().map(headerGroup => (
+              {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow
                   key={headerGroup.id}
                   className="border-b-2 border-gray-300"
@@ -238,7 +249,7 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
                   <TableHead className="w-16 px-4 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider border-r border-gray-300">
                     S. NO
                   </TableHead>
-                  {headerGroup.headers.map(header => (
+                  {headerGroup.headers.map((header) => (
                     <TableHead
                       key={header.id}
                       className="px-4 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider last:border-r-0 whitespace-nowrap border-r border-gray-300"
@@ -262,26 +273,32 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
                 <TableRow
                   key={`${row.original.policy_number}-${index}`}
                   className={cn(
-                    'transition-colors duration-200 border-b border-gray-200 hover:bg-blue-50',
-                    index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
+                    "transition-colors duration-200 border-b border-gray-200 hover:bg-blue-50",
+                    index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
                   )}
                 >
                   {/* Serial Number Cell */}
                   <TableCell className="w-16 px-4 py-4 text-sm text-slate-800 border-r border-gray-200 font-medium text-center">
                     {data?.pages.reduce((acc, page, pageIndex) => {
-                      if (pageIndex === 0) return index + 1
+                      if (pageIndex === 0) return index + 1;
                       return (
-                        acc + (data.pages[pageIndex - 1]?.records.length || 0) + index + 1
-                      )
+                        acc +
+                        (data.pages[pageIndex - 1]?.records.length || 0) +
+                        index +
+                        1
+                      );
                     }, 0) || index + 1}
                   </TableCell>
-                  {row.getVisibleCells().map(cell => (
+                  {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
                       className="px-4 py-4 text-sm text-slate-800 border-r border-gray-200 last:border-r-0 whitespace-nowrap"
                     >
                       <div className="truncate" title={String(cell.getValue())}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
                       </div>
                     </TableCell>
                   ))}
@@ -303,10 +320,9 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
                 </span>
               </div>
             )}
-            
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }

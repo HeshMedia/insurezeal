@@ -91,6 +91,7 @@ export function AdminChildIdManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [childIdToDelete, setChildIdToDelete] = useState<AdminChildId | null>(null)
 
+
   const { data: adminChildIds, isLoading, error } = useAdminChildIdList()
   const { data: brokersInsurers, isLoading: brokersInsurersLoading } = useBrokersInsurersList()
   const createMutation = useCreateAdminChildId()
@@ -324,9 +325,17 @@ export function AdminChildIdManagement() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Code Type</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter code type" {...field} />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select code type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Direct">Direct</SelectItem>
+                            <SelectItem value="Broker">Broker</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
