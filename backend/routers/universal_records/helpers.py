@@ -282,83 +282,100 @@ def compare_record_fields(
     changed_fields = []
     field_changes = {}
 
-    # List of calculated/formula fields that should not be counted as variations 
+    # List of calculated/formula fields that should not be counted as variations
     # when the new record has empty values but existing record has calculated values
     calculated_fields = {
-        'Receivable from Broker', 'Extra Amount Receivable from Broker', 
-        'Total Receivable from Broker', 'Agent_PO_AMT', 'Agent_Extra%', 
-        'Agent_Extr_Amount', 'Agent Total PO Amount', 'Running Bal',
-        'Total Receivable from Broker Include 18% GST', 'IZ Total PO%',
-        'As per Broker PO AMT', 'PO% Diff Broker', 'PO AMT Diff Broker',
-        'Actual Agent PO%', 'As per Agent Payout Amount', 'PO% Diff Agent',
-        'PO AMT Diff Agent', 'Formatted Policy number'
+        "Receivable from Broker",
+        "Extra Amount Receivable from Broker",
+        "Total Receivable from Broker",
+        "Agent_PO_AMT",
+        "Agent_Extra%",
+        "Agent_Extr_Amount",
+        "Agent Total PO Amount",
+        "Running Bal",
+        "Total Receivable from Broker Include 18% GST",
+        "IZ Total PO%",
+        "As per Broker PO AMT",
+        "PO% Diff Broker",
+        "PO AMT Diff Broker",
+        "Actual Agent PO%",
+        "As per Agent Payout Amount",
+        "PO% Diff Agent",
+        "PO AMT Diff Agent",
+        "Formatted Policy number",
     }
-    
+
     # Get all unique field names from both records to ensure comprehensive comparison
     all_fields = set(existing_record.keys()) | set(new_record.keys())
-    
+
     # Compare each field and only count actual value differences
     for field in all_fields:
         existing_value = existing_record.get(field, "")
         new_value = new_record.get(field, "")
-        
+
         # Convert values to strings for comparison
         existing_str = str(existing_value).strip() if existing_value is not None else ""
         new_str = str(new_value).strip() if new_value is not None else ""
-        
+
         # Fix policy number formatting issue (remove leading quote)
-        if field == 'Policy number' and new_str.startswith("'"):
+        if field == "Policy number" and new_str.startswith("'"):
             new_str = new_str[1:]
-        
+
         # Skip ALL fields where new record is empty but existing has values
         # This treats empty upload values as "no change" rather than variations
         if new_str == "" and existing_str != "":
             # Don't count as variation - preserve existing value
             continue
-        
+
         # Only count as changed if values actually differ
         if existing_str != new_str:
             changed_fields.append(field)
             field_changes[field] = (existing_str, new_str)
 
     # Debug logging for first few comparisons
-    policy_num = new_record.get('Policy number', 'Unknown')
+    policy_num = new_record.get("Policy number", "Unknown")
     logger.info(
         f"Policy {policy_num}: {len(changed_fields)} out of {len(all_fields)} fields actually changed"
     )
-    
+
     # Log field names being compared (first time only for each upload)
-    if not hasattr(compare_record_fields, '_logged_fields'):
+    if not hasattr(compare_record_fields, "_logged_fields"):
         logger.info(f"All fields being compared: {sorted(all_fields)}")
         compare_record_fields._logged_fields = True
-    
+
     # For identical data uploads, log ALL changes to debug why fields are showing as different
     if len(changed_fields) > 0:
         logger.info(f"Policy {policy_num} - ALL changed fields: {changed_fields}")
         for field in changed_fields:  # Show ALL changes, not just first 3
             old_val, new_val = field_changes[field]
-            logger.info(f"  CHANGE: {field}: '{old_val}' (len={len(str(old_val))}) -> '{new_val}' (len={len(str(new_val))})")
+            logger.info(
+                f"  CHANGE: {field}: '{old_val}' (len={len(str(old_val))}) -> '{new_val}' (len={len(str(new_val))})"
+            )
     else:
-        logger.info(f"Policy {policy_num} - No field changes detected (this is correct for identical data)")
-    
+        logger.info(
+            f"Policy {policy_num} - No field changes detected (this is correct for identical data)"
+        )
+
     return True, changed_fields, field_changes
 
 
-def calculate_field_variations(processed_records: List[Dict[str, Any]]) -> Dict[str, int]:
+def calculate_field_variations(
+    processed_records: List[Dict[str, Any]],
+) -> Dict[str, int]:
     """
     Calculate field variations for all 72 master sheet headers based on processed records.
-    
+
     Args:
         processed_records: List of processed records with change details
-        
+
     Returns:
         Dictionary mapping field names to variation counts
     """
     from utils.quarterly_sheets_manager import quarterly_manager
-    
+
     # Get master headers from quarterly sheets manager
     master_headers = quarterly_manager._get_default_headers()
-    
+
     # Create a mapping from master headers to actual model field names
     # This maps the 72 master headers to the exact field names in the ReconciliationReport model
     header_to_field_map = {
@@ -435,7 +452,7 @@ def calculate_field_variations(processed_records: List[Dict[str, Any]]) -> Dict[
         "Match": "match",
         "Agent Code": "agent_code",
     }
-    
+
     # Initialize variation counts for all headers
     field_variations = {}
     for header in master_headers:
@@ -444,69 +461,77 @@ def calculate_field_variations(processed_records: List[Dict[str, Any]]) -> Dict[
             field_variations[field_name] = 0
         else:
             # Fallback to automatic conversion for any unmapped headers
-            field_name = (header.lower()
-                         .replace(' ', '_')
-                         .replace('(', '')
-                         .replace(')', '')
-                         .replace('/', '_')
-                         .replace('-', '_')
-                         .replace('.', '')
-                         .replace('\'', '')
-                         .replace('[', '')
-                         .replace(']', '')
-                         .replace('%', '_percentage')
-                         .replace('&', '_and_')
-                         .replace('#', '_number_')
-                         .replace('@', '_at_')
-                         .replace('  ', '_')
-                         .replace('__', '_'))
-            field_name = field_name.strip('_')
+            field_name = (
+                header.lower()
+                .replace(" ", "_")
+                .replace("(", "")
+                .replace(")", "")
+                .replace("/", "_")
+                .replace("-", "_")
+                .replace(".", "")
+                .replace("'", "")
+                .replace("[", "")
+                .replace("]", "")
+                .replace("%", "_percentage")
+                .replace("&", "_and_")
+                .replace("#", "_number_")
+                .replace("@", "_at_")
+                .replace("  ", "_")
+                .replace("__", "_")
+            )
+            field_name = field_name.strip("_")
             field_variations[field_name] = 0
-    
+
     # Count variations for each field based on processed records
     unmapped_fields = set()
     for record in processed_records:
-        changed_fields = record.get('changed_fields', [])
+        changed_fields = record.get("changed_fields", [])
         if isinstance(changed_fields, dict):
             # Handle cases where changed_fields is a dict instead of list
             changed_fields = list(changed_fields.keys())
-        
+
         for field in changed_fields:
             # First try to find direct mapping from master headers
             mapped_field = None
             for header, field_name in header_to_field_map.items():
-                if field.lower() == header.lower() or field.lower().replace(' ', '_') == field_name:
+                if (
+                    field.lower() == header.lower()
+                    or field.lower().replace(" ", "_") == field_name
+                ):
                     mapped_field = field_name
                     break
-            
+
             # If no direct mapping found, use automatic conversion
             if not mapped_field:
-                mapped_field = (str(field).lower()
-                              .replace(' ', '_')
-                              .replace('(', '')
-                              .replace(')', '')
-                              .replace('/', '_')
-                              .replace('-', '_')
-                              .replace('.', '')
-                              .replace('\'', '')
-                              .replace('[', '')
-                              .replace(']', '')
-                              .replace('%', '_percentage')
-                              .replace('&', '_and_')
-                              .replace('#', '_number_')
-                              .replace('@', '_at_')
-                              .replace('  ', '_')
-                              .replace('__', '_'))
-                mapped_field = mapped_field.strip('_')
+                mapped_field = (
+                    str(field)
+                    .lower()
+                    .replace(" ", "_")
+                    .replace("(", "")
+                    .replace(")", "")
+                    .replace("/", "_")
+                    .replace("-", "_")
+                    .replace(".", "")
+                    .replace("'", "")
+                    .replace("[", "")
+                    .replace("]", "")
+                    .replace("%", "_percentage")
+                    .replace("&", "_and_")
+                    .replace("#", "_number_")
+                    .replace("@", "_at_")
+                    .replace("  ", "_")
+                    .replace("__", "_")
+                )
+                mapped_field = mapped_field.strip("_")
                 unmapped_fields.add(f"{field} -> {mapped_field}")
-            
+
             if mapped_field in field_variations:
                 field_variations[mapped_field] += 1
-    
+
     # Log unmapped fields for debugging
     if unmapped_fields:
         logger.info(f"Fields using automatic conversion: {sorted(unmapped_fields)}")
-    
+
     return field_variations
 
 
@@ -810,7 +835,10 @@ def preview_csv_with_mapping(
 
 
 async def process_universal_record_csv(
-    db: AsyncSession, csv_content: str, insurer_name: str, admin_user_id: Union[str, uuid.UUID]
+    db: AsyncSession,
+    csv_content: str,
+    insurer_name: str,
+    admin_user_id: Union[str, uuid.UUID],
 ) -> UniversalRecordProcessingReport:
     """
     Process universal record CSV with insurer-specific mapping
@@ -1258,13 +1286,19 @@ async def process_universal_record_csv(
             # Calculate field variations based on change details
             processed_records = [detail.dict() for detail in change_details]
             field_variations = calculate_field_variations(processed_records)
-            
-            logger.info(f"Creating master ReconciliationReport with {len(field_variations)} field variations")
-            logger.info(f"Non-zero variations: {[(k, v) for k, v in field_variations.items() if v > 0]}")
-            
+
+            logger.info(
+                f"Creating master ReconciliationReport with {len(field_variations)} field variations"
+            )
+            logger.info(
+                f"Non-zero variations: {[(k, v) for k, v in field_variations.items() if v > 0]}"
+            )
+
             db_report = ReconciliationReport(
                 insurer_name=insurer_name,
-                insurer_code=insurer_mapping.get("insurer_code") if insurer_mapping else None,
+                insurer_code=(
+                    insurer_mapping.get("insurer_code") if insurer_mapping else None
+                ),
                 total_records_processed=stats.total_records_processed,
                 total_records_updated=stats.total_records_updated,
                 new_records_added=stats.total_records_added,  # Map to new field name
@@ -1275,10 +1309,15 @@ async def process_universal_record_csv(
                     else admin_user_id
                 ),
                 # Set field variation counts using the calculated variations
-                **{f"{field}_variations": count for field, count in field_variations.items()}
+                **{
+                    f"{field}_variations": count
+                    for field, count in field_variations.items()
+                },
             )
 
-            logger.info(f"Master ReconciliationReport created successfully for insurer: {insurer_name}")
+            logger.info(
+                f"Master ReconciliationReport created successfully for insurer: {insurer_name}"
+            )
             db.add(db_report)
             await db.commit()
             logger.info(
@@ -1604,8 +1643,10 @@ async def process_universal_record_csv_to_quarterly_sheets(
 
         # Save reconciliation report to database for persistence
         try:
-            logger.info(f"Starting to save reconciliation report for insurer: {insurer_name}")
-            
+            logger.info(
+                f"Starting to save reconciliation report for insurer: {insurer_name}"
+            )
+
             # Calculate variance and coverage percentages
             variance_percentage = (
                 (stats.total_errors / stats.total_records_processed * 100)
@@ -1622,18 +1663,26 @@ async def process_universal_record_csv_to_quarterly_sheets(
                 else 0.0
             )
 
-            logger.info(f"Stats summary - Processed: {stats.total_records_processed}, Updated: {stats.total_records_updated}, Added: {stats.total_records_added}")
+            logger.info(
+                f"Stats summary - Processed: {stats.total_records_processed}, Updated: {stats.total_records_updated}, Added: {stats.total_records_added}"
+            )
 
             # Calculate field variations based on change details
             processed_records = [detail.dict() for detail in change_details]
             field_variations = calculate_field_variations(processed_records)
-            
-            logger.info(f"Creating quarterly ReconciliationReport with {len(field_variations)} field variations")
-            logger.info(f"Non-zero variations: {[(k, v) for k, v in field_variations.items() if v > 0]}")
-            
+
+            logger.info(
+                f"Creating quarterly ReconciliationReport with {len(field_variations)} field variations"
+            )
+            logger.info(
+                f"Non-zero variations: {[(k, v) for k, v in field_variations.items() if v > 0]}"
+            )
+
             db_report = ReconciliationReport(
                 insurer_name=insurer_name,
-                insurer_code=insurer_mapping.get("insurer_code") if insurer_mapping else None,
+                insurer_code=(
+                    insurer_mapping.get("insurer_code") if insurer_mapping else None
+                ),
                 total_records_processed=stats.total_records_processed,
                 total_records_updated=stats.total_records_updated,
                 new_records_added=stats.total_records_added,  # Map to new field name
@@ -1644,10 +1693,15 @@ async def process_universal_record_csv_to_quarterly_sheets(
                     else admin_user_id
                 ),
                 # Set field variation counts using the calculated variations
-                **{f"{field}_variations": count for field, count in field_variations.items()}
+                **{
+                    f"{field}_variations": count
+                    for field, count in field_variations.items()
+                },
             )
 
-            logger.info(f"ReconciliationReport created successfully for insurer: {insurer_name}")
+            logger.info(
+                f"ReconciliationReport created successfully for insurer: {insurer_name}"
+            )
             db.add(db_report)
             await db.commit()
             logger.info(

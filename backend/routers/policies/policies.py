@@ -1374,12 +1374,12 @@ async def create_quarter_sheet(
 ):
     """
     Manually create a new quarter sheet with template headers and formulas.
-    
+
     **Requires admin or superadmin permission**
-    
+
     - **quarter**: Quarter number (1, 2, 3, or 4)
     - **year**: Year for the quarter sheet (e.g., 2025)
-    
+
     Creates a new quarterly Google Sheet with:
     - Headers copied from Master Template
     - Sample data row with formulas
@@ -1387,16 +1387,16 @@ async def create_quarter_sheet(
     """
     try:
         from utils.quarterly_sheets_manager import quarterly_manager
-        
-        logger.info(f"User {current_user.get('user_id')} requesting to create Q{quarter}-{year} sheet")
-        
+
+        logger.info(
+            f"User {current_user.get('user_id')} requesting to create Q{quarter}-{year} sheet"
+        )
+
         # Create the quarter sheet with template
         result = await run_in_threadpool(
-            quarterly_manager.create_quarter_sheet_with_template,
-            quarter,
-            year
+            quarterly_manager.create_quarter_sheet_with_template, quarter, year
         )
-        
+
         if result.get("success"):
             logger.info(f"Successfully created quarter sheet: {result.get('message')}")
             return {
@@ -1408,20 +1408,19 @@ async def create_quarter_sheet(
                     "year": year,
                     "rows_copied": result.get("rows_copied"),
                     "columns": result.get("columns"),
-                    "created_by": current_user.get("user_id")
-                }
+                    "created_by": current_user.get("user_id"),
+                },
             }
         else:
             logger.error(f"Failed to create quarter sheet: {result.get('error')}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.get("error", "Failed to create quarter sheet")
+                detail=result.get("error", "Failed to create quarter sheet"),
             )
-    
+
     except Exception as e:
         logger.error(f"Error creating quarter sheet Q{quarter}-{year}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create quarter sheet: {str(e)}"
+            detail=f"Failed to create quarter sheet: {str(e)}",
         )
-

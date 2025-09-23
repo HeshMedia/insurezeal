@@ -1147,7 +1147,10 @@ def prepare_complete_policy_sheets_data(
             "Agent_PO_AMT": 0,
             "Agent_Extra%": 0,
             "Agent_Extr_Amount": 0,
-            "Agent Total PO Amount": getattr(policy_data, "total_agent_commission_amount", 0) or 0,
+            "Agent Total PO Amount": getattr(
+                policy_data, "total_agent_commission_amount", 0
+            )
+            or 0,
             "Payment By Office": getattr(policy_data, "payment_by_office", 0) or 0,
             "PO Paid To Agent": getattr(policy_data, "total_agent_payout_amount", 0)
             or 0,

@@ -611,7 +611,9 @@ class ChildHelpers:
                         f"Invalid UUID format for agent_id: '{agent_id}' - Type: {type(agent_id)} - Error: {str(uuid_error)}"
                     )
                     # Skip agent filtering if UUID is invalid rather than failing the entire request
-                    logger.warning(f"Skipping agent filter due to invalid UUID: {agent_id}")
+                    logger.warning(
+                        f"Skipping agent filter due to invalid UUID: {agent_id}"
+                    )
 
             # Build query: avoid inner joins so we don't drop records when related rows are missing
             query = (

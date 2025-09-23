@@ -531,7 +531,9 @@ async def download_universal_record_template(
 @router.get("/reconciliation", response_model=list[ComprehensiveReconciliationResponse])
 async def get_comprehensive_reconciliation_reports(
     insurer_name: Optional[str] = None,
-    limit: int = Query(default=50, le=1000, description="Maximum number of records to return"),
+    limit: int = Query(
+        default=50, le=1000, description="Maximum number of records to return"
+    ),
     offset: int = Query(default=0, ge=0, description="Number of records to skip"),
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -561,20 +563,22 @@ async def get_comprehensive_reconciliation_reports(
 
     try:
         # Build query with optional insurer filter
-        query = select(ReconciliationReport).order_by(desc(ReconciliationReport.created_at))
-        
+        query = select(ReconciliationReport).order_by(
+            desc(ReconciliationReport.created_at)
+        )
+
         if insurer_name:
             query = query.where(ReconciliationReport.insurer_name == insurer_name)
-        
+
         # Apply pagination
         query = query.offset(offset).limit(limit)
-        
+
         result = await db.execute(query)
         reports = result.scalars().all()
-        
+
         if not reports:
             return []
-        
+
         # Convert database records to response format
         response_data = []
         for report in reports:
@@ -588,7 +592,6 @@ async def get_comprehensive_reconciliation_reports(
                 total_records_updated=report.total_records_updated,
                 new_records_added=report.new_records_added,
                 data_variance_percentage=float(report.data_variance_percentage),
-                
                 # All 72 field variation columns
                 reporting_month_variations=report.reporting_month_variations,
                 child_id_variations=report.child_id_variations,
@@ -663,11 +666,11 @@ async def get_comprehensive_reconciliation_reports(
                 match_variations=report.match_variations,
                 agent_code_variations=report.agent_code_variations,
             )
-            
+
             response_data.append(report_data)
-        
+
         return response_data
-        
+
     except Exception as e:
         logger.error(f"Error fetching comprehensive reconciliation reports: {str(e)}")
         raise HTTPException(
