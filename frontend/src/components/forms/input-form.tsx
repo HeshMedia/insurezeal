@@ -836,7 +836,7 @@ const InputForm: React.FC<InputFormProps> = ({
               data.extracted_data?.customer_phone_number ||
               pdfExtractionData?.extracted_data?.customer_phone_number ||
               null,
-          },
+          } as any,
           admin_input: data.admin_input
             ? {
                 reporting_month: data.admin_input.reporting_month || null,
