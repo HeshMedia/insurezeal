@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { AccessTokenResponse, SheetData } from '@/types/google-sheets.types';
 import { SignJWT, importPKCS8 } from 'jose';
+import { getGoogleSheetsPrivateKey, validatePrivateKey } from '@/lib/utils/google-keys';
 
 
 class GoogleSheetsClient {
@@ -13,7 +14,7 @@ class GoogleSheetsClient {
   constructor() {
     this.spreadsheetId = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID || process.env.GOOGLE_SHEETS_ID || '';
     this.clientEmail = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL || '';
-    this.privateKey = (process.env.NEXT_PUBLIC_GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+    this.privateKey = getGoogleSheetsPrivateKey();
     
     if (!this.spreadsheetId) {
       throw new Error('Google Sheets ID is required. Set NEXT_PUBLIC_GOOGLE_SHEETS_ID or GOOGLE_SHEETS_ID environment variable.');
@@ -23,8 +24,8 @@ class GoogleSheetsClient {
       throw new Error('Google service account email is required. Set NEXT_PUBLIC_GOOGLE_CLIENT_EMAIL or GOOGLE_CLIENT_EMAIL environment variable.');
     }
     
-    if (!this.privateKey) {
-      throw new Error('Google service account private key is required. Set NEXT_PUBLIC_GOOGLE_PRIVATE_KEY or GOOGLE_PRIVATE_KEY environment variable.');
+    if (!this.privateKey || !validatePrivateKey(this.privateKey)) {
+      throw new Error('Google service account private key is required and must be in valid PEM format. Set NEXT_PUBLIC_GOOGLE_PRIVATE_KEY or GOOGLE_PRIVATE_KEY environment variable.');
     }
   }
 

@@ -92,7 +92,7 @@ import os
 import re
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -267,30 +267,247 @@ def compare_record_fields(
     existing_record: Dict[str, Any], new_record: Dict[str, Any]
 ) -> Tuple[bool, List[str], Dict[str, Tuple[str, str]]]:
     """
-    Simple comparison: always return True to overwrite existing record with new data
+    Compare records and identify fields with actual value changes.
+    Always updates the record, but only counts fields with different values as variations.
 
     Args:
         existing_record: Current record from quarterly sheet
         new_record: New record from upload
 
     Returns:
-        - has_changes: Always True (always update)
-        - changed_fields: All field names from new record
-        - field_changes: All fields mapped to (old_value, new_value) tuples
+        - has_changes: Always True (always update the record)
+        - changed_fields: Only field names where values actually differ
+        - field_changes: Only fields with changes mapped to (old_value, new_value) tuples
     """
     changed_fields = []
     field_changes = {}
 
-    # Get all fields from the new record - we want to update everything
-    for field, new_value in new_record.items():
+    # List of calculated/formula fields that should not be counted as variations 
+    # when the new record has empty values but existing record has calculated values
+    calculated_fields = {
+        'Receivable from Broker', 'Extra Amount Receivable from Broker', 
+        'Total Receivable from Broker', 'Agent_PO_AMT', 'Agent_Extra%', 
+        'Agent_Extr_Amount', 'Agent Total PO Amount', 'Running Bal',
+        'Total Receivable from Broker Include 18% GST', 'IZ Total PO%',
+        'As per Broker PO AMT', 'PO% Diff Broker', 'PO AMT Diff Broker',
+        'Actual Agent PO%', 'As per Agent Payout Amount', 'PO% Diff Agent',
+        'PO AMT Diff Agent', 'Formatted Policy number'
+    }
+    
+    # Get all unique field names from both records to ensure comprehensive comparison
+    all_fields = set(existing_record.keys()) | set(new_record.keys())
+    
+    # Compare each field and only count actual value differences
+    for field in all_fields:
         existing_value = existing_record.get(field, "")
-        changed_fields.append(field)
-        field_changes[field] = (str(existing_value), str(new_value))
+        new_value = new_record.get(field, "")
+        
+        # Convert values to strings for comparison
+        existing_str = str(existing_value).strip() if existing_value is not None else ""
+        new_str = str(new_value).strip() if new_value is not None else ""
+        
+        # Fix policy number formatting issue (remove leading quote)
+        if field == 'Policy number' and new_str.startswith("'"):
+            new_str = new_str[1:]
+        
+        # Skip ALL fields where new record is empty but existing has values
+        # This treats empty upload values as "no change" rather than variations
+        if new_str == "" and existing_str != "":
+            # Don't count as variation - preserve existing value
+            continue
+        
+        # Only count as changed if values actually differ
+        if existing_str != new_str:
+            changed_fields.append(field)
+            field_changes[field] = (existing_str, new_str)
 
+    # Debug logging for first few comparisons
+    policy_num = new_record.get('Policy number', 'Unknown')
     logger.info(
-        f"Updating all fields for policy: {new_record.get('Policy number', 'Unknown')}"
+        f"Policy {policy_num}: {len(changed_fields)} out of {len(all_fields)} fields actually changed"
     )
+    
+    # Log field names being compared (first time only for each upload)
+    if not hasattr(compare_record_fields, '_logged_fields'):
+        logger.info(f"All fields being compared: {sorted(all_fields)}")
+        compare_record_fields._logged_fields = True
+    
+    # For identical data uploads, log ALL changes to debug why fields are showing as different
+    if len(changed_fields) > 0:
+        logger.info(f"Policy {policy_num} - ALL changed fields: {changed_fields}")
+        for field in changed_fields:  # Show ALL changes, not just first 3
+            old_val, new_val = field_changes[field]
+            logger.info(f"  CHANGE: {field}: '{old_val}' (len={len(str(old_val))}) -> '{new_val}' (len={len(str(new_val))})")
+    else:
+        logger.info(f"Policy {policy_num} - No field changes detected (this is correct for identical data)")
+    
     return True, changed_fields, field_changes
+
+
+def calculate_field_variations(processed_records: List[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    Calculate field variations for all 72 master sheet headers based on processed records.
+    
+    Args:
+        processed_records: List of processed records with change details
+        
+    Returns:
+        Dictionary mapping field names to variation counts
+    """
+    from utils.quarterly_sheets_manager import quarterly_manager
+    
+    # Get master headers from quarterly sheets manager
+    master_headers = quarterly_manager._get_default_headers()
+    
+    # Create a mapping from master headers to actual model field names
+    # This maps the 72 master headers to the exact field names in the ReconciliationReport model
+    header_to_field_map = {
+        "Reporting Month (mmm'yy)": "reporting_month",
+        "Child ID/ User ID [Provided by Insure Zeal]": "child_id",
+        "Insurer /broker code": "insurer_broker_code",
+        "Policy Start Date": "policy_start_date",
+        "Policy End Date": "policy_end_date",
+        "Booking Date(Click to select Date)": "booking_date",
+        "Broker Name": "broker_name",
+        "Insurer name": "insurer_name",
+        "Major Categorisation( Motor/Life/ Health)": "major_categorisation",
+        "Product (Insurer Report)": "product",
+        "Product Type": "product_type",
+        "Plan type (Comp/STP/SAOD)": "plan_type",
+        "Gross premium": "gross_premium",
+        "GST Amount": "gst_amount",
+        "Net premium": "net_premium",
+        "OD Preimium": "od_premium",
+        "TP Premium": "tp_premium",
+        "Policy number": "policy_number",
+        "Formatted Policy number": "formatted_policy_number",
+        "Registration.no": "registration_no",
+        "Make_Model": "make_model",
+        "Model": "model",
+        "Vehicle_Variant": "vehicle_variant",
+        "GVW": "gvw",
+        "RTO": "rto",
+        "State": "state",
+        "Cluster": "cluster",
+        "Fuel Type": "fuel_type",
+        "CC": "cc",
+        "Age(Year)": "age_year",
+        "NCB (YES/NO)": "ncb",
+        "Discount %": "discount_percentage",
+        "Business Type": "business_type",
+        "Seating Capacity": "seating_capacity",
+        "Veh_Wheels": "veh_wheels",
+        "Customer Name": "customer_name",
+        "Customer Number": "customer_number",
+        "Commissionable Premium": "commissionable_premium",
+        "Incoming Grid %": "incoming_grid_percentage",
+        "Receivable from Broker": "receivable_from_broker",
+        "Extra Grid": "extra_grid",
+        "Extra Amount Receivable from Broker": "extra_amount_receivable",
+        "Total Receivable from Broker": "total_receivable_from_broker",
+        "Claimed By": "claimed_by",
+        "Payment by": "payment_by",
+        "Payment Mode": "payment_mode",
+        "Cut Pay Amount Received From Agent": "cut_pay_amount_received",
+        "Already Given to agent": "already_given_to_agent",
+        "Actual Agent_PO%": "actual_agent_po_percentage",
+        "Agent_PO_AMT": "agent_po_amt",
+        "Agent_Extra%": "agent_extra_percentage",
+        "Agent_Extr_Amount": "agent_extra_amount",
+        "Agent Total PO Amount": "agent_total_po_amount",
+        "Payment By Office": "payment_by_office",
+        "PO Paid To Agent": "po_paid_to_agent",
+        "Running Bal": "running_bal",
+        "Total Receivable from Broker Include 18% GST": "total_receivable_gst",
+        "IZ Total PO%": "iz_total_po_percentage",
+        "As per Broker PO%": "as_per_broker_po_percentage",
+        "As per Broker PO AMT": "as_per_broker_po_amt",
+        "PO% Diff Broker": "po_percentage_diff_broker",
+        "PO AMT Diff Broker": "po_amt_diff_broker",
+        "Actual Agent PO%": "actual_agent_po_percentage_2",
+        "As per Agent Payout%": "as_per_agent_payout_percentage",
+        "As per Agent Payout Amount": "as_per_agent_payout_amount",
+        "PO% Diff Agent": "po_percentage_diff_agent",
+        "PO AMT Diff Agent": "po_amt_diff_agent",
+        "Invoice Status": "invoice_status",
+        "Invoice Number": "invoice_number",
+        "Remarks": "remarks",
+        "Match": "match",
+        "Agent Code": "agent_code",
+    }
+    
+    # Initialize variation counts for all headers
+    field_variations = {}
+    for header in master_headers:
+        field_name = header_to_field_map.get(header)
+        if field_name:
+            field_variations[field_name] = 0
+        else:
+            # Fallback to automatic conversion for any unmapped headers
+            field_name = (header.lower()
+                         .replace(' ', '_')
+                         .replace('(', '')
+                         .replace(')', '')
+                         .replace('/', '_')
+                         .replace('-', '_')
+                         .replace('.', '')
+                         .replace('\'', '')
+                         .replace('[', '')
+                         .replace(']', '')
+                         .replace('%', '_percentage')
+                         .replace('&', '_and_')
+                         .replace('#', '_number_')
+                         .replace('@', '_at_')
+                         .replace('  ', '_')
+                         .replace('__', '_'))
+            field_name = field_name.strip('_')
+            field_variations[field_name] = 0
+    
+    # Count variations for each field based on processed records
+    unmapped_fields = set()
+    for record in processed_records:
+        changed_fields = record.get('changed_fields', [])
+        if isinstance(changed_fields, dict):
+            # Handle cases where changed_fields is a dict instead of list
+            changed_fields = list(changed_fields.keys())
+        
+        for field in changed_fields:
+            # First try to find direct mapping from master headers
+            mapped_field = None
+            for header, field_name in header_to_field_map.items():
+                if field.lower() == header.lower() or field.lower().replace(' ', '_') == field_name:
+                    mapped_field = field_name
+                    break
+            
+            # If no direct mapping found, use automatic conversion
+            if not mapped_field:
+                mapped_field = (str(field).lower()
+                              .replace(' ', '_')
+                              .replace('(', '')
+                              .replace(')', '')
+                              .replace('/', '_')
+                              .replace('-', '_')
+                              .replace('.', '')
+                              .replace('\'', '')
+                              .replace('[', '')
+                              .replace(']', '')
+                              .replace('%', '_percentage')
+                              .replace('&', '_and_')
+                              .replace('#', '_number_')
+                              .replace('@', '_at_')
+                              .replace('  ', '_')
+                              .replace('__', '_'))
+                mapped_field = mapped_field.strip('_')
+                unmapped_fields.add(f"{field} -> {mapped_field}")
+            
+            if mapped_field in field_variations:
+                field_variations[mapped_field] += 1
+    
+    # Log unmapped fields for debugging
+    if unmapped_fields:
+        logger.info(f"Fields using automatic conversion: {sorted(unmapped_fields)}")
+    
+    return field_variations
 
 
 # Master insurer mappings loaded from CSV configuration
@@ -593,7 +810,7 @@ def preview_csv_with_mapping(
 
 
 async def process_universal_record_csv(
-    db: AsyncSession, csv_content: str, insurer_name: str, admin_user_id: int
+    db: AsyncSession, csv_content: str, insurer_name: str, admin_user_id: Union[str, uuid.UUID]
 ) -> UniversalRecordProcessingReport:
     """
     Process universal record CSV with insurer-specific mapping
@@ -1038,29 +1255,30 @@ async def process_universal_record_csv(
                 else 0.0
             )
 
+            # Calculate field variations based on change details
+            processed_records = [detail.dict() for detail in change_details]
+            field_variations = calculate_field_variations(processed_records)
+            
+            logger.info(f"Creating master ReconciliationReport with {len(field_variations)} field variations")
+            logger.info(f"Non-zero variations: {[(k, v) for k, v in field_variations.items() if v > 0]}")
+            
             db_report = ReconciliationReport(
                 insurer_name=insurer_name,
-                report_type="universal_record",
+                insurer_code=insurer_mapping.get("insurer_code") if insurer_mapping else None,
                 total_records_processed=stats.total_records_processed,
                 total_records_updated=stats.total_records_updated,
-                total_records_added=stats.total_records_added,
-                total_records_skipped=stats.total_records_skipped,
-                total_errors=stats.total_errors,
-                processing_time_seconds=stats.processing_time_seconds,
+                new_records_added=stats.total_records_added,  # Map to new field name
                 data_variance_percentage=round(variance_percentage, 2),
-                coverage_percentage=round(coverage_percentage, 2),
-                field_changes=stats.field_changes,
-                error_details=stats.error_details,
-                change_details=[detail.dict() for detail in change_details],
-                file_info=report.file_info,
-                status="completed" if stats.total_errors == 0 else "partial",
                 processed_by=(
                     uuid.UUID(admin_user_id)
                     if isinstance(admin_user_id, str)
                     else admin_user_id
                 ),
+                # Set field variation counts using the calculated variations
+                **{f"{field}_variations": count for field, count in field_variations.items()}
             )
 
+            logger.info(f"Master ReconciliationReport created successfully for insurer: {insurer_name}")
             db.add(db_report)
             await db.commit()
             logger.info(
@@ -1085,7 +1303,7 @@ async def process_universal_record_csv_to_quarterly_sheets(
     db: AsyncSession,
     csv_content: str,
     insurer_name: str,
-    admin_user_id: int,
+    admin_user_id: Union[str, uuid.UUID],
     quarter_list: List[int],
     year_list: List[int],
 ) -> UniversalRecordProcessingReport:
@@ -1326,10 +1544,7 @@ async def process_universal_record_csv_to_quarterly_sheets(
                                     policy_number=policy_number,
                                     record_type="quarterly_sheet",
                                     action="added",
-                                    changed_fields={
-                                        field: "Added field"
-                                        for field in quarterly_record.keys()
-                                    },
+                                    changed_fields={},  # Empty - new records don't count as variations
                                     previous_values={},
                                     new_values=quarterly_record,
                                 )
@@ -1389,6 +1604,8 @@ async def process_universal_record_csv_to_quarterly_sheets(
 
         # Save reconciliation report to database for persistence
         try:
+            logger.info(f"Starting to save reconciliation report for insurer: {insurer_name}")
+            
             # Calculate variance and coverage percentages
             variance_percentage = (
                 (stats.total_errors / stats.total_records_processed * 100)
@@ -1405,31 +1622,36 @@ async def process_universal_record_csv_to_quarterly_sheets(
                 else 0.0
             )
 
+            logger.info(f"Stats summary - Processed: {stats.total_records_processed}, Updated: {stats.total_records_updated}, Added: {stats.total_records_added}")
+
+            # Calculate field variations based on change details
+            processed_records = [detail.dict() for detail in change_details]
+            field_variations = calculate_field_variations(processed_records)
+            
+            logger.info(f"Creating quarterly ReconciliationReport with {len(field_variations)} field variations")
+            logger.info(f"Non-zero variations: {[(k, v) for k, v in field_variations.items() if v > 0]}")
+            
             db_report = ReconciliationReport(
                 insurer_name=insurer_name,
-                report_type="universal_record_quarterly",
+                insurer_code=insurer_mapping.get("insurer_code") if insurer_mapping else None,
                 total_records_processed=stats.total_records_processed,
                 total_records_updated=stats.total_records_updated,
-                total_records_added=stats.total_records_added,
-                total_records_skipped=stats.total_records_skipped,
-                total_errors=stats.total_errors,
-                processing_time_seconds=stats.processing_time_seconds,
+                new_records_added=stats.total_records_added,  # Map to new field name
                 data_variance_percentage=round(variance_percentage, 2),
-                coverage_percentage=round(coverage_percentage, 2),
-                field_changes=stats.field_changes,
-                error_details=stats.error_details,
-                change_details=[detail.dict() for detail in change_details],
-                file_info=report.file_info,
-                processed_by=admin_user_id,
-                status=(
-                    "completed" if stats.total_errors == 0 else "completed_with_errors"
+                processed_by=(
+                    uuid.UUID(admin_user_id)
+                    if isinstance(admin_user_id, str)
+                    else admin_user_id
                 ),
+                # Set field variation counts using the calculated variations
+                **{f"{field}_variations": count for field, count in field_variations.items()}
             )
 
+            logger.info(f"ReconciliationReport created successfully for insurer: {insurer_name}")
             db.add(db_report)
             await db.commit()
             logger.info(
-                f"Saved quarterly reconciliation report to database for insurer '{insurer_name}'"
+                f"Successfully saved quarterly reconciliation report to database for insurer '{insurer_name}'"
             )
 
         except Exception as e:
