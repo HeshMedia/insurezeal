@@ -130,6 +130,7 @@ export interface AgentMISResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  oldest_quarter_sheet: string;
 }
 
 // Table state for UI, using response data split into typed fields

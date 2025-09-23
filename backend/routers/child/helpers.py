@@ -573,10 +573,11 @@ class ChildHelpers:
         try:
             from sqlalchemy.orm import selectinload
 
-            # Base conditions
+            # Base conditions (filter directly on ChildIdRequest to avoid requiring joined rows)
+            # Use case-insensitive comparisons to avoid data casing mismatches
             conditions = [
-                ChildIdRequest.status == "accepted",
-                Insurer.insurer_code == insurer_code,
+                func.lower(ChildIdRequest.status) == "accepted",
+                func.lower(ChildIdRequest.insurer_code) == insurer_code.lower(),
             ]
 
             # Apply strict code type logic
@@ -584,54 +585,44 @@ class ChildHelpers:
                 # Broker type: Must have both insurer and broker codes
                 conditions.extend(
                     [
-                        ChildIdRequest.code_type == "broker",
-                        Broker.broker_code == broker_code,
+                        func.lower(ChildIdRequest.code_type) == "broker",
+                        func.lower(ChildIdRequest.broker_code) == broker_code.lower(),
                     ]
                 )
             else:
-                # Direct type: Only insurer code, no broker
+                # Direct type: Only ensure code_type is direct
+                # Do NOT require broker_code IS NULL, as some data may store empty strings
                 conditions.extend(
                     [
-                        ChildIdRequest.code_type == "direct",
-                        ChildIdRequest.broker_code.is_(None),
+                        func.lower(ChildIdRequest.code_type) == "direct",
                     ]
                 )
 
             # Agent filter: Only return child IDs assigned to this agent
             if agent_id:
-                if isinstance(agent_id, uuid.UUID):
-                    agent_uuid = agent_id
-                else:
-                    agent_uuid = uuid.UUID(agent_id)
-                conditions.append(ChildIdRequest.user_id == agent_uuid)
+                try:
+                    if isinstance(agent_id, uuid.UUID):
+                        agent_uuid = agent_id
+                    else:
+                        agent_uuid = uuid.UUID(agent_id)
+                    conditions.append(ChildIdRequest.user_id == agent_uuid)
+                except ValueError as uuid_error:
+                    logger.error(
+                        f"Invalid UUID format for agent_id: '{agent_id}' - Type: {type(agent_id)} - Error: {str(uuid_error)}"
+                    )
+                    # Skip agent filtering if UUID is invalid rather than failing the entire request
+                    logger.warning(f"Skipping agent filter due to invalid UUID: {agent_id}")
 
-            # Build query with proper joins
-            if broker_code:
-                # For broker type, we need both joins
-                query = (
-                    select(ChildIdRequest)
-                    .options(
-                        selectinload(ChildIdRequest.insurer),
-                        selectinload(ChildIdRequest.broker),
-                    )
-                    .join(Insurer)
-                    .join(Broker)
-                    .where(and_(*conditions))
-                    .order_by(desc(ChildIdRequest.approved_at))
+            # Build query: avoid inner joins so we don't drop records when related rows are missing
+            query = (
+                select(ChildIdRequest)
+                .options(
+                    selectinload(ChildIdRequest.insurer),
+                    selectinload(ChildIdRequest.broker),
                 )
-            else:
-                # For direct type, only join with insurer (no broker)
-                query = (
-                    select(ChildIdRequest)
-                    .options(
-                        selectinload(ChildIdRequest.insurer),
-                        selectinload(ChildIdRequest.broker),
-                    )
-                    .join(Insurer)
-                    .outerjoin(Broker)
-                    .where(and_(*conditions))
-                    .order_by(desc(ChildIdRequest.approved_at))
-                )
+                .where(and_(*conditions))
+                .order_by(desc(ChildIdRequest.approved_at))
+            )
 
             result = await db.execute(query)
             return result.scalars().all()

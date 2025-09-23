@@ -40,11 +40,13 @@ export function AgentStatsCards({
     number_of_policies: number
     running_balance: number
     total_net_premium: number
+    commissionable_premium?: number
   }
   totalBalance?: number
 }) {
   const runningBalanceFontSize = useAdjustedFontSize(stats.running_balance)
   const totalPremiumFontSize = useAdjustedFontSize(stats.total_net_premium)
+  const commissionablePremiumFontSize = useAdjustedFontSize(stats.commissionable_premium)
 
   return (
     <div className="flex gap-4 w-full">
@@ -188,6 +190,51 @@ export function AgentStatsCards({
                 </div>
             </CardContent>
         </Card>
+
+        {/* Commissionable Premium Card - Only show if data is available */}
+        {typeof stats.commissionable_premium === 'number' && (
+          <Card className="group border border-gray-200 hover:border-indigo-300 hover:shadow-lg transition-all duration-300 ease-in-out bg-white flex-1 flex flex-col">
+            <CardContent className="p-4 sm:p-5 flex flex-col justify-center flex-grow">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                      Commissionable Premium
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`Commissionable Premium: ₹${stats.commissionable_premium.toLocaleString()}`}
+                          className="text-indigo-500 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 rounded-sm transition-colors"
+                        >
+                          <Info className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      
+                      <TooltipContent
+                        side="top"
+                        align="center"
+                        className="max-w-xs bg-white text-black shadow-lg rounded-md p-2"
+                      >
+                        <p className="text-sm font-medium whitespace-pre-line">
+                          {`Commissionable Premium:\n${formatCurrencyWithSign(stats.commissionable_premium)}`}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <p className={`${commissionablePremiumFontSize} font-bold text-indigo-600 truncate`}>
+                    {formatCurrencyWithSign(stats.commissionable_premium)}
+                  </p>
+                </div>
+                
+                <div className="ml-3 p-2.5 rounded-lg bg-indigo-50 group-hover:bg-indigo-100 transition-colors duration-200 shrink-0">
+                  <DollarSign className="h-5 w-5 text-indigo-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
     </div>
   )

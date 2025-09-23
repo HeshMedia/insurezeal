@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { superadminApi } from '@/lib/api/superadmin'
 import { 
@@ -7,11 +8,13 @@ import {
   UpdateInsurerRequest,
   CreateAdminChildIdRequest,
   UpdateAdminChildIdRequest,
-  AvailableChildIdsParams
+  AvailableChildIdsParams,
+  AgentListParams
 } from '@/types/superadmin.types'
 
 // Query keys
 const SUPERADMIN_QUERY_KEYS = {
+  agents: (params?: AgentListParams) => ['superadmin', 'agents', params] as const,
   brokers: ['superadmin', 'brokers'] as const,
   broker: (code: string) => ['superadmin', 'brokers', code] as const,
   insurers: ['superadmin', 'insurers'] as const,
@@ -20,6 +23,37 @@ const SUPERADMIN_QUERY_KEYS = {
   adminChildIds: ['superadmin', 'adminChildIds'] as const,
   adminChildId: (id: number) => ['superadmin', 'adminChildIds', id] as const,
   availableChildIds: (params: AvailableChildIdsParams) => ['superadmin', 'adminChildIds', 'available', params] as const,
+}
+
+
+
+// ===== AGENT QUERIES =====
+
+export const useAgentList = (params: AgentListParams = {}) => {
+  return useQuery({
+    queryKey: SUPERADMIN_QUERY_KEYS.agents(params),
+    queryFn: () => superadminApi.agents.list(params),
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  })
+}
+
+// ===== AGENT MUTATIONS =====
+
+export const usePromoteAgentToAdmin = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: (userId: string) => superadminApi.agents.promoteToAdmin(userId),
+    onSuccess: (data) => {
+      // Invalidate all agent queries to refresh the list
+      queryClient.invalidateQueries({ 
+        predicate: (query) => query.queryKey[0] === 'superadmin' && query.queryKey[1] === 'agents'
+      })
+    },
+  })
 }
 
 // ===== BROKER QUERIES =====

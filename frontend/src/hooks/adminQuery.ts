@@ -57,13 +57,6 @@ export const usePOPaidToAgent = (agentCode: string, enabled = true) => {
   })
 }
 
-// Admin Stats Query
-export const useAdminStats = () => {
-  return useQuery({
-    queryKey: ADMIN_QUERY_KEYS.stats,
-    queryFn: adminApi.getStats,
-  })
-}
 
 // CutPay Stats Query - TEMPORARY: Will be moved to cutpayQuery.ts
 export const useCutPayStats = () => {

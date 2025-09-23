@@ -490,6 +490,24 @@ async def list_policies(
         # Build query with optional quarter/year filtering
         query = select(Policy)
 
+        # Role-based access control: agents see only their own policies
+        user_role = current_user.get("role", "agent")
+        if user_role not in ["admin", "superadmin"]:
+            # Fetch the agent_code for the current user from UserProfile
+            from models import UserProfile
+
+            agent_code_result = await db.execute(
+                select(UserProfile.agent_code).where(UserProfile.user_id == current_user["user_id"])  # type: ignore[index]
+            )
+            agent_code = agent_code_result.scalar_one_or_none()
+
+            if not agent_code:
+                # No agent_code associated; return empty list
+                return []
+
+            # Restrict to policies belonging to this agent
+            query = query.where(Policy.agent_code == agent_code)
+
         # Apply date-based filtering if quarter/year are provided
         if quarter is not None or year is not None:
             filters = []
@@ -685,7 +703,8 @@ async def get_policy_transaction_by_policy_number(
                         # Find the row with matching policy number
                         found_policy_data = None
 
-                        for row_data in all_values[1:]:
+                        # Skip header (row 1) and dummy/formula row (row 2)
+                        for row_data in all_values[2:]:
                             if policy_col_index < len(row_data):
                                 cell_value = row_data[policy_col_index].strip()
                                 if cell_value == policy_number.strip():
@@ -1115,7 +1134,8 @@ async def delete_policy_transaction_by_policy_number(
                     # Find the row with matching policy number
                     found_row_index = -1
 
-                    for row_index, row_data in enumerate(all_values[1:], start=2):
+                    # Skip header (row 1) and dummy/formula row (row 2)
+                    for row_index, row_data in enumerate(all_values[2:], start=3):
                         if policy_col_index < len(row_data):
                             cell_value = row_data[policy_col_index].strip()
                             if cell_value == policy_number.strip():
@@ -1405,72 +1425,3 @@ async def create_quarter_sheet(
             detail=f"Failed to create quarter sheet: {str(e)}"
         )
 
-
-@router.post(
-    "/test-formula-copying",
-    response_model=Dict[str, Any],
-    summary="Test formula copying functionality",
-    description="Debug endpoint to test formula copying mechanism"
-)
-async def test_formula_copying(
-    sheet_name: Optional[str] = Query(None, description="Sheet name to test on (defaults to current quarter)"),
-    target_row: Optional[int] = Query(None, description="Target row number (defaults to next empty row)"),
-    current_user=Depends(get_current_user),
-    _rbac_check=Depends(require_quarterly_sheets_write),
-):
-    """
-    Test the formula copying functionality for debugging purposes.
-    
-    **Requires admin or superadmin permission**
-    
-    - **sheet_name**: Optional sheet name to test on (defaults to current quarter sheet)
-    - **target_row**: Optional target row number (defaults to next empty row)
-    
-    Returns detailed information about the formula copying process including:
-    - Number of formulas found in template row
-    - Number of formulas successfully copied
-    - Examples of formulas copied
-    - Any errors encountered
-    """
-    try:
-        from utils.quarterly_sheets_manager import quarterly_manager
-        
-        logger.info(f"User {current_user.get('user_id')} testing formula copying on sheet '{sheet_name}' row {target_row}")
-        
-        # Test the formula copying
-        result = await run_in_threadpool(
-            quarterly_manager.test_formula_copying,
-            sheet_name,
-            target_row
-        )
-        
-        if result.get("success"):
-            logger.info(f"Formula copying test completed: {result.get('test_summary')}")
-            return {
-                "success": True,
-                "message": "Formula copying test completed successfully",
-                "test_results": result,
-                "tested_by": current_user.get("user_id")
-            }
-        else:
-            logger.error(f"Formula copying test failed: {result.get('error')}")
-            return {
-                "success": False,
-                "error": result.get("error"),
-                "traceback": result.get("traceback"),
-                "tested_by": current_user.get("user_id")
-            }
-            
-    except Exception as e:
-        logger.error(f"Error in test_formula_copying endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to test formula copying: {str(e)}"
-        )
-
-    except Exception as e:
-        logger.error(f"Error creating quarter sheet: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create quarter sheet: {str(e)}"
-        )

@@ -1,3 +1,4 @@
+import { AgentListParams } from '@/types/admin.types'
 import { createAuthenticatedClient } from './client'
 import { 
   Broker,
@@ -10,7 +11,9 @@ import {
   AdminChildId,
   CreateAdminChildIdRequest,
   UpdateAdminChildIdRequest,
-  AvailableChildIdsParams
+  AvailableChildIdsParams,
+  PromoteAgentResponse,
+  AgentsListResponse
 } from '@/types/superadmin.types'
 
 // Create axios instance with Supabase authentication
@@ -40,6 +43,31 @@ apiClient.interceptors.response.use(
 
 export const superadminApi = {
   
+  // Agent Management APIs
+  agents: {
+    // Get all agents with pagination and search
+    list: async (params: AgentListParams = {}): Promise<AgentsListResponse> => {
+      const { page = 1, page_size = 20, search } = params;
+      
+      const searchParams = new URLSearchParams({
+        page: page.toString(),
+        page_size: page_size.toString(),
+      });
+      
+      if (search && search.trim()) {
+        searchParams.append('search', search.trim());
+      }
+
+      const response = await apiClient.get(`/admin/agents?${searchParams.toString()}`);
+      return response.data;
+    },
+
+    // Promote an agent to admin role
+    promoteToAdmin: async (userId: string): Promise<PromoteAgentResponse> => {
+      const response = await apiClient.put(`/superadmin/agents/${userId}/promote-to-admin`);
+      return response.data;
+    },
+  },
   // Broker APIs
   brokers: {
     // Get all brokers
