@@ -61,6 +61,7 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
       child_id: "",
       payment_by: "Agent",
       payment_method: null,
+      payment_detail: null,
       payment_by_office: 0,
       agent_commission_given_percent: 0,
       notes: "",
@@ -70,7 +71,19 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
   const codeType = form.watch("code_type");
   const insurerCode = form.watch("insurer_code");
   const paymentBy = form.watch("payment_by");
+  const paymentMethod = form.watch("payment_method");
   const brokerCode = form.watch("broker_code") || undefined;
+
+  // Payment method options matching CutPay form
+  const paymentMethodOptions = useMemo(() => [
+    { value: "Credit Card", label: "Credit Card" },
+    { value: "Bank Transfer", label: "Bank Transfer" },
+    { value: "Cheque", label: "Cheque" },
+    { value: "Cash", label: "Cash" },
+    { value: "cd/float(iz)", label: "cd/float(iz)" },
+    { value: "UPI", label: "UPI" },
+    { value: "Net Banking", label: "Net Banking" },
+  ], []);
 
   // Options
   const { data: directInsurers } = useInsurers();
@@ -130,9 +143,78 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
 
   const onSubmit = async (values: PolicyReviewFormSchemaType) => {
     try {
+      // VALIDATION: Compare manual selections with extracted data
+      const validationExtracted = pdfExtractionData?.extracted_data;
+      if (validationExtracted) {
+        const extractedInsurer = validationExtracted.ai_detected_insurer_name;
+        const extractedBroker = validationExtracted.ai_detected_broker_name;
+
+        // Get selected insurer name from options
+        const selectedInsurerOption = insurerOptions.find(opt => opt.value === values.insurer_code);
+        const selectedInsurerName = selectedInsurerOption?.label;
+
+        // Get selected broker name from options (if applicable)
+        let selectedBrokerName = null;
+        if (codeType === "Broker" && values.broker_code) {
+          const selectedBrokerOption = brokerOptions.find(opt => opt.value === values.broker_code);
+          selectedBrokerName = selectedBrokerOption?.label;
+        }
+
+        // Validate insurer match
+        if (extractedInsurer && selectedInsurerName) {
+          const normalizeString = (str: string) => str.toLowerCase().trim();
+          if (normalizeString(extractedInsurer) !== normalizeString(selectedInsurerName)) {
+            toast.error(`Selection Mismatch: The selected Insurer "${selectedInsurerName}" does not match the AI-detected insurer in the uploaded PDF ("${extractedInsurer}"). Please review your selection or upload the correct document.`);
+            return;
+          }
+        }
+
+        // Validate broker match (if broker code type is selected)
+        if (codeType === "Broker" && extractedBroker && selectedBrokerName) {
+          const normalizeString = (str: string) => str.toLowerCase().trim();
+          if (normalizeString(extractedBroker) !== normalizeString(selectedBrokerName)) {
+            toast.error(`Selection Mismatch: The selected Broker "${selectedBrokerName}" does not match the AI-detected broker in the uploaded PDF ("${extractedBroker}"). Please review your selection or upload the correct document.`);
+            return;
+          }
+        }
+      }
+
       // Proceed even if preview URL is absent; we'll read the file from IndexedDB
 
-      const extracted = pdfExtractionData?.extracted_data || {};
+      const extracted = pdfExtractionData?.extracted_data || {
+        policy_number: null,
+        formatted_policy_number: null,
+        major_categorisation: null,
+        product_insurer_report: null,
+        product_type: null,
+        plan_type: null,
+        customer_name: null,
+        customer_phone_number: null,
+        registration_number: null,
+        make_model: null,
+        model: null,
+        vehicle_variant: null,
+        gvw: null,
+        rto: null,
+        state: null,
+        fuel_type: null,
+        cc: null,
+        age_year: null,
+        ncb: null,
+        discount_percent: null,
+        business_type: null,
+        seating_capacity: null,
+        veh_wheels: null,
+        start_date: null,
+        end_date: null,
+        gross_premium: null,
+        gst_amount: null,
+        net_premium: null,
+        od_premium: null,
+        tp_premium: null,
+        ai_detected_insurer_name: null,
+        ai_detected_broker_name: null,
+      };
 
       // Compute AI confidence (supports both policy and cutpay extraction shapes)
       const aiConfidenceScore: number | undefined = (() => {
@@ -155,9 +237,17 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         toast.warning("Agent code is missing from your profile. Policy will be created without agent code.");
       }
 
+      // Generate PDF file path and name for S3 upload
+      const policyNumber = values.policy_number.replace(/[^a-zA-Z0-9]/g, '_'); // Sanitize policy number for filename
+      const timestamp = Date.now();
+      const pdfFileName = `policy_${policyNumber}_${timestamp}.pdf`;
+      const pdfFilePath = `policies/${new Date().getFullYear()}/${pdfFileName}`;
+
       const payload: SubmitPolicyPayload = {
         policy_number: values.policy_number,
-        policy_type: extracted.plan_type || "Policy",
+        policy_type: extracted.plan_type || "Standard",
+        pdf_file_path: pdfFilePath,
+        pdf_file_name: pdfFileName,
 
         // Agent context (optional)
         agent_id: userProfile?.user_id || undefined,
@@ -210,7 +300,9 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
         total_agent_payout_amount: totalAgentPayout || undefined,
         code_type: values.code_type,
         payment_by: values.payment_by,
-        payment_method: values.payment_method || undefined,
+        payment_method: values.payment_method && values.payment_detail
+          ? `${values.payment_method}-${values.payment_detail}`
+          : values.payment_method || undefined,
         notes: values.notes || undefined,
         // AI metadata
         ai_confidence_score: aiConfidenceScore,
@@ -219,12 +311,15 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
 
       const created = await submitPolicyMutation.mutateAsync(payload);
 
-      // After creation, upload the policy PDF using presigned URL
+      // After creation, upload the policy PDF using the predefined file path
       const stored = await getFromIndexedDB('policy_pdf')
       if (stored?.content) {
         try {
+          // Create a new File object with the predefined filename
+          const pdfFile = new File([stored.content], pdfFileName, { type: 'application/pdf' });
+          
           await uploadPolicyMutation.mutateAsync({
-            file: stored.content,
+            file: pdfFile,
             policy_id: created.id,
             document_type: 'policy_pdf',
           })
@@ -412,7 +507,37 @@ const PolicyReviewForm = ({ onPrev, onSuccess }: PolicyReviewFormProps) => {
                             name="payment_method"
                             control={form.control}
                             render={({ field }) => (
-                              <Input className="h-10 w-fit" value={String(field.value ?? "")} onChange={(e) => field.onChange(e.target.value || null)} />
+                              <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                                <SelectTrigger className="h-10 w-fit">
+                                  <SelectValue placeholder="Select Payment Method" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {paymentMethodOptions.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
+                      )}
+
+                      {/* Payment Detail (hidden when payment_by is Agent or no payment method selected) */}
+                      {paymentBy !== "Agent" && paymentMethod && (
+                        <div className="space-y-2 flex-none w-fit">
+                          <Label className="text-sm font-medium text-gray-700">Payment Detail</Label>
+                          <Controller
+                            name="payment_detail"
+                            control={form.control}
+                            render={({ field }) => (
+                              <Input 
+                                className="h-10 w-fit" 
+                                placeholder="e.g., Ref #12345" 
+                                value={String(field.value ?? "")} 
+                                onChange={(e) => field.onChange(e.target.value || null)} 
+                              />
                             )}
                           />
                         </div>

@@ -115,8 +115,8 @@ export interface SubmitPolicyPayload {
   // Required fields according to API
   policy_number: string;
   policy_type: string;
-  pdf_file_path?: string;
-  pdf_file_name?: string;
+  pdf_file_path: string;  // Required by backend
+  pdf_file_name: string;  // Required by backend
   
   // Agent and Child ID information
   agent_id?: string;

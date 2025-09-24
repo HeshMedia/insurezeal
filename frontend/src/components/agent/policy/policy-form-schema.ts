@@ -18,6 +18,7 @@ export const PolicyReviewFormSchema = z.object({
     required_error: "Select payment by",
   }),
   payment_method: z.string().nullable().optional(),
+  payment_detail: z.string().nullable().optional(),
   payment_by_office: z.number().nullable().optional(),
   agent_commission_given_percent: z.number().nullable().optional(),
   notes: z.string().nullable().optional(),

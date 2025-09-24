@@ -5,6 +5,7 @@ import {
   UniversalUploadParams,
   UniversalTemplateParams,
   ReconciliationSummaryParams,
+  ReconciliationReportsParams,
 } from '@/types/universalrecords.types';
 
 export const universalRecordsKeys = {
@@ -12,6 +13,8 @@ export const universalRecordsKeys = {
   insurers: () => [...universalRecordsKeys.all, 'insurers'] as const,
   summaries: () => [...universalRecordsKeys.all, 'summaries'] as const,
   summary: (params: ReconciliationSummaryParams) => [...universalRecordsKeys.summaries(), params] as const,
+  reports: () => [...universalRecordsKeys.all, 'reports'] as const,
+  reportsList: (params: ReconciliationReportsParams) => [...universalRecordsKeys.reports(), params] as const,
   mappings: () => [...universalRecordsKeys.all, 'mappings'] as const,
   mapping: (insurerName: string) => [...universalRecordsKeys.mappings(), insurerName] as const,
 };
@@ -57,6 +60,15 @@ export const useReconciliationSummary = (params: ReconciliationSummaryParams) =>
     queryKey: universalRecordsKeys.summary(params),
     queryFn: () => universalRecordsApi.getReconciliationSummary(params),
     staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+// GET /universal-records/reconciliation
+export const useReconciliationReports = (params?: ReconciliationReportsParams) => {
+  return useQuery({
+    queryKey: universalRecordsKeys.reportsList(params || {}),
+    queryFn: () => universalRecordsApi.getReconciliationReports(params),
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 };
 

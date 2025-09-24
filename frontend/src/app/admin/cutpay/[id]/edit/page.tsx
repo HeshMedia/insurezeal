@@ -145,6 +145,7 @@ export default function CutPayEditPage() {
         business_type: toStringOrNull((data)['business_type']),
         seating_capacity: toNumberOrNull((data)['seating_capacity']),
         veh_wheels: toNumberOrNull((data)['veh_wheels']),
+        insurance_company: undefined
       },
       admin_input: {
         reporting_month: toStringOrNull((data)['reporting_month']),

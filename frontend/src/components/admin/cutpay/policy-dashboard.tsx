@@ -119,10 +119,12 @@ export function PolicyDashboard({ data, onEdit, onDownload }: PolicyDashboardPro
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" onClick={onEdit}>
-            <Edit className="w-4 h-4 mr-2" />
-            Edit Policy
-          </Button>
+          {onEdit && (
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <Edit className="w-4 h-4 mr-2" />
+              Edit Policy
+            </Button>
+          )}
           <Button size="sm" onClick={onDownload}>
             <Download className="w-4 h-4 mr-2" />
             Download PDF

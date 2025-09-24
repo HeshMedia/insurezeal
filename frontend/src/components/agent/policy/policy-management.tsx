@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Grid3X3, List, Eye, Edit, MoreHorizontal } from 'lucide-react'
+import { Plus, Search, Grid3X3, List, Eye, MoreHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -19,7 +19,7 @@ import { useAtom } from 'jotai'
 import { selectedPolicyContextAtom } from '@/lib/atoms/policy'
 import { PolicyListItem, ListPoliciesParams } from '@/types/policy.types'
 
-function PolicyCard({ policy, onViewDetails, onEdit }: { 
+function PolicyCard({ policy, onViewDetails, }: { 
   policy: PolicyListItem; 
   onViewDetails: (id: string) => void;
   onEdit: (id: string) => void;
@@ -67,11 +67,6 @@ function PolicyCard({ policy, onViewDetails, onEdit }: {
                 <Eye className="mr-2 h-4 w-4" />
                 View Details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(policy.id)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Policy
-              </DropdownMenuItem>
-              {/* Delete is admin-only; hidden for agents */}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -159,7 +154,7 @@ export function PolicyManagement() {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="text-center py-12">
           <div className="text-red-500 text-lg mb-2">Error loading policies</div>
           <p className="text-gray-600">{error.message}</p>
@@ -169,7 +164,7 @@ export function PolicyManagement() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="  space-y-6">
       {/* Header Actions */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div className="flex flex-1 gap-2 max-w-md">
@@ -332,10 +327,6 @@ export function PolicyManagement() {
                                 <DropdownMenuItem onClick={() => handleViewDetails(policy.id)}>
                                   <Eye className="mr-2 h-4 w-4" />
                                   View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleEdit(policy.id)}>
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Edit Policy
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>

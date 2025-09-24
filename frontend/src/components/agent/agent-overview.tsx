@@ -1,11 +1,10 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent,} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { 
   Award,
   Plus,
-  BarChart3
 } from "lucide-react"
 import { useChildIdRequests, useActiveChildIds } from "@/hooks/agentQuery"
 import { AgentMISTable } from "@/components/agent/dashboard-mis-table/agent-mis-table"
@@ -101,24 +100,7 @@ export function AgentOverview() {
 
 
       {/* MIS Table Section */}
-      <Card className="border border-gray-200">
-        <CardHeader className="border-b border-gray-200 bg-gray-50/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold text-gray-900">
-                  My Business Data (MIS)
-                </CardTitle>
-                <p className="text-sm text-gray-600 mt-1">
-                  View your policy data and commission details
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
+      <Card className="border border-gray-200 !p-0">
         <CardContent className="p-0">
           <AgentMISTable />
         </CardContent>

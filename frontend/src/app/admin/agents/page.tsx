@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { EnhancedAgentManagement } from '@/components/admin/enhanced-agent-management'
+import { EnhancedAgentManagement } from '@/components/admin/agent/enhanced-agent-management'
 
 export default function AgentsPage() {
   return (

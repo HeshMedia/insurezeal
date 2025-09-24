@@ -1,7 +1,7 @@
 'use client'
 
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { ChildRequestManagement } from '@/components/admin/child-request-management'
+import { ChildRequestManagement } from '@/components/admin/child-id/child-request-management'
 import { useChildRequestList } from '@/hooks/adminQuery'
 
 export default function ChildRequestsPage() {

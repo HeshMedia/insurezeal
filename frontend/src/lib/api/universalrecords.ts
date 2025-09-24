@@ -8,6 +8,8 @@ import {
   UniversalTemplateParams,
   ReconciliationSummaryParams,
   ReconciliationSummaryResponse,
+  ReconciliationReportsParams,
+  ReconciliationReportsResponse,
   InsurerMappingResponse,
 } from '@/types/universalrecords.types';
 
@@ -141,6 +143,19 @@ export const universalRecordsApi = {
   getReconciliationSummary: async (params: ReconciliationSummaryParams): Promise<ReconciliationSummaryResponse> => {
     const client = await createAuthenticatedClient();
     const response = await client.get('/universal-records/reconciliation/summary', { params });
+    return response.data;
+  },
+
+  // GET /universal-records/reconciliation
+  getReconciliationReports: async (params?: ReconciliationReportsParams): Promise<ReconciliationReportsResponse> => {
+    const client = await createAuthenticatedClient();
+    const response = await client.get('/universal-records/reconciliation', { 
+      params: {
+        insurer_name: params?.insurer_name,
+        limit: params?.limit || 50,
+        offset: params?.offset || 0,
+      } 
+    });
     return response.data;
   },
 

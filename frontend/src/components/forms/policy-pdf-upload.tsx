@@ -200,30 +200,35 @@ const PolicyPdfUpload = ({
         extractionData.extracted_data?.formatted_policy_number ??
         undefined;
 
+      // Perform duplicate check if policy number exists
       if (extractedPolicyNumber) {
         try {
           setCheckingDuplicate(true);
           const result = await checkDuplicateMutation.mutateAsync({
             policy_number: extractedPolicyNumber,
           });
+          
           if (result?.is_duplicate) {
             setError(
               result?.message ||
                 "Duplicate policy number detected. Please verify before proceeding."
             );
             setCheckingDuplicate(false);
+            // CRITICAL FIX: Block user from proceeding when duplicate is found
             return;
           }
+          setCheckingDuplicate(false);
         } catch {
           setError(
             "Could not verify duplicates right now. Please try again in a moment."
           );
           setCheckingDuplicate(false);
+          // CRITICAL FIX: Block user from proceeding when duplicate check fails
           return;
         }
-        setCheckingDuplicate(false);
       }
 
+      // Only proceed if no duplicates were found or no policy number to check
       setFormCompletion((prev) => ({ ...prev, step1Complete: true }));
       onNext();
     }
