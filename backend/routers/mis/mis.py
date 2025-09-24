@@ -892,7 +892,7 @@ async def export_quarterly_sheet_data(
                 except AttributeError:
                     # Fallback if method doesn't exist - create basic summary from quarterly data
                     logger.info(
-                        f"get_quarterly_summary_data not available, creating basic summary from quarterly data"
+                        "get_quarterly_summary_data not available, creating basic summary from quarterly data"
                     )
                     summary_result = []
 

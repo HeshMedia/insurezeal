@@ -695,16 +695,16 @@ class AdminHelpers:
                 detail="Failed to reject child ID request",
             )
 
-    async def suspend_child_id(
+    async def toggle_child_id_suspension(
         self, db: AsyncSession, request_id: str, admin_notes: str, admin_user_id: str
     ) -> ChildIdRequest:
         """
-        Suspend an active child ID
+        Toggle suspension status of a child ID
 
         Args:
             db: Database session
             request_id: Child ID request ID
-            admin_notes: Suspension reason
+            admin_notes: Reason for suspension/unsuspension
             admin_user_id: Admin user ID
 
         Returns:
@@ -733,13 +733,21 @@ class AdminHelpers:
                     detail="Child ID request not found",
                 )
 
-            if child_request.status != "accepted":
+            # Check current status and toggle
+            if child_request.status == "accepted":
+                # Suspend the child ID
+                child_request.status = "suspended"
+                action = "suspended"
+            elif child_request.status == "suspended":
+                # Unsuspend the child ID
+                child_request.status = "accepted"
+                action = "unsuspended"
+            else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Only accepted child IDs can be suspended",
+                    detail="Only accepted or suspended child IDs can have their suspension status toggled",
                 )
 
-            child_request.status = "suspended"
             child_request.admin_notes = admin_notes
             # Convert admin_user_id to UUID if it's a string, otherwise use as-is
             if isinstance(admin_user_id, str):
@@ -753,7 +761,7 @@ class AdminHelpers:
             await db.refresh(child_request)
 
             logger.info(
-                f"Suspended child ID request {request_id} by admin {admin_user_id}"
+                f"{action.capitalize()} child ID request {request_id} by admin {admin_user_id}"
             )
             return child_request
 
@@ -761,10 +769,10 @@ class AdminHelpers:
             raise
         except Exception as e:
             await db.rollback()
-            logger.error(f"Error suspending child request: {str(e)}")
+            logger.error(f"Error toggling child request suspension: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to suspend child ID request",
+                detail="Failed to toggle child ID suspension status",
             )
 
     async def get_child_id_statistics(self, db: AsyncSession) -> Dict[str, Any]:

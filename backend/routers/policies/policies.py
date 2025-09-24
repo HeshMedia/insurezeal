@@ -1180,7 +1180,7 @@ async def delete_policy_transaction_by_policy_number(
         "database_deletion": {
             "success": True,
             "policy_id": str(policy_id) if policy else None,
-            "message": f"Successfully deleted from database",
+            "message": "Successfully deleted from database",
         },
         "sheets_deletion": {
             "success": sheets_deletion_success,

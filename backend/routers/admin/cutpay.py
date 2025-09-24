@@ -274,7 +274,7 @@ async def create_cutpay_transaction(
             f"Step 2 SUCCESS: Google Sheets sync finished for CutPay ID {cutpay.id}."
         )
 
-    except Exception as e:
+    except Exception:
         logger.critical(
             f"Step 2 FAILED: Google Sheets sync failed for CutPay ID {cutpay.id}, but database changes are saved. Traceback:\n{traceback.format_exc()}"
         )
@@ -312,7 +312,7 @@ async def create_cutpay_transaction(
             )
             return database_cutpay_response(final_cutpay)
 
-    except Exception as e:
+    except Exception:
         logger.critical(
             f"Step 3 FAILED: Updating sync flags failed for CutPay ID {cutpay.id}. Traceback:\n{traceback.format_exc()}"
         )
@@ -765,7 +765,7 @@ async def bulk_update_cutpay_transactions(
                         )
                 else:
                     logger.warning(
-                        f"❌ No policy number found, falling back to create method"
+                        "❌ No policy number found, falling back to create method"
                     )
                     # Fallback to creating new record if no policy number
                     if quarter and year:
@@ -1455,7 +1455,7 @@ async def update_cutpay_transaction_by_policy(
             f"Step 2 SUCCESS: Quarterly Google Sheets sync finished for policy '{target_policy_number}' in '{quarter_sheet_name}': {quarterly_result.get('operation', 'UPDATE')}"
         )
 
-    except Exception as e:
+    except Exception:
         logger.critical(
             f"Step 2 FAILED: Quarterly Google Sheets sync failed for policy '{policy_number}', but database changes are saved. Traceback:\n{traceback.format_exc()}"
         )
@@ -1495,7 +1495,7 @@ async def update_cutpay_transaction_by_policy(
             )
             return database_cutpay_response(final_cutpay)
 
-    except Exception as e:
+    except Exception:
         logger.critical(
             f"Step 3 FAILED: Updating sync flags failed for policy '{policy_number}' (CutPay ID {cutpay.id}). Traceback:\n{traceback.format_exc()}"
         )
@@ -1672,7 +1672,7 @@ async def delete_cutpay_transaction_by_policy(
         "database_deletion": {
             "success": True,
             "cutpay_id": cutpay_id if cutpay else None,
-            "message": f"Successfully deleted from database",
+            "message": "Successfully deleted from database",
         },
         "sheets_deletion": {
             "success": sheets_deletion_success,
@@ -1790,7 +1790,7 @@ async def upload_policy_document(
 
         if document_type_clean == "policy_pdf":
             logger.info(
-                f"✅ PRESIGNED: ENTERING policy_pdf branch - UPDATING policy_pdf_url"
+                "✅ PRESIGNED: ENTERING policy_pdf branch - UPDATING policy_pdf_url"
             )
             old_url = cutpay.policy_pdf_url
             cutpay.policy_pdf_url = document_url

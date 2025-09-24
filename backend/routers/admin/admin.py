@@ -691,7 +691,7 @@ async def reject_child_request(
 
 
 @router.put("/child-requests/{request_id}/suspend", response_model=ChildIdResponse)
-async def suspend_child_id(
+async def toggle_child_id_suspension(
     request_id: str,
     suspension_data: ChildIdStatusUpdate,
     current_user=Depends(get_current_user),
@@ -699,12 +699,14 @@ async def suspend_child_id(
     _rbac_check=Depends(require_admin_child_requests_update),
 ):
     """
-    Admin: Suspend an active child ID
+    Admin: Toggle suspension status of a child ID
 
     **Admin only endpoint**
 
-    - **admin_notes**: Required reason for suspension
-    - Can only suspend accepted child IDs
+    - **admin_notes**: Required reason for suspension/unsuspension
+    - Toggles between 'accepted' and 'suspended' status
+    - If currently 'accepted' → changes to 'suspended'
+    - If currently 'suspended' → changes to 'accepted'
     """
 
     try:
@@ -723,7 +725,7 @@ async def suspend_child_id(
 
         admin_user_id = str(current_user["user_id"])  # Ensure it's a string
 
-        child_request = await admin_helpers.suspend_child_id(
+        child_request = await admin_helpers.toggle_child_id_suspension(
             db=db,
             request_id=request_id,
             admin_notes=suspension_data.admin_notes,
@@ -788,7 +790,9 @@ async def suspend_child_id(
             "created_at": child_request.created_at,
             "updated_at": child_request.updated_at,
         }
-        google_sheets_sync.sync_child_id_request(google_sheets_dict, "SUSPEND")
+        # Determine the action based on the final status
+        sync_action = "SUSPEND" if child_request.status == "suspended" else "UNSUSPEND"
+        google_sheets_sync.sync_child_id_request(google_sheets_dict, sync_action)
 
         return ChildIdResponse.model_validate(req_dict)
 
@@ -910,7 +914,7 @@ async def promote_agent_to_admin(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

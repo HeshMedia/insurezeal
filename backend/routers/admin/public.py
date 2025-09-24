@@ -90,7 +90,7 @@ async def promote_to_superadmin(
                 attributes={"user_metadata": {"role": "superadmin"}},
             )
 
-            logger.info(f"Supabase update response received")
+            logger.info("Supabase update response received")
 
             if response and response.user:
                 updated_in_supabase = True
@@ -114,13 +114,13 @@ async def promote_to_superadmin(
 
         if updated_in_database and updated_in_supabase:
             success = True
-            message = f"Successfully promoted user to superadmin in both local database and Supabase auth"
+            message = "Successfully promoted user to superadmin in both local database and Supabase auth"
         elif updated_in_database:
             success = True  # Still successful since local database is primary
-            message = f"Promoted to superadmin in local database (UserProfile + Users tables), but failed to sync with Supabase auth. User can still access superadmin features."
+            message = "Promoted to superadmin in local database (UserProfile + Users tables), but failed to sync with Supabase auth. User can still access superadmin features."
         elif updated_in_supabase:
             success = False
-            message = f"Updated role in Supabase auth but failed to update local database. This creates inconsistent state - please try again."
+            message = "Updated role in Supabase auth but failed to update local database. This creates inconsistent state - please try again."
         else:
             success = False
             message = "Failed to promote user to superadmin in both local database and Supabase auth"

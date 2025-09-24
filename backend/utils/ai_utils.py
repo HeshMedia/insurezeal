@@ -392,7 +392,7 @@ async def extract_policy_data_from_pdf_bytes(pdf_bytes: bytes) -> Dict[str, Any]
             f"Extracting comprehensive policy data from PDF bytes ({len(pdf_bytes)} bytes)"
         )
         logger.info(f"Extracted text length: {len(pdf_text)} characters")
-        logger.info(f"Policy flow: Always includes insurer/broker detection")
+        logger.info("Policy flow: Always includes insurer/broker detection")
 
         extracted_data = gemini_extractor.extract_policy_data(pdf_text)
 
