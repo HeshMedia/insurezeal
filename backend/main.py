@@ -1,5 +1,6 @@
 import logging
 import os
+import sentry_sdk
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +18,24 @@ from routers.universal_records.universal_records import (
     router as universal_records_router,
 )
 from routers.users.users import router as users_router
+
+sentry_sdk.init(
+    dsn="https://9b2f10070541c7e5fd5f968f9062e470@o4510076195504128.ingest.us.sentry.io/4510076196880384",
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+    # Enable sending logs to Sentry
+    enable_logs=True,
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for tracing.
+    traces_sample_rate=1.0,
+    # Set profile_session_sample_rate to 1.0 to profile 100%
+    # of profile sessions.
+    profile_session_sample_rate=1.0,
+    # Set profile_lifecycle to "trace" to automatically
+    # run the profiler on when there is an active transaction
+    profile_lifecycle="trace",
+)
 
 # Setup detailed logging
 logging.basicConfig(level=logging.INFO)
@@ -98,6 +117,9 @@ except Exception as e:
     logger.critical(f"FATAL: Failed to import or include routers: {e}", exc_info=True)
     raise
 
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
 
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):
