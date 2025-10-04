@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { User, Settings, BarChart3, Users, Shield, DollarSign, MessageSquare, Database , FileSpreadsheet } from "lucide-react"
+import { User, BarChart3, Users, Shield, DollarSign, MessageSquare, Database , FileSpreadsheet } from "lucide-react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/hooks/useAuth"
@@ -55,12 +55,6 @@ const navigationItems = [
     title: "Universal Records",
     url: "/admin/universal-records",
     icon: Database,
-  },
-
-  {
-    title: "Settings",
-    url: "/admin/settings",
-    icon: Settings,
   },
 ]
 

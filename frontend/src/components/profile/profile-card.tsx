@@ -11,6 +11,7 @@ import { Edit, Camera, Mail, Phone, MapPin, Calendar, User, Briefcase } from 'lu
 import { UserProfile, UpdateProfileRequest } from '@/types/profile.types'
 import { ProfileEditForm } from '@/components/profile/profile-edit-form'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface DetailItem {
   label: string
@@ -57,9 +58,21 @@ export function ProfileCard({
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      onUploadImage(file)
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file')
+      return
     }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB')
+      return
+    }
+
+    onUploadImage(file)
   }
 
   return (
@@ -78,12 +91,16 @@ export function ProfileCard({
               </Avatar>
               
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full flex items-center justify-center cursor-pointer">
-                <Camera className="w-6 h-6 text-white" />
+                <div className="text-center">
+                  <Camera className="w-6 h-6 text-white mx-auto mb-1" />
+                  <span className="text-xs text-white font-medium">Change Photo</span>
+                </div>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
                   onChange={handleImageUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={isLoading}
                 />
               </div>
             </div>

@@ -147,7 +147,7 @@ export default function AdminOverview() {
             <Users className="w-4 h-4 text-blue-600" />
             <h2 className="text-sm font-semibold">Agent Summary</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             <Card className="border-gray-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-[12px] font-medium text-muted-foreground">TOTAL AGENTS</CardTitle>

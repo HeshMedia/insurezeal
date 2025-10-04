@@ -69,17 +69,45 @@ export const profileApi = {
     }
   },
 
-  // Upload profile image
+  // Upload profile image using presigned URL flow (S3)
   uploadProfileImage: async (file: File): Promise<ProfileImageUploadResponse> => {
-    const formData = new FormData()
-    formData.append('file', file)
+    const contentType = file.type || 'image/jpeg'
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Only image files are allowed')
+    }
 
-    const response = await apiClient.post('/users/me/profile-image', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    // Validate file size (max 5MB for profile images)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('Image size must be less than 5MB')
+    }
+    
+    // Build form body as x-www-form-urlencoded per API spec
+    const body = new URLSearchParams()
+    body.append('filename', file.name)
+    body.append('content_type', contentType)
+
+    // Request presigned URL (no file upload here)
+    const presignResp = await apiClient.post('/users/me/profile-image', body, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
-    return response.data
+
+    const data = presignResp.data as ProfileImageUploadResponse & { upload_url?: string }
+
+    // Upload binary directly to S3 if upload_url provided
+    if (data.upload_url) {
+      const putRes = await fetch(data.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      })
+      if (!putRes.ok) {
+        throw new Error(`Failed to upload image to storage (status ${putRes.status})`)
+      }
+    }
+
+    return data
   },
 
   // Delete profile image
@@ -87,19 +115,37 @@ export const profileApi = {
     await apiClient.delete('/users/me/profile-image')
   },
 
-  // Upload document
+  // Upload document using presigned URL flow (S3)
   uploadDocument: async ({ file, document_type, document_name }: DocumentUploadRequest): Promise<DocumentUploadResponse> => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('document_type', document_type)
-    formData.append('document_name', document_name)
+    const contentType = file.type || 'application/pdf'
+    
+    // Build form body as x-www-form-urlencoded per API spec
+    const body = new URLSearchParams()
+    body.append('filename', file.name)
+    body.append('content_type', contentType)
+    body.append('document_type', document_type)
+    body.append('document_name', document_name)
 
-    const response = await apiClient.post('/users/documents/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+    // Request presigned URL (no file upload here)
+    const presignResp = await apiClient.post('/users/documents/upload', body, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
-    return response.data
+
+    const data = presignResp.data as DocumentUploadResponse & { upload_url?: string }
+
+    // Upload binary directly to S3 if upload_url provided
+    if (data.upload_url) {
+      const putRes = await fetch(data.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      })
+      if (!putRes.ok) {
+        throw new Error(`Failed to upload document to storage (status ${putRes.status})`)
+      }
+    }
+
+    return data
   },
 
   // Get user documents

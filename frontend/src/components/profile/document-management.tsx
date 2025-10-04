@@ -48,8 +48,9 @@ import {
   DollarSign,
   Shield
 } from 'lucide-react'
-import { UserProfile } from '@/types/profile.types'
+import { UserProfile, DocumentType as ProfileDocumentType } from '@/types/profile.types'
 import { toast } from 'sonner'
+import { useUploadDocument, useUserDocuments, useDeleteDocument } from '@/hooks/profileQuery'
 
 interface DocumentManagementProps {
   profile: UserProfile
@@ -71,8 +72,8 @@ interface UploadProgress {
   fileName: string
 }
 
-interface DocumentType {
-  id: string
+interface DocumentTypeConfig {
+  id: ProfileDocumentType
   name: string
   description: string
   icon: React.ReactNode
@@ -80,7 +81,7 @@ interface DocumentType {
   category: 'identity' | 'financial' | 'professional' | 'address'
 }
 
-const documentTypes: DocumentType[] = [
+const documentTypes: DocumentTypeConfig[] = [
   // Identity Documents
   {
     id: 'aadhaar',
@@ -188,50 +189,73 @@ const categoryLabels = {
 }
 
 export function DocumentManagement({}: DocumentManagementProps) {
-  const [documents, setDocuments] = useState<Document[]>([])
   const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ isUploading: false, progress: 0, fileName: '' })
   const [showUploadDialog, setShowUploadDialog] = useState(false)
-  const [selectedDocType, setSelectedDocType] = useState<string>('')
+  const [selectedDocType, setSelectedDocType] = useState<ProfileDocumentType | ''>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const simulateUpload = async (file: File, docType: string): Promise<void> => {
+  // Use React Query hooks
+  const { data: documentsData, isLoading: isLoadingDocuments } = useUserDocuments()
+  const uploadDocumentMutation = useUploadDocument()
+  const deleteDocumentMutation = useDeleteDocument()
+
+  // Transform API documents to local format
+  const documents: Document[] = documentsData?.documents.map(doc => ({
+    id: doc.document_id,
+    name: doc.document_name,
+    filename: doc.document_name,
+    type: doc.document_type,
+    uploadedAt: new Date(doc.upload_date).toISOString().split('T')[0],
+    size: 'N/A', // Size not returned from API
+    url: doc.document_url
+  })) || []
+
+  const handleUploadDocument = async (file: File, docType: ProfileDocumentType): Promise<void> => {
     setUploadProgress({ isUploading: true, progress: 0, fileName: file.name })
     
-    // Simulate upload progress
-    for (let progress = 0; progress <= 100; progress += 10) {
-      await new Promise(resolve => setTimeout(resolve, 200))
-      setUploadProgress(prev => ({ ...prev, progress }))
-    }
+    try {
+      // Start progress simulation
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => ({
+          ...prev,
+          progress: Math.min(prev.progress + 10, 90)
+        }))
+      }, 200)
 
-    // Add document to list (replace if exists)
-    const newDoc: Document = {
-      id: Date.now().toString(),
-      name: documentTypes.find(dt => dt.id === docType)?.name || 'Document',
-      filename: file.name,
-      type: docType,
-      uploadedAt: new Date().toISOString().split('T')[0],
-      size: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
-      url: URL.createObjectURL(file)
+      const docTypeName = documentTypes.find(dt => dt.id === docType)?.name || 'Document'
+      
+      // Upload using S3 pre-signed URL
+      await uploadDocumentMutation.mutateAsync({
+        file,
+        document_type: docType,
+        document_name: docTypeName
+      })
+
+      clearInterval(progressInterval)
+      setUploadProgress({ isUploading: false, progress: 100, fileName: file.name })
+      
+      setTimeout(() => {
+        setUploadProgress({ isUploading: false, progress: 0, fileName: '' })
+        setShowUploadDialog(false)
+        setSelectedDocType('')
+      }, 500)
+      
+      toast.success('Document uploaded successfully!')
+    } catch (error) {
+      setUploadProgress({ isUploading: false, progress: 0, fileName: '' })
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload document'
+      toast.error(errorMessage)
+      throw error
     }
-    
-    // Remove existing document of same type
-    setDocuments(prev => prev.filter(doc => doc.type !== docType))
-    // Add new document
-    setDocuments(prev => [...prev, newDoc])
-    
-    setUploadProgress({ isUploading: false, progress: 0, fileName: '' })
-    setShowUploadDialog(false)
-    setSelectedDocType('')
-    toast.success('Document uploaded successfully!')
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !selectedDocType) return
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size should be less than 5MB')
+    // Validate file size (max 10MB to match policy uploads)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File size should be less than 10MB')
       return
     }
 
@@ -240,24 +264,26 @@ export function DocumentManagement({}: DocumentManagementProps) {
     if (!allowedTypes.includes(file.type)) {
       toast.error('Only JPG, PNG, and PDF files are allowed')
       return
-    }    try {
-      await simulateUpload(file, selectedDocType)
+    }
+
+    try {
+      await handleUploadDocument(file, selectedDocType)
     } catch {
-      toast.error('Failed to upload document')
-      setUploadProgress({ isUploading: false, progress: 0, fileName: '' })
+      // Error is already handled in handleUploadDocument
     } finally {
       if (event.target) {
         event.target.value = ''
       }
     }
   }
+
   const handleDeleteDocument = async (docId: string) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setDocuments(prev => prev.filter(doc => doc.id !== docId))
+      await deleteDocumentMutation.mutateAsync(docId)
       toast.success('Document deleted successfully!')
-    } catch {
-      toast.error('Failed to delete document')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete document'
+      toast.error(errorMessage)
     }
   }
 
@@ -334,7 +360,7 @@ export function DocumentManagement({}: DocumentManagementProps) {
         <Button 
           onClick={() => setShowUploadDialog(true)}
           className="ml-4"
-          disabled={uploadProgress.isUploading}
+          disabled={uploadProgress.isUploading || isLoadingDocuments}
         >
           <Plus className="w-4 h-4 mr-2" />
           Upload Document
@@ -453,8 +479,8 @@ export function DocumentManagement({}: DocumentManagementProps) {
           {uploadProgress.isUploading ? (
             <div className="space-y-4 py-4">
               <div className="text-center">
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  Uploading {uploadProgress.fileName}...
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  {uploadProgress.progress < 90 ? 'Uploading to S3...' : 'Finalizing upload...'} {uploadProgress.fileName}
                 </p>
                 <Progress value={uploadProgress.progress} className="w-full" />
                 <p className="text-xs text-gray-500 mt-1">
@@ -469,7 +495,7 @@ export function DocumentManagement({}: DocumentManagementProps) {
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Document Type
                 </label>
-                <Select value={selectedDocType} onValueChange={setSelectedDocType}>
+                <Select value={selectedDocType} onValueChange={(value) => setSelectedDocType(value as ProfileDocumentType)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select document type" />
                   </SelectTrigger>
@@ -509,7 +535,7 @@ export function DocumentManagement({}: DocumentManagementProps) {
                     Click to upload or drag and drop
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    PDF, JPG, PNG up to 5MB
+                    PDF, JPG, PNG up to 10MB
                   </p>
                   <input
                     ref={fileInputRef}

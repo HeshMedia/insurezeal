@@ -31,24 +31,6 @@ export const generateDynamicColumns = (sampleData: unknown[]): MasterSheetColumn
   
   // Generate columns for all keys without categorization
   return allKeys.map((key) => {
-    // Smart width calculation based on key name patterns
-    let width = 150; // Default width (increased from 120 to provide better initial spacing)
-    
-    // Wider columns for certain types of data
-    if (key.toLowerCase().includes('name') || key.toLowerCase().includes('address')) {
-      width = 200;
-    } else if (key.toLowerCase().includes('description') || key.toLowerCase().includes('note')) {
-      width = 250;
-    } else if (key.toLowerCase().includes('phone') || key.toLowerCase().includes('email')) {
-      width = 180;
-    } else if (key.toLowerCase().includes('date')) {
-      width = 130; // Increased to accommodate filter controls
-    } else if (key.toLowerCase().includes('amount') || key.toLowerCase().includes('premium')) {
-      width = 140; // Increased to accommodate filter controls
-    } else if (key.length > 20) {
-      width = 200; // Wider columns for long headers
-    }
-    
     return {
       key: key,
       id: key,
@@ -58,7 +40,6 @@ export const generateDynamicColumns = (sampleData: unknown[]): MasterSheetColumn
       tag: 'editable',
       editable: true,
       enableSorting: true,
-      width: width, // Use calculated width
     } as MasterSheetColumnConfig;
   });
 };
