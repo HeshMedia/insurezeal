@@ -22,6 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { toast } from 'sonner'
 
 interface ProfileHeaderProps {
   profile: UserProfile
@@ -51,10 +52,39 @@ export function ProfileHeader({
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      onUploadImage(file)
-      setShowImageOptions(false)
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file')
+      return
     }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB')
+      return
+    }
+
+    // Validate image dimensions (optional, for better UX)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        // Recommend square images but don't enforce
+        if (Math.abs(img.width - img.height) > 100) {
+          toast.warning('For best results, use a square image')
+        }
+        
+        onUploadImage(file)
+        setShowImageOptions(false)
+      }
+      img.onerror = () => {
+        toast.error('Failed to load image. Please try another file.')
+      }
+      img.src = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleDeleteImage = () => {
@@ -96,8 +126,11 @@ export function ProfileHeader({
                   onClick={() => document.getElementById('avatar-upload')?.click()}
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  Upload New Picture
+                  {isLoading ? 'Uploading...' : 'Upload New Picture'}
                 </Button>
+                <p className="text-xs text-gray-500 text-center px-2">
+                  Accepts JPG, PNG, GIF (max 5MB)
+                </p>
                 
                 {profile.avatar_url && (
                   <Button

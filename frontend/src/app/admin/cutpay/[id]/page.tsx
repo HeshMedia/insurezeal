@@ -50,7 +50,7 @@ export default function CutPayDetailPage() {
         plan_type: get('Plan type (Comp/STP/SAOD)'),
         gross_premium: get('Gross premium'),
         gst_amount: get('GST Amount'),
-        net_premium: get(' Net premium '),
+        net_premium: get('Net premium'),
         od_premium: get('OD Preimium'),
         tp_premium: get('TP Premium'),
         registration_no: get('Registration.no'),

@@ -16,8 +16,7 @@ import { AgentSummary } from "@/types/admin.types"
 import { cn } from "@/lib/utils"
 import { 
   Search, 
-  Filter, 
-  Download, 
+ 
   MoreHorizontal, 
   Eye, 
   Edit,
@@ -235,7 +234,7 @@ export function EnhancedAgentManagement() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className=" mx-auto space-y-6">
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -327,14 +326,6 @@ export function EnhancedAgentManagement() {
               <Button onClick={handleSearch} variant="outline" className="shrink-0">
                 <Search className="h-4 w-4 mr-2" />
                 Search
-              </Button>
-              <Button variant="outline" className="shrink-0">
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
-              <Button variant="outline" className="shrink-0">
-                <Download className="h-4 w-4 mr-2" />
-                Export
               </Button>
             </div>
           </div>

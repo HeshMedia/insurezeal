@@ -5,7 +5,7 @@ import { MasterSheetTableWrapper } from '@/components/mistable/admin-mis-table.c
 
 function MasterSheetPage() {
   return (
-    <div className="h-[calc(100vh-80px)] flex flex-col bg-gray-50 p-4">
+    <div className="h-[calc(100vh-80px)] flex flex-col bg-gray-50 ">
       {/* Table Container */}
       <div className="flex-1 w-[80vw] bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <MasterSheetTableWrapper />
