@@ -1,5 +1,5 @@
 import { SuperAdminSidebar } from "@/components/superadmin/sidebar"
-import { SuperAdminHeader } from "@/components/superadmin/superadmin-header"
+import { Header } from "@/components/header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 interface SuperAdminLayoutProps {
@@ -16,7 +16,7 @@ export default function SuperAdminLayout({ children }: SuperAdminLayoutProps) {
     >
       <SuperAdminSidebar />
       <SidebarInset>
-        <SuperAdminHeader />
+        <Header dashboardType="superadmin" />
         
         {/* Main Content */}
         <div className="flex flex-1 min-h-0 flex-col gap-3 p-3 bg-gray-50/30 overflow-hidden w-full max-w-[calc(100vw-15rem)]">
