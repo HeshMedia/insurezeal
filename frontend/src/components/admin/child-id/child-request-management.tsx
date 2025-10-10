@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,15 +11,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Search, Edit, Eye, Phone, Mail, User } from "lucide-react"
-import { useRejectChildRequest, useSuspendChildId } from "@/hooks/adminQuery"
+import { Search, Edit, Eye, Phone, Mail, User, ArrowLeft, ArrowRight } from "lucide-react"
+import { useChildRequestList, useChildRequestStats, useRejectChildRequest, useSuspendChildId } from "@/hooks/adminQuery"
 import type { ChildRequest } from "@/types/admin.types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 interface ChildRequestManagementProps {
-  requests?: ChildRequest[]
-  isLoading?: boolean
+  defaultPageSize?: number
 }
 
 const statusColors = {
@@ -292,27 +291,64 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
   )
 }
 
-export function ChildRequestManagement({ requests = [], isLoading = false }: ChildRequestManagementProps) {
+export function ChildRequestManagement({ defaultPageSize = 20 }: ChildRequestManagementProps = {}) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState<string | undefined>()
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(defaultPageSize)
   const [selectedRequest, setSelectedRequest] = useState<ChildRequest | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogAction, setDialogAction] = useState<'reject' | 'suspend' | null>(null)
 
-  // Ensure requests is always an array
-  const safeRequests = Array.isArray(requests) ? requests : []
+  const queryParams = useMemo(
+    () => ({
+      page: currentPage,
+      page_size: pageSize,
+      status: statusFilter === 'all' ? undefined : (statusFilter as ChildRequest['status']),
+      search: appliedSearch,
+    }),
+    [appliedSearch, currentPage, pageSize, statusFilter]
+  )
 
-  const filteredRequests = safeRequests.filter(request => {
-    const matchesSearch = 
-      (request.agent_name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (request.agent_code?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (request.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (request.phone_number || '').includes(searchQuery) ||
-      (request.child_id || '').includes(searchQuery)
-    
-    const matchesStatus = statusFilter === 'all' || request.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const {
+    data,
+    isLoading,
+    isFetching,
+    error,
+  } = useChildRequestList(queryParams)
+  const { data: statsData } = useChildRequestStats()
+
+  const requests = data?.requests ?? []
+  const totalCountFromData = data?.total_count
+  const totalCount =
+    totalCountFromData !== undefined
+      ? totalCountFromData
+      : statsData?.total_requests ?? requests.length
+  const activePage = data?.page ?? currentPage
+  const activePageSize = data?.page_size ?? pageSize
+  const totalPages =
+    data?.total_pages ??
+    (totalCount > 0 ? Math.max(1, Math.ceil(totalCount / activePageSize)) : 1)
+  const pageStart = totalCount === 0 ? 0 : (activePage - 1) * activePageSize + 1
+  const pageEnd = totalCount === 0 ? 0 : Math.min(pageStart + requests.length - 1, totalCount)
+  const isInitialLoading = isLoading && !data
+
+  const statusCounts = statsData
+    ? {
+        all: statsData.total_requests,
+        pending: statsData.pending_requests,
+        accepted: statsData.approved_requests,
+        rejected: statsData.rejected_requests,
+        suspended: statsData.suspended_requests,
+      }
+    : {
+        all: totalCount,
+        pending: requests.filter((r) => r.status === 'pending').length,
+        accepted: requests.filter((r) => r.status === 'accepted').length,
+        rejected: requests.filter((r) => r.status === 'rejected').length,
+        suspended: requests.filter((r) => r.status === 'suspended').length,
+      }
 
   const handleAction = (action: 'reject' | 'suspend', request: ChildRequest) => {
     try {
@@ -325,19 +361,40 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
     }
   }
 
-  const getStatusCounts = () => {
-    return {
-      all: safeRequests.length,
-      pending: safeRequests.filter(r => r.status === 'pending').length,
-      accepted: safeRequests.filter(r => r.status === 'accepted').length,
-      rejected: safeRequests.filter(r => r.status === 'rejected').length,
-      suspended: safeRequests.filter(r => r.status === 'suspended').length,
-    }
+  const handleSearch = () => {
+    setAppliedSearch(searchQuery.trim() || undefined)
+    setCurrentPage(1)
   }
 
-  const statusCounts = getStatusCounts()
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value)
+    setCurrentPage(1)
+  }
 
-  if (isLoading) {
+  const handleStatusCardClick = (status: string) => {
+    setStatusFilter(status)
+    setCurrentPage(1)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return
+    setCurrentPage(newPage)
+  }
+
+  if (error) {
+    return (
+      <Card className="border-red-200 bg-red-50">
+        <CardContent className="p-6">
+          <p className="text-red-600">
+            Failed to load child requests:{' '}
+            {error instanceof Error ? error.message : 'Unknown error'}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (isInitialLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -377,10 +434,10 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
               "cursor-pointer transition-all hover:shadow-sm border border-gray-200",
               statusFilter === status && "ring-2 ring-blue-500 bg-blue-50"
             )}
-            onClick={() => setStatusFilter(status)}
+            onClick={() => handleStatusCardClick(status)}
           >
             <CardContent className="p-3 text-center">
-              <div className="text-lg font-bold text-gray-900">{count}</div>
+              <div className="text-lg font-bold text-gray-900">{count ?? 0}</div>
               <div className="text-sm text-gray-600 capitalize">
                 {status === 'all' ? 'Total' : status}
               </div>
@@ -397,26 +454,40 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
             placeholder="Search by agent name, agent code, email, phone, or child ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch()
+              }
+            }}
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="accepted">Accepted</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col sm:flex-row gap-2 sm:w-auto">
+          <Button
+            onClick={handleSearch}
+            className="sm:px-5"
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Search
+          </Button>
+          <Select value={statusFilter} onValueChange={handleStatusChange}>
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="accepted">Accepted</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="suspended">Suspended</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Requests Grid */}
       <div className="grid gap-4">
-        {filteredRequests.length === 0 ? (
+        {requests.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <div className="text-gray-500">
@@ -428,7 +499,7 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
             </CardContent>
           </Card>
         ) : (
-          filteredRequests.map((request) => {
+          requests.map((request) => {
             try {
               return (
                 <RequestCard
@@ -450,6 +521,39 @@ export function ChildRequestManagement({ requests = [], isLoading = false }: Chi
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {requests.length > 0 && totalCount > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+          <div className="text-sm text-gray-500">
+            Showing {pageStart} to {pageEnd} of {totalCount} requests
+            {isFetching && !isInitialLoading ? ' (updating...)' : ''}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(activePage - 1)}
+              disabled={activePage <= 1}
+            >
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Previous
+            </Button>
+            <span className="text-sm text-gray-600">
+              Page {activePage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(activePage + 1)}
+              disabled={activePage >= totalPages}
+            >
+              Next
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Dialog */}
       <ChildRequestDialog

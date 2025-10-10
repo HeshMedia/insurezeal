@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { CardGridSkeleton } from "@/components/ui/card-grid-skeleton";
 import { useCutPayList } from "@/hooks/cutpayQuery";
-import { CutPayListParams, CutPayTransaction } from "@/types/cutpay.types";
+import { CutPayTransaction } from "@/types/cutpay.types";
 import { cn } from "@/lib/utils";
 import {
   Search,
@@ -154,44 +154,60 @@ function CutPayCard({
 
 export function CutPayManagement() {
   const router = useRouter();
-  const [params, setParams] = useState<CutPayListParams>({
-    limit: 100,
-    skip: 0,
-  });
   const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState<string | undefined>();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
 
-  const { data: cutpayTransactions, isLoading, error } = useCutPayList(params);
+  const queryParams = useMemo(
+    () => ({
+      limit: pageSize,
+      skip: (currentPage - 1) * pageSize,
+      search: appliedSearch,
+    }),
+    [appliedSearch, currentPage, pageSize]
+  );
 
-  // Client-side pagination and filtering
-  const filteredTransactions =
-    cutpayTransactions?.filter((transaction) => {
-      if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        transaction.policy_number?.toLowerCase().includes(query) ||
-        transaction.customer_name?.toLowerCase().includes(query) ||
-        transaction.registration_number?.toLowerCase().includes(query) ||
-        transaction.agent_code?.toLowerCase().includes(query)
-      );
-    }) || [];
+  const {
+    data: cutpayData,
+    isLoading,
+    isFetching,
+    error,
+  } = useCutPayList(queryParams);
 
-  const totalTransactions = filteredTransactions.length;
-  const totalPages = Math.ceil(totalTransactions / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const currentTransactions = filteredTransactions.slice(startIndex, endIndex);
+  const transactions = cutpayData?.transactions ?? [];
+  const limit = cutpayData?.limit ?? pageSize;
+  const skip = cutpayData?.skip ?? (currentPage - 1) * pageSize;
+  const derivedTotal = cutpayData?.total_count;
+  const fallbackTotal =
+    derivedTotal !== undefined
+      ? derivedTotal
+      : transactions.length < limit
+        ? skip + transactions.length
+        : undefined;
+  const totalCount = fallbackTotal;
+  const pageStart = transactions.length > 0 ? skip + 1 : 0;
+  const pageEnd = skip + transactions.length;
+  const totalPages =
+    totalCount !== undefined && limit > 0
+      ? Math.max(1, Math.ceil(totalCount / limit))
+      : undefined;
+  const hasNextPage =
+    totalCount !== undefined
+      ? pageEnd < totalCount
+      : transactions.length === limit;
+  const isInitialLoading = isLoading && !cutpayData;
 
   const handleSearch = () => {
-    setParams((prev) => ({ ...prev, search: searchQuery }));
-    setCurrentPage(1); // Reset to first page when searching
+    setAppliedSearch(searchQuery.trim() || undefined);
+    setCurrentPage(1);
   };
 
-  // Handle pagination
   const handlePageChange = (newPage: number) => {
+    if (newPage < 1) return;
+    if (!hasNextPage && newPage > currentPage) return;
     setCurrentPage(newPage);
   };
 
@@ -335,12 +351,12 @@ export function CutPayManagement() {
       {/* Transactions Grid/List */}
       <div className="">
         <div>
-          {isLoading ? (
+          {isInitialLoading ? (
             <CardGridSkeleton
               viewMode={viewMode}
               avatarClassName="h-9 w-9 rounded-lg"
             />
-          ) : totalTransactions === 0 ? (
+          ) : transactions.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-2">
                 <CreditCard className="h-12 w-12 mx-auto" />
@@ -368,7 +384,7 @@ export function CutPayManagement() {
                   : "grid-cols-1"
               )}
             >
-              {currentTransactions.map((cutpay) => (
+              {transactions.map((cutpay) => (
                 <CutPayCard
                   key={cutpay.id}
                   cutpay={cutpay}
@@ -380,12 +396,14 @@ export function CutPayManagement() {
           )}
 
           {/* Pagination */}
-          {totalTransactions > 0 && totalPages > 1 && (
+          {transactions.length > 0 && (
             <div className="flex items-center justify-between mt-6">
               <div className="text-sm text-gray-500">
-                Showing {startIndex + 1} to{" "}
-                {Math.min(endIndex, totalTransactions)} of {totalTransactions}{" "}
-                transactions
+                Showing {pageStart || 0}
+                {pageEnd !== pageStart ? ` to ${pageEnd}` : ""}
+                {totalCount !== undefined
+                  ? ` of ${totalCount} transactions`
+                  : " transactions"}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -398,13 +416,15 @@ export function CutPayManagement() {
                   Previous
                 </Button>
                 <span className="text-sm text-gray-600">
-                  Page {currentPage} of {totalPages}
+                  Page {currentPage}
+                  {totalPages ? ` of ${totalPages}` : ""}
+                  {isFetching && !isInitialLoading ? " (updating...)" : ""}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
+                  disabled={!hasNextPage}
                 >
                   Next
                   <ArrowRight className="h-4 w-4 ml-1" />

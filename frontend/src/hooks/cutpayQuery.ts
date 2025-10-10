@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery, keepPreviousData } from '@tanstack/react-query'
 import { cutpayApi } from '@/lib/api/cutpay'
 import {
   CutPayTransaction,
@@ -41,6 +41,7 @@ export const useCutPayList = (params?: CutPayListParams) => {
   return useQuery({
     queryKey: cutpayKeys.list(params),
     queryFn: () => cutpayApi.list(params),
+    placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }
@@ -347,8 +348,11 @@ export const useInfiniteCutPay = (params?: Omit<CutPayListParams, 'skip'>) => {
         limit: params?.limit || 20 
       })
       return {
-        data: result,
-        nextCursor: result.length === (params?.limit || 20) ? skip + (params?.limit || 20) : undefined
+        ...result,
+        nextCursor:
+          result.transactions.length === (params?.limit || 20)
+            ? skip + (params?.limit || 20)
+            : undefined
       }
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
