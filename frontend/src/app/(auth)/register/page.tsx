@@ -41,13 +41,21 @@ const RegisterPage = () => {
     
     try {
       const { email, password, username, first_name, last_name } = formData
-      await signUp({ email, password, username, first_name, last_name })
+      const result = await signUp({ email, password, username, first_name, last_name })
+
+      if (result?.error) {
+        const normalizedMessage = result.error.toLowerCase().includes('email')
+          ? 'An account with this email already exists. Try signing in instead.'
+          : 'Unable to create your account. Please check your details and try again.'
+        setFormError(normalizedMessage)
+        return
+      }
       
       // Redirect to email verification page
       router.push(`/verify-email?email=${encodeURIComponent(email)}`)
     } catch (error: unknown) {
       console.error('Registration error:', error)
-      const errorMessage = error instanceof Error ? error.message : "Registration failed. Please try again."
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed. Please try again.'
       setFormError(errorMessage)
     } finally {
       setLoading(false)

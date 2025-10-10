@@ -187,8 +187,13 @@ export function useLogout() {
   const logout = async () => {
     setIsLoading(true)
     try {
-      await signOut()
-      // signOut already handles redirect to login
+      const result = await signOut()
+
+      if (result?.error) {
+        console.warn('Logout error:', result.error)
+        router.push('/login')
+      }
+      // On success, signOut already triggers a redirect to login
     } catch (error) {
       console.error('Logout error:', error)
       // Even if logout fails, redirect to login

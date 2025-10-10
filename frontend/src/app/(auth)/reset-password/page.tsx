@@ -44,8 +44,14 @@ const ForgotPasswordForm = () => {
     setLoading(true)
 
     try {
-      await resetPasswordForEmail(email)
-      setMessage("If an account with that email exists, a password reset link has been sent.")
+      const result = await resetPasswordForEmail(email)
+
+      if (!result.success) {
+        setError(result.error ?? 'Unable to send the reset link. Please try again.')
+        return
+      }
+
+      setMessage('If an account with that email exists, a password reset link has been sent.')
     } catch (error: unknown) {
       console.error('Reset password error:', error)
       const errorMessage = error instanceof Error ? error.message : 'An error occurred'
@@ -151,8 +157,14 @@ const UpdatePasswordForm = () => {
     setLoading(true)
 
     try {
-      await updatePassword(password)
-      setMessage("Password updated successfully! Redirecting to login...")
+      const result = await updatePassword(password)
+
+      if (!result.success) {
+        setError(result.error ?? 'Unable to update your password. Please try again.')
+        return
+      }
+
+      setMessage('Password updated successfully! Redirecting to login...')
       
       // Redirect to login after 2 seconds
       setTimeout(() => {
