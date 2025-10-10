@@ -7,13 +7,10 @@ import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/loader'
 import { ArrowLeft } from 'lucide-react'
 import InputForm from '@/components/forms/input-form'
-import { useAtom } from 'jotai'
-import { pdfExtractionDataAtom } from '@/lib/atoms/cutpay'
+import { useAtom, useSetAtom } from 'jotai'
+import { pdfExtractionDataAtom, cutpayCalculationResultAtom, policyPdfUrlAtom, additionalDocumentsUrlsAtom } from '@/lib/atoms/cutpay'
 import { useEffect, useMemo } from 'react'
 import type { ExtractedPolicyData, AdminInputData, CalculationResult } from '@/types/cutpay.types'
-// Types are inferred via API response normalization, no explicit imports needed
-import { useSetAtom } from 'jotai'
-import { policyPdfUrlAtom, additionalDocumentsUrlsAtom } from '@/lib/atoms/cutpay'
 
 const toStringOrNull = (val: unknown): string | null => {
   if (val === null || val === undefined) return null
@@ -38,10 +35,12 @@ export default function CutPayEditPage() {
   
   const { data: policyData, isLoading: isLoadingCutpay } = useCutPayByPolicy(policy, quarter, year, true)
   const [, setPdfExtractionData] = useAtom(pdfExtractionDataAtom)
+  const [, setCalculationResult] = useAtom(cutpayCalculationResultAtom)
   const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom)
   const setAdditionalDocUrls = useSetAtom(additionalDocumentsUrlsAtom)
 
   // Build a combined record from Google Sheets + DB for form auto-fill
+  // Priority: DB record fields (if exist) > Google Sheets fields
   const dbRecord = policyData?.database_record as Record<string, unknown> | undefined
   const sheet = policyData?.google_sheets_data as Record<string, string> | undefined
   const fromSheet = useMemo<Record<string, unknown>>(() => {
@@ -100,8 +99,26 @@ export default function CutPayEditPage() {
       code_type: derivedCodeType,
     }
   }, [sheet])
+  
+  // Combine: Start with sheet data as fallback, then apply DB record on top
+  // This ensures calculations and all DB fields take priority
   const combinedRecord = useMemo<Record<string, unknown> | undefined>(() => {
-    return (dbRecord || sheet) ? { ...(fromSheet || {}), ...(dbRecord || {}) } : undefined
+    if (!dbRecord && !sheet) return undefined
+    
+    // Start with sheet data as base, then overlay DB record
+    const combined = { ...(fromSheet || {}), ...(dbRecord || {}) }
+    
+    // Parse payment_method and payment_detail from DB if they exist as combined string
+    if (dbRecord?.payment_method && typeof dbRecord.payment_method === 'string') {
+      const paymentModeStr = dbRecord.payment_method as string
+      const dashIdx = paymentModeStr.indexOf(' - ')
+      if (dashIdx >= 0) {
+        combined.payment_method = paymentModeStr.slice(0, dashIdx).trim()
+        combined.payment_detail = paymentModeStr.slice(dashIdx + 3).trim()
+      }
+    }
+    
+    return combined
   }, [dbRecord, sheet, fromSheet])
 
   // Transform cutpay data to match the form structure
@@ -188,17 +205,40 @@ export default function CutPayEditPage() {
     }
   }
 
-  // Set the extracted data when cutpay data is loaded
+  // Set the extracted data and calculations when cutpay data is loaded
   useEffect(() => {
     if (combinedRecord && Object.keys(combinedRecord).length) {
       const transformedData = transformCutpayData(combinedRecord)
       if (transformedData) {
+        // Set extracted data for auto-fill
         setPdfExtractionData({
           extracted_data: transformedData.extracted_data,
           confidence_scores: {},
           extraction_status: 'completed',
           extraction_time: new Date().toISOString(),
         })
+        
+        // Set calculation results if they exist and have valid values
+        if (transformedData.calculations && Object.values(transformedData.calculations).some(v => v !== null && v !== undefined)) {
+          // Filter out null/undefined and ensure all required fields are present
+          const calc = transformedData.calculations
+          const hasRequiredFields = 
+            calc.receivable_from_broker !== null && calc.receivable_from_broker !== undefined &&
+            calc.cut_pay_amount !== null && calc.cut_pay_amount !== undefined
+          
+          if (hasRequiredFields) {
+            setCalculationResult({
+              receivable_from_broker: calc.receivable_from_broker ?? 0,
+              extra_amount_receivable_from_broker: calc.extra_amount_receivable_from_broker ?? 0,
+              total_receivable_from_broker: calc.total_receivable_from_broker ?? 0,
+              total_receivable_from_broker_with_gst: calc.total_receivable_from_broker_with_gst ?? 0,
+              cut_pay_amount: calc.cut_pay_amount ?? 0,
+              agent_po_amt: calc.agent_po_amt ?? 0,
+              agent_extra_amount: calc.agent_extra_amount ?? 0,
+              total_agent_po_amt: calc.total_agent_po_amt ?? 0,
+            })
+          }
+        }
       }
     }
 
@@ -209,7 +249,7 @@ export default function CutPayEditPage() {
       // If future API adds additional document URLs, set them here
       setAdditionalDocUrls({ kyc_documents: null, rc_document: null, previous_policy: null })
     } catch {}
-  }, [policyData, combinedRecord, dbRecord, setPdfExtractionData, setPolicyPdfUrl, setAdditionalDocUrls])
+  }, [combinedRecord, dbRecord, setPdfExtractionData, setCalculationResult, setPolicyPdfUrl, setAdditionalDocUrls])
 
   const handlePrev = () => {
     router.back()

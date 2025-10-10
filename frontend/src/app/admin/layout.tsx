@@ -1,5 +1,5 @@
 import { AdminSidebar } from "@/components/admin/sidebar"
-import { AdminHeader } from "@/components/admin/admin-header"
+import { Header } from "@/components/header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 interface AdminLayoutProps {
@@ -16,7 +16,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     >
       <AdminSidebar />
       <SidebarInset>
-        <AdminHeader />
+        <Header dashboardType="admin" />
         
         {/* Main Content */}
         <div className="flex flex-1 flex-col gap-3 bg-gray-50/30 p-4 ">

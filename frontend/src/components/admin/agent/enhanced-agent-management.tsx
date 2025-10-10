@@ -16,16 +16,18 @@ import { AgentSummary } from "@/types/admin.types"
 import { cn } from "@/lib/utils"
 import { 
   Search, 
- 
   MoreHorizontal, 
   Eye, 
   Edit,
   Users,
-  Mail,  Phone,
+  Mail,
+  Phone,
   Calendar,
   ArrowLeft,
   ArrowRight,
-  Trash2
+  Trash2,
+  Grid3x3,
+  List
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -34,6 +36,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -243,8 +250,45 @@ export function EnhancedAgentManagement() {
             <p className="text-gray-600 mt-1">Manage insurance agents and their profiles</p>
           </div>
           <div className="flex gap-3">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Search className="h-4 w-4 mr-2" />
+                  Search
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm">Search Agents</h4>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Search by name, email, agent code..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button onClick={handleSearch} className="w-full" size="sm">
+                    Search
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            
             <Button variant="outline" size="sm" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
-              {viewMode === 'grid' ? 'List View' : 'Grid View'}
+              {viewMode === 'grid' ? (
+                <>
+                  <List className="h-4 w-4 mr-2" />
+                  List View
+                </>
+              ) : (
+                <>
+                  <Grid3x3 className="h-4 w-4 mr-2" />
+                  Grid View
+                </>
+              )}
             </Button>
             <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
               <Users className="h-4 w-4 mr-2" />
@@ -307,30 +351,6 @@ export function EnhancedAgentManagement() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Filters and Search */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="Search by name, email, agent code..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleSearch} variant="outline" className="shrink-0">
-                <Search className="h-4 w-4 mr-2" />
-                Search
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Agents Grid/List */}
       <Card className="border border-gray-200 shadow-sm">
