@@ -11,18 +11,18 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
 import { format } from 'date-fns'
 import { UpdateAgentConfigRequest } from '@/types/cutpay.types'
+import Loading from '@/app/loading'
 
 export default function EditAgentConfigPage() {
   const router = useRouter()
   const params = useParams()
   const configId = parseInt(params.id as string)
 
-  const { data: config, isLoading, error } = useAgentConfigById(configId, !!configId)
+  const { data: config, error, isLoading } = useAgentConfigById(configId, !!configId)
   const updateMutation = useUpdateAgentConfig()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,29 +47,11 @@ export default function EditAgentConfigPage() {
     )
   }
 
+  // Show loading while fetching
   if (isLoading) {
     return (
-      <div className="p-4 md:p-8">
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Skeleton className="h-10 w-24" />
-              <Skeleton className="h-10 w-24" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+<Loading />
+      
     )
   }
 

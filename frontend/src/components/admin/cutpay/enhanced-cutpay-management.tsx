@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
+import { CardGridSkeleton } from "@/components/ui/card-grid-skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 
@@ -307,31 +307,10 @@ export function CutPayManagement() {
       <div className="">
         <div>
           {isLoading ? (
-            <div className={cn(
-              "grid gap-4",
-              viewMode === 'grid' ? "md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-            )}>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Card key={i}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-9 w-9 rounded-lg" />
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <Skeleton className="h-3 w-full" />
-                      <Skeleton className="h-3 w-3/4" />
-                      <Skeleton className="h-8 w-full mt-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <CardGridSkeleton
+              viewMode={viewMode}
+              avatarClassName="h-9 w-9 rounded-lg"
+            />
           ) : totalTransactions === 0 ? (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-2">

@@ -3,7 +3,6 @@
 // component work in progress
 "use client";
 
-
 import React, { useMemo, useCallback, useEffect, useState } from "react";
 import {
   useReactTable,

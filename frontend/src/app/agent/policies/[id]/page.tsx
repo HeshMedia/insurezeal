@@ -4,11 +4,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
 import { usePolicyDetailsByNumber } from '@/hooks/policyQuery'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/ui/loader'
 import { ArrowLeft } from 'lucide-react'
 import { useAtom } from 'jotai'
 import { selectedPolicyContextAtom } from '@/lib/atoms/policy'
 import { PolicyDashboard, PolicyData } from '@/components/admin/cutpay/policy-dashboard'
+import Loading from '@/app/loading'
 
 export default function PolicyDetailPage() {
   const params = useParams()
@@ -30,7 +30,7 @@ export default function PolicyDetailPage() {
     return isNaN(n) ? 0 : n
   })()
 
-  const { data: policyData, isLoading, error } = usePolicyDetailsByNumber({
+  const { data: policyData, error, isLoading } = usePolicyDetailsByNumber({
     policy_number: policyId,
     quarter: qQuarter,
     year: qYear,
@@ -105,15 +105,12 @@ export default function PolicyDetailPage() {
 
   const normalized = normalize()
 
+  // Show loading while fetching
   if (isLoading) {
     return (
       <DashboardWrapper requiredRole="agent">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <LoadingSpinner />
-            <p className="text-sm text-gray-500">Loading policy details...</p>
-          </div>
-        </div>
+      <Loading />
+    
       </DashboardWrapper>
     )
   }

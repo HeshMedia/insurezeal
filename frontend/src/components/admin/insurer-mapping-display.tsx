@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, AlertCircle, FileSearch, ArrowRight, Database, FileText } from 'lucide-react'
+import {AlertCircle, FileSearch, ArrowRight, Database, FileText } from 'lucide-react'
+import Loading from '@/app/loading'
 
 interface InsurerMappingDisplayProps {
   insurerName: string;
@@ -91,9 +92,7 @@ export function InsurerMappingDisplay({ insurerName }: InsurerMappingDisplayProp
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+     <Loading />
     )
   }
 

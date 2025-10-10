@@ -1,5 +1,6 @@
 'use client'
 
+import Loading from '@/app/loading'
 import { useRequireAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -34,12 +35,9 @@ export function DashboardWrapper({ children, requiredRole }: DashboardWrapperPro
     }
   }, [isAuthenticated, userRole, loading, requiredRole, router])
 
+
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-      </div>
-    )
+    return <Loading />
   }
 
   if (!isAuthenticated || userRole !== requiredRole) {
