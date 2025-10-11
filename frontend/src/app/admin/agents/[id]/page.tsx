@@ -1,8 +1,9 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useAgentById } from '@/hooks/adminQuery'
+import { useAgentById, useUpdateAgent } from '@/hooks/adminQuery'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -14,17 +15,160 @@ import {
   User, 
   Phone,
   MapPin,
-  FileText,
-  Briefcase
+  FileText
 } from 'lucide-react'
 import Loading from '@/app/loading'
+import { ProfileDetails } from '@/components/profile/profile-details'
+import { ProfileEditForm } from '@/components/profile/profile-edit-form'
+import type { AgentUpdateRequest } from '@/types/admin.types'
+import type { UpdateProfileRequest, UserProfile } from '@/types/profile.types'
+import { toast } from 'sonner'
 
 export default function AgentDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const agentId = params.id as string
 
   const { data: agent, isLoading, error } = useAgentById(agentId)
+  console.log('Agent data:', { agentId, agent, isLoading, error })
+  const updateAgent = useUpdateAgent()
+  const [isEditing, setIsEditing] = useState(false)
+  const [activeTab, setActiveTab] = useState<'details' | 'documents'>('details')
+
+  useEffect(() => {
+    const shouldEdit = searchParams?.get('edit') === 'true'
+    setIsEditing(shouldEdit)
+    if (shouldEdit) {
+      setActiveTab('details')
+    }
+  }, [searchParams])
+
+  const openEdit = () => {
+    setIsEditing(true)
+    if (searchParams?.get('edit') !== 'true') {
+      router.replace(`/admin/agents/${agentId}?edit=true`, { scroll: false })
+    }
+  }
+
+  const agentProfile = useMemo<UserProfile | null>(() => {
+    if (!agent) return null
+
+    return {
+      id: agent.id,
+      user_id: agent.user_id,
+      email: agent.email,
+      first_name: agent.first_name ?? undefined,
+      middle_name: agent.middle_name ?? undefined,
+      last_name: agent.last_name ?? undefined,
+      father_name: agent.father_name ?? undefined,
+      mother_name: agent.mother_name ?? undefined,
+      date_of_birth: agent.date_of_birth ?? undefined,
+      gender: agent.gender,
+      mobile_number: agent.mobile_number ?? undefined,
+      alternate_mobile: agent.alternate_mobile ?? undefined,
+      alternate_email: agent.alternate_email ?? undefined,
+      permanent_address_line1: agent.permanent_address_line1 ?? undefined,
+      permanent_address_line2: agent.permanent_address_line2 ?? undefined,
+      permanent_city: agent.permanent_city ?? undefined,
+      permanent_state: agent.permanent_state ?? undefined,
+      permanent_pincode: agent.permanent_pincode ?? undefined,
+      communication_same_as_permanent: agent.communication_same_as_permanent ?? undefined,
+      communication_address_line1: agent.communication_address_line1 ?? undefined,
+      communication_address_line2: agent.communication_address_line2 ?? undefined,
+      communication_city: agent.communication_city ?? undefined,
+      communication_state: agent.communication_state ?? undefined,
+      communication_pincode: agent.communication_pincode ?? undefined,
+      education_level: agent.education_level,
+      specialization: agent.specialization ?? undefined,
+      previous_insurance_experience: agent.previous_insurance_experience ?? undefined,
+      years_of_experience: agent.years_of_experience ?? undefined,
+      previous_company_name: agent.previous_company_name ?? undefined,
+      bank_name: agent.bank_name ?? undefined,
+      account_number: agent.account_number ?? undefined,
+      ifsc_code: agent.ifsc_code ?? undefined,
+      branch_name: agent.branch_name ?? undefined,
+      nominee_name: agent.nominee_name ?? undefined,
+      nominee_relationship: agent.nominee_relationship ?? undefined,
+      nominee_date_of_birth: agent.nominee_date_of_birth ?? undefined,
+      preferred_language: agent.preferred_language ?? undefined,
+      territory_preference: agent.territory_preference ?? undefined,
+      avatar_url: agent.avatar_url ?? undefined,
+      preferences: agent.preferences ?? undefined,
+      created_at: agent.created_at,
+      updated_at: agent.updated_at,
+      agent_code: agent.agent_code ?? undefined,
+      user_role: agent.user_role ?? undefined,
+      document_urls: agent.document_urls ?? undefined,
+      username: agent.username ?? undefined,
+      display_name: agent.display_name ?? undefined,
+      bio: agent.bio ?? undefined,
+      timezone: agent.timezone ?? undefined,
+      language: agent.language ?? undefined,
+    }
+  }, [agent])
+
+  const handleAgentUpdate = async (formData: UpdateProfileRequest) => {
+    if (!agent) return
+
+    const payload: AgentUpdateRequest = {
+      first_name: formData.first_name ?? null,
+      last_name: formData.last_name ?? null,
+      middle_name: formData.middle_name ?? null,
+      father_name: formData.father_name ?? null,
+      mother_name: formData.mother_name ?? null,
+      date_of_birth: formData.date_of_birth ?? null,
+      gender: formData.gender ?? null,
+      mobile_number: formData.mobile_number ?? null,
+      alternate_mobile: formData.alternate_mobile ?? null,
+      alternate_email: formData.alternate_email ?? null,
+      permanent_address_line1: formData.permanent_address_line1 ?? null,
+      permanent_address_line2: formData.permanent_address_line2 ?? null,
+      permanent_city: formData.permanent_city ?? null,
+      permanent_state: formData.permanent_state ?? null,
+      permanent_pincode: formData.permanent_pincode ?? null,
+      communication_same_as_permanent: formData.communication_same_as_permanent ?? null,
+      communication_address_line1: formData.communication_address_line1 ?? null,
+      communication_address_line2: formData.communication_address_line2 ?? null,
+      communication_city: formData.communication_city ?? null,
+      communication_state: formData.communication_state ?? null,
+      communication_pincode: formData.communication_pincode ?? null,
+      education_level: formData.education_level ?? null,
+      specialization: formData.specialization ?? null,
+      previous_insurance_experience: formData.previous_insurance_experience ?? null,
+      years_of_experience: formData.years_of_experience ?? null,
+      previous_company_name: formData.previous_company_name ?? null,
+      bank_name: formData.bank_name ?? null,
+      account_number: formData.account_number ?? null,
+      ifsc_code: formData.ifsc_code ?? null,
+      branch_name: formData.branch_name ?? null,
+      nominee_name: formData.nominee_name ?? null,
+      nominee_relationship: formData.nominee_relationship ?? null,
+      nominee_date_of_birth: formData.nominee_date_of_birth ?? null,
+      preferred_language: formData.preferred_language ?? null,
+      territory_preference: formData.territory_preference ?? null,
+      agent_code: formData.agent_code ?? null,
+    }
+
+    console.log('Updating agent:', { agentId, payload })
+    try {
+      await updateAgent.mutateAsync({ agentId, data: payload })
+      toast.success('Agent updated successfully')
+      closeEdit()
+    } catch (mutationError) {
+      console.error('Agent update error:', mutationError)
+      toast.error(
+        mutationError instanceof Error ? mutationError.message : 'Failed to update agent'
+      )
+    }
+  }
+
+  const closeEdit = () => {
+    setIsEditing(false)
+    if (searchParams?.get('edit')) {
+      router.replace(`/admin/agents/${agentId}`, { scroll: false })
+    }
+  }
 
   const getInitials = (firstName?: string | null, lastName?: string | null) => {
     if (firstName && lastName) {
@@ -73,7 +217,7 @@ export default function AgentDetailPage() {
 
   return (
     <DashboardWrapper requiredRole="admin">
-      <div className="max-w-5xl mx-auto space-y-6 p-6">
+      <div className=" space-y-6 p-6">
         {/* Back Button */}
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={() => router.back()}>
@@ -165,7 +309,10 @@ export default function AgentDetailPage() {
 
             {/* Action Button */}
             <div className="flex flex-col gap-2">
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
+              <Button
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                onClick={openEdit}
+              >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Agent
               </Button>
@@ -177,113 +324,72 @@ export default function AgentDetailPage() {
 
         {/* Detailed Information */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="border-b border-gray-200 dark:border-gray-700 px-6 pt-6">
-            <Tabs defaultValue="personal" className="w-full">
-              <TabsList className="grid w-full max-w-2xl grid-cols-4">
-                <TabsTrigger value="personal" className="flex items-center gap-2">
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as 'details' | 'documents')}
+            className="w-full"
+          >
+            <div className="border-b border-gray-200 dark:border-gray-700 px-6 pt-6">
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="details" className="flex items-center gap-2">
                   <User className="w-4 h-4" />
-                  Personal
-                </TabsTrigger>
-                <TabsTrigger value="contact" className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  Contact
-                </TabsTrigger>
-                <TabsTrigger value="professional" className="flex items-center gap-2">
-                  <Briefcase className="w-4 h-4" />
-                  Professional
+                  Details
                 </TabsTrigger>
                 <TabsTrigger value="documents" className="flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   Documents
                 </TabsTrigger>
               </TabsList>
-          
-              <TabsContent value="personal" className="p-6 space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Personal Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InfoItem label="First Name" value={agent.first_name} />
-                    <InfoItem label="Last Name" value={agent.last_name} />
-                    <InfoItem label="Middle Name" value={agent.middle_name} />
-                    <InfoItem label="Date of Birth" value={agent.date_of_birth} />
-                    <InfoItem label="Gender" value={agent.gender} />
-                    <InfoItem label="Father's Name" value={agent.father_name} />
-                    <InfoItem label="Mother's Name" value={agent.mother_name} />
-                    <InfoItem label="Preferred Language" value={agent.preferred_language} />
-                  </div>
+            </div>
+
+            <TabsContent value="details" className="p-6">
+              {agentProfile && (
+                isEditing ? (
+                  <ProfileEditForm
+                    profile={agentProfile}
+                    onSubmit={handleAgentUpdate}
+                    onCancel={closeEdit}
+                    isLoading={updateAgent.isPending}
+                    mode="agent"
+                  />
+                ) : (
+                  <ProfileDetails profile={agentProfile} onEditClick={openEdit} />
+                )
+              )}
+            </TabsContent>
+
+            <TabsContent value="documents" className="p-6 space-y-4">
+              {agent.document_urls && Object.keys(agent.document_urls).length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(agent.document_urls).map(([docType, url]) => (
+                    <div
+                      key={docType}
+                      className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 dark:bg-gray-800/40"
+                    >
+                      <div>
+                        <p className="font-medium capitalize text-gray-900 dark:text-white">
+                          {docType.replace(/_/g, ' ')}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Uploaded document</p>
+                      </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          View
+                        </a>
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              </TabsContent>
-              
-              <TabsContent value="contact" className="p-6 space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Contact Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InfoItem label="Email" value={agent.email} />
-                    <InfoItem label="Mobile Number" value={agent.mobile_number} />
-                    <InfoItem label="Alternate Mobile" value={agent.alternate_mobile} />
-                    <InfoItem label="Alternate Email" value={agent.alternate_email} />
-                    <InfoItem label="Permanent Address Line 1" value={agent.permanent_address_line1} />
-                    <InfoItem label="Permanent Address Line 2" value={agent.permanent_address_line2} />
-                    <InfoItem label="Permanent City" value={agent.permanent_city} />
-                    <InfoItem label="Permanent State" value={agent.permanent_state} />
-                    <InfoItem label="Permanent Pincode" value={agent.permanent_pincode} />
-                    <InfoItem label="Communication Address Line 1" value={agent.communication_address_line1} />
-                    <InfoItem label="Communication Address Line 2" value={agent.communication_address_line2} />
-                    <InfoItem label="Communication City" value={agent.communication_city} />
-                    <InfoItem label="Communication State" value={agent.communication_state} />
-                    <InfoItem label="Communication Pincode" value={agent.communication_pincode} />
-                  </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-gray-500 dark:text-gray-400">
+                  No documents uploaded yet.
                 </div>
-              </TabsContent>
-              
-              <TabsContent value="professional" className="p-6 space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Professional Details</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InfoItem label="Agent Code" value={agent.agent_code} />
-                    <InfoItem label="User Role" value={agent.user_role} />
-                    <InfoItem label="Education Level" value={agent.education_level} />
-                    <InfoItem label="Specialization" value={agent.specialization} />
-                    <InfoItem label="Years of Experience" value={agent.years_of_experience?.toString()} />
-                    <InfoItem label="Previous Company" value={agent.previous_company_name} />
-                    <InfoItem label="Territory Preference" value={agent.territory_preference} />
-                    <InfoItem label="Language" value={agent.language} />
-                  </div>
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="documents" className="p-6 space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Document Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <InfoItem label="PAN Number" value={agent.pan_number} />
-                    <InfoItem label="Aadhaar Number" value={agent.aadhaar_number} />
-                    <InfoItem label="Bank Name" value={agent.bank_name} />
-                    <InfoItem label="Account Number" value={agent.account_number} />
-                    <InfoItem label="IFSC Code" value={agent.ifsc_code} />
-                    <InfoItem label="Branch Name" value={agent.branch_name} />
-                    <InfoItem label="Nominee Name" value={agent.nominee_name} />
-                    <InfoItem label="Nominee Relationship" value={agent.nominee_relationship} />
-                    <InfoItem label="Nominee Date of Birth" value={agent.nominee_date_of_birth} />
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </DashboardWrapper>
-  )
-}
-
-function InfoItem({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="text-sm text-gray-900 dark:text-white">
-        {value || <span className="text-gray-400 italic">Not provided</span>}
-      </p>
-    </div>
   )
 }
 

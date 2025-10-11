@@ -114,6 +114,7 @@ export interface UpdateProfileRequest {
   nominee_date_of_birth?: string
   preferred_language?: string
   territory_preference?: string
+  agent_code?: string | null
   username?: string
   display_name?: string
   bio?: string

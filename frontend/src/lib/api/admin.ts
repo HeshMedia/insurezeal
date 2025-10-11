@@ -3,6 +3,8 @@ import {
   AgentListResponse,
   AgentListParams,
   AgentDetails,
+  AgentUpdateRequest,
+  AgentUpdateResponse,
   ChildRequest,
   ChildRequestListResponse,
   ChildRequestListParams,
@@ -70,6 +72,13 @@ export const adminApi = {
     // Get agent details
     getById: async (agentId: string): Promise<AgentDetails> => {
       const response = await apiClient.get(`/admin/agents/${agentId}`)
+      return response.data
+    },
+
+    // Update agent details
+    update: async (agentId: string, data: AgentUpdateRequest): Promise<AgentUpdateResponse> => {
+      console.log('API call:', `PUT /admin/agents/${agentId}/edit-details`, data)
+      const response = await apiClient.put(`/admin/agents/${agentId}/edit-details`, data)
       return response.data
     },
 

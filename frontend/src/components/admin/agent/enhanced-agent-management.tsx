@@ -53,9 +53,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 
-function AgentCard({ agent, onViewDetails, onDelete }: { 
+function AgentCard({ agent, onViewDetails, onEdit, onDelete }: { 
   agent: AgentSummary; 
   onViewDetails: (id: string) => void;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
   const getInitials = (firstName?: string | null, lastName?: string | null) => {
@@ -126,7 +127,10 @@ function AgentCard({ agent, onViewDetails, onDelete }: {
                 <Eye className="h-4 w-4 mr-2" />
                 View Details
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => onEdit(agent.id)}
+              >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Profile
               </DropdownMenuItem>
@@ -209,6 +213,10 @@ export function EnhancedAgentManagement() {
     router.push(`/admin/agents/${agentId}`)
   }
 
+  const handleEditAgent = (agentId: string) => {
+    router.push(`/admin/agents/${agentId}?edit=true`)
+  }
+
   const handleDeleteClick = (agentId: string) => {
     setAgentToDelete(agentId)
     setDeleteDialogOpen(true)
@@ -270,7 +278,7 @@ export function EnhancedAgentManagement() {
                       className="pl-10"
                     />
                   </div>
-                  <Button onClick={handleSearch} className="w-full" size="sm">
+                  <Button onClick={handleSearch} className="w-full bg-blue-700" size="sm">
                     Search
                   </Button>
                 </div>
@@ -289,10 +297,6 @@ export function EnhancedAgentManagement() {
                   Grid View
                 </>
               )}
-            </Button>
-            <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white">
-              <Users className="h-4 w-4 mr-2" />
-              Add Agent
             </Button>
           </div>
         </div>
@@ -353,7 +357,7 @@ export function EnhancedAgentManagement() {
       </div>
 
       {/* Agents Grid/List */}
-      <Card className="border border-gray-200 shadow-sm">
+      <div>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold text-gray-900">Agents</CardTitle>
@@ -398,6 +402,7 @@ export function EnhancedAgentManagement() {
                   key={agent.id}
                   agent={agent}
                   onViewDetails={handleViewDetails}
+                  onEdit={handleEditAgent}
                   onDelete={handleDeleteClick}
                 />
               ))}
@@ -438,7 +443,7 @@ export function EnhancedAgentManagement() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

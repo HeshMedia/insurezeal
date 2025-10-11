@@ -54,6 +54,7 @@ interface ProfileFormData {
   username?: string
   display_name?: string
   bio?: string
+  agent_code?: string
 }
 
 interface ProfileEditFormProps {
@@ -61,9 +62,10 @@ interface ProfileEditFormProps {
   onSubmit: (data: UpdateProfileRequest) => Promise<void>
   onCancel: () => void
   isLoading?: boolean
+  mode?: 'profile' | 'agent'
 }
 
-export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false }: ProfileEditFormProps) {  const form = useForm<ProfileFormData>({
+export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false, mode = 'profile' }: ProfileEditFormProps) {  const form = useForm<ProfileFormData>({
     defaultValues: {
       first_name: profile.first_name || '',
       middle_name: profile.middle_name || '',
@@ -105,6 +107,7 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
       username: profile.username || '',
       display_name: profile.display_name || '',
       bio: profile.bio || '',
+      agent_code: profile.agent_code || '',
     },
   })
 
@@ -143,11 +146,20 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
       })
     )
 
+    const { agent_code: agentCodeValue, ...restPayload } = payload as Record<string, unknown>
+    const yearsValue = restPayload['years_of_experience'] as number | string | null | undefined
+
     // Prepare update data with proper type conversion for numeric fields.
     const updateData: UpdateProfileRequest = {
-      ...payload,
+      ...(restPayload as UpdateProfileRequest),
       years_of_experience:
-        payload.years_of_experience !== null ? Number(payload.years_of_experience) : null,
+        yearsValue !== null && yearsValue !== undefined && yearsValue !== ''
+          ? Number(yearsValue)
+          : null,
+    }
+
+    if (mode === 'agent') {
+      updateData.agent_code = (agentCodeValue as string | null) ?? null
     }
 
     console.log('Form data being submitted:', updateData)
@@ -403,6 +415,22 @@ export function ProfileEditForm({ profile, onSubmit, onCancel, isLoading = false
           </FormField>
         </div>
       </div>
+
+      {mode === 'agent' && (
+        <>
+          <Separator />
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white border-b pb-2">
+              Agent Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField label="Agent Code">
+                <Input {...register('agent_code')} placeholder="Enter agent code" />
+              </FormField>
+            </div>
+          </div>
+        </>
+      )}
 
       <Separator />
 
