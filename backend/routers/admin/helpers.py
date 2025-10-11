@@ -236,12 +236,19 @@ class AdminHelpers:
             Dictionary mapping document types to URLs
         """
         try:
+            from uuid import UUID
+            
+            # Convert user_id to UUID if it's a string
+            if isinstance(user_id, str):
+                user_id = UUID(user_id)
+            
             doc_query = select(UserDocument).where(UserDocument.user_id == user_id)
             doc_result = await db.execute(doc_query)
             documents = doc_result.scalars().all()
 
+            # Return dictionary with document_type as key and document_url as value
             return {
-                doc.document_type: doc.file_url for doc in documents if doc.file_url
+                doc.document_type: doc.document_url for doc in documents if doc.document_url
             }
 
         except Exception as e:
