@@ -234,10 +234,11 @@ export function CutPayManagement() {
     const { quarter, year } = computeQuarterYear(
       cutpay.booking_date || cutpay.created_at
     );
-    const policy = cutpay.policy_number || "";
-    const query = `?policy=${encodeURIComponent(
-      policy
-    )}&q=${quarter}&y=${year}`;
+    const policy = cutpay.policy_number?.trim();
+    const query = policy
+      ? `?policy=${encodeURIComponent(policy)}&q=${quarter}&y=${year}`
+      : "";
+
     router.push(`/admin/cutpay/${cutpay.id}/edit${query}`);
   };
 

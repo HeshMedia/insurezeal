@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAtom } from "jotai";
-import { useMemo, useEffect, useState } from "react";
+import { useMemo, useEffect, useState, useRef, useCallback } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -31,7 +31,7 @@ import { useAgentList } from "@/hooks/adminQuery";
 import {
   useCreateCutPay,
   useUploadCutPayDocument,
-  useUpdateCutPayByPolicy,
+  useUpdateCutPay,
 } from "@/hooks/cutpayQuery";
  
 import {
@@ -42,7 +42,10 @@ import {
 } from "@/hooks/superadminQuery";
 import { AgentSummary } from "@/types/admin.types";
 import { clearAllFromIndexedDB } from "@/lib/utils/indexeddb";
-import { CreateCutpayTransactionCutpayPostRequest } from "@/types/cutpay.types";
+import {
+  CreateCutpayTransactionCutpayPostRequest,
+  UpdateCutPayRequest,
+} from "@/types/cutpay.types";
  
 import { Insurer, Broker, AdminChildId } from "@/types/superadmin.types";
 import {
@@ -57,7 +60,6 @@ import {
 import Calculations from "../admin/cutpay/calculations";
 import { Loader2, Info } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
-import { editModeFieldMappings, specialFieldMappings } from '@/components/admin/cutpay/form-config';
 import {
   Tooltip,
   TooltipContent,
@@ -72,18 +74,18 @@ interface InputFormProps {
   policyNumber?: string;
   quarter?: number;
   year?: number;
-  initialDbRecord?: any;
+  initialDbRecord?: Record<string, unknown> | undefined;
+  initialPrefill?: CreateCutpayTransactionCutpayPostRequest | null;
 }
 
 const InputForm: React.FC<InputFormProps> = ({
   onPrev,
-  // editId is optional but currently unused in policy-based update flow
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  editId: _editId, // Optional ID for edit mode
+  editId,
   policyNumber,
   quarter,
   year,
   initialDbRecord,
+  initialPrefill,
 }) => {
   const router = useRouter();
   // State for document viewer visibility is now managed locally
@@ -124,12 +126,12 @@ const InputForm: React.FC<InputFormProps> = ({
   ]);
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
-  const updateCutPayByPolicyMutation = useUpdateCutPayByPolicy();
+  const updateCutPayByIdMutation = useUpdateCutPay();
+
+  const isEditMode = typeof editId === "number";
 
 
   // Existing data supplied from parent for edit mode (policy-based)
-  const existingCutpayData = initialDbRecord;
-
   // State for child ID auto-fill functionality
   const [, setSelectedChildIdDetails] = useState<
     AdminChildId | null
@@ -167,6 +169,7 @@ const InputForm: React.FC<InputFormProps> = ({
   const childIdValue = watch("admin_input.admin_child_id");
   const cutpayReceivedStatus = watch("cutpay_received_status");
   const cutPayAmount = watch("calculations.cut_pay_amount");
+  const cutpayReceivedAmount = watch("cutpay_received");
   const codeType = watch("admin_input.code_type");
   const insurerCode = watch("admin_input.insurer_code");
   const brokerCode = watch("admin_input.broker_code");
@@ -234,28 +237,98 @@ const InputForm: React.FC<InputFormProps> = ({
   }, [pdfExtractionData, setValue]);
 
   // Effect to populate the form with existing cutpay data in edit mode (from DB record)
-  useEffect(() => {
-    if (existingCutpayData) {
-      console.log("Populating form with existing cutpay data:", existingCutpayData);
+  const prefillAppliedRef = useRef(false);
+  const lastPrefillRef = useRef<string | null>(null);
 
-      // Populate regular fields using the auto-generated mapping
-      Object.entries(editModeFieldMappings).forEach(([apiField, formField]) => {
-        const value = existingCutpayData[apiField as keyof typeof existingCutpayData];
-        if (value !== null && value !== undefined) {
-          setValue(formField as any, value, { shouldValidate: true });
-        }
-      });
-
-      // Handle special cases with transformations
-      Object.entries(specialFieldMappings).forEach(([apiField, config]) => {
-        const value = existingCutpayData[apiField as keyof typeof existingCutpayData];
-        if (value !== null && value !== undefined) {
-          const transformedValue = config.transform ? config.transform(value) : value;
-          setValue(config.target as any, transformedValue, { shouldValidate: true });
-        }
-      });
+  const normalizeNumber = useCallback((value: unknown): number | null => {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
     }
-  }, [existingCutpayData, setValue]);
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const parsed = Number(trimmed.replace(/₹/g, "").replace(/,/g, ""));
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  }, []);
+
+  const normalizeReceivedStatus = useCallback((value: unknown): "Yes" | "No" | "Partial" | null => {
+    if (typeof value !== "string") return null;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "yes") return "Yes";
+    if (normalized === "no") return "No";
+    if (normalized === "partial") return "Partial";
+    return null;
+  }, []);
+
+  useEffect(() => {
+    if (!initialPrefill) {
+      prefillAppliedRef.current = false;
+      lastPrefillRef.current = null;
+      return;
+    }
+
+    const receivedStatus = normalizeReceivedStatus(initialDbRecord?.["cutpay_received_status"]);
+
+    const snapshotKey = JSON.stringify({ initialPrefill, receivedStatus });
+    if (prefillAppliedRef.current && lastPrefillRef.current === snapshotKey) {
+      return;
+    }
+
+    const nextValues: CutPayFormSchemaType = {
+      policy_pdf_url: initialPrefill.policy_pdf_url ?? "",
+      additional_documents: initialPrefill.additional_documents ?? {},
+      extracted_data: initialPrefill.extracted_data ?? {},
+      admin_input: {
+        reporting_month: initialPrefill.admin_input?.reporting_month ?? null,
+        booking_date: initialPrefill.admin_input?.booking_date ?? null,
+        agent_code: initialPrefill.admin_input?.agent_code ?? null,
+        code_type: initialPrefill.admin_input?.code_type ?? null,
+        incoming_grid_percent: normalizeNumber(initialPrefill.admin_input?.incoming_grid_percent),
+        agent_commission_given_percent: normalizeNumber(initialPrefill.admin_input?.agent_commission_given_percent),
+        extra_grid: normalizeNumber(initialPrefill.admin_input?.extra_grid),
+        commissionable_premium: normalizeNumber(initialPrefill.admin_input?.commissionable_premium),
+        payment_by: initialPrefill.admin_input?.payment_by ?? null,
+        payment_method: initialPrefill.admin_input?.payment_method ?? null,
+        payment_detail: initialPrefill.admin_input?.payment_detail ?? null,
+        payout_on: initialPrefill.admin_input?.payout_on ?? null,
+        agent_extra_percent: normalizeNumber(initialPrefill.admin_input?.agent_extra_percent),
+        payment_by_office: normalizeNumber(initialPrefill.admin_input?.payment_by_office),
+        insurer_code: initialPrefill.admin_input?.insurer_code ?? null,
+        broker_code: initialPrefill.admin_input?.broker_code ?? null,
+        admin_child_id: initialPrefill.admin_input?.admin_child_id ?? null,
+        od_agent_payout_percent: normalizeNumber(initialPrefill.admin_input?.od_agent_payout_percent),
+        tp_agent_payout_percent: normalizeNumber(initialPrefill.admin_input?.tp_agent_payout_percent),
+        od_incoming_grid_percent: normalizeNumber(initialPrefill.admin_input?.od_incoming_grid_percent),
+        tp_incoming_grid_percent: normalizeNumber(initialPrefill.admin_input?.tp_incoming_grid_percent),
+        od_incoming_extra_grid: normalizeNumber(initialPrefill.admin_input?.od_incoming_extra_grid),
+        tp_incoming_extra_grid: normalizeNumber(initialPrefill.admin_input?.tp_incoming_extra_grid),
+      },
+      calculations: {
+        receivable_from_broker: normalizeNumber(initialPrefill.calculations?.receivable_from_broker),
+        extra_amount_receivable_from_broker: normalizeNumber(initialPrefill.calculations?.extra_amount_receivable_from_broker),
+        total_receivable_from_broker: normalizeNumber(initialPrefill.calculations?.total_receivable_from_broker),
+        total_receivable_from_broker_with_gst: normalizeNumber(initialPrefill.calculations?.total_receivable_from_broker_with_gst),
+        cut_pay_amount: normalizeNumber(initialPrefill.calculations?.cut_pay_amount),
+        agent_po_amt: normalizeNumber(initialPrefill.calculations?.agent_po_amt),
+        agent_extra_amount: normalizeNumber(initialPrefill.calculations?.agent_extra_amount),
+        total_agent_po_amt: normalizeNumber(initialPrefill.calculations?.total_agent_po_amt),
+        iz_total_po_percent: normalizeNumber(initialPrefill.calculations?.iz_total_po_percent),
+        already_given_to_agent: normalizeNumber(initialPrefill.calculations?.already_given_to_agent),
+        broker_payout_amount: normalizeNumber(initialPrefill.calculations?.broker_payout_amount),
+      },
+      claimed_by: initialPrefill.claimed_by ?? null,
+      running_bal: normalizeNumber(initialPrefill.running_bal),
+  cutpay_received_status: receivedStatus,
+      cutpay_received: normalizeNumber(initialPrefill.cutpay_received),
+      notes: initialPrefill.notes ?? null,
+    };
+
+    reset(nextValues);
+    prefillAppliedRef.current = true;
+    lastPrefillRef.current = snapshotKey;
+  }, [initialPrefill, initialDbRecord, reset, normalizeNumber, normalizeReceivedStatus]);
 
   // Auto-fill plan type based on PDF extraction data
   useEffect(() => {
@@ -274,19 +347,18 @@ const InputForm: React.FC<InputFormProps> = ({
   // Auto-populate cutpay_received based on cutpay_received_status
   useEffect(() => {
     if (cutpayReceivedStatus === "No") {
-      // Set cutpay_received to 0 when status is "No"
       setValue("cutpay_received", 0, { shouldValidate: true });
     } else if (cutpayReceivedStatus === "Yes" && cutPayAmount) {
-      // Pre-fill with calculated cutpay amount when status is "Yes"
       setValue("cutpay_received", cutPayAmount, { shouldValidate: true });
     } else if (cutpayReceivedStatus === "Partial" && cutPayAmount) {
-      // Pre-fill with calculated cutpay amount when status is "Partial" (user can edit)
       setValue("cutpay_received", cutPayAmount, { shouldValidate: true });
-    } else if (!cutpayReceivedStatus) {
-      // Clear cutpay_received when no status is selected
+    } else if (
+      !cutpayReceivedStatus &&
+      (!prefillAppliedRef.current || cutpayReceivedAmount === undefined)
+    ) {
       setValue("cutpay_received", null, { shouldValidate: true });
     }
-  }, [cutpayReceivedStatus, cutPayAmount, setValue]);
+  }, [cutpayReceivedStatus, cutPayAmount, cutpayReceivedAmount, setValue]);
 
   // This is the single source of truth for the relationship between
   // registration number and major categorisation. It runs whenever
@@ -945,67 +1017,88 @@ const InputForm: React.FC<InputFormProps> = ({
 
         console.log("Final payload:", payload);
 
-        let createdTransaction;
+        if (isEditMode && editId != null) {
+          const updatePayload: UpdateCutPayRequest = {
+            policypdfurl: payload.policy_pdf_url ?? null,
+            additionalDocuments: payload.additional_documents ?? null,
+            extractedData: payload.extracted_data ?? null,
+            adminInput: payload.admin_input ?? null,
+            calculations: payload.calculations ?? null,
+            claimedBy: payload.claimed_by ?? null,
+            runningbal: payload.running_bal ?? 0,
+            cutpay_recieved:
+              payload.cutpay_received != null
+                ? payload.cutpay_received.toString()
+                : "0",
+            notes: payload.notes ?? null,
+          };
 
-        if (policyNumber && quarter && year) {
-          // Edit mode - policy-based update
-          createdTransaction = await updateCutPayByPolicyMutation.mutateAsync({
-            params: { policy_number: policyNumber, quarter, year },
-            data: payload as any,
+          await updateCutPayByIdMutation.mutateAsync({
+            cutpayId: editId,
+            data: updatePayload,
           });
+
           updateStepStatus("create-transaction", "completed");
+          updateStepStatus("upload-policy", "completed");
+          updateStepStatus("upload-additional", "completed");
+          updateStepStatus("cleanup-redirect", "completed");
           toast.success("Transaction updated successfully!");
+
+          // Keep navigation consistent with create flow so users land on the list
+          router.push("/admin/cutpay");
         } else {
           // Create mode - use create mutation
-          createdTransaction = await createCutPayMutation.mutateAsync(payload);
+          const createdTransaction = await createCutPayMutation.mutateAsync(
+            payload
+          );
           updateStepStatus("create-transaction", "completed");
           // Store the created transaction in global state
           setCreatedTransaction(createdTransaction);
-        }
 
-        // Steps 2 & 3: Upload all associated documents
-        try {
-          await uploadDocuments(createdTransaction.id);
-          toast.success(
-            "🎉 Transaction created and documents uploaded successfully!"
-          );
-        } catch (uploadError) {
-          console.error("Document upload error:", uploadError);
-          const errorMessage =
-            uploadError instanceof Error
-              ? uploadError.message
-              : "Unknown upload error";
-          // Provide specific feedback based on the upload error
-          if (errorMessage.includes("Some documents failed")) {
-            toast.warning(
-              "⚠️ Transaction created successfully, but some documents failed to upload."
+          // Steps 2 & 3: Upload all associated documents
+          try {
+            await uploadDocuments(createdTransaction.id);
+            toast.success(
+              "🎉 Transaction created and documents uploaded successfully!"
             );
-          } else {
-            toast.warning(
-              "⚠️ Transaction created successfully, but documents could not be uploaded."
-            );
+          } catch (uploadError) {
+            console.error("Document upload error:", uploadError);
+            const errorMessage =
+              uploadError instanceof Error
+                ? uploadError.message
+                : "Unknown upload error";
+            // Provide specific feedback based on the upload error
+            if (errorMessage.includes("Some documents failed")) {
+              toast.warning(
+                "⚠️ Transaction created successfully, but some documents failed to upload."
+              );
+            } else {
+              toast.warning(
+                "⚠️ Transaction created successfully, but documents could not be uploaded."
+              );
+            }
           }
-        }
 
-        // Step 4: Clean up IndexedDB and redirect the user
-        updateStepStatus("cleanup-redirect", "active");
-        try {
-          console.log("🧹 Cleaning up IndexedDB documents...");
-          await clearAllFromIndexedDB(); // Remove temporary files
-          console.log("✅ IndexedDB cleanup completed");
-          updateStepStatus("cleanup-redirect", "completed");
+          // Step 4: Clean up IndexedDB and redirect the user
+          updateStepStatus("cleanup-redirect", "active");
+          try {
+            console.log("🧹 Cleaning up IndexedDB documents...");
+            await clearAllFromIndexedDB(); // Remove temporary files
+            console.log("✅ IndexedDB cleanup completed");
+            updateStepStatus("cleanup-redirect", "completed");
 
-          // A small delay to allow the user to see the final status
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+            // A small delay to allow the user to see the final status
+            await new Promise((resolve) => setTimeout(resolve, 1000));
 
-          // Redirect to the main cutpay list page
-          console.log("🔄 Redirecting to cutpay list...");
-          router.push("/admin/cutpay");
-        } catch (cleanupError) {
-          console.error("❌ Cleanup error:", cleanupError);
-          updateStepStatus("cleanup-redirect", "failed");
-          // Redirect anyway to avoid getting stuck
-          router.push("/admin/cutpay");
+            // Redirect to the main cutpay list page
+            console.log("🔄 Redirecting to cutpay list...");
+            router.push("/admin/cutpay");
+          } catch (cleanupError) {
+            console.error("❌ Cleanup error:", cleanupError);
+            updateStepStatus("cleanup-redirect", "failed");
+            // Redirect anyway to avoid getting stuck
+            router.push("/admin/cutpay");
+          }
         }
       }
 
