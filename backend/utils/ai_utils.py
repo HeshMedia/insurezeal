@@ -118,7 +118,15 @@ class GeminiPolicyExtractor:
         - gvw: Gross Vehicle Weight, do not convert to any unit, just extract the integer value as is for example "2500" for "2,500 KG"
         - rto: RTO code like MH01, DL01, etc. (extract first 4 characters of registration number)
         - state: State of registration
-        - fuel_type: Petrol, Diesel, CNG, Electric
+        - fuel_type: Look for fuel type in the document. MUST be one of these EXACT values: "Petrol", "Diesel", "CNG", "Electric"
+          * Search for keywords: "Fuel Type", "Fuel", "Type of Fuel", "Fuel Used"
+          * Common variations to map:
+            - "Petrol" / "PETROL" / "PET" → return "Petrol"
+            - "Diesel" / "DIESEL" / "DSL" / "HSD" → return "Diesel"
+            - "CNG" / "C.N.G" / "Compressed Natural Gas" → return "CNG"
+            - "Electric" / "ELECTRIC" / "EV" / "Battery" → return "Electric"
+          * If fuel type is not found or doesn't match these categories, return null
+          * Do NOT return any other value - only "Petrol", "Diesel", "CNG", "Electric", or null
         - cc: Engine capacity in CC
         - age_year: Vehicle age in years (if available in policy)
           * Find "Manufacturing Year", "Model Year", "Year of Manufacture" in the policy

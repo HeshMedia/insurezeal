@@ -153,6 +153,74 @@ class AgentSummary(BaseModel):
         from_attributes = True
 
 
+class AgentUpdateRequest(BaseModel):
+    """Schema for admin to update agent details"""
+
+    # Personal Information
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    middle_name: Optional[str] = Field(None, max_length=50)
+    father_name: Optional[str] = Field(None, max_length=100)
+    mother_name: Optional[str] = Field(None, max_length=100)
+    date_of_birth: Optional[date] = None
+    gender: Optional[GenderEnum] = None
+
+    # Contact Information
+    mobile_number: Optional[str] = Field(None, max_length=15)
+    alternate_mobile: Optional[str] = Field(None, max_length=15)
+    alternate_email: Optional[EmailStr] = None
+
+    # Address Information
+    permanent_address_line1: Optional[str] = Field(None, max_length=200)
+    permanent_address_line2: Optional[str] = Field(None, max_length=200)
+    permanent_city: Optional[str] = Field(None, max_length=50)
+    permanent_state: Optional[str] = Field(None, max_length=50)
+    permanent_pincode: Optional[str] = Field(None, max_length=6)
+
+    communication_same_as_permanent: Optional[bool] = None
+    communication_address_line1: Optional[str] = Field(None, max_length=200)
+    communication_address_line2: Optional[str] = Field(None, max_length=200)
+    communication_city: Optional[str] = Field(None, max_length=50)
+    communication_state: Optional[str] = Field(None, max_length=50)
+    communication_pincode: Optional[str] = Field(None, max_length=6)
+
+    # Professional Information
+    education_level: Optional[EducationLevelEnum] = None
+    specialization: Optional[str] = Field(None, max_length=100)
+    previous_insurance_experience: Optional[bool] = None
+    years_of_experience: Optional[int] = None
+    previous_company_name: Optional[str] = Field(None, max_length=100)
+
+    # Banking Information
+    bank_name: Optional[str] = Field(None, max_length=100)
+    account_number: Optional[str] = Field(None, max_length=18)
+    ifsc_code: Optional[str] = Field(None, max_length=11)
+    branch_name: Optional[str] = Field(None, max_length=100)
+
+    # Nominee Information
+    nominee_name: Optional[str] = Field(None, max_length=100)
+    nominee_relationship: Optional[str] = Field(None, max_length=50)
+    nominee_date_of_birth: Optional[date] = None
+
+    # Preferences
+    preferred_language: Optional[str] = Field(None, max_length=20)
+    territory_preference: Optional[str] = Field(None, max_length=100)
+
+    # Agent System Fields
+    agent_code: Optional[str] = Field(None, min_length=3, max_length=8)
+
+    class Config:
+        from_attributes = True
+
+
+class AgentUpdateResponse(BaseModel):
+    """Response after updating agent details"""
+
+    message: str
+    agent_id: str
+    updated_fields: List[str]
+
+
 class AgentListResponse(BaseModel):
     """Response for listing all agents"""
 

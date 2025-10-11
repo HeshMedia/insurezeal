@@ -109,6 +109,8 @@ from .schemas import (
     AgentDetailResponse,
     AgentListResponse,
     AgentSummary,
+    AgentUpdateRequest,
+    AgentUpdateResponse,
     ChildIdAssignment,
     ChildIdRequestList,
     ChildIdResponse,
@@ -248,6 +250,135 @@ async def delete_agent_by_id(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete agent",
+        )
+
+
+@router.put("/agents/{agent_id}/edit-details", response_model=AgentUpdateResponse)
+async def edit_agent_details(
+    agent_id: str,
+    update_data: AgentUpdateRequest,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _rbac_check=Depends(require_admin_write),
+):
+    """
+    Edit agent details (Admin only)
+
+    **Admin only endpoint**
+
+    - **agent_id**: The ID of the agent to update
+
+    Allows admin to update all agent profile fields including:
+    - Personal information (name, DOB, gender, etc.)
+    - Contact information (phone, email, etc.)
+    - Address information (permanent and communication)
+    - Professional information (education, experience, etc.)
+    - Banking information
+    - Nominee information
+    - Agent code (with uniqueness validation)
+
+    **Note**: If updating agent_code, system validates uniqueness and returns error if code already exists.
+    """
+
+    try:
+        # Validate agent_id UUID format
+        try:
+            agent_uuid = uuid.UUID(agent_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid agent ID format. Expected valid UUID, got: '{agent_id}'",
+            )
+
+        # Get the agent profile
+        result = await db.execute(
+            select(UserProfile).where(UserProfile.user_id == agent_uuid)
+        )
+        agent_profile = result.scalar_one_or_none()
+
+        if not agent_profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent with ID {agent_id} not found",
+            )
+
+        # Check if trying to update to non-agent role
+        if agent_profile.user_role not in ["agent", "admin"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot edit details for user with role: {agent_profile.user_role}",
+            )
+
+        # Get only the fields that were provided (exclude None values)
+        update_dict = update_data.model_dump(exclude_unset=True)
+        
+        if not update_dict:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields provided for update",
+            )
+
+        # Check if agent_code is being updated and validate uniqueness
+        if "agent_code" in update_dict and update_dict["agent_code"] is not None:
+            new_agent_code = update_dict["agent_code"]
+            
+            # Check if the new agent code is different from current
+            if new_agent_code != agent_profile.agent_code:
+                # Check if agent code already exists for another user
+                existing_agent = await db.execute(
+                    select(UserProfile).where(
+                        UserProfile.agent_code == new_agent_code,
+                        UserProfile.user_id != agent_uuid
+                    )
+                )
+                existing_agent_profile = existing_agent.scalar_one_or_none()
+                
+                if existing_agent_profile:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Agent code '{new_agent_code}' already exists. Please choose a different code.",
+                    )
+
+        # Track which fields are being updated
+        updated_fields = []
+
+        # Update the agent profile with provided fields
+        for field, value in update_dict.items():
+            if hasattr(agent_profile, field):
+                # Only update if value is different
+                if getattr(agent_profile, field) != value:
+                    setattr(agent_profile, field, value)
+                    updated_fields.append(field)
+
+        if not updated_fields:
+            return AgentUpdateResponse(
+                message="No changes detected. Agent details are already up to date.",
+                agent_id=agent_id,
+                updated_fields=[],
+            )
+
+        # Commit the changes
+        await db.commit()
+        await db.refresh(agent_profile)
+
+        logger.info(
+            f"Admin {current_user['user_id']} updated agent {agent_id}. Fields: {', '.join(updated_fields)}"
+        )
+
+        return AgentUpdateResponse(
+            message=f"Agent details updated successfully. Updated {len(updated_fields)} field(s).",
+            agent_id=agent_id,
+            updated_fields=updated_fields,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error updating agent {agent_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update agent details",
         )
 
 

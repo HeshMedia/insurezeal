@@ -188,7 +188,24 @@ async def preview_csv_with_insurer_mapping(
             )
 
         file_content = await file.read()
-        csv_content = file_content.decode("utf-8")
+        
+        # Try to decode with multiple encodings
+        csv_content = None
+        encodings_to_try = ['utf-8', 'utf-8-sig', 'windows-1252', 'iso-8859-1', 'cp1252']
+        
+        for encoding in encodings_to_try:
+            try:
+                csv_content = file_content.decode(encoding)
+                logger.info(f"Successfully decoded preview file with {encoding} encoding")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if csv_content is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to decode CSV file. Please ensure the file is in UTF-8, Windows-1252, or ISO-8859-1 encoding."
+            )
 
         if not csv_content.strip():
             raise HTTPException(
@@ -334,7 +351,24 @@ async def upload_universal_record(
                 )
 
         file_content = await file.read()
-        csv_content = file_content.decode("utf-8")
+        
+        # Try to decode with multiple encodings
+        csv_content = None
+        encodings_to_try = ['utf-8', 'utf-8-sig', 'windows-1252', 'iso-8859-1', 'cp1252']
+        
+        for encoding in encodings_to_try:
+            try:
+                csv_content = file_content.decode(encoding)
+                logger.info(f"Successfully decoded file with {encoding} encoding")
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if csv_content is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to decode CSV file. Please ensure the file is in UTF-8, Windows-1252, or ISO-8859-1 encoding."
+            )
 
         if not csv_content.strip():
             raise HTTPException(
