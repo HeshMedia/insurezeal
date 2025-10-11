@@ -188,7 +188,7 @@ async def get_agent_details(
 
     **Admin only endpoint**
 
-    - **agent_id**: The ID of the agent to retrieve
+    - **agent_id**: The user_id of the agent to retrieve (from Users table)
       Returns complete agent profile including all personal, professional, and document information.
     """
 
@@ -222,7 +222,7 @@ async def delete_agent_by_id(
 
     **Admin only endpoint**
 
-    - **agent_id**: The ID of the agent to delete
+    - **agent_id**: The user_id of the agent to delete (from Users table)
 
     **⚠️ Warning: This action is irreversible!**
 
@@ -266,7 +266,7 @@ async def edit_agent_details(
 
     **Admin only endpoint**
 
-    - **agent_id**: The ID of the agent to update
+    - **agent_id**: The user_id of the agent to update (from Users table)
 
     Allows admin to update all agent profile fields including:
     - Personal information (name, DOB, gender, etc.)
@@ -281,26 +281,11 @@ async def edit_agent_details(
     """
 
     try:
-        # Validate agent_id UUID format
-        try:
-            agent_uuid = uuid.UUID(agent_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid agent ID format. Expected valid UUID, got: '{agent_id}'",
-            )
+        # Get the agent profile using helper function (queries UserProfile.user_id)
+        agent_profile = await admin_helpers.get_agent_by_id(db, agent_id)
 
-        # Get the agent profile
-        result = await db.execute(
-            select(UserProfile).where(UserProfile.user_id == agent_uuid)
-        )
-        agent_profile = result.scalar_one_or_none()
-
-        if not agent_profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Agent with ID {agent_id} not found",
-            )
+        # agent_profile is guaranteed to exist and be an agent at this point
+        # (get_agent_by_id raises HTTPException if not found)
 
         # Check if trying to update to non-agent role
         if agent_profile.user_role not in ["agent", "admin"]:
@@ -328,7 +313,7 @@ async def edit_agent_details(
                 existing_agent = await db.execute(
                     select(UserProfile).where(
                         UserProfile.agent_code == new_agent_code,
-                        UserProfile.user_id != agent_uuid
+                        UserProfile.user_id != agent_profile.user_id
                     )
                 )
                 existing_agent_profile = existing_agent.scalar_one_or_none()

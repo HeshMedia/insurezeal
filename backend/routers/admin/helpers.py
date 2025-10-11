@@ -185,11 +185,11 @@ class AdminHelpers:
 
     async def get_agent_by_id(self, db: AsyncSession, agent_id: str) -> UserProfile:
         """
-        Get a specific agent by ID
+        Get a specific agent by user_id
 
         Args:
             db: Database session
-            agent_id: Agent's profile ID
+            agent_id: Agent's user_id (from Users table)
 
         Returns:
             UserProfile object
@@ -198,8 +198,17 @@ class AdminHelpers:
             HTTPException: If agent not found or is not an agent
         """
         try:
+            # Validate UUID format
+            try:
+                user_uuid = uuid.UUID(agent_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid user ID format. Expected valid UUID, got: '{agent_id}'",
+                )
+
             query = select(UserProfile).where(
-                and_(UserProfile.id == agent_id, UserProfile.user_role == "agent")
+                and_(UserProfile.user_id == user_uuid, UserProfile.user_role == "agent")
             )
 
             result = await db.execute(query)
@@ -208,7 +217,7 @@ class AdminHelpers:
             if not agent:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Agent with ID {agent_id} not found",
+                    detail=f"Agent with user ID {agent_id} not found",
                 )
 
             return agent
@@ -263,7 +272,7 @@ class AdminHelpers:
 
         Args:
             db: Database session
-            agent_id: Agent's profile ID
+            agent_id: Agent's user_id
 
         Returns:
             Dictionary containing agent data and document URLs
@@ -279,6 +288,14 @@ class AdminHelpers:
             }
             agent_data["email"] = email
             agent_data["document_urls"] = document_urls
+
+            # Convert datetime fields to date objects to avoid Pydantic validation errors
+            date_fields = ["date_of_birth", "nominee_date_of_birth"]
+            for field in date_fields:
+                if field in agent_data and agent_data[field] is not None:
+                    # If it's a datetime, convert to date
+                    if hasattr(agent_data[field], 'date'):
+                        agent_data[field] = agent_data[field].date()
 
             return agent_data
 
@@ -297,7 +314,7 @@ class AdminHelpers:
 
         Args:
             db: Database session
-            agent_id: Agent's profile ID
+            agent_id: Agent's user_id (from Users table)
 
         Returns:
             Dictionary with deletion confirmation
