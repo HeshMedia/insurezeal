@@ -185,27 +185,42 @@ export const removeFromIndexedDB = async (key: string): Promise<void> => {
  * Clear all documents from IndexedDB
  */
 export const clearAllFromIndexedDB = async (): Promise<void> => {
-  try {
-    console.log(`🗑️ Clearing all documents from IndexedDB...`);
-    
-    const db = await getDB();
-    
-    if (!db.objectStoreNames.contains(STORE_NAME)) {
-      console.error(`❌ ${STORE_NAME} store not found in ${DB_NAME}`);
-      db.close();
-      return;
-    }
+  const variants: Array<{ name: string; store: string; viaHelper?: boolean }> = [
+    { name: DB_NAME, store: STORE_NAME, viaHelper: true },
+    { name: 'DocumentsDB', store: 'documents' },
+    { name: 'cutpay-documents', store: 'files' },
+    { name: 'fileStorage', store: 'documents' },
+  ];
 
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    await store.clear();
-    await tx.done;
-    db.close();
-    
-    console.log(`✅ Successfully cleared all documents from IndexedDB`);
-  } catch (error) {
-    console.error(`❌ Failed to clear all documents from IndexedDB:`, error);
-    throw error;
+  let primaryError: Error | null = null;
+
+  for (const { name, store, viaHelper } of variants) {
+    try {
+      const db = viaHelper ? await getDB() : await openDB(name);
+
+      if (!db.objectStoreNames.contains(store)) {
+        console.log(`ℹ️ Store ${store} not found in ${name}, skipping.`);
+        db.close();
+        continue;
+      }
+
+      console.log(`🗑️ Clearing store ${store} in ${name}...`);
+      const tx = db.transaction(store, 'readwrite');
+      await tx.objectStore(store).clear();
+      await tx.done;
+      db.close();
+      console.log(`✅ Cleared store ${store} in ${name}`);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`❌ Failed clearing store ${store} in ${name}:`, err);
+      if (viaHelper && !primaryError) {
+        primaryError = err;
+      }
+    }
+  }
+
+  if (primaryError) {
+    throw primaryError;
   }
 };
 

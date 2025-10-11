@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useAtom } from "jotai";
-import { useMemo, useEffect, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useAtom, useSetAtom } from "jotai";
+import { useMemo, useEffect, useState, useCallback } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ import {
   pdfExtractionDataAtom,
   createdCutpayTransactionAtom,
   cutpayCalculationResultAtom,
+  cutpayCreationStepAtom,
 } from "@/lib/atoms/cutpay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,45 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LoadingDialog } from "@/components/ui/loading-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type SubmissionStepState = {
+  id: string;
+  label: string;
+  status: "pending" | "active" | "completed" | "failed";
+};
+
+const createInitialSubmissionSteps = (): SubmissionStepState[] => [
+  {
+    id: "create-transaction",
+    label: "Creating cutpay transaction",
+    status: "pending",
+  },
+  {
+    id: "upload-policy",
+    label: "Uploading policy document",
+    status: "pending",
+  },
+  {
+    id: "upload-additional",
+    label: "Uploading additional documents",
+    status: "pending",
+  },
+  {
+    id: "cleanup-redirect",
+    label: "Cleaning up and redirecting",
+    status: "pending",
+  },
+];
 import { useAgentList } from "@/hooks/adminQuery";
 import {
   useCreateCutPay,
@@ -89,39 +129,17 @@ const InputForm: React.FC<InputFormProps> = ({
   // State for document viewer visibility is now managed locally
   const [isViewerOpen, setIsViewerOpen] = useState(true);
   // Global state management using Jotai atoms
-  const [pdfExtractionData] = useAtom(pdfExtractionDataAtom); // Data extracted from PDF
-  const [calculationResult] = useAtom(cutpayCalculationResultAtom); // Results from calculation step
+  const [pdfExtractionData, setPdfExtractionData] = useAtom(pdfExtractionDataAtom); // Data extracted from PDF
+  const [calculationResult, setCalculationResult] = useAtom(cutpayCalculationResultAtom); // Results from calculation step
   const [, setCreatedTransaction] = useAtom(createdCutpayTransactionAtom); // To store the newly created transaction
+  const setCutpayCreationStep = useSetAtom(cutpayCreationStepAtom);
   const [isSubmitting, setIsSubmitting] = useState(false); // Tracks form submission state
+  const [isExitDialogOpen, setIsExitDialogOpen] = useState(false);
+  const [isClearingProgress, setIsClearingProgress] = useState(false);
   // State for tracking the progress of the submission process
-  const [submissionSteps, setSubmissionSteps] = useState<
-    {
-      id: string;
-      label: string;
-      status: "pending" | "active" | "completed" | "failed";
-    }[]
-  >([
-    {
-      id: "create-transaction",
-      label: "Creating transaction...",
-      status: "pending",
-    },
-    {
-      id: "upload-policy",
-      label: "Uploading policy PDF...",
-      status: "pending",
-    },
-    {
-      id: "upload-additional",
-      label: "Uploading additional documents...",
-      status: "pending",
-    },
-    {
-      id: "cleanup-redirect",
-      label: "Cleaning up and redirecting...",
-      status: "pending",
-    },
-  ]);
+  const [submissionSteps, setSubmissionSteps] = useState<SubmissionStepState[]>(() =>
+    createInitialSubmissionSteps()
+  );
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
   const updateCutPayByPolicyMutation = useUpdateCutPayByPolicy();
@@ -163,6 +181,8 @@ const InputForm: React.FC<InputFormProps> = ({
   const registrationNo = watch("extracted_data.registration_number");
   const majorCategorisation = watch("extracted_data.major_categorisation");
   const planType = watch("extracted_data.plan_type");
+  const productTypeValue = watch("extracted_data.product_type");
+  const fuelTypeValue = watch("extracted_data.fuel_type");
 
   const childIdValue = watch("admin_input.admin_child_id");
   const cutpayReceivedStatus = watch("cutpay_received_status");
@@ -178,28 +198,7 @@ const InputForm: React.FC<InputFormProps> = ({
 
   // Effect to reset submission state when the component mounts
   useEffect(() => {
-    setSubmissionSteps([
-      {
-        id: "create-transaction",
-        label: "Creating cutpay transaction",
-        status: "pending",
-      },
-      {
-        id: "upload-policy",
-        label: "Uploading policy document",
-        status: "pending",
-      },
-      {
-        id: "upload-additional",
-        label: "Uploading additional documents",
-        status: "pending",
-      },
-      {
-        id: "cleanup-redirect",
-        label: "Cleaning up and redirecting",
-        status: "pending",
-      },
-    ]);
+    setSubmissionSteps(createInitialSubmissionSteps());
     setIsSubmitting(false);
   }, []);
 
@@ -287,6 +286,17 @@ const InputForm: React.FC<InputFormProps> = ({
       setValue("cutpay_received", null, { shouldValidate: true });
     }
   }, [cutpayReceivedStatus, cutPayAmount, setValue]);
+
+  useEffect(() => {
+    const normalized = productTypeValue
+      ? String(productTypeValue).trim().toLowerCase()
+      : "";
+    const isGcvProduct = ["gcv", "gcv - 3w", "gcv-w"].includes(normalized);
+
+    if (!isGcvProduct) {
+      setValue("extracted_data.gvw", null, { shouldValidate: true });
+    }
+  }, [productTypeValue, setValue]);
 
   // This is the single source of truth for the relationship between
   // registration number and major categorisation. It runs whenever
@@ -515,6 +525,48 @@ const InputForm: React.FC<InputFormProps> = ({
     []
   );
 
+  const resetCutpayFlowState = useCallback(() => {
+    setPdfExtractionData(null);
+    setCalculationResult(null);
+    setCreatedTransaction(null);
+    setCutpayCreationStep(1);
+  }, [
+    setPdfExtractionData,
+    setCalculationResult,
+    setCreatedTransaction,
+    setCutpayCreationStep,
+  ]);
+
+  useEffect(() => {
+    const incomingFuel = pdfExtractionData?.extracted_data?.fuel_type;
+    if (!incomingFuel) {
+      return;
+    }
+
+    const normalizedIncoming = String(incomingFuel).trim();
+    if (normalizedIncoming === "") {
+      return;
+    }
+
+    const matchedOption = fuelTypeOptions.find(
+      (option) =>
+        option.value.toLowerCase() === normalizedIncoming.toLowerCase()
+    );
+
+    const targetValue = matchedOption ? matchedOption.value : normalizedIncoming;
+
+    if (fuelTypeValue !== targetValue) {
+      setValue("extracted_data.fuel_type", targetValue, {
+        shouldValidate: true,
+      });
+    }
+  }, [
+    pdfExtractionData?.extracted_data?.fuel_type,
+    fuelTypeOptions,
+    fuelTypeValue,
+    setValue,
+  ]);
+
   // Helper function to update the status of a submission step
   const updateStepStatus = (
     stepId: string,
@@ -523,6 +575,27 @@ const InputForm: React.FC<InputFormProps> = ({
     setSubmissionSteps((prev) =>
       prev.map((step) => (step.id === stepId ? { ...step, status } : step))
     );
+  };
+
+  const handleConfirmExit = async () => {
+    setIsClearingProgress(true);
+    try {
+      await clearAllFromIndexedDB();
+    } catch (error) {
+      console.error(
+        "Failed to clear IndexedDB before exiting:",
+        error instanceof Error ? error.message : error
+      );
+    } finally {
+      reset();
+      resetCutpayFlowState();
+      setSelectedChildIdDetails(null);
+      setSubmissionSteps(createInitialSubmissionSteps());
+      setIsSubmitting(false);
+      setIsClearingProgress(false);
+      setIsExitDialogOpen(false);
+      onPrev();
+    }
   };
 
   /**
@@ -994,6 +1067,8 @@ const InputForm: React.FC<InputFormProps> = ({
           await clearAllFromIndexedDB(); // Remove temporary files
           console.log("✅ IndexedDB cleanup completed");
           updateStepStatus("cleanup-redirect", "completed");
+          resetCutpayFlowState();
+          setSelectedChildIdDetails(null);
 
           // A small delay to allow the user to see the final status
           await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -1004,6 +1079,8 @@ const InputForm: React.FC<InputFormProps> = ({
         } catch (cleanupError) {
           console.error("❌ Cleanup error:", cleanupError);
           updateStepStatus("cleanup-redirect", "failed");
+          resetCutpayFlowState();
+          setSelectedChildIdDetails(null);
           // Redirect anyway to avoid getting stuck
           router.push("/admin/cutpay");
         }
@@ -1036,6 +1113,18 @@ const InputForm: React.FC<InputFormProps> = ({
   const renderField = (field: FormFieldConfig) => {
     const { key, label, type, disabled, options: configOptions, tag } = field;
     // Allow all fields to be editable in policy mode - no readonly restrictions
+
+    const isGcvProduct = (() => {
+      if (!productTypeValue) return false;
+      const normalized = String(productTypeValue).trim().toLowerCase();
+      return ["gcv", "gcv - 3w", "gcv-w"].some(
+        (option) => normalized === option
+      );
+    })();
+
+    if (key === "extracted_data.gvw" && !isGcvProduct) {
+      return null;
+    }
 
     // Get current payout_on value for conditional rendering
     const payoutOn = watch("admin_input.payout_on");
@@ -1330,8 +1419,12 @@ const InputForm: React.FC<InputFormProps> = ({
               // Special handling for product_type: if the current value is not in the options,
               // add it as a temporary option so it can be displayed
               let finalOptions = options;
+              const allowCustomOptionKeys = [
+                "extracted_data.product_type",
+                "extracted_data.fuel_type",
+              ];
               if (
-                key === "extracted_data.product_type" &&
+                allowCustomOptionKeys.includes(key) &&
                 controllerField.value
               ) {
                 const currentValue = controllerField.value as string;
@@ -1790,9 +1883,9 @@ const InputForm: React.FC<InputFormProps> = ({
           <div className="flex justify-between mt-6">
             <Button
               type="button"
-              onClick={onPrev}
+              onClick={() => setIsExitDialogOpen(true)}
               variant="outline"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isClearingProgress}
             >
               Previous
             </Button>
@@ -1815,6 +1908,35 @@ const InputForm: React.FC<InputFormProps> = ({
             steps={submissionSteps}
           />
         </form>
+        <AlertDialog open={isExitDialogOpen} onOpenChange={setIsExitDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard current progress?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your uploaded documents and form entries will be cleared. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isClearingProgress}>
+                Keep editing
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => void handleConfirmExit()}
+                disabled={isClearingProgress}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {isClearingProgress ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Clearing...
+                  </span>
+                ) : (
+                  "Discard"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
