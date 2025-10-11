@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/lib/api/admin'
 import { 
   AgentListParams,
+  AgentUpdateRequest,
   ChildRequestListParams,
   AssignChildIdRequest,
   ChildRequestStatusUpdate
@@ -44,6 +45,19 @@ export const useAgentById = (agentId: string) => {
     queryKey: ADMIN_QUERY_KEYS.agents.detail(agentId),
     queryFn: () => adminApi.agents.getById(agentId),
     enabled: !!agentId,
+  })
+}
+
+export const useUpdateAgent = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ agentId, data }: { agentId: string; data: AgentUpdateRequest }) =>
+      adminApi.agents.update(agentId, data),
+    onSuccess: (_response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.detail(variables.agentId) })
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.lists() })
+    },
   })
 }
 

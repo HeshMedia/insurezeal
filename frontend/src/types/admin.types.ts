@@ -223,3 +223,48 @@ export interface EnhancedAgentDetails extends AgentDetails {
   documents: AgentDocument[]
   document_urls: Record<string, string> // document_type -> url mapping
 }
+
+export interface AgentUpdateRequest {
+  first_name?: string | null
+  last_name?: string | null
+  middle_name?: string | null
+  father_name?: string | null
+  mother_name?: string | null
+  date_of_birth?: string | null
+  gender?: GenderEnum
+  mobile_number?: string | null
+  alternate_mobile?: string | null
+  alternate_email?: string | null
+  permanent_address_line1?: string | null
+  permanent_address_line2?: string | null
+  permanent_city?: string | null
+  permanent_state?: string | null
+  permanent_pincode?: string | null
+  communication_same_as_permanent?: boolean | null
+  communication_address_line1?: string | null
+  communication_address_line2?: string | null
+  communication_city?: string | null
+  communication_state?: string | null
+  communication_pincode?: string | null
+  education_level?: EducationLevelEnum
+  specialization?: string | null
+  previous_insurance_experience?: boolean | null
+  years_of_experience?: number | null
+  previous_company_name?: string | null
+  bank_name?: string | null
+  account_number?: string | null
+  ifsc_code?: string | null
+  branch_name?: string | null
+  nominee_name?: string | null
+  nominee_relationship?: string | null
+  nominee_date_of_birth?: string | null
+  preferred_language?: string | null
+  territory_preference?: string | null
+  agent_code?: string | null
+}
+
+export interface AgentUpdateResponse {
+  message: string
+  agent_id: string
+  updated_fields: string[]
+}
