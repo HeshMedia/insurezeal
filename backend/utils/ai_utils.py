@@ -87,7 +87,14 @@ class GeminiPolicyExtractor:
         - formatted_policy_number: Prefix with hash symbol and include complete policy number with original formatting. For "P0026100026/4103/100341", return "#P0026100026/4103/100341"
         - major_categorisation: Motor, Life, Health, Travel, General Insurance
         - product_insurer_report: Product name from insurer report
-        - product_type: Private Car, Two Wheeler, Commercial Vehicle, etc. Include vehicle category like (GCV), (SCV), (PCV) in brackets
+        - product_type: MUST be one of the following EXACT values:
+            "Ambulance", "Bike", "GCV", "GCV - 3W", "Misc D", "Private Car", "PCV - 3W", "PCV - 4W", "Route Bus", "School Bus", "Scooter", "Staff Bus", "Tractor"
+          * Common codes for context:
+            - "GCV": Commercial Vehicle
+            - "GCV - 3W": Three-wheeler Commercial Vehicle
+            - "PCV": Passenger Commercial Vehicle (e.g., "PCV - 3W", "PCV - 4W")
+          * If the document text does not match one of these exactly, return null
+          * Use the exact spelling including spaces and dashes
         - plan_type: Determine based on coverage type:
           * "Comprehensive" - if policy covers both OD (Own Damage) and TP (Third Party) or if it is a package policy
           * "STP" (Stand-alone TP) - if policy covers only Third Party/Liability
