@@ -3,9 +3,9 @@
 import { useAdminChildIdList } from "@/hooks/superadminQuery"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
+import Loading from "@/app/loading"
 
 export default function AdminChildIdsPage() {
   const { data: adminChildIds, isLoading, error } = useAdminChildIdList()
@@ -40,11 +40,8 @@ export default function AdminChildIdsPage() {
         </CardHeader>
         <CardContent>
           {isLoading && (
-            <div className="space-y-2">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-12 w-full" />
-            </div>
+          
+              <Loading />
           )}
           {!isLoading && error && (
             <Alert variant="destructive">

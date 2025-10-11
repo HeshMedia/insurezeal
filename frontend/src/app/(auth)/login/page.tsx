@@ -26,16 +26,21 @@ const LoginPage = () => {
     setLoading(true)
 
     try {
-      const { user } = await signIn({ email, password })
-      
-      if (user) {
-        const userRole = getUserRole(user)
+      const result = await signIn({ email, password })
+
+      if (result?.error) {
+        setError('Invalid email or password. Please try again.')
+        return
+      }
+
+      if (result?.user) {
+        const userRole = getUserRole(result.user)
         const redirectPath = userRole ? getDefaultRedirectPath(userRole) : '/'
         router.push(redirectPath)
       }
     } catch (error: unknown) {
       console.error('Login error:', error)
-      const errorMessage = error instanceof Error ? error.message : "Login failed. Please try again."
+      const errorMessage = error instanceof Error ? error.message : 'Login failed. Please try again.'
       setError(errorMessage)
     } finally {
       setLoading(false)

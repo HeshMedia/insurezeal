@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { LoadingSpinner } from '@/components/ui/loader'
+import { CardGridSkeleton } from '@/components/ui/card-grid-skeleton'
+
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -239,12 +240,18 @@ export function PolicyManagement() {
           </Card>
         </div>
       )}
-
-      {/* Loading State */}
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <LoadingSpinner />
-        </div>
+        <CardGridSkeleton
+          viewMode={viewMode}
+          count={6}
+          showFooterSkeleton={false}
+          contentLineClassNames={[
+            "h-3 w-full",
+            "h-3 w-5/6",
+            "h-3 w-4/5",
+            "h-3 w-2/3"
+          ]}
+        />
       )}
 
       {/* Policies Grid/List */}

@@ -5,11 +5,11 @@ import { useRouter, useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Building, Phone, Mail, MapPin, User, Calendar, FileText, AlertCircle, Eye, EyeOff, Lock } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { adminApi } from "@/lib/api/admin"
 import { cn } from "@/lib/utils"
+import Loading from "@/app/loading"
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -46,18 +46,10 @@ export function ChildRequestDetailPage() {
     router.push(`/admin/child-requests/${requestId}/assign`)
   }
 
+  // Show loading while fetching
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10" />
-          <Skeleton className="h-8 w-48" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Skeleton className="h-96 w-full" />
-          <Skeleton className="h-96 w-full" />
-        </div>
-      </div>
+      <Loading />
     )
   }
 

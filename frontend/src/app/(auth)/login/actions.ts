@@ -18,8 +18,8 @@ export async function login(formData: FormData) {
   const { data: result, error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
-    console.error('Login error:', error)
-    redirect('/error?message=' + encodeURIComponent(error.message))
+    console.warn('Login error:', error)
+    return { error: 'Invalid email or password. Please try again.' }
   }
 
   if (result.user) {
@@ -31,7 +31,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/')
+  return { error: 'Unable to sign in. Please try again.' }
 }
 
 export async function signup(formData: FormData) {

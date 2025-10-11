@@ -5,6 +5,7 @@ import {
   CreateCutpayTransactionCutpayPostRequest,
   UpdateCutPayRequest,
   CutPayListParams,
+  CutPayListResponse,
   CutPayDocumentUploadResponse,
   CutPayDeleteResponse,
   ExtractPdfResponse,
@@ -63,7 +64,7 @@ export const cutpayApi = {
   },
 
   // List cutpay transactions
-  list: async (params?: CutPayListParams): Promise<CutPayTransaction[]> => {
+  list: async (params?: CutPayListParams): Promise<CutPayListResponse> => {
     const response = await apiClient.get('/cutpay/', {
       params: {
         broker_code: params?.broker_code,
@@ -75,7 +76,65 @@ export const cutpayApi = {
         skip: params?.skip || 0
       }
     })
-    return response.data
+    const limit = params?.limit || 100
+    const skip = params?.skip || 0
+
+    const payload = response.data as
+      | CutPayTransaction[]
+      | {
+          results?: CutPayTransaction[]
+          data?: CutPayTransaction[]
+          transactions?: CutPayTransaction[]
+          items?: CutPayTransaction[]
+          total_count?: number
+          count?: number
+          total?: number
+          pagination?: { total?: number }
+        }
+
+    const extractTransactions = () => {
+      if (Array.isArray(payload)) {
+        return payload
+      }
+      return (
+        payload?.results ||
+        payload?.data ||
+        payload?.transactions ||
+        payload?.items ||
+        []
+      )
+    }
+
+    const transactions = extractTransactions()
+
+    const extractTotalCount = () => {
+      if (Array.isArray(payload)) {
+        return undefined
+      }
+      return (
+        payload?.total_count ??
+        payload?.count ??
+        payload?.total ??
+        payload?.pagination?.total ??
+        undefined
+      )
+    }
+
+    const headerTotal = Number.parseInt(
+      response.headers?.['x-total-count'] ?? response.headers?.['x_total_count'] ?? '',
+      10
+    )
+
+    const totalCount = Number.isFinite(headerTotal)
+      ? headerTotal
+      : extractTotalCount()
+
+    return {
+      transactions,
+      total_count: totalCount ?? (skip === 0 ? transactions.length : undefined),
+      limit,
+      skip,
+    }
   },
 
   // Get specific cutpay transaction

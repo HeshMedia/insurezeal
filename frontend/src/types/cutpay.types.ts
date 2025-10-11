@@ -247,6 +247,13 @@ export interface CutPayListParams {
   skip?: number
 }
 
+export interface CutPayListResponse {
+  transactions: CutPayTransaction[]
+  total_count?: number
+  limit: number
+  skip: number
+}
+
 // Document upload response
 export interface CutPayDocumentUploadResponse {
   document_url: string

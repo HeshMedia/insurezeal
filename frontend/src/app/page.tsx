@@ -21,7 +21,7 @@ import {
 import { getUserRole } from '@/lib/utils/auth'
 
 export default function Home() {
-  const { user, loading } = useAuth()
+  const { user, } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const getUserDisplayName = () => {
@@ -33,14 +33,6 @@ export default function Home() {
     return role === 'admin' ? '/admin' 
          : role === 'superadmin' ? '/superadmin' 
          : '/agent'
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
   }
 
   return (

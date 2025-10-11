@@ -10,12 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft, Building, Phone, Mail, MapPin, User, AlertCircle, FileText, Badge, } from "lucide-react"
 import { useAssignChildId } from "@/hooks/adminQuery"
 import { AssignChildIdRequest } from "@/types/admin.types"
 import { PasswordInput } from "@/components/ui/password-input"
 import { cn } from "@/lib/utils"
+import Loading from "@/app/loading"
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -39,7 +39,7 @@ export function AssignChildIdPage() {
   const [formData, setFormData] = useState<Partial<AssignChildIdRequest>>({})
 
   // Fetch request details
-  const { data: request, isLoading: requestLoading, error: requestError } = useQuery({
+  const { data: request, error: requestError, isLoading: isLoadingRequest } = useQuery({
     queryKey: ['admin', 'childRequests', 'detail', requestId],
     queryFn: () => adminApi.childRequests.getById(requestId),
     enabled: !!requestId,
@@ -79,16 +79,11 @@ export function AssignChildIdPage() {
     router.push('/admin/child-requests')
   }
 
-  if (requestLoading) {
+  // Show loading while fetching
+  if (isLoadingRequest) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10" />
-          <Skeleton className="h-8 w-48" />
-        </div>
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-96 w-full" />
-      </div>
+     
+      <Loading />
     )
   }
 

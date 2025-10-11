@@ -120,6 +120,8 @@ export interface AgentMISParams {
   year?: number;
   page?: number;
   page_size?: number;
+  date_from?: string;
+  date_to?: string;
 }
 
 // Response for the agent MIS endpoint (direct full API response)

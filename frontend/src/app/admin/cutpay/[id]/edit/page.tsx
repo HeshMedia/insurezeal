@@ -4,13 +4,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
 import { useCutPayByPolicy } from '@/hooks/cutpayQuery'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/ui/loader'
 import { ArrowLeft } from 'lucide-react'
 import InputForm from '@/components/forms/input-form'
 import { useAtom, useSetAtom } from 'jotai'
 import { pdfExtractionDataAtom, cutpayCalculationResultAtom, policyPdfUrlAtom, additionalDocumentsUrlsAtom } from '@/lib/atoms/cutpay'
 import { useEffect, useMemo } from 'react'
 import type { ExtractedPolicyData, AdminInputData, CalculationResult } from '@/types/cutpay.types'
+import Loading from '@/app/loading'
 
 const toStringOrNull = (val: unknown): string | null => {
   if (val === null || val === undefined) return null
@@ -33,7 +33,7 @@ export default function CutPayEditPage() {
   const quarter = search.get('q') ? parseInt(search.get('q') as string) : undefined
   const year = search.get('y') ? parseInt(search.get('y') as string) : undefined
   
-  const { data: policyData, isLoading: isLoadingCutpay } = useCutPayByPolicy(policy, quarter, year, true)
+  const { data: policyData, isLoading } = useCutPayByPolicy(policy, quarter, year, true)
   const [, setPdfExtractionData] = useAtom(pdfExtractionDataAtom)
   const [, setCalculationResult] = useAtom(cutpayCalculationResultAtom)
   const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom)
@@ -255,15 +255,11 @@ export default function CutPayEditPage() {
     router.back()
   }
 
-  if (isLoadingCutpay) {
+  // Show loading while fetching
+  if (isLoading) {
     return (
       <DashboardWrapper requiredRole="admin">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <LoadingSpinner />
-            <p className="text-sm text-gray-500">Loading transaction details...</p>
-          </div>
-        </div>
+            <Loading />
       </DashboardWrapper>
     )
   }

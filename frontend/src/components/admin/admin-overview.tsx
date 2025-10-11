@@ -2,7 +2,6 @@
 
 import { useBalanceSheetStats, useBrokerSheetStats } from "@/hooks/useGoogleSheetsMIS";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Button } from "@/components/ui/button";
 import {
   RefreshCw,
@@ -11,6 +10,7 @@ import {
   
 } from "lucide-react";
 import React from "react";
+import Loading from "@/app/loading";
 
 
 export default function AdminOverview() {
@@ -21,18 +21,9 @@ export default function AdminOverview() {
     balanceSheetStats.refresh();
     brokerSheetStats.refresh();
   };
-
-  if (balanceSheetStats.loading || brokerSheetStats.loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <LoadingSpinner size="lg" />
-          <p className="text-muted-foreground">Loading admin statistics...</p>
-        </div>
-      </div>
-    );
+  if (balanceSheetStats.loading || brokerSheetStats.loading){
+    return <Loading />
   }
-
   if (balanceSheetStats.error || brokerSheetStats.error) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

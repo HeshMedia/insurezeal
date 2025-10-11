@@ -5,9 +5,9 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
 import { useCutPayByPolicy } from '@/hooks/cutpayQuery'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/ui/loader'
 import { ArrowLeft } from 'lucide-react'
 import { PolicyDashboard, PolicyData } from '@/components/admin/cutpay/policy-dashboard'
+import Loading from '@/app/loading'
 
 export default function CutPayDetailPage() {
   const params = useParams()
@@ -18,7 +18,7 @@ export default function CutPayDetailPage() {
   const quarter = search.get('q') ? parseInt(search.get('q') as string) : undefined
   const year = search.get('y') ? parseInt(search.get('y') as string) : undefined
 
-  const { data, isLoading, error } = useCutPayByPolicy(policy, quarter, year, true)
+  const { data, error, isLoading } = useCutPayByPolicy(policy, quarter, year, true)
 
   const normalize = (): PolicyData | null => {
     if (!data) return null
@@ -92,15 +92,11 @@ export default function CutPayDetailPage() {
 
   const normalized = normalize()
 
+  // Show loading while fetching
   if (isLoading) {
     return (
       <DashboardWrapper requiredRole="admin">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <LoadingSpinner />
-            <p className="text-sm text-gray-500">Loading transaction details...</p>
-          </div>
-        </div>
+            <Loading />
       </DashboardWrapper>
     )
   }

@@ -3,7 +3,6 @@
 import React from 'react'
 import { useAtom } from 'jotai'
 import { toast } from 'sonner'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { ProfileHeader } from './profile-header'
 import { ProfileTabs } from './profile-tabs'
 import { ProfileDetails } from './profile-details'
@@ -12,6 +11,7 @@ import { DocumentManagement } from './document-management'
 import { useProfile, useUpdateProfile, useUploadProfileImage, useDeleteProfileImage } from '@/hooks/profileQuery'
 import { isEditingProfileAtom, activeProfileTabAtom } from '@/lib/atoms/profile'
 import type { UpdateProfileRequest } from '@/types/profile.types'
+import Loading from '@/app/loading'
 
 export function ProfileView() {
   const { data: profile, isLoading, error } = useProfile()
@@ -65,12 +65,7 @@ export function ProfileView() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <LoadingSpinner />
-          <p className="text-sm text-gray-500">Loading profile...</p>
-        </div>
-      </div>
+     <Loading />
     )
   }
 

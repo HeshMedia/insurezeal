@@ -131,6 +131,18 @@ export const useSuspendChildId = () => {
   })
 }
 
+export const useUnsuspendChildId = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ requestId, data }: { requestId: string; data: ChildRequestStatusUpdate }) =>
+      adminApi.childRequests.unsuspend(requestId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.childRequests.all })
+    },
+  })
+}
+
 export const useChildRequestStats = () => {
   return useQuery({
     queryKey: ADMIN_QUERY_KEYS.childRequests.stats(),
