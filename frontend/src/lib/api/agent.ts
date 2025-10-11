@@ -94,14 +94,23 @@ export const agentApi = {
   mis: {
     // Get agent MIS data (agent's own quarterly data)
     getAgentMISData: async (params: AgentMISParams): Promise<AgentMISResponse> => {
-      const { quarter = 3, year = 2025, page = 1, page_size = 50 } = params
+      const {
+        quarter = 3,
+        year = 2025,
+        page = 1,
+        page_size = 50,
+        date_from,
+        date_to,
+      } = params
       
       const response = await apiClient.get(`/mis/my-mis`, {
         params: {
           quarter,
           year,
           page,
-          page_size
+          page_size,
+          date_from,
+          date_to,
         }
       })
       return response.data

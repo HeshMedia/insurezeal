@@ -169,6 +169,7 @@ export interface ChildRequestListParams {
 
 export interface ChildRequestStatusUpdate {
   admin_notes: string
+  action?: 'suspend' | 'unsuspend'
 }
 
 export type UpdateChildRequestStatusRequest = ChildRequestStatusUpdate

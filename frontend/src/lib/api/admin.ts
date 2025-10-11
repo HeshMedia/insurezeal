@@ -121,7 +121,19 @@ export const adminApi = {
 
     // Suspend child ID
     suspend: async (requestId: string, data: ChildRequestStatusUpdate): Promise<ChildRequest> => {
-      const response = await apiClient.put(`/admin/child-requests/${requestId}/suspend`, data)
+      const response = await apiClient.put(`/admin/child-requests/${requestId}/suspend`, {
+        ...data,
+        action: data.action ?? 'suspend',
+      })
+      return response.data
+    },
+
+    // Unsuspend child ID using suspend route with explicit action flag
+    unsuspend: async (requestId: string, data: ChildRequestStatusUpdate): Promise<ChildRequest> => {
+      const response = await apiClient.put(`/admin/child-requests/${requestId}/suspend`, {
+        ...data,
+        action: 'unsuspend',
+      })
       return response.data
     },
 

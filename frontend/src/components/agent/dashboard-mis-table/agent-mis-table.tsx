@@ -26,10 +26,18 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Loader2, Calendar, TrendingUp } from "lucide-react";
+import {
+  RefreshCw,
+  Loader2,
+  Calendar,
+  TrendingUp,
+  CalendarClock,
+  X,
+} from "lucide-react";
 import { useInView } from "react-intersection-observer";
 import { cn } from "@/lib/utils";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 
 interface AgentMISTableProps {
   onStatsUpdate?: (stats: {
@@ -55,6 +63,9 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
     getCurrentQuarter()
   );
   const [selectedYear, setSelectedYear] = useState<number>(getCurrentYear());
+  const [dateFrom, setDateFrom] = useState<string | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<string | undefined>(undefined);
+  const [showDateFilters, setShowDateFilters] = useState(false);
 
   const {
     data,
@@ -65,7 +76,13 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
     isLoading,
     refetch,
   } = useInfiniteQuery<AgentMISResponse, Error>({
-    queryKey: ["agent-mis", selectedQuarter, selectedYear],
+    queryKey: [
+      "agent-mis",
+      selectedQuarter,
+      selectedYear,
+      dateFrom,
+      dateTo,
+    ],
     queryFn: async (context: { pageParam?: unknown }) => {
       const pageParam =
         typeof context.pageParam === "number" ? context.pageParam : 1;
@@ -74,6 +91,8 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
         year: selectedYear,
         page: pageParam,
         page_size: 50,
+        date_from: dateFrom,
+        date_to: dateTo,
       });
     },
     initialPageParam: 1,
@@ -109,6 +128,27 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
   });
 
   const handleRefresh = () => {
+    refetch();
+  };
+
+  const handlePresetDateRange = (preset: "thisMonth" | "lastMonth") => {
+    const now = new Date();
+    const targetDate =
+      preset === "thisMonth"
+        ? now
+        : new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const start = startOfMonth(targetDate);
+    const end = endOfMonth(targetDate);
+    setDateFrom(format(start, "yyyy-MM-dd"));
+    setDateTo(format(end, "yyyy-MM-dd"));
+    setShowDateFilters(true);
+    refetch();
+  };
+
+  const clearDateFilters = () => {
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setShowDateFilters(false);
     refetch();
   };
 
@@ -221,6 +261,37 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
               </Select>
             </div>
 
+            {/* Date Filter Toggle */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showDateFilters || dateFrom || dateTo ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "border-blue-300",
+                  showDateFilters || dateFrom || dateTo
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : "hover:bg-blue-50"
+                )}
+                onClick={() => setShowDateFilters((prev) => !prev)}
+              >
+                <CalendarClock className="mr-2 h-4 w-4" />
+                {showDateFilters || dateFrom || dateTo
+                  ? "Date Range"
+                  : "Filter by Date"}
+              </Button>
+              {(dateFrom || dateTo) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-gray-500 hover:text-gray-700"
+                  onClick={clearDateFilters}
+                  title="Clear date filters"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
             {/* Refresh Button */}
             <Button
               onClick={handleRefresh}
@@ -233,6 +304,58 @@ export function AgentMISTable({ onStatsUpdate }: AgentMISTableProps) {
             </Button>
           </div>
         </div>
+
+        {showDateFilters && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-blue-50/60 border border-blue-200 rounded-xl p-4">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="date-from" className="text-sm font-medium text-blue-900">
+                From Date
+              </label>
+              <input
+                id="date-from"
+                type="date"
+                value={dateFrom ?? ""}
+                onChange={(e) => setDateFrom(e.target.value || undefined)}
+                className="border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                max={dateTo ?? undefined}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label htmlFor="date-to" className="text-sm font-medium text-blue-900">
+                To Date
+              </label>
+              <input
+                id="date-to"
+                type="date"
+                value={dateTo ?? ""}
+                onChange={(e) => setDateTo(e.target.value || undefined)}
+                className="border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                min={dateFrom ?? undefined}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-blue-900">Quick Ranges</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-blue-300 hover:bg-blue-100 text-blue-700"
+                  onClick={() => handlePresetDateRange("thisMonth")}
+                >
+                  This Month
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-blue-300 hover:bg-blue-100 text-blue-700"
+                  onClick={() => handlePresetDateRange("lastMonth")}
+                >
+                  Last Month
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Table Container with scroll */}

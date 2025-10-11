@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Search, Edit, Eye, Phone, Mail, User, ArrowLeft, ArrowRight } from "lucide-react"
-import { useChildRequestList, useChildRequestStats, useRejectChildRequest, useSuspendChildId } from "@/hooks/adminQuery"
+import { useChildRequestList, useChildRequestStats, useRejectChildRequest, useSuspendChildId, useUnsuspendChildId } from "@/hooks/adminQuery"
 import type { ChildRequest } from "@/types/admin.types"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -35,7 +35,9 @@ const statusLabels = {
   suspended: "Suspended",
 }
 
-function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (action: 'reject' | 'suspend', request: ChildRequest) => void }) {
+type ChildRequestAction = 'reject' | 'suspend' | 'unsuspend'
+
+function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (action: ChildRequestAction, request: ChildRequest) => void }) {
   const router = useRouter()
 
   // Safety check for request object
@@ -166,6 +168,16 @@ function RequestCard({ request, onAction }: { request: ChildRequest; onAction: (
                 Suspend
               </Button>
             )}
+            {request.status === 'suspended' && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onAction('unsuspend', request)}
+                className="h-7 px-3 text-green-600 border-green-200 hover:bg-green-50"
+              >
+                Unsuspend
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -177,12 +189,13 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   request: ChildRequest | null
-  action: 'reject' | 'suspend' | null
+  action: ChildRequestAction | null
 }) {
   const [notes, setNotes] = useState('')
   
   const rejectMutation = useRejectChildRequest()
   const suspendMutation = useSuspendChildId()
+  const unsuspendMutation = useUnsuspendChildId()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,10 +214,20 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
         await suspendMutation.mutateAsync({
           requestId: request.id,
           data: { 
-            admin_notes: notes 
+            admin_notes: notes,
+            action: 'suspend',
           }
         })
         toast.success('Child ID suspended successfully')
+      } else if (action === 'unsuspend') {
+        await unsuspendMutation.mutateAsync({
+          requestId: request.id,
+          data: {
+            admin_notes: notes,
+            action: 'unsuspend',
+          },
+        })
+        toast.success('Child ID unsuspended successfully')
       }
       
       onOpenChange(false)
@@ -214,7 +237,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
     }
   }
 
-  const isLoading = rejectMutation.isPending || suspendMutation.isPending
+  const isLoading = rejectMutation.isPending || suspendMutation.isPending || unsuspendMutation.isPending
 
   if (!request) return null
 
@@ -225,6 +248,7 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
           <DialogTitle className="text-xl font-semibold">
             {action === 'reject' && 'Reject Request'}
             {action === 'suspend' && 'Suspend Child ID'}
+            {action === 'unsuspend' && 'Unsuspend Child ID'}
           </DialogTitle>
         </DialogHeader>
 
@@ -246,7 +270,11 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="notes">
-                {action === 'reject' ? 'Reason for Rejection' : 'Reason for Suspension'} *
+                {action === 'reject'
+                  ? 'Reason for Rejection'
+                  : action === 'suspend'
+                    ? 'Reason for Suspension'
+                    : 'Reason for Unsuspending'} *
               </Label>
               <Textarea
                 id="notes"
@@ -255,7 +283,9 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                 placeholder={
                   action === 'reject' 
                     ? "Please provide a reason for rejecting this request..."
-                    : "Please provide a reason for suspending this child ID..."
+                    : action === 'suspend'
+                      ? "Please provide a reason for suspending this child ID..."
+                      : "Please provide details for unsuspending this child ID..."
                 }
                 rows={3}
                 disabled={isLoading}
@@ -280,8 +310,13 @@ function ChildRequestDialog({ open, onOpenChange, request, action }: {
                   action === 'suspend' && "bg-orange-600 hover:bg-orange-700"
                 )}
               >
-                {isLoading ? 'Processing...' : 
-                 action === 'reject' ? 'Reject Request' : 'Suspend ID'}
+                {isLoading
+                  ? 'Processing...'
+                  : action === 'reject'
+                    ? 'Reject Request'
+                    : action === 'suspend'
+                      ? 'Suspend ID'
+                      : 'Unsuspend ID'}
               </Button>
             </DialogFooter>
           </form>
@@ -299,7 +334,7 @@ export function ChildRequestManagement({ defaultPageSize = 20 }: ChildRequestMan
   const [pageSize] = useState(defaultPageSize)
   const [selectedRequest, setSelectedRequest] = useState<ChildRequest | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogAction, setDialogAction] = useState<'reject' | 'suspend' | null>(null)
+  const [dialogAction, setDialogAction] = useState<ChildRequestAction | null>(null)
 
   const queryParams = useMemo(
     () => ({
@@ -350,7 +385,7 @@ export function ChildRequestManagement({ defaultPageSize = 20 }: ChildRequestMan
         suspended: requests.filter((r) => r.status === 'suspended').length,
       }
 
-  const handleAction = (action: 'reject' | 'suspend', request: ChildRequest) => {
+  const handleAction = (action: ChildRequestAction, request: ChildRequest) => {
     try {
       setSelectedRequest(request)
       setDialogAction(action)
