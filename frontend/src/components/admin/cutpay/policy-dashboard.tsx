@@ -273,7 +273,7 @@ export function PolicyDashboard({ data, onEdit, onDownload }: PolicyDashboardPro
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">NCB Discount</p>
-                  <p className="font-semibold text-accent">{data.policy_info.discount_percent ? `${data.policy_info.discount_percent}%` : "—"}</p>
+                  <p className="font-semibold">{data.policy_info.discount_percent ? `${data.policy_info.discount_percent}%` : "—"}</p>
                 </div>
               </div>
             </div>
@@ -354,7 +354,7 @@ export function PolicyDashboard({ data, onEdit, onDownload }: PolicyDashboardPro
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Incoming Grid %</p>
-                  <p className="font-semibold text-accent">{data.policy_info.incoming_grid_percent ? `${data.policy_info.incoming_grid_percent}%` : "—"}</p>
+                  <p className="font-semibold">{data.policy_info.incoming_grid_percent ? `${data.policy_info.incoming_grid_percent}%` : "—"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Receivable from Broker</p>
