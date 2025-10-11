@@ -369,6 +369,7 @@ class Policy(Base):
         "ChildIdRequest", foreign_keys=[child_id]
     )
 
+
 class Broker(Base):
     """
     Brokers table for storing insurance broker information

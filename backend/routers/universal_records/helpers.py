@@ -1273,7 +1273,7 @@ async def process_universal_record_csv(
                 if stats.total_records_processed > 0
                 else 0.0
             )
-    
+
             # Calculate field variations based on change details
             processed_records = [detail.dict() for detail in change_details]
             field_variations = calculate_field_variations(processed_records)

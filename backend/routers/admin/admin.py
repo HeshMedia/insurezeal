@@ -296,7 +296,7 @@ async def edit_agent_details(
 
         # Get only the fields that were provided (exclude None values)
         update_dict = update_data.model_dump(exclude_unset=True)
-        
+
         if not update_dict:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -306,18 +306,18 @@ async def edit_agent_details(
         # Check if agent_code is being updated and validate uniqueness
         if "agent_code" in update_dict and update_dict["agent_code"] is not None:
             new_agent_code = update_dict["agent_code"]
-            
+
             # Check if the new agent code is different from current
             if new_agent_code != agent_profile.agent_code:
                 # Check if agent code already exists for another user
                 existing_agent = await db.execute(
                     select(UserProfile).where(
                         UserProfile.agent_code == new_agent_code,
-                        UserProfile.user_id != agent_profile.user_id
+                        UserProfile.user_id != agent_profile.user_id,
                     )
                 )
                 existing_agent_profile = existing_agent.scalar_one_or_none()
-                
+
                 if existing_agent_profile:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,

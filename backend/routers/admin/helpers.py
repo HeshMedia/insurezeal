@@ -246,18 +246,20 @@ class AdminHelpers:
         """
         try:
             from uuid import UUID
-            
+
             # Convert user_id to UUID if it's a string
             if isinstance(user_id, str):
                 user_id = UUID(user_id)
-            
+
             doc_query = select(UserDocument).where(UserDocument.user_id == user_id)
             doc_result = await db.execute(doc_query)
             documents = doc_result.scalars().all()
 
             # Return dictionary with document_type as key and document_url as value
             return {
-                doc.document_type: doc.document_url for doc in documents if doc.document_url
+                doc.document_type: doc.document_url
+                for doc in documents
+                if doc.document_url
             }
 
         except Exception as e:
@@ -294,7 +296,7 @@ class AdminHelpers:
             for field in date_fields:
                 if field in agent_data and agent_data[field] is not None:
                     # If it's a datetime, convert to date
-                    if hasattr(agent_data[field], 'date'):
+                    if hasattr(agent_data[field], "date"):
                         agent_data[field] = agent_data[field].date()
 
             return agent_data

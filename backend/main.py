@@ -117,9 +117,11 @@ except Exception as e:
     logger.critical(f"FATAL: Failed to import or include routers: {e}", exc_info=True)
     raise
 
+
 @app.get("/sentry-debug")
 async def trigger_error():
     division_by_zero = 1 / 0
+
 
 @app.get("/docs", include_in_schema=False)
 async def api_documentation(request: Request):
