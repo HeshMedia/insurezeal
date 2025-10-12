@@ -345,137 +345,54 @@ class CutPayUpdate(BaseModel):
 
 
 class CutPayResponse(BaseModel):
-    """Comprehensive schema for cut pay transaction response"""
+    """
+    Comprehensive nested response schema for CutPay transaction.
+    Returns data in the same nested structure as CutPayCreate for consistency.
+    Used when fetching complete data from Google Sheets or database.
+    """
 
-    id: int
+    # Database fields
+    id: Optional[int] = None
 
     # Document upload fields
-    policy_pdf_url: Optional[str]
-    additional_documents: Optional[Dict[str, Any]]
+    policy_pdf_url: Optional[str] = None
+    additional_documents: Optional[Dict[str, Any]] = None
 
-    # =============================================================================
-    # EXTRACTED FIELDS FROM PDF
-    # =============================================================================
+    # Nested data structures (matches CutPayCreate structure)
+    extracted_data: Optional[ExtractedPolicyData] = None
+    admin_input: Optional[AdminInputData] = None
+    calculations: Optional[CalculationResult] = None
 
-    # Basic Policy Information
-    policy_number: Optional[str]
-    formatted_policy_number: Optional[str]
-    major_categorisation: Optional[str]
-    product_insurer_report: Optional[str]
-    product_type: Optional[str]
-    plan_type: Optional[str]
-    customer_name: Optional[str]
-    customer_phone_number: Optional[str]
+    # Additional fields for context (from database relationships)
+    broker_name: Optional[str] = None
+    insurer_name: Optional[str] = None
 
-    # Premium & Financial Details
-    gross_premium: Optional[float]
-    net_premium: Optional[float]
-    od_premium: Optional[float]
-    tp_premium: Optional[float]
-    gst_amount: Optional[float]
+    # Admin tracking fields
+    claimed_by: Optional[str] = None
+    running_bal: Optional[float] = None
+    cutpay_received: Optional[float] = None
+    cluster: Optional[str] = None
 
-    # Vehicle Details
-    registration_number: Optional[str]
-    make_model: Optional[str]
-    model: Optional[str]
-    vehicle_variant: Optional[str]
-    gvw: Optional[float]
-    rto: Optional[str]
-    state: Optional[str]
-    fuel_type: Optional[str]
-    cc: Optional[int]
-    age_year: Optional[int]
-    ncb: Optional[str]
-    discount_percent: Optional[float]
-    business_type: Optional[str]
-    seating_capacity: Optional[int]
-    veh_wheels: Optional[int]
+    # Post-CutPay details
+    already_given_to_agent: Optional[float] = None
+    iz_total_po_percent: Optional[float] = None
+    broker_po_percent: Optional[float] = None
+    broker_payout_amount: Optional[float] = None
+    invoice_status: Optional[str] = None
+    remarks: Optional[str] = None
+    company: Optional[str] = None
 
-    # =============================================================================
-    # ADMIN INPUT FIELDS
-    # =============================================================================
-
-    # Transaction Configuration
-    reporting_month: Optional[str]
-    booking_date: Optional[date]
-    agent_code: Optional[str]
-    code_type: Optional[str]
-
-    # Commission Configuration
-    incoming_grid_percent: Optional[float]
-    agent_commission_given_percent: Optional[float]
-    extra_grid: Optional[float]
-    commissionable_premium: Optional[float]
-
-    # Payment Configuration
-    payment_by: Optional[str]
-    payment_method: Optional[str]
-    payout_on: Optional[str]
-    agent_extra_percent: Optional[float]
-    payment_by_office: Optional[float]
-
-    # Relationships
-    insurer_id: Optional[int]
-    broker_id: Optional[int]
-    child_id_request_id: Optional[UUID]
-
-    # =============================================================================
-    # AUTO-CALCULATED FIELDS
-    # =============================================================================
-
-    # Database Auto-Population
-    insurer_name: Optional[str]
-    broker_name: Optional[str]
-    insurer_broker_code: Optional[str]
-    cluster: Optional[str]
-
-    # Commission Calculations
-    receivable_from_broker: Optional[float]
-    extra_amount_receivable_from_broker: Optional[float]
-    total_receivable_from_broker: Optional[float]
-    total_receivable_from_broker_with_gst: Optional[float]
-
-    # CutPay & Payout Calculations
-    cut_pay_amount: Optional[float]
-    agent_po_amt: Optional[float]
-    agent_extra_amount: Optional[float]
-    total_agent_po_amt: Optional[float]
-
-    # =============================================================================
-    # ADMIN TRACKING FIELDS
-    # =============================================================================
-
-    claimed_by: Optional[str]
-    running_bal: Optional[float]
-    cutpay_received: Optional[float]
-    cluster: Optional[str]
-
-    # =============================================================================
-    # POST-CUTPAY DETAILS FIELDS
-    # =============================================================================
-
-    already_given_to_agent: Optional[float]
-    iz_total_po_percent: Optional[float]
-    broker_po_percent: Optional[float]
-    broker_payout_amount: Optional[float]
-    invoice_status: Optional[str]
-    remarks: Optional[str]
-    company: Optional[str]
-
-    # =============================================================================
-    # SYSTEM FIELDS
-    # =============================================================================
-
-    synced_to_cutpay_sheet: bool
-    synced_to_master_sheet: bool
-    cutpay_sheet_row_id: Optional[str]
-    master_sheet_row_id: Optional[str]
-    notes: Optional[str]
+    # System fields
+    synced_to_cutpay_sheet: Optional[bool] = None
+    synced_to_master_sheet: Optional[bool] = None
+    cutpay_sheet_row_id: Optional[str] = None
+    master_sheet_row_id: Optional[str] = None
+    notes: Optional[str] = None
 
     # Audit fields
-    created_by: Optional[UUID]
-    created_at: datetime
-    updated_at: datetime
+    created_by: Optional[UUID] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

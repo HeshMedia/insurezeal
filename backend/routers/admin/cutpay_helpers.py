@@ -1510,3 +1510,190 @@ def prepare_complete_sheets_data_for_update(
     )
 
     return sheets_data
+
+
+def convert_sheets_data_to_nested_response(
+    sheets_data: Dict[str, Any],
+    database_record: Optional[Dict[str, Any]] = None,
+    broker_name: str = "",
+    insurer_name: str = "",
+) -> Dict[str, Any]:
+    """
+    Convert flat Google Sheets data to nested CutPayDetailResponse structure.
+    Groups fields into extracted_data, admin_input, and calculations nested objects.
+
+    Args:
+        sheets_data: Flat dictionary from Google Sheets
+        database_record: Optional database record for id and system fields
+        broker_name: Broker name from database
+        insurer_name: Insurer name from database
+
+    Returns:
+        Dictionary with nested structure matching CutPayDetailResponse
+    """
+    from datetime import datetime
+
+    # Helper to safely parse dates
+    def parse_date(value):
+        if not value or value == "":
+            return None
+        if isinstance(value, date):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        try:
+            return datetime.strptime(str(value), "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
+
+    # Helper to safely parse floats
+    def parse_float(value):
+        if not value or value == "":
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return None
+
+    # Helper to safely parse ints
+    def parse_int(value):
+        if not value or value == "":
+            return None
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return None
+
+    # Extract database ID if available
+    cutpay_id = None
+    if database_record and "id" in database_record:
+        cutpay_id = database_record["id"]
+
+    # Build extracted_data (from PDF extraction)
+    extracted_data = {
+        "policy_number": sheets_data.get("Policy number") or sheets_data.get("policy_number"),
+        "formatted_policy_number": sheets_data.get("Formatted policy number"),
+        "major_categorisation": sheets_data.get("Major categorisation"),
+        "product_insurer_report": sheets_data.get("Product insurer report"),
+        "product_type": sheets_data.get("Product type"),
+        "plan_type": sheets_data.get("Plan type"),
+        "customer_name": sheets_data.get("Customer name"),
+        "customer_phone_number": sheets_data.get("Customer phone number"),
+        "gross_premium": parse_float(sheets_data.get("Gross premium")),
+        "net_premium": parse_float(sheets_data.get("Net premium")),
+        "od_premium": parse_float(sheets_data.get("OD premium")),
+        "tp_premium": parse_float(sheets_data.get("TP premium")),
+        "gst_amount": parse_float(sheets_data.get("GST amount")),
+        "start_date": sheets_data.get("Start date"),
+        "end_date": sheets_data.get("End date"),
+        "registration_number": sheets_data.get("Registration number"),
+        "make_model": sheets_data.get("Make model"),
+        "model": sheets_data.get("Model"),
+        "vehicle_variant": sheets_data.get("Vehicle variant"),
+        "gvw": parse_float(sheets_data.get("GVW")),
+        "rto": sheets_data.get("RTO"),
+        "state": sheets_data.get("State"),
+        "fuel_type": sheets_data.get("Fuel type"),
+        "cc": parse_int(sheets_data.get("CC")),
+        "age_year": parse_int(sheets_data.get("Age year")),
+        "ncb": sheets_data.get("NCB"),
+        "discount_percent": parse_float(sheets_data.get("Discount percent")),
+        "business_type": sheets_data.get("Business type"),
+        "seating_capacity": parse_int(sheets_data.get("Seating capacity")),
+        "veh_wheels": parse_int(sheets_data.get("Veh wheels")),
+    }
+    # Remove None values from extracted_data
+    extracted_data = {k: v for k, v in extracted_data.items() if v is not None}
+
+    # Build admin_input (manual admin fields)
+    admin_input = {
+        "reporting_month": sheets_data.get("Reporting month"),
+        "booking_date": parse_date(sheets_data.get("Booking date")),
+        "agent_code": sheets_data.get("Agent code"),
+        "code_type": sheets_data.get("Code type"),
+        "broker_code": sheets_data.get("Broker code"),
+        "insurer_code": sheets_data.get("Insurer code"),
+        "admin_child_id": sheets_data.get("Admin child ID"),
+        "incoming_grid_percent": parse_float(sheets_data.get("Incoming grid percent")),
+        "agent_commission_given_percent": parse_float(
+            sheets_data.get("Agent commission given percent")
+        ),
+        "extra_grid": parse_float(sheets_data.get("Extra grid")),
+        "commissionable_premium": parse_float(sheets_data.get("Commissionable premium")),
+        "payment_by": sheets_data.get("Payment by"),
+        "payment_method": sheets_data.get("Payment method"),
+        "payout_on": sheets_data.get("Payout on"),
+        "agent_extra_percent": parse_float(sheets_data.get("Agent extra percent")),
+        "payment_by_office": parse_float(sheets_data.get("Payment by office")),
+    }
+    # Remove None values from admin_input
+    admin_input = {k: v for k, v in admin_input.items() if v is not None}
+
+    # Build calculations (auto-calculated fields)
+    calculations = {
+        "receivable_from_broker": parse_float(sheets_data.get("Receivable from broker")),
+        "extra_amount_receivable_from_broker": parse_float(
+            sheets_data.get("Extra amount receivable from broker")
+        ),
+        "total_receivable_from_broker": parse_float(
+            sheets_data.get("Total receivable from broker")
+        ),
+        "total_receivable_from_broker_with_gst": parse_float(
+            sheets_data.get("Total receivable from broker with GST")
+        ),
+        "cut_pay_amount": parse_float(sheets_data.get("Cut pay amount")),
+        "agent_po_amt": parse_float(sheets_data.get("Agent PO amt")),
+        "agent_extra_amount": parse_float(sheets_data.get("Agent extra amount")),
+        "total_agent_po_amt": parse_float(sheets_data.get("Total agent PO amt")),
+        "insurer_broker_code": sheets_data.get("Insurer broker code"),
+        "cluster": sheets_data.get("Cluster"),
+    }
+    # Remove None values from calculations
+    calculations = {k: v for k, v in calculations.items() if v is not None}
+
+    # Build the nested response
+    response = {
+        "id": cutpay_id,
+        "policy_pdf_url": database_record.get("policy_pdf_url")
+        if database_record
+        else None,
+        "additional_documents": database_record.get("additional_documents")
+        if database_record
+        else None,
+        "extracted_data": extracted_data if extracted_data else None,
+        "admin_input": admin_input if admin_input else None,
+        "calculations": calculations if calculations else None,
+        "broker_name": broker_name or sheets_data.get("Broker"),
+        "insurer_name": insurer_name or sheets_data.get("Insurance company"),
+        "claimed_by": sheets_data.get("Claimed by"),
+        "running_bal": parse_float(sheets_data.get("Running bal")),
+        "cutpay_received": parse_float(sheets_data.get("Cutpay received")),
+        "cluster": sheets_data.get("Cluster"),
+        "already_given_to_agent": parse_float(sheets_data.get("Already given to agent")),
+        "iz_total_po_percent": parse_float(sheets_data.get("IZ total PO percent")),
+        "broker_po_percent": parse_float(sheets_data.get("Broker PO percent")),
+        "broker_payout_amount": parse_float(sheets_data.get("Broker payout amount")),
+        "invoice_status": sheets_data.get("Invoice status"),
+        "remarks": sheets_data.get("Remarks"),
+        "company": sheets_data.get("Company"),
+        "notes": sheets_data.get("Notes"),
+    }
+
+    # Add system fields from database if available
+    if database_record:
+        response.update(
+            {
+                "synced_to_cutpay_sheet": database_record.get("synced_to_cutpay_sheet"),
+                "synced_to_master_sheet": database_record.get("synced_to_master_sheet"),
+                "cutpay_sheet_row_id": database_record.get("cutpay_sheet_row_id"),
+                "master_sheet_row_id": database_record.get("master_sheet_row_id"),
+                "created_by": database_record.get("created_by"),
+                "created_at": database_record.get("created_at"),
+                "updated_at": database_record.get("updated_at"),
+            }
+        )
+
+    # Remove None values at top level (but keep nested objects even if empty)
+    response = {k: v for k, v in response.items() if v is not None}
+
+    return response

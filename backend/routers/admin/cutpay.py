@@ -38,6 +38,7 @@ from ..auth.auth import get_current_user
 from .cutpay_helpers import (
     auto_populate_relationship_data,
     calculate_commission_amounts,
+    convert_sheets_data_to_nested_response,
     database_cutpay_response,
     get_dropdown_options,
     get_filtered_dropdowns,
@@ -59,6 +60,7 @@ from .cutpay_schemas import (
     CutPayAgentConfigResponse,
     CutPayAgentConfigUpdate,
     CutPayCreate,
+    CutPayResponse,
     CutPayDatabaseResponse,
     CutPayUpdate,
     DocumentUploadResponse,
@@ -948,7 +950,7 @@ async def list_agent_configs(
         )
 
 
-@router.get("/policy-details", response_model=Dict[str, Any])
+@router.get("/policy-details")
 async def get_cutpay_transaction_by_policy(
     policy_number: str = Query(..., description="Policy number to search for"),
     quarter: int = Query(
@@ -968,14 +970,16 @@ async def get_cutpay_transaction_by_policy(
     1. Combines quarter and year into sheet name format (Q3-2025)
     2. Searches for the specific quarterly Google Sheet
     3. Fetches data from both the specific sheet AND database for the same policy number
-    4. Returns combined results from both sources
+    4. Returns combined results in nested format (extracted_data, admin_input, calculations)
 
     Parameters:
     - policy_number: The policy number to search for
     - quarter: Quarter number (1-4)
     - year: Year
 
-    Returns combined data from both database and the specific quarterly sheet
+    Returns:
+    - policy_data: Nested CutPayDetailResponse structure with complete policy details
+    - metadata: Search information and status flags
     """
     try:
         # Step 1: Create quarter sheet name from quarter and year
@@ -1131,30 +1135,64 @@ async def get_cutpay_transaction_by_policy(
                 "error": f"Failed to fetch from Google Sheets: {str(sheets_error)}"
             }
 
-        # Step 4: Combine results from both sources
+        # Step 4: Convert sheets data to nested format and combine with database
+        found_in_database = database_record is not None and "error" not in str(
+            database_record
+        )
+        found_in_sheets = sheet_found and "error" not in sheets_data
+
+        # Convert to nested structure if we have valid sheets data
+        policy_data = None
+        if found_in_sheets and isinstance(sheets_data, dict) and "error" not in sheets_data:
+            policy_data = convert_sheets_data_to_nested_response(
+                sheets_data=sheets_data,
+                database_record=database_record if found_in_database else None,
+                broker_name=broker_name,
+                insurer_name=insurer_name,
+            )
+        elif found_in_database and isinstance(database_record, dict):
+            # If only database record exists, create minimal nested structure
+            policy_data = {
+                "id": database_record.get("id"),
+                "policy_pdf_url": database_record.get("policy_pdf_url"),
+                "additional_documents": database_record.get("additional_documents"),
+                "extracted_data": {
+                    "policy_number": database_record.get("policy_number"),
+                },
+                "admin_input": {
+                    "agent_code": database_record.get("agent_code"),
+                    "booking_date": database_record.get("booking_date"),
+                    "admin_child_id": database_record.get("admin_child_id"),
+                },
+                "broker_name": broker_name,
+                "insurer_name": insurer_name,
+            }
+
         response_data = {
-            "policy_number": policy_number,
-            "quarter": quarter,
-            "year": year,
-            "quarter_sheet_name": quarter_sheet_name,
-            "database_record": database_record,
-            "google_sheets_data": sheets_data,
-            "broker_name": broker_name,
-            "insurer_name": insurer_name,
-            "found_in_database": database_record is not None
-            and "error" not in str(database_record),
-            "found_in_sheets": sheet_found and "error" not in sheets_data,
-            "quarter_sheet_exists": sheet_found,
+            "policy_data": policy_data,
             "metadata": {
+                "policy_number": policy_number,
+                "quarter": quarter,
+                "year": year,
+                "quarter_sheet_name": quarter_sheet_name,
+                "found_in_database": found_in_database,
+                "found_in_sheets": found_in_sheets,
+                "quarter_sheet_exists": sheet_found,
                 "fetched_at": datetime.now().isoformat(),
                 "search_quarter": quarter_sheet_name,
                 "database_search_completed": True,
                 "sheets_search_completed": True,
             },
+            # Keep error info if exists
+            "database_error": database_record.get("error") if isinstance(database_record, dict) and "error" in database_record else None,
+            "sheets_error": sheets_data.get("error") if isinstance(sheets_data, dict) and "error" in sheets_data else None,
         }
 
+        # Remove None values at top level
+        response_data = {k: v for k, v in response_data.items() if v is not None}
+
         logger.info(
-            f"Search completed - DB: {response_data['found_in_database']}, Sheets: {response_data['found_in_sheets']}"
+            f"Search completed - DB: {found_in_database}, Sheets: {found_in_sheets}"
         )
         return response_data
 
