@@ -376,17 +376,35 @@ export interface CutPayDatabaseResponse {
 }
 
 export interface PolicyDetailsResponse {
-  policy_number: string;
-  quarter: number;
-  year: number;
-  quarter_sheet_name: string;
-  database_record: CutPayDatabaseResponse | Record<string, unknown> | null;
-  google_sheets_data: Record<string, string> | { error?: string };
-  broker_name?: string;
-  insurer_name?: string;
-  found_in_database: boolean;
-  found_in_sheets: boolean;
-  quarter_sheet_exists: boolean;
-  metadata?: Record<string, unknown>;
+  policy_data: {
+    id: number;
+    policy_pdf_url: string | null;
+    extracted_data: ExtractedPolicyData | null;
+    admin_input: AdminInputData | null;
+    calculations: CalculationResult | null;
+    additional_documents?: { [key: string]: unknown } | null;
+    claimed_by?: string | null;
+    running_bal?: number;
+    cutpay_received?: number | null;
+    notes?: string | null;
+    insurer_name: string;
+    cluster: string;
+    remarks: string;
+    created_at: string;
+    updated_at: string;
+  };
+  metadata: {
+    policy_number: string;
+    quarter: number;
+    year: number;
+    quarter_sheet_name: string;
+    found_in_database: boolean;
+    found_in_sheets: boolean;
+    quarter_sheet_exists: boolean;
+    fetched_at: string;
+    search_quarter: string;
+    database_search_completed: boolean;
+    sheets_search_completed: boolean;
+  };
 }
 
