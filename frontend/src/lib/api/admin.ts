@@ -70,21 +70,21 @@ export const adminApi = {
     },
 
     // Get agent details
-    getById: async (agentId: string): Promise<AgentDetails> => {
-      const response = await apiClient.get(`/admin/agents/${agentId}`)
+    getByUserId: async (userId: string): Promise<AgentDetails> => {
+      const response = await apiClient.get(`/admin/agents/${userId}`)
       return response.data
     },
 
     // Update agent details
-    update: async (agentId: string, data: AgentUpdateRequest): Promise<AgentUpdateResponse> => {
-      console.log('API call:', `PUT /admin/agents/${agentId}/edit-details`, data)
-      const response = await apiClient.put(`/admin/agents/${agentId}/edit-details`, data)
+    update: async (userId: string, data: AgentUpdateRequest): Promise<AgentUpdateResponse> => {
+      console.log('API call:', `PUT /admin/agents/${userId}/edit-details`, data)
+      const response = await apiClient.put(`/admin/agents/${userId}/edit-details`, data)
       return response.data
     },
 
     // Delete agent
-    delete: async (agentId: string): Promise<{ message: string }> => {
-      const response = await apiClient.delete(`/admin/agents/${agentId}`)
+    delete: async (userId: string): Promise<{ message: string }> => {
+      const response = await apiClient.delete(`/admin/agents/${userId}`)
       return response.data
     },
 

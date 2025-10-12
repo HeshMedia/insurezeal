@@ -55,9 +55,9 @@ import { toast } from "sonner"
 
 function AgentCard({ agent, onViewDetails, onEdit, onDelete }: { 
   agent: AgentSummary; 
-  onViewDetails: (id: string) => void;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
+  onViewDetails: (userId: string) => void;
+  onEdit: (userId: string) => void;
+  onDelete: (userId: string) => void;
 }) {
   const getInitials = (firstName?: string | null, lastName?: string | null) => {
     if (firstName && lastName) {
@@ -121,7 +121,7 @@ function AgentCard({ agent, onViewDetails, onEdit, onDelete }: {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
-                onClick={() => onViewDetails(agent.id)}
+                onClick={() => onViewDetails(agent.user_id)}
                 className="cursor-pointer"
               >
                 <Eye className="h-4 w-4 mr-2" />
@@ -129,14 +129,14 @@ function AgentCard({ agent, onViewDetails, onEdit, onDelete }: {
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="cursor-pointer"
-                onClick={() => onEdit(agent.id)}
+                onClick={() => onEdit(agent.user_id)}
               >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit Profile
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => onDelete(agent.id)}
+                onClick={() => onDelete(agent.user_id)}
                 className="cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
@@ -177,7 +177,7 @@ function AgentCard({ agent, onViewDetails, onEdit, onDelete }: {
         </div>
         <div className="mt-5 pt-4 border-t border-gray-100">
           <Button
-            onClick={() => onViewDetails(agent.id)}
+            onClick={() => onViewDetails(agent.user_id)}
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm"
             size="sm"
           >
@@ -196,7 +196,7 @@ export function EnhancedAgentManagement() {
   const [searchQuery, setSearchQuery] = useState("")
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [agentToDelete, setAgentToDelete] = useState<string | null>(null)
+  const [userIdToDelete, setUserIdToDelete] = useState<string | null>(null)
 
   const { data: agentData, isLoading, error } = useAgentList(params)
   const deleteAgentMutation = useDeleteAgent()
@@ -209,27 +209,28 @@ export function EnhancedAgentManagement() {
     setParams(prev => ({ ...prev, page: newPage }))
   }
 
-  const handleViewDetails = (agentId: string) => {
-    router.push(`/admin/agents/${agentId}`)
+  const handleViewDetails = (userId: string) => {
+    router.push(`/admin/agents/${userId}`)
   }
 
-  const handleEditAgent = (agentId: string) => {
-    router.push(`/admin/agents/${agentId}?edit=true`)
+  const handleEditAgent = (userId: string) => {
+    router.push(`/admin/agents/${userId}?edit=true`)
   }
 
-  const handleDeleteClick = (agentId: string) => {
-    setAgentToDelete(agentId)
+  const handleDeleteClick = (userId: string) => {
+    setUserIdToDelete(userId)
     setDeleteDialogOpen(true)
   }
 
   const handleDeleteConfirm = async () => {
-    if (!agentToDelete) return
+    if (!userIdToDelete) return
 
     try {
-      await deleteAgentMutation.mutateAsync(agentToDelete)
+      await deleteAgentMutation.mutateAsync(userIdToDelete)
       toast.success('Agent deleted successfully')
       setDeleteDialogOpen(false)
-      setAgentToDelete(null)    } catch (error: unknown) {
+      setUserIdToDelete(null)
+    } catch (error: unknown) {
       toast.error(`Failed to delete agent: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
@@ -399,7 +400,7 @@ export function EnhancedAgentManagement() {
             )}>
               {agentData?.agents?.map((agent) => (
                 <AgentCard
-                  key={agent.id}
+                  key={agent.user_id}
                   agent={agent}
                   onViewDetails={handleViewDetails}
                   onEdit={handleEditAgent}
@@ -456,7 +457,7 @@ export function EnhancedAgentManagement() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setAgentToDelete(null)}>
+            <AlertDialogCancel onClick={() => setUserIdToDelete(null)}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction

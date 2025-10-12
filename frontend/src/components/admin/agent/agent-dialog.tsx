@@ -1,13 +1,14 @@
 "use client"
 
+import { useMemo } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useAgentById } from "@/hooks/adminQuery"
-import { formatDate } from "@/lib/utils"
+import { useAgentByUserId } from "@/hooks/adminQuery"
+import { formatDate, normalizeDocumentUrls } from "@/lib/utils"
 import { 
   User, 
   Mail, 
@@ -18,20 +19,24 @@ import {
   FileText,
   Shield,
   Edit,
-  ExternalLink
+  Eye,
 } from "lucide-react"
 import AgentDialogSkeleton from "./AgentDialogSkeleton"
 
 interface AgentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  userId?: string | null
   agentId?: string | null
 }
 
-export function AgentDialog({ open, onOpenChange, agentId }: AgentDialogProps) {
-  const { data: agent, isLoading, error } = useAgentById(agentId || "")
+export function AgentDialog({ open, onOpenChange, userId, agentId }: AgentDialogProps) {
+  const resolvedUserId = userId ?? agentId ?? ""
+  const { data: agent, isLoading, error } = useAgentByUserId(resolvedUserId)
 
-  if (!agentId) return null
+  const documents = useMemo(() => normalizeDocumentUrls(agent?.document_urls), [agent?.document_urls])
+
+  if (!resolvedUserId) return null
 
   const getInitials = (firstName?: string | null, lastName?: string | null) => {
     if (firstName && lastName) {
@@ -144,7 +149,7 @@ export function AgentDialog({ open, onOpenChange, agentId }: AgentDialogProps) {
                     <div>
                       <p className="text-xs text-gray-500">Documents</p>
                       <p className="text-sm font-medium">
-                        {Object.keys(agent.document_urls || {}).length} uploaded
+                        {documents.length} uploaded
                       </p>
                     </div>
                   </div>
@@ -282,24 +287,25 @@ export function AgentDialog({ open, onOpenChange, agentId }: AgentDialogProps) {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {agent.document_urls && Object.keys(agent.document_urls).length > 0 ? (
+                    {documents.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Object.entries(agent.document_urls).map(([docType, url]) => (
-                          <div key={docType} className="flex items-center justify-between p-3 border rounded-lg">
+                        {documents.map(({ label, url }) => (
+                          <div key={url} className="flex items-center justify-between p-3 border rounded-lg">
                             <div>
-                              <p className="font-medium capitalize">{docType.replace('_', ' ')}</p>
-                              <p className="text-sm text-gray-500">Document uploaded</p>
+                              <p className="font-medium capitalize">{label}</p>
+                              <p className="text-sm text-gray-500">Uploaded document</p>
                             </div>
                             <Button variant="outline" size="sm" asChild>
-                              <a href={url} target="_blank" rel="noopener noreferrer">
-                                <ExternalLink className="h-4 w-4" />
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                View
                               </a>
                             </Button>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-500 text-center py-8">No documents uploaded</p>
+                      <p className="text-gray-500 text-center py-8">No documents uploaded yet.</p>
                     )}
                   </CardContent>
                 </Card>

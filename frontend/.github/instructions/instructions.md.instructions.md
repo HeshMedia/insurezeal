@@ -17,4 +17,3 @@ alwaysApply: true
  Code must be understandable by others without requiring context from the original author. Comments should explain intent (“why”) rather than implementation (“what”). Readability, debuggability, and extensibility are prioritized.
 7. we are using bun as our runtime environment and package manager. We don't use npm or yarn. 
 8. we are using tailwind css for styling and avoid using any other css framework or library.
-9. we doing any changes to the code first explain if the approach mentioned in prompt is good will fix or do the job or not if its not good suggest a better approach and then implement the changes automatically like after explaining dont stop start implementing those changes by yourself.

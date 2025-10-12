@@ -40,11 +40,11 @@ export const useAgentList = (params?: AgentListParams) => {
   })
 }
 
-export const useAgentById = (agentId: string) => {
+export const useAgentByUserId = (userId: string) => {
   return useQuery({
-    queryKey: ADMIN_QUERY_KEYS.agents.detail(agentId),
-    queryFn: () => adminApi.agents.getById(agentId),
-    enabled: !!agentId,
+    queryKey: ADMIN_QUERY_KEYS.agents.detail(userId),
+    queryFn: () => adminApi.agents.getByUserId(userId),
+    enabled: !!userId,
   })
 }
 
@@ -52,10 +52,10 @@ export const useUpdateAgent = () => {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ agentId, data }: { agentId: string; data: AgentUpdateRequest }) =>
-      adminApi.agents.update(agentId, data),
+    mutationFn: ({ userId, data }: { userId: string; data: AgentUpdateRequest }) =>
+      adminApi.agents.update(userId, data),
     onSuccess: (_response, variables) => {
-      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.detail(variables.agentId) })
+      queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.detail(variables.userId) })
       queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEYS.agents.lists() })
     },
   })

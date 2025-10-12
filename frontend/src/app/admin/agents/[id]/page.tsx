@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { DashboardWrapper } from '@/components/dashboard-wrapper'
-import { useAgentById, useUpdateAgent } from '@/hooks/adminQuery'
+import { useAgentByUserId, useUpdateAgent } from '@/hooks/adminQuery'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -15,7 +15,8 @@ import {
   User, 
   Phone,
   MapPin,
-  FileText
+  FileText,
+  Eye,
 } from 'lucide-react'
 import Loading from '@/app/loading'
 import { ProfileDetails } from '@/components/profile/profile-details'
@@ -23,15 +24,16 @@ import { ProfileEditForm } from '@/components/profile/profile-edit-form'
 import type { AgentUpdateRequest } from '@/types/admin.types'
 import type { UpdateProfileRequest, UserProfile } from '@/types/profile.types'
 import { toast } from 'sonner'
+import { normalizeDocumentUrls } from '@/lib/utils'
 
 export default function AgentDetailPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const agentId = params.id as string
+  const userId = params.id as string
 
-  const { data: agent, isLoading, error } = useAgentById(agentId)
-  console.log('Agent data:', { agentId, agent, isLoading, error })
+  const { data: agent, isLoading, error } = useAgentByUserId(userId)
+  console.log('Agent data:', { userId, agent, isLoading, error })
   const updateAgent = useUpdateAgent()
   const [isEditing, setIsEditing] = useState(false)
   const [activeTab, setActiveTab] = useState<'details' | 'documents'>('details')
@@ -47,7 +49,7 @@ export default function AgentDetailPage() {
   const openEdit = () => {
     setIsEditing(true)
     if (searchParams?.get('edit') !== 'true') {
-      router.replace(`/admin/agents/${agentId}?edit=true`, { scroll: false })
+      router.replace(`/admin/agents/${userId}?edit=true`, { scroll: false })
     }
   }
 
@@ -55,7 +57,7 @@ export default function AgentDetailPage() {
     if (!agent) return null
 
     return {
-      id: agent.id,
+  id: agent.user_id,
       user_id: agent.user_id,
       email: agent.email,
       first_name: agent.first_name ?? undefined,
@@ -108,6 +110,8 @@ export default function AgentDetailPage() {
     }
   }, [agent])
 
+  const documents = useMemo(() => normalizeDocumentUrls(agent?.document_urls), [agent?.document_urls])
+
   const handleAgentUpdate = async (formData: UpdateProfileRequest) => {
     if (!agent) return
 
@@ -150,9 +154,9 @@ export default function AgentDetailPage() {
       agent_code: formData.agent_code ?? null,
     }
 
-    console.log('Updating agent:', { agentId, payload })
+    console.log('Updating agent:', { userId, payload })
     try {
-      await updateAgent.mutateAsync({ agentId, data: payload })
+      await updateAgent.mutateAsync({ userId, data: payload })
       toast.success('Agent updated successfully')
       closeEdit()
     } catch (mutationError) {
@@ -166,7 +170,7 @@ export default function AgentDetailPage() {
   const closeEdit = () => {
     setIsEditing(false)
     if (searchParams?.get('edit')) {
-      router.replace(`/admin/agents/${agentId}`, { scroll: false })
+      router.replace(`/admin/agents/${userId}`, { scroll: false })
     }
   }
 
@@ -359,21 +363,27 @@ export default function AgentDetailPage() {
             </TabsContent>
 
             <TabsContent value="documents" className="p-6 space-y-4">
-              {agent.document_urls && Object.keys(agent.document_urls).length > 0 ? (
+              {documents.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {Object.entries(agent.document_urls).map(([docType, url]) => (
+                  {documents.map(({ label, url }) => (
                     <div
-                      key={docType}
+                      key={url}
                       className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 dark:bg-gray-800/40"
                     >
                       <div>
                         <p className="font-medium capitalize text-gray-900 dark:text-white">
-                          {docType.replace(/_/g, ' ')}
+                          {label}
                         </p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Uploaded document</p>
                       </div>
                       <Button variant="outline" size="sm" asChild>
-                        <a href={url} target="_blank" rel="noopener noreferrer">
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2"
+                        >
+                          <Eye className="h-4 w-4" />
                           View
                         </a>
                       </Button>

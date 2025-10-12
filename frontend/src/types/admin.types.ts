@@ -1,3 +1,5 @@
+import type { DocumentStore } from './profile.types'
+
 // Agent Types
 export type GenderEnum = 'male' | 'female' | 'other' | null
 export type EducationLevelEnum = 
@@ -86,7 +88,7 @@ export interface AgentDetails {
   preferences: Record<string, unknown> | null
   created_at: string
   updated_at: string
-  document_urls: Record<string, string>
+  document_urls: DocumentStore
   display_name: string | null
   bio: string | null
   timezone: string | null
@@ -221,7 +223,7 @@ export interface AgentDocument {
 
 export interface EnhancedAgentDetails extends AgentDetails {
   documents: AgentDocument[]
-  document_urls: Record<string, string> // document_type -> url mapping
+  document_urls: DocumentStore // document_type -> url mapping
 }
 
 export interface AgentUpdateRequest {

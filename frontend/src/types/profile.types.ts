@@ -24,6 +24,30 @@ export type DocumentType =
   | 'income_proof'
 
 // Base Profile Interface
+export type DocumentStoreValue =
+  | string
+  | null
+  | undefined
+  | {
+      url?: string | null
+      document_url?: string | null
+      file_url?: string | null
+      document_name?: string | null
+      document_type?: string | null
+      [key: string]: unknown
+    }
+
+export type DocumentStore =
+  | Record<string, DocumentStoreValue>
+  | Array<{
+      document_type?: string | null
+      document_name?: string | null
+      url?: string | null
+      document_url?: string | null
+      file_url?: string | null
+      [key: string]: unknown
+    }>
+
 export interface UserProfile {
   id: string
   user_id: string
@@ -69,7 +93,7 @@ export interface UserProfile {
   updated_at: string
   agent_code?: string
   user_role?: string
-  document_urls?: Record<string, string>
+  document_urls?: DocumentStore
   username?: string
   display_name?: string
   bio?: string
