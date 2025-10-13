@@ -1212,7 +1212,11 @@ def prepare_complete_sheets_data(
                 "Broker code": admin.broker_code or "",
                 "Insurer code": admin.insurer_code or "",
                 "Admin child ID": admin.admin_child_id or "",
-                "Insurer /broker code": (admin.insurer_code or admin.broker_code or ""),
+                "Insurer /broker code": (
+                    "/".join(filter(None, [admin.insurer_code, admin.broker_code]))
+                    if admin.insurer_code and admin.broker_code
+                    else (admin.insurer_code or admin.broker_code or "")
+                ),
                 "Broker Name": broker_name,  # Populated from database lookup
                 "Insurer name": insurer_name,  # Populated from database lookup
                 "Commissionable Premium": admin.commissionable_premium or 0,
@@ -1370,7 +1374,11 @@ def prepare_complete_sheets_data_for_update(
                 "Booking Date(Click to select Date)": (
                     admin.booking_date.isoformat() if admin.booking_date else ""
                 ),
-                "Insurer /broker code": (admin.insurer_code or admin.broker_code or ""),
+                "Insurer /broker code": (
+                    "/".join(filter(None, [admin.insurer_code, admin.broker_code]))
+                    if admin.insurer_code and admin.broker_code
+                    else (admin.insurer_code or admin.broker_code or "")
+                ),
                 "Broker Name": broker_name,  # Populated from database lookup
                 "Insurer name": insurer_name,  # Populated from database lookup
                 "Commissionable Premium": admin.commissionable_premium or 0,
@@ -1622,21 +1630,43 @@ def convert_sheets_data_to_nested_response(
         db_agent_code = database_record.get("agent_code") 
         db_admin_child_id = database_record.get("admin_child_id")
     
-    # Get insurer/broker names from sheets
+    # Extract broker and insurer codes from combined column
+    # Can be single code (I015 or B001) or combined with slash (I015/B001)
+    combined_code = sheets_data.get("Insurer /broker code", "")
+    broker_code = ""
+    insurer_code = ""
+    
+    if combined_code:
+        if "/" in combined_code:
+            # Split by slash and identify each part by prefix
+            parts = [part.strip() for part in combined_code.split("/")]
+            for part in parts:
+                if part.startswith("B"):  # Broker code starts with "B"
+                    broker_code = part
+                elif part.startswith("I"):  # Insurer code starts with "I"
+                    insurer_code = part
+        else:
+            # Single code - determine type by prefix
+            if combined_code.startswith("B"):  # Broker code starts with "B"
+                broker_code = combined_code
+            elif combined_code.startswith("I"):  # Insurer code starts with "I"
+                insurer_code = combined_code
+    
+    # Get insurer/broker names from sheets  
     sheets_broker_name = sheets_data.get("Broker Name", "")
     sheets_insurer_name = sheets_data.get("Insurer name", "")
     
-    # Determine code_type: if broker_name exists in sheets, it's "Broker Code", else "Direct Code"
-    code_type = "Broker Code" if sheets_broker_name else "Direct Code"
+    # Determine code_type based on presence of broker_code
+    code_type = "Broker Code" if broker_code else "Direct Code"
     
     admin_input = {
         "reporting_month": sheets_data.get("Reporting Month (mmm'yy)") or "",
         "booking_date": parse_date(sheets_data.get("Booking Date(Click to select Date)")) or db_booking_date,
-        "agent_code": sheets_data.get("Agent Code") or db_agent_code,
+        "agent_code": sheets_data.get("Agent Code") or db_agent_code or "",
         "code_type": code_type,
-        "broker_name": sheets_broker_name or broker_name,  # From sheets or database lookup
-        "insurer_name": sheets_insurer_name or insurer_name,  # From sheets or database lookup
-        "admin_child_id": sheets_data.get("Admin child ID") or db_admin_child_id,
+        "broker_code": broker_code,
+        "insurer_code": insurer_code,
+        "admin_child_id": sheets_data.get("Admin child ID") or db_admin_child_id or "",
         "incoming_grid_percent": parse_float(sheets_data.get("Incoming Grid %")),
         "agent_commission_given_percent": parse_float(
             sheets_data.get("Actual Agent_PO%")
