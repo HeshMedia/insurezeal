@@ -1613,23 +1613,6 @@ def convert_sheets_data_to_nested_response(
     extracted_data = {k: v for k, v in extracted_data.items() if v is not None}
 
     # Build admin_input (manual admin fields)
-    # Handle broker_code and insurer_code with fallback to combined column
-    combined_code = sheets_data.get("Insurer /broker code", "")
-    separate_broker_code = sheets_data.get("Broker code")
-    separate_insurer_code = sheets_data.get("Insurer code")
-    
-    # Use separate columns if they exist and have values, otherwise use combined column
-    broker_code = separate_broker_code if separate_broker_code else combined_code
-    insurer_code = separate_insurer_code if separate_insurer_code else combined_code
-    
-    # Determine code_type based on business logic
-    code_type = None
-    if broker_code and insurer_code:
-        code_type = "Broker Code"  # Both present = Broker Code
-    elif insurer_code and not broker_code:
-        code_type = "Direct Code"   # Only insurer = Direct Code
-    # If neither present, code_type remains None
-    
     # Get database fallback values for key fields
     db_booking_date = None
     db_agent_code = None
@@ -1639,13 +1622,20 @@ def convert_sheets_data_to_nested_response(
         db_agent_code = database_record.get("agent_code") 
         db_admin_child_id = database_record.get("admin_child_id")
     
+    # Get insurer/broker names from sheets
+    sheets_broker_name = sheets_data.get("Broker Name", "")
+    sheets_insurer_name = sheets_data.get("Insurer name", "")
+    
+    # Determine code_type: if broker_name exists in sheets, it's "Broker Code", else "Direct Code"
+    code_type = "Broker Code" if sheets_broker_name else "Direct Code"
+    
     admin_input = {
         "reporting_month": sheets_data.get("Reporting Month (mmm'yy)"),
         "booking_date": parse_date(sheets_data.get("Booking Date(Click to select Date)")) or db_booking_date,
         "agent_code": sheets_data.get("Agent Code") or db_agent_code,
-        "code_type": code_type,  # Use computed code_type based on broker/insurer presence
-        "broker_code": broker_code,
-        "insurer_code": insurer_code,
+        "code_type": code_type,
+        "broker_name": sheets_broker_name or broker_name,  # From sheets or database lookup
+        "insurer_name": sheets_insurer_name or insurer_name,  # From sheets or database lookup
         "admin_child_id": sheets_data.get("Admin child ID") or db_admin_child_id,
         "incoming_grid_percent": parse_float(sheets_data.get("Incoming Grid %")),
         "agent_commission_given_percent": parse_float(
@@ -1697,8 +1687,6 @@ def convert_sheets_data_to_nested_response(
         "extracted_data": extracted_data if extracted_data else None,
         "admin_input": admin_input if admin_input else None,
         "calculations": calculations if calculations else None,
-        "broker_name": broker_name or sheets_data.get("Broker Name"),
-        "insurer_name": insurer_name or sheets_data.get("Insurer name"),
         "claimed_by": sheets_data.get("Claimed By"),
         "running_bal": parse_float(sheets_data.get("Running Bal")),
         "cluster": sheets_data.get("Cluster"),
