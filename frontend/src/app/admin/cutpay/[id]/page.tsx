@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
@@ -23,69 +22,74 @@ export default function CutPayDetailPage() {
   const normalize = (): PolicyData | null => {
     if (!data) return null
 
-    const db = (data as any)?.database_record as any
-    const sheet = (data as any)?.google_sheets_data as Record<string, string>
-
+    // Extract from new API response format
+    const policyData = data.policy_data
+    const metadata = data.metadata
+    const adminInput = policyData.admin_input
+    const extractedData = policyData.extracted_data
+    
+    // For now, google_sheets_data is not in the new response, so we'll use empty object
+    const sheet = {} as Record<string, string>
     const get = (key: string): string => (sheet && sheet[key]) ? String(sheet[key]) : ''
 
     return {
-      policy_number: data.policy_number,
-      quarter: data.quarter,
-      year: data.year,
-      quarter_sheet_name: data.quarter_sheet_name,
+      policy_number: metadata.policy_number,
+      quarter: metadata.quarter,
+      year: metadata.year,
+      quarter_sheet_name: metadata.quarter_sheet_name,
       policy_details: {
-        agent_code: db?.agent_code || get('Agent Code') || '',
-        booking_date: db?.booking_date || get("Booking Date(Click to select Date)") || '',
-        policy_start_date: db?.policy_start_date || get('Policy Start Date') || '',
-        policy_end_date: db?.policy_end_date || get('Policy End Date') || '',
-        created_at: db?.created_at || '',
-        updated_at: db?.updated_at || '',
+        agent_code: adminInput?.agent_code || get('Agent Code') || '',
+        booking_date: adminInput?.booking_date || get("Booking Date(Click to select Date)") || '',
+        policy_start_date: extractedData?.start_date || get('Policy Start Date') || '',
+        policy_end_date: extractedData?.end_date || get('Policy End Date') || '',
+        created_at: policyData.created_at || '',
+        updated_at: policyData.updated_at || '',
       },
       policy_info: {
-        reporting_month: get("Reporting Month (mmm'yy)"),
-        child_id: get("Child ID/ User ID [Provided by Insure Zeal]"),
-        major_categorisation: get("Major Categorisation( Motor/Life/ Health)"),
-        product: get('Product (Insurer Report)'),
-        product_type: get('Product Type'),
-        plan_type: get('Plan type (Comp/STP/SAOD)'),
-        gross_premium: get('Gross premium'),
-        gst_amount: get('GST Amount'),
-        net_premium: get('Net premium'),
-        od_premium: get('OD Preimium'),
-        tp_premium: get('TP Premium'),
-        registration_no: get('Registration.no'),
-        make_model: get('Make_Model'),
-        model: get('Model'),
-        vehicle_variant: get('Vehicle_Variant'),
-        gvw: get('GVW'),
-        rto: get('RTO'),
-        state: get('State'),
-        fuel_type: get('Fuel Type'),
-        cc: get('CC'),
-        age_year: get('Age(Year)'),
-        ncb: get('NCB (YES/NO)'),
-        discount_percent: get('Discount %'),
-        business_type: get('Business Type'),
-        seating_capacity: get('Seating Capacity'),
-        veh_wheels: get('Veh_Wheels'),
-        customer_name: get('Customer Name'),
-        customer_number: get('Customer Number'),
-        commissionable_premium: get('Commissionable Premium'),
-        incoming_grid_percent: get('Incoming Grid %'),
-        receivable_from_broker: get('Receivable from Broker'),
-        extra_grid: get('Extra Grid'),
-        extra_amount_receivable: get('Extra Amount Receivable from Broker'),
-        total_receivable: get('Total Receivable from Broker'),
-        claimed_by: get('Claimed By'),
-        payment_by: get('Payment by'),
-        payment_mode: get('Payment Mode'),
-        agent_code: get('Agent Code') || db?.agent_code || '',
+        reporting_month: adminInput?.reporting_month || get("Reporting Month (mmm'yy)"),
+        child_id: adminInput?.admin_child_id || get("Child ID/ User ID [Provided by Insure Zeal]"),
+        major_categorisation: extractedData?.major_categorisation || get("Major Categorisation( Motor/Life/ Health)"),
+        product: extractedData?.product_insurer_report || get('Product (Insurer Report)'),
+        product_type: extractedData?.product_type || get('Product Type'),
+        plan_type: extractedData?.plan_type || get('Plan type (Comp/STP/SAOD)'),
+        gross_premium: String(extractedData?.gross_premium || '') || get('Gross premium'),
+        gst_amount: String(extractedData?.gst_amount || '') || get('GST Amount'),
+        net_premium: String(extractedData?.net_premium || '') || get('Net premium'),
+        od_premium: String(extractedData?.od_premium || '') || get('OD Preimium'),
+        tp_premium: String(extractedData?.tp_premium || '') || get('TP Premium'),
+        registration_no: extractedData?.registration_number || get('Registration.no'),
+        make_model: extractedData?.make_model || get('Make_Model'),
+        model: extractedData?.model || get('Model'),
+        vehicle_variant: extractedData?.vehicle_variant || get('Vehicle_Variant'),
+        gvw: String(extractedData?.gvw || '') || get('GVW'),
+        rto: extractedData?.rto || get('RTO'),
+        state: extractedData?.state || get('State'),
+        fuel_type: extractedData?.fuel_type || get('Fuel Type'),
+        cc: String(extractedData?.cc || '') || get('CC'),
+        age_year: String(extractedData?.age_year || '') || get('Age(Year)'),
+        ncb: extractedData?.ncb || get('NCB (YES/NO)'),
+        discount_percent: String(extractedData?.discount_percent || '') || get('Discount %'),
+        business_type: extractedData?.business_type || get('Business Type'),
+        seating_capacity: String(extractedData?.seating_capacity || '') || get('Seating Capacity'),
+        veh_wheels: String(extractedData?.veh_wheels || '') || get('Veh_Wheels'),
+        customer_name: extractedData?.customer_name || get('Customer Name'),
+        customer_number: extractedData?.customer_phone_number || get('Customer Number'),
+        commissionable_premium: String(adminInput?.commissionable_premium || '') || get('Commissionable Premium'),
+        incoming_grid_percent: String(adminInput?.incoming_grid_percent || '') || get('Incoming Grid %'),
+        receivable_from_broker: String(policyData.calculations?.receivable_from_broker || '') || get('Receivable from Broker'),
+        extra_grid: String(adminInput?.extra_grid || '') || get('Extra Grid'),
+        extra_amount_receivable: String(policyData.calculations?.extra_amount_receivable_from_broker || '') || get('Extra Amount Receivable from Broker'),
+        total_receivable: String(policyData.calculations?.total_receivable_from_broker || '') || get('Total Receivable from Broker'),
+        claimed_by: policyData.claimed_by || get('Claimed By'),
+        payment_by: adminInput?.payment_by || get('Payment by'),
+        payment_mode: adminInput?.payment_method || get('Payment Mode'),
+        agent_code: adminInput?.agent_code || get('Agent Code') || '',
       },
       metadata: {
-        fetched_at: String((data as any).metadata?.fetched_at || ''),
-        search_quarter: (data as any).metadata?.search_quarter || data.quarter_sheet_name,
-        database_search_completed: Boolean((data as any).metadata?.database_search_completed),
-        sheets_search_completed: Boolean((data as any).metadata?.sheets_search_completed),
+        fetched_at: metadata.fetched_at,
+        search_quarter: metadata.search_quarter || metadata.quarter_sheet_name,
+        database_search_completed: metadata.database_search_completed,
+        sheets_search_completed: metadata.sheets_search_completed,
       }
     }
   }

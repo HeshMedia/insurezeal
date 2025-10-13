@@ -38,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { numberInputOnWheelPreventChange } from "@/lib/utils/number-input";
 
 type SubmissionStepState = {
   id: string;
@@ -68,11 +69,7 @@ const createInitialSubmissionSteps = (): SubmissionStepState[] => [
   },
 ];
 import { useAgentList } from "@/hooks/adminQuery";
-import {
-  useCreateCutPay,
-  useUploadCutPayDocument,
-  useUpdateCutPayByPolicy,
-} from "@/hooks/cutpayQuery";
+import { useCreateCutPay, useUploadCutPayDocument } from "@/hooks/cutpayQuery";
  
 import {
   useBrokerList,
@@ -97,7 +94,6 @@ import {
 import Calculations from "../admin/cutpay/calculations";
 import { Loader2, Info } from "lucide-react";
 import DocumentViewer from "@/components/forms/documentviewer";
-import { editModeFieldMappings, specialFieldMappings } from '@/components/admin/cutpay/form-config';
 import {
   Tooltip,
   TooltipContent,
@@ -108,22 +104,10 @@ import {
 // Props interface for the InputForm component (cutpay only)
 interface InputFormProps {
   onPrev: () => void; // Function to go to the previous step
-  editId?: number; // Optional ID for edit mode
-  policyNumber?: string;
-  quarter?: number;
-  year?: number;
-  initialDbRecord?: any;
 }
 
 const InputForm: React.FC<InputFormProps> = ({
   onPrev,
-  // editId is optional but currently unused in policy-based update flow
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  editId: _editId, // Optional ID for edit mode
-  policyNumber,
-  quarter,
-  year,
-  initialDbRecord,
 }) => {
   const router = useRouter();
   // State for document viewer visibility is now managed locally
@@ -142,11 +126,6 @@ const InputForm: React.FC<InputFormProps> = ({
   );
   const createCutPayMutation = useCreateCutPay();
   const uploadDocumentMutation = useUploadCutPayDocument();
-  const updateCutPayByPolicyMutation = useUpdateCutPayByPolicy();
-
-
-  // Existing data supplied from parent for edit mode (policy-based)
-  const existingCutpayData = initialDbRecord;
 
   // State for child ID auto-fill functionality
   const [, setSelectedChildIdDetails] = useState<
@@ -231,30 +210,6 @@ const InputForm: React.FC<InputFormProps> = ({
       );
     }
   }, [pdfExtractionData, setValue]);
-
-  // Effect to populate the form with existing cutpay data in edit mode (from DB record)
-  useEffect(() => {
-    if (existingCutpayData) {
-      console.log("Populating form with existing cutpay data:", existingCutpayData);
-
-      // Populate regular fields using the auto-generated mapping
-      Object.entries(editModeFieldMappings).forEach(([apiField, formField]) => {
-        const value = existingCutpayData[apiField as keyof typeof existingCutpayData];
-        if (value !== null && value !== undefined) {
-          setValue(formField as any, value, { shouldValidate: true });
-        }
-      });
-
-      // Handle special cases with transformations
-      Object.entries(specialFieldMappings).forEach(([apiField, config]) => {
-        const value = existingCutpayData[apiField as keyof typeof existingCutpayData];
-        if (value !== null && value !== undefined) {
-          const transformedValue = config.transform ? config.transform(value) : value;
-          setValue(config.target as any, transformedValue, { shouldValidate: true });
-        }
-      });
-    }
-  }, [existingCutpayData, setValue]);
 
   // Auto-fill plan type based on PDF extraction data
   useEffect(() => {
@@ -1018,23 +973,10 @@ const InputForm: React.FC<InputFormProps> = ({
 
         console.log("Final payload:", payload);
 
-        let createdTransaction;
-
-        if (policyNumber && quarter && year) {
-          // Edit mode - policy-based update
-          createdTransaction = await updateCutPayByPolicyMutation.mutateAsync({
-            params: { policy_number: policyNumber, quarter, year },
-            data: payload as any,
-          });
-          updateStepStatus("create-transaction", "completed");
-          toast.success("Transaction updated successfully!");
-        } else {
-          // Create mode - use create mutation
-          createdTransaction = await createCutPayMutation.mutateAsync(payload);
-          updateStepStatus("create-transaction", "completed");
-          // Store the created transaction in global state
-          setCreatedTransaction(createdTransaction);
-        }
+        const createdTransaction = await createCutPayMutation.mutateAsync(payload);
+        updateStepStatus("create-transaction", "completed");
+        // Store the created transaction in global state
+        setCreatedTransaction(createdTransaction);
 
         // Steps 2 & 3: Upload all associated documents
         try {
@@ -1554,6 +1496,7 @@ const InputForm: React.FC<InputFormProps> = ({
                     controllerField.onChange(value === "" ? null : value);
                   }
                 }}
+                onWheel={type === "number" ? numberInputOnWheelPreventChange : undefined}
                 disabled={disabled}
                 className={`h-10 w-fit ${disabled ? "bg-gray-50" : ""}`}
                 step={type === "number" ? "0.01" : undefined}
@@ -1832,6 +1775,7 @@ const InputForm: React.FC<InputFormProps> = ({
                                               value === "" ? null : Number(value);
                                             controllerField.onChange(numValue);
                                           }}
+                                          onWheel={numberInputOnWheelPreventChange}
                                           step="0.01"
                                           placeholder="Enter received amount"
                                         />

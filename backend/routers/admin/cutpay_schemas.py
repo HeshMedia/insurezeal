@@ -78,6 +78,8 @@ class AdminInputData(BaseModel):
     booking_date: Optional[date] = Field(None, description="Transaction date")
     agent_code: Optional[str] = Field(None, description="Agent identifier code")
     code_type: Optional[str] = Field(None, description="Selection (Direct, Broker)")
+    broker_name: Optional[str] = Field(None, description="Broker company name")
+    insurer_name: Optional[str] = Field(None, description="Insurance company name")
 
     # Commission Configuration
     incoming_grid_percent: Optional[float] = Field(
