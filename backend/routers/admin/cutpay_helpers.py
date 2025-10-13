@@ -1609,7 +1609,7 @@ def convert_sheets_data_to_nested_response(
         "seating_capacity": parse_int(sheets_data.get("Seating Capacity")),
         "veh_wheels": parse_int(sheets_data.get("Veh_Wheels")),
     }
-    # Remove None values from extracted_data
+    # Preserve all fields including empty strings ("") and zeros (0), only remove None values
     extracted_data = {k: v for k, v in extracted_data.items() if v is not None}
 
     # Build admin_input (manual admin fields)
@@ -1630,7 +1630,7 @@ def convert_sheets_data_to_nested_response(
         code_type = "Direct Code"   # Only insurer = Direct Code
     # If neither present, code_type remains None
     
-    # Get database fallback values for key fields
+    # Get database fallback values for key fields when sheets data is empty
     db_booking_date = None
     db_agent_code = None
     db_admin_child_id = None
@@ -1640,49 +1640,48 @@ def convert_sheets_data_to_nested_response(
         db_admin_child_id = database_record.get("admin_child_id")
     
     admin_input = {
-        "reporting_month": sheets_data.get("Reporting Month (mmm'yy)"),
+        "reporting_month": sheets_data.get("Reporting Month (mmm'yy)") or "",
         "booking_date": parse_date(sheets_data.get("Booking Date(Click to select Date)")) or db_booking_date,
-        "agent_code": sheets_data.get("Agent Code") or db_agent_code,
-        "code_type": code_type,  # Use computed code_type based on broker/insurer presence
-        "broker_code": broker_code,
-        "insurer_code": insurer_code,
-        "admin_child_id": sheets_data.get("Admin child ID") or db_admin_child_id,
-        "incoming_grid_percent": parse_float(sheets_data.get("Incoming Grid %")),
-        "agent_commission_given_percent": parse_float(
-            sheets_data.get("Actual Agent_PO%")
-        ),
-        "extra_grid": parse_float(sheets_data.get("Extra Grid")),
-        "commissionable_premium": parse_float(sheets_data.get("Commissionable Premium")),
-        "payment_by": sheets_data.get("Payment by"),
-        "payment_method": sheets_data.get("Payment Mode"),
-        "payout_on": sheets_data.get("Payout on"),
-        "agent_extra_percent": parse_float(sheets_data.get("Agent_Extra%")),
-        "payment_by_office": parse_float(sheets_data.get("Payment By Office")),
+        "agent_code": sheets_data.get("Agent Code") or db_agent_code or "",
+        "code_type": code_type or "",  # Computed code_type based on broker/insurer presence
+        "broker_code": broker_code or "",
+        "insurer_code": insurer_code or "",
+        "admin_child_id": sheets_data.get("Child ID/ User ID [Provided by Insure Zeal]") or sheets_data.get("Admin child ID") or db_admin_child_id or "",
+        "incoming_grid_percent": parse_float(sheets_data.get("Incoming Grid %")) or 0,
+        "agent_commission_given_percent": parse_float(sheets_data.get("Actual Agent_PO%")) or 0,
+        "extra_grid": parse_float(sheets_data.get("Extra Grid")) or 0,
+        "commissionable_premium": parse_float(sheets_data.get("Commissionable Premium")) or 0,
+        "payment_by": sheets_data.get("Payment by") or "",
+        "payment_method": sheets_data.get("Payment Mode") or "",
+        "payout_on": sheets_data.get("Payout on") or "",
+        "agent_extra_percent": parse_float(sheets_data.get("Agent_Extra%")) or 0,
+        "payment_by_office": parse_float(sheets_data.get("Payment By Office")) or 0,
     }
-    # Keep all fields including empty strings and zeros, only remove actual None values
-    # This ensures fields show up in API even if they have default/empty values
+    # Remove only None values, preserve empty strings and zeros
     admin_input = {k: v for k, v in admin_input.items() if v is not None}
 
     # Build calculations (auto-calculated fields)
     calculations = {
-        "receivable_from_broker": parse_float(sheets_data.get("Receivable from Broker")),
+        "receivable_from_broker": parse_float(sheets_data.get("Receivable from Broker")) or 0,
         "extra_amount_receivable_from_broker": parse_float(
             sheets_data.get("Extra Amount Receivable from Broker")
-        ),
+        ) or 0,
         "total_receivable_from_broker": parse_float(
             sheets_data.get("Total Receivable from Broker")
-        ),
+        ) or 0,
         "total_receivable_from_broker_with_gst": parse_float(
             sheets_data.get("Total Receivable from Broker Include 18% GST")
-        ),
-        "cut_pay_amount": parse_float(sheets_data.get("Cut Pay Amount Received From Agent")),
-        "agent_po_amt": parse_float(sheets_data.get("Agent_PO_AMT")),
-        "agent_extra_amount": parse_float(sheets_data.get("Agent_Extr_Amount")),
-        "total_agent_po_amt": parse_float(sheets_data.get("Agent Total PO Amount")),
-        "iz_total_po_percent": parse_float(sheets_data.get("IZ Total PO%")),
-        "already_given_to_agent": parse_float(sheets_data.get("Already Given to agent")),
+        ) or 0,
+        "cut_pay_amount": parse_float(sheets_data.get("Cut Pay Amount Received From Agent")) or 0,
+        "agent_po_amt": parse_float(sheets_data.get("Agent_PO_AMT")) or 0,
+        "agent_extra_amount": parse_float(sheets_data.get("Agent_Extr_Amount")) or 0,
+        "total_agent_po_amt": parse_float(sheets_data.get("Agent Total PO Amount")) or 0,
+        "iz_total_po_percent": parse_float(sheets_data.get("IZ Total PO%")) or 0,
+        "already_given_to_agent": parse_float(sheets_data.get("Already Given to agent")) or 0,
+        "insurer_broker_code": sheets_data.get("Insurer /broker code") or "",
+        "cluster": sheets_data.get("Cluster") or "",
     }
-    # Keep all fields including zeros, only remove actual None values
+    # Remove only None values, preserve zeros and empty strings
     calculations = {k: v for k, v in calculations.items() if v is not None}
 
     # Build the nested response
@@ -1697,27 +1696,26 @@ def convert_sheets_data_to_nested_response(
         "extracted_data": extracted_data if extracted_data else None,
         "admin_input": admin_input if admin_input else None,
         "calculations": calculations if calculations else None,
-        "broker_name": broker_name or sheets_data.get("Broker Name"),
-        "insurer_name": insurer_name or sheets_data.get("Insurer name"),
-        "claimed_by": sheets_data.get("Claimed By"),
-        "running_bal": parse_float(sheets_data.get("Running Bal")),
-        "cluster": sheets_data.get("Cluster"),
-        "already_given_to_agent": parse_float(sheets_data.get("Already Given to agent")),
-        "iz_total_po_percent": parse_float(sheets_data.get("IZ Total PO%")),
-        "broker_po_percent": parse_float(sheets_data.get("As per Broker PO%")),
-        "broker_payout_amount": parse_float(sheets_data.get("As per Broker PO AMT")),
-        "invoice_status": sheets_data.get("Invoice Status"),
-        "remarks": sheets_data.get("Remarks"),
-        # Additional fields from Google Sheets
-        "po_paid_to_agent": parse_float(sheets_data.get("PO Paid To Agent")),
-        "as_per_agent_payout_percent": parse_float(sheets_data.get("As per Agent Payout%")),
-        "as_per_agent_payout_amount": parse_float(sheets_data.get("As per Agent Payout Amount")),
-        "po_percent_diff_agent": parse_float(sheets_data.get("PO% Diff Agent")),
-        "po_amount_diff_agent": parse_float(sheets_data.get("PO AMT Diff Agent")),
-        "po_percent_diff_broker": parse_float(sheets_data.get("PO% Diff Broker")),
-        "po_amount_diff_broker": parse_float(sheets_data.get("PO AMT Diff Broker")),
-        "invoice_number": sheets_data.get("Invoice Number"),
-        "match": sheets_data.get("Match"),
+        "broker_name": broker_name or sheets_data.get("Broker Name") or "",
+        "insurer_name": insurer_name or sheets_data.get("Insurer name") or "",
+        "claimed_by": sheets_data.get("Claimed By") or "",
+        "running_bal": parse_float(sheets_data.get("Running Bal")) or 0,
+        "cluster": sheets_data.get("Cluster") or "",
+        "iz_total_po_percent": parse_float(sheets_data.get("IZ Total PO%")) or 0,
+        "broker_po_percent": parse_float(sheets_data.get("As per Broker PO%")) or 0,
+        "broker_payout_amount": parse_float(sheets_data.get("As per Broker PO AMT")) or 0,
+        "invoice_status": sheets_data.get("Invoice Status") or "",
+        "remarks": sheets_data.get("Remarks") or "",
+        # Additional fields from Google Sheets (all remaining fields from 72-column list)
+        "po_paid_to_agent": parse_float(sheets_data.get("PO Paid To Agent")) or 0,
+        "as_per_agent_payout_percent": parse_float(sheets_data.get("As per Agent Payout%")) or 0,
+        "as_per_agent_payout_amount": parse_float(sheets_data.get("As per Agent Payout Amount")) or 0,
+        "po_percent_diff_agent": parse_float(sheets_data.get("PO% Diff Agent")) or 0,
+        "po_amount_diff_agent": parse_float(sheets_data.get("PO AMT Diff Agent")) or 0,
+        "po_percent_diff_broker": parse_float(sheets_data.get("PO% Diff Broker")) or 0,
+        "po_amount_diff_broker": parse_float(sheets_data.get("PO AMT Diff Broker")) or 0,
+        "invoice_number": sheets_data.get("Invoice Number") or "",
+        "match": sheets_data.get("Match") or "FALSE",
     }
 
     # Add system fields from database if available
