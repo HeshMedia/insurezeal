@@ -1,6 +1,6 @@
 'use client'
 
-import { useAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,7 +23,12 @@ import {
   policyCreationStepAtom,
   policyLoadingStatesAtom,
   policyErrorAtom,
-  policyFormCompletionAtom
+  policyFormCompletionAtom,
+  policyPdfExtractionDataAtom,
+  policyPdfFileAtom,
+  policyPdfUrlAtom,
+  policySuccessStatesAtom,
+  createdPolicyAtom
 } from '@/lib/atoms/policy'
 
 // Import components
@@ -79,7 +84,15 @@ const CreatePolicyPage = () => {
   const [currentStep, setCurrentStep] = useAtom(policyCreationStepAtom)
   const [loadingStates] = useAtom(policyLoadingStatesAtom)
   const [error] = useAtom(policyErrorAtom)
-  const [formCompletion] = useAtom(policyFormCompletionAtom)
+  const [formCompletion, setFormCompletion] = useAtom(policyFormCompletionAtom)
+  
+  // Atoms to reset on mount
+  const setPolicyPdfExtractionData = useSetAtom(policyPdfExtractionDataAtom)
+  const setPolicyPdfFile = useSetAtom(policyPdfFileAtom)
+  const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom)
+  const setSuccessStates = useSetAtom(policySuccessStatesAtom)
+  const setCreatedPolicy = useSetAtom(createdPolicyAtom)
+  const setError = useSetAtom(policyErrorAtom)
 
   // State for additional documents
   const [additionalDocuments, setAdditionalDocuments] = useState<AdditionalDocuments>({
@@ -87,6 +100,55 @@ const CreatePolicyPage = () => {
     rc_document: null,
     previous_policy: null
   })
+
+  // Reset all atoms when starting a new policy transaction
+  useEffect(() => {
+    console.log('🔄 Resetting all policy atoms for new transaction...')
+    
+    // Reset step to 1
+    setCurrentStep(1)
+    
+    // Clear PDF data
+    setPolicyPdfExtractionData(null)
+    setPolicyPdfFile(null)
+    
+    // Clear PDF URL if it exists
+    setPolicyPdfUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev)
+      }
+      return null
+    })
+    
+    // Reset success states
+    setSuccessStates({
+      pdfExtracted: false,
+      documentsUploaded: false
+    })
+    
+    // Reset form completion
+    setFormCompletion({
+      step1Complete: false,
+      step2Complete: false
+    })
+    
+    // Clear created policy
+    setCreatedPolicy(null)
+    
+    // Clear errors
+    setError(null)
+    
+    console.log('✅ All policy atoms reset successfully')
+  }, [
+    setCurrentStep,
+    setPolicyPdfExtractionData,
+    setPolicyPdfFile,
+    setPolicyPdfUrl,
+    setSuccessStates,
+    setFormCompletion,
+    setCreatedPolicy,
+    setError
+  ])
 
   // Debug IndexedDB when component mounts
   useEffect(() => {
