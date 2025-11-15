@@ -323,7 +323,6 @@ async def edit_agent_details(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Agent code '{new_agent_code}' already exists. Please choose a different code.",
                     )
-
         # Track which fields are being updated
         updated_fields = []
 

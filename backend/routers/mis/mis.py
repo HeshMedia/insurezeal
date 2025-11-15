@@ -1120,7 +1120,6 @@ async def export_quarterly_sheet_data(
             try:
                 import tempfile
                 import pandas as pd
-
                 # Create temporary Excel file
                 temp_dir = tempfile.mkdtemp()
                 excel_path = f"{temp_dir}/quarterly_export.xlsx"
