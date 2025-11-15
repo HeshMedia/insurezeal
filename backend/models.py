@@ -325,6 +325,10 @@ class CutPay(Base):
         "AdminChildID", foreign_keys=[admin_child_id]
     )
 
+    cut_pay_amount_received: Mapped[Optional[Numeric]] = mapped_column(
+        Numeric(15, 2), nullable=True
+    )
+
 
 class Policy(Base):
     """

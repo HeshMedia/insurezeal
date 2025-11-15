@@ -195,6 +195,20 @@ async def create_cutpay_transaction(
             # Remove None values
             db_fields = {k: v for k, v in db_fields.items() if v is not None}
 
+            # Include selective financial fields if provided (from calculations or top-level)
+            try:
+                if hasattr(cutpay_data, "calculations") and cutpay_data.calculations:
+                    calc = cutpay_data.calculations
+                    # Extract agent_total_po_amt from calculations
+                    if getattr(calc, "total_agent_po_amt", None) is not None:
+                        db_fields["agent_total_po_amount"] = calc.total_agent_po_amt
+                # cutpay_received is the authoritative source for Cut Pay Amount Received From Agent
+                if getattr(cutpay_data, "cutpay_received", None) is not None:
+                    db_fields["cut_pay_amount_received"] = cutpay_data.cutpay_received
+            except Exception:
+                # Be resilient - do not fail DB create if these fields are malformed
+                logger.warning("Failed to extract financial fields for DB storage from request")
+
             logger.info(
                 f"Storing {len(db_fields)} essential fields in database: {list(db_fields.keys())}"
             )
@@ -587,6 +601,8 @@ async def bulk_update_cutpay_transactions(
                 "child_id_request_id",
                 "policy_start_date",
                 "policy_end_date",
+                "cut_pay_amount_received",
+                "agent_total_po_amount",
             }
 
             # Convert date strings to date objects for database fields
@@ -1370,6 +1386,20 @@ async def update_cutpay_transaction_by_policy(
             logger.info(
                 f"Updating {len(db_update_fields)} essential fields in database: {list(db_update_fields.keys())}"
             )
+
+            # Include calculation-derived DB fields if present
+            try:
+                if hasattr(cutpay_data, "calculations") and cutpay_data.calculations:
+                    calc = cutpay_data.calculations
+                    # Extract agent_total_po_amt from calculations
+                    if getattr(calc, "total_agent_po_amt", None) is not None:
+                        db_update_fields["agent_total_po_amount"] = calc.total_agent_po_amt
+
+                # cutpay_received is the authoritative source for Cut Pay Amount Received From Agent
+                if getattr(cutpay_data, "cutpay_received", None) is not None:
+                    db_update_fields["cut_pay_amount_received"] = cutpay_data.cutpay_received
+            except Exception:
+                logger.warning("Failed to extract financial fields for DB update from request")
 
             # Check for policy number uniqueness if policy number is being updated
             if updated_policy_number and updated_policy_number != cutpay.policy_number:
