@@ -1,6 +1,6 @@
 'use client'
 
-import { useAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,7 +22,13 @@ import {
   cutpayCreationStepAtom,
   cutpayLoadingStatesAtom,
   cutpayErrorAtom,
-  cutpayFormCompletionAtom
+  cutpayFormCompletionAtom,
+  pdfExtractionDataAtom,
+  policyPdfFileAtom,
+  policyPdfUrlAtom,
+  cutpaySuccessStatesAtom,
+  cutpayCalculationResultAtom,
+  createdCutpayTransactionAtom
 } from '@/lib/atoms/cutpay'
 
 // Import components
@@ -78,7 +84,16 @@ const CreateCutPayPage = () => {
   const [currentStep, setCurrentStep] = useAtom(cutpayCreationStepAtom)
   const [loadingStates] = useAtom(cutpayLoadingStatesAtom)
   const [error] = useAtom(cutpayErrorAtom)
-  const [formCompletion] = useAtom(cutpayFormCompletionAtom)
+  const [formCompletion, setFormCompletion] = useAtom(cutpayFormCompletionAtom)
+  
+  // Atoms to reset on mount
+  const setPdfExtractionData = useSetAtom(pdfExtractionDataAtom)
+  const setPolicyPdfFile = useSetAtom(policyPdfFileAtom)
+  const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom)
+  const setSuccessStates = useSetAtom(cutpaySuccessStatesAtom)
+  const setCalculationResult = useSetAtom(cutpayCalculationResultAtom)
+  const setCreatedTransaction = useSetAtom(createdCutpayTransactionAtom)
+  const setError = useSetAtom(cutpayErrorAtom)
 
   // State for additional documents
   const [additionalDocuments, setAdditionalDocuments] = useState<AdditionalDocuments>({
@@ -86,6 +101,59 @@ const CreateCutPayPage = () => {
     rc: null,
     previousPolicy: null
   })
+
+  // Reset all atoms when starting a new transaction
+  useEffect(() => {
+    console.log('🔄 Resetting all cutpay atoms for new transaction...')
+    
+    // Reset step to 1
+    setCurrentStep(1)
+    
+    // Clear PDF data
+    setPdfExtractionData(null)
+    setPolicyPdfFile(null)
+    
+    // Clear PDF URL if it exists
+    setPolicyPdfUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev)
+      }
+      return null
+    })
+    
+    // Reset success states
+    setSuccessStates({
+      pdfExtracted: false,
+      documentsUploaded: false
+    })
+    
+    // Reset form completion
+    setFormCompletion({
+      step1Complete: false,
+      step2Complete: false
+    })
+    
+    // Clear calculation results
+    setCalculationResult(null)
+    
+    // Clear created transaction
+    setCreatedTransaction(null)
+    
+    // Clear errors
+    setError(null)
+    
+    console.log('✅ All cutpay atoms reset successfully')
+  }, [
+    setCurrentStep,
+    setPdfExtractionData,
+    setPolicyPdfFile,
+    setPolicyPdfUrl,
+    setSuccessStates,
+    setFormCompletion,
+    setCalculationResult,
+    setCreatedTransaction,
+    setError
+  ])
 
   // Debug IndexedDB when component mounts
   useEffect(() => {

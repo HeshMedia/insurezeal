@@ -1212,7 +1212,11 @@ def prepare_complete_sheets_data(
                 "Broker code": admin.broker_code or "",
                 "Insurer code": admin.insurer_code or "",
                 "Admin child ID": admin.admin_child_id or "",
-                "Insurer /broker code": (admin.insurer_code or admin.broker_code or ""),
+                "Insurer /broker code": (
+                    "/".join(filter(None, [admin.insurer_code, admin.broker_code]))
+                    if admin.insurer_code and admin.broker_code
+                    else (admin.insurer_code or admin.broker_code or "")
+                ),
                 "Broker Name": broker_name,  # Populated from database lookup
                 "Insurer name": insurer_name,  # Populated from database lookup
                 "Commissionable Premium": admin.commissionable_premium or 0,
@@ -1370,7 +1374,11 @@ def prepare_complete_sheets_data_for_update(
                 "Booking Date(Click to select Date)": (
                     admin.booking_date.isoformat() if admin.booking_date else ""
                 ),
-                "Insurer /broker code": (admin.insurer_code or admin.broker_code or ""),
+                "Insurer /broker code": (
+                    "/".join(filter(None, [admin.insurer_code, admin.broker_code]))
+                    if admin.insurer_code and admin.broker_code
+                    else (admin.insurer_code or admin.broker_code or "")
+                ),
                 "Broker Name": broker_name,  # Populated from database lookup
                 "Insurer name": insurer_name,  # Populated from database lookup
                 "Commissionable Premium": admin.commissionable_premium or 0,
@@ -1609,7 +1617,7 @@ def convert_sheets_data_to_nested_response(
         "seating_capacity": parse_int(sheets_data.get("Seating Capacity")),
         "veh_wheels": parse_int(sheets_data.get("Veh_Wheels")),
     }
-    # Remove None values from extracted_data
+    # Preserve all fields including empty strings ("") and zeros (0), only remove None values
     extracted_data = {k: v for k, v in extracted_data.items() if v is not None}
 
     # Build admin_input (manual admin fields)
@@ -1622,21 +1630,43 @@ def convert_sheets_data_to_nested_response(
         db_agent_code = database_record.get("agent_code") 
         db_admin_child_id = database_record.get("admin_child_id")
     
-    # Get insurer/broker names from sheets
+    # Extract broker and insurer codes from combined column
+    # Can be single code (I015 or B001) or combined with slash (I015/B001)
+    combined_code = sheets_data.get("Insurer /broker code", "")
+    broker_code = ""
+    insurer_code = ""
+    
+    if combined_code:
+        if "/" in combined_code:
+            # Split by slash and identify each part by prefix
+            parts = [part.strip() for part in combined_code.split("/")]
+            for part in parts:
+                if part.startswith("B"):  # Broker code starts with "B"
+                    broker_code = part
+                elif part.startswith("I"):  # Insurer code starts with "I"
+                    insurer_code = part
+        else:
+            # Single code - determine type by prefix
+            if combined_code.startswith("B"):  # Broker code starts with "B"
+                broker_code = combined_code
+            elif combined_code.startswith("I"):  # Insurer code starts with "I"
+                insurer_code = combined_code
+    
+    # Get insurer/broker names from sheets  
     sheets_broker_name = sheets_data.get("Broker Name", "")
     sheets_insurer_name = sheets_data.get("Insurer name", "")
     
-    # Determine code_type: if broker_name exists in sheets, it's "Broker Code", else "Direct Code"
-    code_type = "Broker Code" if sheets_broker_name else "Direct Code"
+    # Determine code_type based on presence of broker_code
+    code_type = "Broker Code" if broker_code else "Direct Code"
     
     admin_input = {
-        "reporting_month": sheets_data.get("Reporting Month (mmm'yy)"),
+        "reporting_month": sheets_data.get("Reporting Month (mmm'yy)") or "",
         "booking_date": parse_date(sheets_data.get("Booking Date(Click to select Date)")) or db_booking_date,
-        "agent_code": sheets_data.get("Agent Code") or db_agent_code,
+        "agent_code": sheets_data.get("Agent Code") or db_agent_code or "",
         "code_type": code_type,
-        "broker_name": sheets_broker_name or broker_name,  # From sheets or database lookup
-        "insurer_name": sheets_insurer_name or insurer_name,  # From sheets or database lookup
-        "admin_child_id": sheets_data.get("Admin child ID") or db_admin_child_id,
+        "broker_code": broker_code,
+        "insurer_code": insurer_code,
+        "admin_child_id": sheets_data.get("Admin child ID") or db_admin_child_id or "",
         "incoming_grid_percent": parse_float(sheets_data.get("Incoming Grid %")),
         "agent_commission_given_percent": parse_float(
             sheets_data.get("Actual Agent_PO%")
@@ -1649,30 +1679,31 @@ def convert_sheets_data_to_nested_response(
         "agent_extra_percent": parse_float(sheets_data.get("Agent_Extra%")),
         "payment_by_office": parse_float(sheets_data.get("Payment By Office")),
     }
-    # Keep all fields including empty strings and zeros, only remove actual None values
-    # This ensures fields show up in API even if they have default/empty values
+    # Remove only None values, preserve empty strings and zeros
     admin_input = {k: v for k, v in admin_input.items() if v is not None}
 
     # Build calculations (auto-calculated fields)
     calculations = {
-        "receivable_from_broker": parse_float(sheets_data.get("Receivable from Broker")),
+        "receivable_from_broker": parse_float(sheets_data.get("Receivable from Broker")) or 0,
         "extra_amount_receivable_from_broker": parse_float(
             sheets_data.get("Extra Amount Receivable from Broker")
-        ),
+        ) or 0,
         "total_receivable_from_broker": parse_float(
             sheets_data.get("Total Receivable from Broker")
-        ),
+        ) or 0,
         "total_receivable_from_broker_with_gst": parse_float(
             sheets_data.get("Total Receivable from Broker Include 18% GST")
-        ),
-        "cut_pay_amount": parse_float(sheets_data.get("Cut Pay Amount Received From Agent")),
-        "agent_po_amt": parse_float(sheets_data.get("Agent_PO_AMT")),
-        "agent_extra_amount": parse_float(sheets_data.get("Agent_Extr_Amount")),
-        "total_agent_po_amt": parse_float(sheets_data.get("Agent Total PO Amount")),
-        "iz_total_po_percent": parse_float(sheets_data.get("IZ Total PO%")),
-        "already_given_to_agent": parse_float(sheets_data.get("Already Given to agent")),
+        ) or 0,
+        "cut_pay_amount": parse_float(sheets_data.get("Cut Pay Amount Received From Agent")) or 0,
+        "agent_po_amt": parse_float(sheets_data.get("Agent_PO_AMT")) or 0,
+        "agent_extra_amount": parse_float(sheets_data.get("Agent_Extr_Amount")) or 0,
+        "total_agent_po_amt": parse_float(sheets_data.get("Agent Total PO Amount")) or 0,
+        "iz_total_po_percent": parse_float(sheets_data.get("IZ Total PO%")) or 0,
+        "already_given_to_agent": parse_float(sheets_data.get("Already Given to agent")) or 0,
+        "insurer_broker_code": sheets_data.get("Insurer /broker code") or "",
+        "cluster": sheets_data.get("Cluster") or "",
     }
-    # Keep all fields including zeros, only remove actual None values
+    # Remove only None values, preserve zeros and empty strings
     calculations = {k: v for k, v in calculations.items() if v is not None}
 
     # Build the nested response

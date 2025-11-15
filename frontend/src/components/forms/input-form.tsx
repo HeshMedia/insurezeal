@@ -147,6 +147,13 @@ const InputForm: React.FC<InputFormProps> = ({
           od_incoming_grid_percent: null,
           tp_incoming_grid_percent: null,
           booking_date: new Date().toISOString().split("T")[0], // Default to current date
+          reporting_month: (() => {
+            // Auto-fill reporting_month with current month and year in YYYY-MM format
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+          })(),
         },
         calculations: {},
         cutpay_received_status: null,
@@ -224,6 +231,20 @@ const InputForm: React.FC<InputFormProps> = ({
       }
     }
   }, [pdfExtractionData?.extracted_data?.plan_type, planType, setValue]);
+
+  // Auto-fill product type based on PDF extraction data
+  useEffect(() => {
+    if (pdfExtractionData?.extracted_data?.product_type) {
+      const extractedProductType = pdfExtractionData.extracted_data.product_type;
+
+      // Only auto-fill if the current value is empty
+      if (!productTypeValue) {
+        setValue("extracted_data.product_type", extractedProductType, {
+          shouldValidate: true,
+        });
+      }
+    }
+  }, [pdfExtractionData?.extracted_data?.product_type, productTypeValue, setValue]);
 
   // Auto-populate cutpay_received based on cutpay_received_status
   useEffect(() => {
