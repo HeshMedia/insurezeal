@@ -48,6 +48,7 @@ def database_cutpay_response(cutpay_obj) -> CutPayDatabaseResponse:
             "child_id_request_id": "child_id_request_id",
             "policy_start_date": "policy_start_date",
             "policy_end_date": "policy_end_date",
+            "cut_pay_amount_received": "cut_pay_amount_received",
             "created_at": "created_at",
             "updated_at": "updated_at",
         }
@@ -1242,7 +1243,6 @@ def prepare_complete_sheets_data(
                 "Total Receivable from Broker": calc.total_receivable_from_broker or 0,
                 "Total Receivable from Broker Include 18% GST": calc.total_receivable_from_broker_with_gst
                 or 0,
-                "Cut Pay Amount Received From Agent": calc.cut_pay_amount or 0,
                 "Agent_PO_AMT": calc.agent_po_amt or 0,
                 "Agent_Extr_Amount": calc.agent_extra_amount or 0,
                 "Agent Total PO Amount": calc.total_agent_po_amt or 0,
@@ -1251,6 +1251,10 @@ def prepare_complete_sheets_data(
                 "As per Broker PO AMT": calc.broker_payout_amount or 0,
             }
         )
+
+    # Use cutpay_received as the authoritative source for Cut Pay Amount Received From Agent
+    if hasattr(cutpay_data, "cutpay_received") and cutpay_data.cutpay_received is not None:
+        sheets_data["Cut Pay Amount Received From Agent"] = cutpay_data.cutpay_received
 
     # Extract top-level fields and add additional fields from template
     sheets_data.update(
@@ -1403,7 +1407,6 @@ def prepare_complete_sheets_data_for_update(
                 "Total Receivable from Broker": calc.total_receivable_from_broker or 0,
                 "Total Receivable from Broker Include 18% GST": calc.total_receivable_from_broker_with_gst
                 or 0,
-                "Cut Pay Amount Received From Agent": calc.cut_pay_amount or 0,
                 "Agent_PO_AMT": calc.agent_po_amt or 0,
                 "Agent_Extr_Amount": calc.agent_extra_amount or 0,
                 "Agent Total PO Amount": calc.total_agent_po_amt or 0,
@@ -1412,6 +1415,10 @@ def prepare_complete_sheets_data_for_update(
                 "As per Broker PO AMT": calc.broker_payout_amount or 0,
             }
         )
+
+    # Use cutpay_received as the authoritative source for Cut Pay Amount Received From Agent
+    if hasattr(cutpay_data, "cutpay_received") and cutpay_data.cutpay_received is not None:
+        sheets_data["Cut Pay Amount Received From Agent"] = cutpay_data.cutpay_received
 
     # Handle direct field updates (for flat structure updates)
     direct_field_mappings = {
@@ -1455,6 +1462,7 @@ def prepare_complete_sheets_data_for_update(
         "payment_by_office": "Payment By Office",
         "claimed_by": "Claimed By",
         "running_bal": "Running Bal",
+        "cutpay_received": "Cut Pay Amount Received From Agent",
         "notes": "Remarks",
     }
 

@@ -1291,6 +1291,7 @@ class AdminHelpers:
             "transaction_date": "transaction_date",
             "payment_date": "payment_date",
             "notes": "notes",
+            "cut_pay_amount_received": "cut_pay_amount_received",
         }
 
         for universal_field, cutpay_field in field_mappings.items():
@@ -1372,6 +1373,10 @@ class AdminHelpers:
             "payment_date": universal_record.get("payment_date"),
             "notes": universal_record.get("notes"),
             "created_by": admin_user_id,
+            
+            "cut_pay_amount_received": universal_record.get(
+                "cut_pay_amount_received", 0.0
+            ),
         }
         cutpay_data = {k: v for k, v in cutpay_data.items() if v is not None}
 

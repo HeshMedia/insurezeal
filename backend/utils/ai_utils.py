@@ -331,12 +331,32 @@ class GeminiPolicyExtractor:
             # Process policy numbers
             if data.get("policy_number"):
                 policy_num = str(data["policy_number"]).strip()
-                # Keep the complete policy number with all "/" and "-" characters as-is
-                data["policy_number"] = policy_num
+                # Default: keep the complete policy number
+                normalized = policy_num
 
-                # Set formatted policy number with "#" prefix and full original format
+                # Detect insurer from AI result or product report
+                insurer_name = (
+                    (data.get("ai_detected_insurer_name") or "")
+                    .strip()
+                    .lower()
+                )
+                product_report = (data.get("product_insurer_report") or "").strip().lower()
+
+                # Normalization rules for specific insurers
+                #  - Go Digit: policy like 'D233483195 / 11112025' -> 'D233483195'
+                #  - Tata (Tata AIG): policy like '6301813637 00 00' -> '6301813637'
+                if "go digit" in insurer_name or "go digit" in product_report:
+                    # Split on '/' first, then take first token before any whitespace
+                    normalized = normalized.split("/")[0].split()[0].strip()
+                elif "tata" in insurer_name or "tata" in product_report:
+                    # Take first whitespace-separated token
+                    normalized = normalized.split()[0].strip()
+
+                data["policy_number"] = normalized
+
+                # Set formatted policy number with "#" prefix based on normalized value
                 if not data.get("formatted_policy_number"):
-                    data["formatted_policy_number"] = "#" + policy_num
+                    data["formatted_policy_number"] = "#" + normalized
                 elif not str(data["formatted_policy_number"]).startswith("#"):
                     data["formatted_policy_number"] = "#" + str(
                         data["formatted_policy_number"]

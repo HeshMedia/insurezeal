@@ -373,6 +373,8 @@ class CutPayResponse(BaseModel):
     claimed_by: Optional[str] = None
     running_bal: Optional[float] = None
     cutpay_received: Optional[float] = None
+    # New Google Sheets / DB fields
+    cut_pay_amount_received: Optional[float] = None
     cluster: Optional[str] = None
 
     # Post-CutPay details
@@ -428,6 +430,7 @@ class CutPayDatabaseResponse(BaseModel):
     agent_code: Optional[str] = Field(None, description="Agent identifier code")
     booking_date: Optional[date] = Field(None, description="Transaction booking date")
     admin_child_id: Optional[str] = Field(None, description="Selected admin child ID")
+    cut_pay_amount_received: Optional[float] = Field( None, description="Cut Pay Amount Received From Agent")
 
     # Essential relationship fields (stored in DB)
     insurer_id: Optional[int] = Field(None, description="Insurer foreign key")
