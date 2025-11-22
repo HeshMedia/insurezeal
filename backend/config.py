@@ -191,6 +191,8 @@ def get_google_sheets_private_key():
     if base64_key:
         try:
             decoded_key = base64.b64decode(base64_key).decode("utf-8")
+            # Handle escaped newlines that may be in the Base64-encoded content
+            decoded_key = decoded_key.replace("\\n", "\n")
             logger.info("Using Base64 decoded Google Sheets private key")
             return decoded_key
         except Exception as e:
