@@ -580,14 +580,15 @@ class CutPayHelpers:
                 .where(UserProfile.agent_code.isnot(None))
                 .order_by(UserProfile.agent_code)
             )
-            agents = [
-                {
+            agents_data = agents_result.all()
+            agents = []
+            for row in agents_data:
+                name = f"{row.first_name or ''} {row.last_name or ''}".strip() or row.agent_code
+                agents.append({
                     "code": row.agent_code,
-                    "name": f"{row.first_name or ''} {row.last_name or ''}".strip() or row.agent_code,
-                    "label": f"{row.agent_code} - {f'{row.first_name or ''} {row.last_name or ''}'.strip() or row.agent_code}"
-                }
-                for row in agents_result.all()
-            ]
+                    "name": name,
+                    "label": f"{row.agent_code} - {name}"
+                })
             
             # Get active insurers
             insurer_result = await db.execute(
