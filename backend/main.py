@@ -44,6 +44,27 @@ logger = logging.getLogger(__name__)
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 IS_PRODUCTION = ENVIRONMENT == "prod"
 
+# Validate critical environment variables for AI/PDF features
+def validate_ai_environment():
+    """Validate that AI/PDF extraction dependencies are configured"""
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    llm_key = os.getenv("LLMWHISPERER_API_KEY")
+    
+    if not gemini_key:
+        logger.warning("⚠️ GEMINI_API_KEY not set - PDF extraction will fail")
+    else:
+        logger.info("✅ GEMINI_API_KEY configured")
+    
+    if not llm_key:
+        logger.warning("⚠️ LLMWHISPERER_API_KEY not set - PDF text extraction may fail")
+    else:
+        logger.info("✅ LLMWHISPERER_API_KEY configured")
+    
+    if not gemini_key and not llm_key:
+        logger.error("❌ CRITICAL: No AI extraction services configured - PDF extraction will not work")
+
+validate_ai_environment()
+
 app = FastAPI(
     title="Insurezeal Site API",
     description="A comprehensive API for a Insurezeal website",

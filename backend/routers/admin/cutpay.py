@@ -1977,6 +1977,8 @@ async def extract_pdf_data_endpoint(
     - Customer information
     """
     try:
+        logger.info(f"PDF extraction started - File: {file.filename}, User: {current_user.get('user_id', 'unknown')}")
+        
         if not file.filename or not file.filename.lower().endswith(".pdf"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1984,22 +1986,34 @@ async def extract_pdf_data_endpoint(
             )
 
         pdf_bytes = await file.read()
+        logger.info(f"PDF file read successfully - Size: {len(pdf_bytes)} bytes")
 
         if len(pdf_bytes) == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty"
             )
 
-        from utils.ai_utils import extract_policy_data_from_pdf_bytes
-
+        from utils.ai_utils import extract_policy_data_from_pdf_bytes, gemini_extractor
+        
+        # Check if AI services are available
+        if not gemini_extractor:
+            logger.error("Gemini extractor not initialized - check GEMINI_API_KEY environment variable")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="AI extraction service not available. Please contact administrator.",
+            )
+        
+        logger.info("Starting PDF data extraction...")
         extracted_data_dict = await extract_policy_data_from_pdf_bytes(pdf_bytes)
 
         if not extracted_data_dict:
+            logger.error("PDF extraction returned empty data")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to extract data from PDF. Please ensure the PDF contains readable policy information.",
             )
 
+        logger.info(f"PDF extraction successful - Extracted {len(extracted_data_dict)} fields")
         extracted_data = ExtractedPolicyData(**extracted_data_dict)
 
         return ExtractionResponse(
@@ -2008,8 +2022,10 @@ async def extract_pdf_data_endpoint(
             extraction_time=datetime.now(),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"PDF extraction failed for CutPay {str(e)}")
+        logger.error(f"PDF extraction failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF extraction failed: {str(e)}",
