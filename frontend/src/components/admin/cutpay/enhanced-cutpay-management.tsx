@@ -113,13 +113,7 @@ function CutPayCard({
           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <span className="text-gray-600 font-medium">Cut Pay Amount:</span>
             <span className="font-bold text-green-600">
-              {formatCurrency(cutpay.cut_pay_amount || 0)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-            <span className="text-gray-600 font-medium">Total Agent PO:</span>
-            <span className="font-bold text-blue-600">
-              {formatCurrency(cutpay.total_agent_po_amt || 0)}
+              {formatCurrency(cutpay.cut_pay_amount_received || 0)}
             </span>
           </div>
           <div className="flex items-center gap-3 text-gray-600 pt-2">
