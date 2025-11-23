@@ -44,27 +44,6 @@ logger = logging.getLogger(__name__)
 ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
 IS_PRODUCTION = ENVIRONMENT == "prod"
 
-# Validate critical environment variables for AI/PDF features
-def validate_ai_environment():
-    """Validate that AI/PDF extraction dependencies are configured"""
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    llm_key = os.getenv("LLMWHISPERER_API_KEY")
-    
-    if not gemini_key:
-        logger.warning("⚠️ GEMINI_API_KEY not set - PDF extraction will fail")
-    else:
-        logger.info("✅ GEMINI_API_KEY configured")
-    
-    if not llm_key:
-        logger.warning("⚠️ LLMWHISPERER_API_KEY not set - PDF text extraction may fail")
-    else:
-        logger.info("✅ LLMWHISPERER_API_KEY configured")
-    
-    if not gemini_key and not llm_key:
-        logger.error("❌ CRITICAL: No AI extraction services configured - PDF extraction will not work")
-
-validate_ai_environment()
-
 app = FastAPI(
     title="Insurezeal Site API",
     description="A comprehensive API for a Insurezeal website",
@@ -75,21 +54,6 @@ app = FastAPI(
 )
 
 logger.info("--- FastAPI application starting up ---")
-
-# Global exception handler for debugging
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Catch all unhandled exceptions and log them"""
-    logger.error(f"Global exception handler caught: {type(exc).__name__}: {str(exc)}", exc_info=True)
-    logger.error(f"Request path: {request.url.path}")
-    logger.error(f"Request method: {request.method}")
-    
-    # Return user-friendly error
-    return {
-        "detail": f"Internal server error: {str(exc)}",
-        "type": type(exc).__name__,
-        "path": request.url.path
-    }
 
 
 # Add startup and shutdown events
@@ -114,19 +78,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 logger.info("CORS middleware configured.")
-
-# Add request logging middleware for debugging
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Log all incoming requests for debugging"""
-    logger.info(f">>> Incoming request: {request.method} {request.url.path}")
-    try:
-        response = await call_next(request)
-        logger.info(f"<<< Response status: {response.status_code} for {request.method} {request.url.path}")
-        return response
-    except Exception as e:
-        logger.error(f"!!! Request failed: {request.method} {request.url.path} - Error: {str(e)}", exc_info=True)
-        raise
 
 logger.info("Importing and including routers...")
 try:
