@@ -469,11 +469,20 @@ class CutPayDatabaseResponse(BaseModel):
 # =============================================================================
 
 
+class AgentOption(BaseModel):
+    """Schema for agent dropdown options"""
+
+    code: str
+    name: str
+    label: str  # Pre-formatted display label: "CODE - Name"
+
+
 class InsurerOption(BaseModel):
     """Schema for insurer dropdown options"""
 
     code: str
     name: str
+    label: str  # Pre-formatted display label: "CODE - Name"
     is_active: bool = True
 
 
@@ -482,6 +491,7 @@ class BrokerOption(BaseModel):
 
     code: str
     name: str
+    label: str  # Pre-formatted display label: "CODE - Name"
     is_active: bool = True
 
 
@@ -493,12 +503,14 @@ class AdminChildIdOption(BaseModel):
     insurer_name: str
     broker_name: Optional[str]
     code_type: str
+    label: str  # Pre-formatted display label with insurer/broker info
     is_active: bool
 
 
 class DropdownOptions(BaseModel):
     """Schema for all dropdown options"""
 
+    agents: List[AgentOption]
     insurers: List[InsurerOption]
     brokers: List[BrokerOption]
     admin_child_ids: List[AdminChildIdOption]
