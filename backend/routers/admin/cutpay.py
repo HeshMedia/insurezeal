@@ -1976,7 +1976,19 @@ async def extract_pdf_data_endpoint(
     - Vehicle details (for Motor insurance)
     - Customer information
     """
+    logger.info(f"=== PDF EXTRACTION REQUEST RECEIVED ===")
+    logger.info(f"File: {file.filename if file else 'NO FILE'}")
+    logger.info(f"Content Type: {file.content_type if file else 'NONE'}")
+    logger.info(f"User: {current_user.get('user_id', 'unknown') if current_user else 'NO USER'}")
+    
     try:
+        if not file:
+            logger.error("No file uploaded in request")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No file provided in request",
+            )
+        
         logger.info(f"PDF extraction started - File: {file.filename}, User: {current_user.get('user_id', 'unknown')}")
         
         if not file.filename or not file.filename.lower().endswith(".pdf"):

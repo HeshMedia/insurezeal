@@ -76,6 +76,21 @@ app = FastAPI(
 
 logger.info("--- FastAPI application starting up ---")
 
+# Global exception handler for debugging
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all unhandled exceptions and log them"""
+    logger.error(f"Global exception handler caught: {type(exc).__name__}: {str(exc)}", exc_info=True)
+    logger.error(f"Request path: {request.url.path}")
+    logger.error(f"Request method: {request.method}")
+    
+    # Return user-friendly error
+    return {
+        "detail": f"Internal server error: {str(exc)}",
+        "type": type(exc).__name__,
+        "path": request.url.path
+    }
+
 
 # Add startup and shutdown events
 @app.on_event("startup")
@@ -99,6 +114,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 logger.info("CORS middleware configured.")
+
+# Add request logging middleware for debugging
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests for debugging"""
+    logger.info(f">>> Incoming request: {request.method} {request.url.path}")
+    try:
+        response = await call_next(request)
+        logger.info(f"<<< Response status: {response.status_code} for {request.method} {request.url.path}")
+        return response
+    except Exception as e:
+        logger.error(f"!!! Request failed: {request.method} {request.url.path} - Error: {str(e)}", exc_info=True)
+        raise
 
 logger.info("Importing and including routers...")
 try:
