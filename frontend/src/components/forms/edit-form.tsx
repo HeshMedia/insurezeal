@@ -411,6 +411,9 @@ const EditForm: React.FC<EditFormProps> = ({
   }, [paymentBy, grossPremium, setValue]);
 
   useEffect(() => {
+    // Only update cutpay_received when the field is visible
+    if (!showHiddenFields) return;
+
     if (cutpayReceivedStatus === "No") {
       setValue("cutpay_received", 0, { shouldValidate: true });
     } else if (
@@ -421,7 +424,7 @@ const EditForm: React.FC<EditFormProps> = ({
     } else if (!cutpayReceivedStatus) {
       setValue("cutpay_received", null, { shouldValidate: true });
     }
-  }, [cutpayReceivedStatus, cutPayAmount, setValue]);
+  }, [cutpayReceivedStatus, cutPayAmount, setValue, showHiddenFields]);
 
   useEffect(() => {
     const normalized = productTypeValue
