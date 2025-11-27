@@ -9,6 +9,13 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Upload,
   FileText,
   CheckCircle,
@@ -54,6 +61,11 @@ const PolicyPdfUpload = ({
   const [uploadProgress] = useState(0);
   const [isDragActive, setIsDragActive] = useState(false);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<{
+    message: string;
+    policyNumber: string;
+  } | null>(null);
 
   const extractPdfMutation = useExtractionHook();
   const checkDuplicateMutation = useCheckPolicyNumberDuplicate();
@@ -180,6 +192,8 @@ const PolicyPdfUpload = ({
     setExtractionData(null);
     setSuccessStates((prev) => ({ ...prev, pdfExtracted: false }));
     setError(null);
+    setShowDuplicateDialog(false);
+    setDuplicateError(null);
   }, [
     pdfUrl,
     setFile,
@@ -188,6 +202,13 @@ const PolicyPdfUpload = ({
     setSuccessStates,
     setError,
   ]);
+
+  const handleCloseDuplicateDialog = useCallback(() => {
+    setShowDuplicateDialog(false);
+    setDuplicateError(null);
+    // Also clear the uploaded file so user can upload a different one
+    handleRemoveFile();
+  }, [handleRemoveFile]);
 
   const handleContinue = useCallback(async () => {
     if (
@@ -207,23 +228,24 @@ const PolicyPdfUpload = ({
           const result = await checkDuplicateMutation.mutateAsync({
             policy_number: extractedPolicyNumber,
           });
-          
+
           if (result?.is_duplicate) {
-            setError(
-              result?.message ||
-                "Duplicate policy number detected. Please verify before proceeding."
-            );
+            // Show custom dialog instead of simple error
+            setDuplicateError({
+              message: result?.message || "This policy already exists in the system.",
+              policyNumber: extractedPolicyNumber,
+            });
+            setShowDuplicateDialog(true);
             setCheckingDuplicate(false);
-            // CRITICAL FIX: Block user from proceeding when duplicate is found
             return;
           }
           setCheckingDuplicate(false);
-        } catch {
+        } catch (error) {
+          console.error("Error during duplicate check:", error);
           setError(
             "Could not verify duplicates right now. Please try again in a moment."
           );
           setCheckingDuplicate(false);
-          // CRITICAL FIX: Block user from proceeding when duplicate check fails
           return;
         }
       }
@@ -243,7 +265,7 @@ const PolicyPdfUpload = ({
 
   return (
     <div className="space-y-6">
-      
+
 
       {/* Error Display */}
       {error && (
@@ -412,7 +434,7 @@ const PolicyPdfUpload = ({
                         {/* Show extraction confidence if available */}
                         {extractionData.confidence_scores &&
                           Object.keys(extractionData.confidence_scores).length >
-                            0 && (
+                          0 && (
                             <div className="mt-3 pt-3 border-t border-gray-200">
                               <span className="text-xs text-gray-500">
                                 Extraction Confidence:{" "}
@@ -420,9 +442,9 @@ const PolicyPdfUpload = ({
                                   Object.values(
                                     extractionData?.confidence_scores || {}
                                   ).reduce((a, b) => a + b, 0) /
-                                    Object.values(
-                                      extractionData?.confidence_scores || {}
-                                    ).length
+                                  Object.values(
+                                    extractionData?.confidence_scores || {}
+                                  ).length
                                 )}
                                 %
                               </span>
@@ -436,9 +458,8 @@ const PolicyPdfUpload = ({
             </motion.div>
           ) : (
             <div
-              className={`text-center space-y-4 transition-all duration-300 ${
-                isDragActive ? "scale-105" : ""
-              }`}
+              className={`text-center space-y-4 transition-all duration-300 ${isDragActive ? "scale-105" : ""
+                }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -498,7 +519,52 @@ const PolicyPdfUpload = ({
         </motion.div>
       )}
 
- 
+      {/* Duplicate Policy Error Dialog */}
+      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <DialogContent className="sm:max-w-md" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle className="text-center text-red-600 font-bold text-xl">
+              Duplicate Policy Detected
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center space-y-6 py-6">
+            {/* Red Circle with Danger Icon */}
+            <div className="relative">
+              <div className="w-24 h-24 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
+                <AlertTriangle className="h-12 w-12 text-white" strokeWidth={2.5} />
+              </div>
+              <div className="absolute inset-0 w-24 h-24 bg-red-500 rounded-full animate-ping opacity-20"></div>
+            </div>
+
+            {/* Error Message */}
+            <div className="text-center space-y-3 px-4">
+              <DialogDescription className="text-gray-700 text-base font-medium">
+                {duplicateError?.message || "This policy already exists in the system."}
+              </DialogDescription>
+
+              {duplicateError?.policyNumber && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-gray-600 mb-1">Policy Number:</p>
+                  <p className="text-lg font-bold text-red-600">{duplicateError.policyNumber}</p>
+                </div>
+              )}
+
+              <p className="text-sm text-gray-600 mt-4">
+                Please upload a different policy document.
+              </p>
+            </div>
+
+            {/* Action Button */}
+            <Button
+              onClick={handleCloseDuplicateDialog}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium"
+            >
+              Close and Upload New Policy
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
