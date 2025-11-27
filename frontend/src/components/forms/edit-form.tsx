@@ -6,7 +6,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, EyeOff, Eye } from "lucide-react";
 import { useSetAtom } from "jotai";
 
 import { Button } from "@/components/ui/button";
@@ -347,6 +347,7 @@ const EditForm: React.FC<EditFormProps> = ({
   const router = useRouter();
   const updateCutPayByPolicy = useUpdateCutPayByPolicy();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showHiddenFields, setShowHiddenFields] = useState(false);
   const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom);
 
   // Set the policy PDF URL in the atom for the DocumentViewer
@@ -685,6 +686,17 @@ const EditForm: React.FC<EditFormProps> = ({
     );
 
     if (key === "extracted_data.gvw" && !isGcvProduct) {
+      return null;
+    }
+
+    // Hide specific fields unless showHiddenFields is true
+    const hiddenFields = [
+      "admin_input.payout_on",
+      "admin_input.payment_method",
+      "admin_input.payment_detail",
+    ];
+
+    if (!showHiddenFields && hiddenFields.includes(key)) {
       return null;
     }
 
@@ -1205,10 +1217,25 @@ const EditForm: React.FC<EditFormProps> = ({
             <div className="w-full md:w-1/2">
               <Card className="shadow-sm border border-l-6 border-green-500 h-full">
                 <CardHeader className="bg-gray-50 border-b">
-                  <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                    <span className="h-2 w-2 bg-green-500 rounded-full" />
-                    Admin Input
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                      <span className="h-2 w-2 bg-green-500 rounded-full" />
+                      Admin Input
+                    </CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowHiddenFields(!showHiddenFields)}
+                      className="flex items-center gap-2"
+                    >
+                      {showHiddenFields ? (
+                        <><Eye className="h-4 w-4" />Hide Hidden Fields</>
+                      ) : (
+                        <><EyeOff className="h-4 w-4" />Show Hidden Fields</>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6">
                   <div className="flex flex-wrap gap-4 items-start">
@@ -1222,7 +1249,8 @@ const EditForm: React.FC<EditFormProps> = ({
 
                         if (
                           field.key === "admin_input.payment_by" &&
-                          paymentBy === "InsureZeal"
+                          paymentBy === "InsureZeal" &&
+                          showHiddenFields
                         ) {
                           return (
                             <Fragment key={field.key}>
