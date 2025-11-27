@@ -25,14 +25,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { 
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -53,13 +53,13 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
-  
+
   // Basic filters
   const [agentCodeFilter, setAgentCodeFilter] = useState('')
   const [insurerNameFilter, setInsurerNameFilter] = useState('')
   const [policyNumberFilter, setPolicyNumberFilter] = useState('')
   const [reportingMonthFilter, setReportingMonthFilter] = useState('')
-  
+
   // Advanced filters
   const [codeTypeFilter, setCodeTypeFilter] = useState('')
   const [bookingDateFromFilter, setBookingDateFromFilter] = useState<Date | undefined>(undefined)
@@ -70,7 +70,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
   const [majorCategorisationFilter, setMajorCategorisationFilter] = useState('')
   const [stateFilter, setStateFilter] = useState('')
   const [brokerNameFilter, setBrokerNameFilter] = useState('')
-  
+
   const [sorting, setSorting] = useState<SortingState>([])
 
   // Debounce search terms to avoid excessive API calls
@@ -105,10 +105,10 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
     ...(debouncedState && { state: debouncedState }),
     ...(debouncedBrokerName && { broker_name: debouncedBrokerName }),
   }), [
-    debouncedSearchTerm, 
-    debouncedAgentCode, 
-    debouncedInsurerName, 
-    debouncedPolicyNumber, 
+    debouncedSearchTerm,
+    debouncedAgentCode,
+    debouncedInsurerName,
+    debouncedPolicyNumber,
     debouncedReportingMonth,
     debouncedCodeType,
     bookingDateFromFilter,
@@ -129,12 +129,12 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
     isFetchingNextPage,
     isLoading,
   } = useMasterSheetList(queryParams)
-  
+
   const bulkUpdateMutation = useBulkUpdateMasterSheet()
-  
+
   const [pendingUpdates, setPendingUpdates] = useAtom(masterSheetPendingUpdatesAtom)
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnId: string } | null>(null)
-  
+
   const { ref, inView } = useInView()
 
   useEffect(() => {
@@ -191,9 +191,9 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
     toast.success("All filters cleared")
   }
 
-  const hasActiveFilters = searchTerm || agentCodeFilter || insurerNameFilter || policyNumberFilter || 
-    reportingMonthFilter || codeTypeFilter || bookingDateFromFilter || bookingDateToFilter || 
-    productTypeFilter || paymentByFilter || invoiceStatusFilter || majorCategorisationFilter || 
+  const hasActiveFilters = searchTerm || agentCodeFilter || insurerNameFilter || policyNumberFilter ||
+    reportingMonthFilter || codeTypeFilter || bookingDateFromFilter || bookingDateToFilter ||
+    productTypeFilter || paymentByFilter || invoiceStatusFilter || majorCategorisationFilter ||
     stateFilter || brokerNameFilter
 
   const handleSaveChanges = () => {
@@ -302,7 +302,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
                 </div>
               </div>
             </div>
-            
+
             {/* Action Buttons */}
             <div className="flex items-center gap-4">
               {pendingChangesCount > 0 && (
@@ -315,7 +315,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
                   Clear Changes
                 </Button>
               )}
-              
+
               <Button
                 onClick={handleSaveChanges}
                 disabled={pendingChangesCount === 0 || bulkUpdateMutation.isPending}
@@ -363,14 +363,14 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
                 className="pl-12 pr-4 h-12 text-base bg-white/80 backdrop-blur-sm border-gray-300 rounded-xl shadow-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               />
             </div>
-            
+
             <Button
               variant={showFilters ? "default" : "outline"}
               onClick={() => setShowFilters(!showFilters)}
               className={cn(
                 "h-12 px-6 rounded-xl font-medium transition-all duration-200 shadow-lg",
-                showFilters 
-                  ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                showFilters
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
                   : "bg-white/80 backdrop-blur-sm border-gray-300 hover:bg-blue-50"
               )}
             >
@@ -384,7 +384,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
               {hasActiveFilters && (
                 <span className="ml-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
                   {[
-                    searchTerm, agentCodeFilter, insurerNameFilter, policyNumberFilter, 
+                    searchTerm, agentCodeFilter, insurerNameFilter, policyNumberFilter,
                     reportingMonthFilter, codeTypeFilter, bookingDateFromFilter, bookingDateToFilter,
                     productTypeFilter, paymentByFilter, invoiceStatusFilter, majorCategorisationFilter,
                     stateFilter, brokerNameFilter
@@ -410,7 +410,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
           {showFilters && (
             <div className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-xl p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                
+
                 {/* Basic Filters Row 1 */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -728,8 +728,8 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="border-b-2 border-gray-300">
                   {headerGroup.headers.map((header) => (
-                    <TableHead 
-                      key={header.id} 
+                    <TableHead
+                      key={header.id}
                       className="px-6 py-4 text-left text-xs font-bold text-slate-700 uppercase tracking-wider whitespace-nowrap bg-gray-50 border-r border-gray-300 last:border-r-0"
                     >
                       {header.isPlaceholder
@@ -742,16 +742,16 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
             </TableHeader>
             <TableBody className="bg-white">
               {table.getRowModel().rows.map((row, index) => (
-                <TableRow 
-                  key={`${row.original.id}-${index}`} 
+                <TableRow
+                  key={`${row.original.id}-${index}`}
                   className={cn(
                     "transition-colors duration-200 border-b border-gray-200 hover:bg-blue-50",
                     index % 2 === 0 ? "bg-white" : "bg-gray-50/50"
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell 
-                      key={cell.id} 
+                    <TableCell
+                      key={cell.id}
                       className="p-0 whitespace-nowrap text-sm text-slate-800 border-r border-gray-200 last:border-r-0"
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -761,7 +761,7 @@ export function MasterSheetTable({ onPendingChangesCount }: MasterSheetTableProp
               ))}
             </TableBody>
           </Table>
-          
+
           {/* LOADING INDICATOR */}
           <div ref={ref} className="h-20 flex justify-center items-center bg-white border-t-2 border-gray-300">
             {isFetchingNextPage && (

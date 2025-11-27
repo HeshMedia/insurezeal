@@ -230,8 +230,8 @@ const mergeWithDefaults = (
     typeof record.cutpay_received === "number"
       ? record.cutpay_received
       : record.cutpay_received === null
-      ? null
-      : defaultFormValues.cutpay_received;
+        ? null
+        : defaultFormValues.cutpay_received;
 
   const { payment_by_office: rawPaymentByOffice, ...restAdminInput } =
     record.admin_input ?? {};
@@ -261,8 +261,8 @@ const mergeWithDefaults = (
     admin_child_id: normalizeNullableString(mergedAdminInput.admin_child_id),
     payment_by_office:
       rawPaymentByOffice !== undefined &&
-      rawPaymentByOffice !== null &&
-      rawPaymentByOffice !== ""
+        rawPaymentByOffice !== null &&
+        rawPaymentByOffice !== ""
         ? Number(rawPaymentByOffice)
         : null,
   };
@@ -286,8 +286,8 @@ const mergeWithDefaults = (
       (cutpayReceivedValue == null
         ? null
         : cutpayReceivedValue === 0
-        ? "No"
-        : "Yes"),
+          ? "No"
+          : "Yes"),
     claimed_by: normalizeNullableString(record.claimed_by),
     notes: normalizeNullableString(record.notes),
   };
@@ -306,14 +306,14 @@ const buildPayload = (
     policy_pdf_url: form.policy_pdf_url ?? null,
     additional_documents:
       form.additional_documents &&
-      Object.keys(form.additional_documents).length > 0
+        Object.keys(form.additional_documents).length > 0
         ? form.additional_documents
         : null,
     extracted_data: form.extracted_data
       ? ({
-          insurance_company: options?.insuranceCompany ?? null,
-          ...form.extracted_data,
-        } as ExtractedPolicyData)
+        insurance_company: options?.insuranceCompany ?? null,
+        ...form.extracted_data,
+      } as ExtractedPolicyData)
       : null,
     admin_input: {
       ...form.admin_input,
@@ -898,8 +898,8 @@ const EditForm: React.FC<EditFormProps> = ({
                           isLoading
                             ? "Loading..."
                             : childIdState.disabled
-                            ? "Select dependencies first"
-                            : `Select ${label}`
+                              ? "Select dependencies first"
+                              : `Select ${label}`
                         }
                       />
                     </SelectTrigger>
@@ -1107,7 +1107,7 @@ const EditForm: React.FC<EditFormProps> = ({
       router.push(
         `/admin/cutpay/${encodeURIComponent(
           policyNumber
-        )}?q=${quarter}&y=${year}`
+        )}?policy=${encodeURIComponent(policyNumber)}&q=${quarter}&y=${year}`
       );
     } catch (error) {
       console.error("Failed to update transaction", error);
@@ -1275,52 +1275,52 @@ const EditForm: React.FC<EditFormProps> = ({
                               </div>
                               {(cutpayReceivedStatus === "Yes" ||
                                 cutpayReceivedStatus === "Partial") && (
-                                <div
-                                  className="space-y-2 flex-none w-fit"
-                                  key="cutpay_received_wrapper"
-                                >
-                                  <Label className="text-sm font-medium text-gray-700">
-                                    Cutpay Received Amount
-                                  </Label>
-                                  <Controller
-                                    name="cutpay_received"
-                                    control={control}
-                                    render={({
-                                      field: controllerField,
-                                      fieldState,
-                                    }) => (
-                                      <>
-                                        <Input
-                                          type="number"
-                                          className="h-10 w-fit"
-                                          {...controllerField}
-                                          value={String(
-                                            controllerField.value ?? ""
+                                  <div
+                                    className="space-y-2 flex-none w-fit"
+                                    key="cutpay_received_wrapper"
+                                  >
+                                    <Label className="text-sm font-medium text-gray-700">
+                                      Cutpay Received Amount
+                                    </Label>
+                                    <Controller
+                                      name="cutpay_received"
+                                      control={control}
+                                      render={({
+                                        field: controllerField,
+                                        fieldState,
+                                      }) => (
+                                        <>
+                                          <Input
+                                            type="number"
+                                            className="h-10 w-fit"
+                                            {...controllerField}
+                                            value={String(
+                                              controllerField.value ?? ""
+                                            )}
+                                            onChange={(e) => {
+                                              const value = e.target.value;
+                                              const numValue =
+                                                value === ""
+                                                  ? null
+                                                  : Number(value);
+                                              controllerField.onChange(numValue);
+                                            }}
+                                            onWheel={
+                                              numberInputOnWheelPreventChange
+                                            }
+                                            step="0.01"
+                                            placeholder="Enter received amount"
+                                          />
+                                          {fieldState.error && (
+                                            <p className="text-red-500 text-xs mt-1">
+                                              {fieldState.error.message}
+                                            </p>
                                           )}
-                                          onChange={(e) => {
-                                            const value = e.target.value;
-                                            const numValue =
-                                              value === ""
-                                                ? null
-                                                : Number(value);
-                                            controllerField.onChange(numValue);
-                                          }}
-                                          onWheel={
-                                            numberInputOnWheelPreventChange
-                                          }
-                                          step="0.01"
-                                          placeholder="Enter received amount"
-                                        />
-                                        {fieldState.error && (
-                                          <p className="text-red-500 text-xs mt-1">
-                                            {fieldState.error.message}
-                                          </p>
-                                        )}
-                                      </>
-                                    )}
-                                  />
-                                </div>
-                              )}
+                                        </>
+                                      )}
+                                    />
+                                  </div>
+                                )}
                             </Fragment>
                           );
                         }
