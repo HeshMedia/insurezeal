@@ -2,11 +2,11 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, EyeOff, Eye } from "lucide-react";
 import { useSetAtom } from "jotai";
 
 import { Button } from "@/components/ui/button";
@@ -50,11 +50,7 @@ import {
   useInsurerList,
 } from "@/hooks/superadminQuery";
 
-import type {
-  AdminChildId,
-  Broker,
-  Insurer,
-} from "@/types/superadmin.types";
+import type { AdminChildId, Broker, Insurer } from "@/types/superadmin.types";
 import type { AgentSummary } from "@/types/admin.types";
 import type {
   CreateCutpayTransactionCutpayPostRequest,
@@ -69,19 +65,6 @@ type EditFormProps = {
   quarter: number;
   year: number;
   policyPdfUrl?: string | null;
-};
-
-const coerceNullableNumber = (value: unknown): number | null => {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const defaultFormValues: CutPayFormSchemaType = {
@@ -167,121 +150,146 @@ const defaultFormValues: CutPayFormSchemaType = {
   notes: null,
 };
 
-const sanitizeExtractedData = (
-  extracted?: ExtractedPolicyData | null
-): CutPayFormSchemaType["extracted_data"] => {
-  if (!extracted) {
-    return { ...defaultFormValues.extracted_data };
+const normalizeNullableString = (value?: string | null): string | null => {
+  if (value === undefined || value === null) {
+    return null;
   }
-
-  const { insurance_company, ...rest } = extracted;
-  void insurance_company;
-
-  return {
-    ...defaultFormValues.extracted_data,
-    ...rest,
-  };
+  const trimmed = String(value).trim();
+  return trimmed === "" ? null : trimmed;
 };
 
-const sanitizeAdminInput = (
-  adminInput?: CreateCutpayTransactionCutpayPostRequest["admin_input"] | null
-): CutPayFormSchemaType["admin_input"] => {
-  const base = defaultFormValues.admin_input;
-
-  return {
-    reporting_month: adminInput?.reporting_month ?? base.reporting_month,
-    booking_date: adminInput?.booking_date ?? base.booking_date,
-    agent_code: adminInput?.agent_code ?? base.agent_code,
-    code_type: adminInput?.code_type ?? base.code_type,
-    incoming_grid_percent: coerceNullableNumber(
-      adminInput?.incoming_grid_percent
-    ),
-    agent_commission_given_percent: coerceNullableNumber(
-      adminInput?.agent_commission_given_percent
-    ),
-    extra_grid: coerceNullableNumber(adminInput?.extra_grid),
-    commissionable_premium: coerceNullableNumber(
-      adminInput?.commissionable_premium
-    ),
-    payment_by: adminInput?.payment_by ?? base.payment_by,
-    payment_method: adminInput?.payment_method ?? base.payment_method,
-    payment_detail: adminInput?.payment_detail ?? base.payment_detail,
-    payout_on: adminInput?.payout_on ?? base.payout_on,
-    agent_extra_percent: coerceNullableNumber(adminInput?.agent_extra_percent),
-    payment_by_office: coerceNullableNumber(adminInput?.payment_by_office),
-    insurer_code: adminInput?.insurer_code ?? base.insurer_code,
-    broker_code: adminInput?.broker_code ?? base.broker_code,
-    admin_child_id: adminInput?.admin_child_id ?? base.admin_child_id,
-    od_agent_payout_percent: coerceNullableNumber(
-      adminInput?.od_agent_payout_percent
-    ),
-    tp_agent_payout_percent: coerceNullableNumber(
-      adminInput?.tp_agent_payout_percent
-    ),
-    od_incoming_grid_percent: coerceNullableNumber(
-      adminInput?.od_incoming_grid_percent
-    ),
-    tp_incoming_grid_percent: coerceNullableNumber(
-      adminInput?.tp_incoming_grid_percent
-    ),
-    od_incoming_extra_grid: coerceNullableNumber(
-      adminInput?.od_incoming_extra_grid
-    ),
-    tp_incoming_extra_grid: coerceNullableNumber(
-      adminInput?.tp_incoming_extra_grid
-    ),
-  };
+const normalizeCodeType = (value?: string | null): string | null => {
+  const normalized = normalizeNullableString(value);
+  if (!normalized) return null;
+  const lower = normalized.toLowerCase();
+  if (lower === "direct" || lower === "direct code") {
+    return "Direct";
+  }
+  if (lower === "broker" || lower === "broker code") {
+    return "Broker";
+  }
+  return normalized;
 };
 
-const sanitizeAdditionalDocuments = (
-  documents?: CreateCutpayTransactionCutpayPostRequest["additional_documents"] | null
-) => ({
-  ...(documents as Record<string, unknown> | null) ??
-    defaultFormValues.additional_documents,
-});
+const normalizePayoutOn = (value?: string | null): string | null => {
+  const normalized = normalizeNullableString(value);
+  if (!normalized) return null;
+  const upper = normalized.toUpperCase();
+  if (upper === "ODTP") {
+    return "OD+TP";
+  }
+  if (["OD", "NP", "OD+TP"].includes(upper)) {
+    return upper;
+  }
+  return normalized;
+};
+
+const normalizeDateToISO = (value?: string | null): string | null => {
+  const normalized = normalizeNullableString(value);
+  if (!normalized) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(normalized)) {
+    return normalized.slice(0, 10);
+  }
+  const slashFormat = normalized.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+  if (slashFormat) {
+    const [, month, day, year] = slashFormat;
+    return `${year}-${month}-${day}`;
+  }
+  return normalized;
+};
+
+type SelectOption = { value: string; label: string };
+
+const ensureOptionExists = (
+  options: SelectOption[],
+  rawValue?: string | null,
+  labelFactory?: (value: string) => string
+): SelectOption[] => {
+  const value = normalizeNullableString(rawValue);
+  if (!value) {
+    return options;
+  }
+  if (options.some((option) => option.value === value)) {
+    return options;
+  }
+  return [
+    ...options,
+    {
+      value,
+      label: labelFactory ? labelFactory(value) : value,
+    },
+  ];
+};
 
 const mergeWithDefaults = (
   record?: CreateCutpayTransactionCutpayPostRequest | null
 ): CutPayFormSchemaType => {
-  const safeRecord = record ?? {};
-
-  const extracted = sanitizeExtractedData(
-    safeRecord.extracted_data ?? null
-  );
-
-  const adminInput = sanitizeAdminInput(safeRecord.admin_input ?? null);
-
-  const calculations = {
-    ...defaultFormValues.calculations,
-    ...(safeRecord.calculations ?? {}),
-  };
-
-  const additionalDocs = sanitizeAdditionalDocuments(
-    safeRecord.additional_documents ?? null
-  );
+  if (!record) return defaultFormValues;
 
   const cutpayReceivedValue =
-    typeof safeRecord.cutpay_received === "number"
-      ? safeRecord.cutpay_received
-      : safeRecord.cutpay_received === null
-      ? null
-      : defaultFormValues.cutpay_received;
+    typeof record.cutpay_received === "number"
+      ? record.cutpay_received
+      : record.cutpay_received === null
+        ? null
+        : defaultFormValues.cutpay_received;
+
+  const { payment_by_office: rawPaymentByOffice, ...restAdminInput } =
+    record.admin_input ?? {};
+
+  const mergedAdminInput = {
+    ...defaultFormValues.admin_input,
+    ...(restAdminInput as Partial<CutPayFormSchemaType["admin_input"]>),
+  };
+
+  const extractedData: CutPayFormSchemaType["extracted_data"] = {
+    ...defaultFormValues.extracted_data,
+    ...(record.extracted_data || {}),
+  };
+
+  const adminInput: CutPayFormSchemaType["admin_input"] = {
+    ...mergedAdminInput,
+    booking_date: normalizeDateToISO(mergedAdminInput.booking_date),
+    reporting_month: normalizeNullableString(mergedAdminInput.reporting_month),
+    agent_code: normalizeNullableString(mergedAdminInput.agent_code),
+    code_type: normalizeCodeType(mergedAdminInput.code_type),
+    payout_on: normalizePayoutOn(mergedAdminInput.payout_on),
+    payment_by: normalizeNullableString(mergedAdminInput.payment_by),
+    payment_detail: normalizeNullableString(mergedAdminInput.payment_detail),
+    payment_method: normalizeNullableString(mergedAdminInput.payment_method),
+    insurer_code: normalizeNullableString(mergedAdminInput.insurer_code),
+    broker_code: normalizeNullableString(mergedAdminInput.broker_code),
+    admin_child_id: normalizeNullableString(mergedAdminInput.admin_child_id),
+    payment_by_office:
+      rawPaymentByOffice !== undefined &&
+        rawPaymentByOffice !== null &&
+        rawPaymentByOffice !== ""
+        ? Number(rawPaymentByOffice)
+        : null,
+  };
 
   return {
     ...defaultFormValues,
-    ...safeRecord,
-    extracted_data: extracted,
+    ...record,
+    extracted_data: extractedData,
     admin_input: adminInput,
-    calculations,
-    additional_documents: additionalDocs,
+    calculations: {
+      ...defaultFormValues.calculations,
+      ...(record.calculations || {}),
+    },
+    additional_documents: {
+      ...defaultFormValues.additional_documents,
+      ...(record.additional_documents || {}),
+    },
     cutpay_received: cutpayReceivedValue,
     cutpay_received_status:
-      (safeRecord as any).cutpay_received_status ??
+      (record as any).cutpay_received_status ??
       (cutpayReceivedValue == null
         ? null
         : cutpayReceivedValue === 0
-        ? "No"
-        : "Yes"),
+          ? "No"
+          : "Yes"),
+    claimed_by: normalizeNullableString(record.claimed_by),
+    notes: normalizeNullableString(record.notes),
   };
 };
 
@@ -290,9 +298,7 @@ const buildPayload = (
   options?: { insuranceCompany?: string | null }
 ): CreateCutpayTransactionCutpayPostRequest => {
   const cutpayReceived =
-    form.cutpay_received_status === "No"
-      ? 0
-      : form.cutpay_received ?? null;
+    form.cutpay_received_status === "No" ? 0 : form.cutpay_received ?? null;
 
   const paymentBy = form.admin_input.payment_by;
 
@@ -300,14 +306,14 @@ const buildPayload = (
     policy_pdf_url: form.policy_pdf_url ?? null,
     additional_documents:
       form.additional_documents &&
-      Object.keys(form.additional_documents).length > 0
+        Object.keys(form.additional_documents).length > 0
         ? form.additional_documents
         : null,
     extracted_data: form.extracted_data
       ? ({
-          insurance_company: options?.insuranceCompany ?? null,
-          ...form.extracted_data,
-        } as ExtractedPolicyData)
+        insurance_company: options?.insuranceCompany ?? null,
+        ...form.extracted_data,
+      } as ExtractedPolicyData)
       : null,
     admin_input: {
       ...form.admin_input,
@@ -341,7 +347,7 @@ const EditForm: React.FC<EditFormProps> = ({
   const router = useRouter();
   const updateCutPayByPolicy = useUpdateCutPayByPolicy();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const dependencyResetGuard = useRef(true);
+  const [showHiddenFields, setShowHiddenFields] = useState(false);
   const setPolicyPdfUrl = useSetAtom(policyPdfUrlAtom);
 
   // Set the policy PDF URL in the atom for the DocumentViewer
@@ -359,7 +365,6 @@ const EditForm: React.FC<EditFormProps> = ({
 
   useEffect(() => {
     reset(mergeWithDefaults(initialDbRecord ?? undefined));
-    dependencyResetGuard.current = true;
   }, [initialDbRecord, reset]);
 
   const insuranceCompany = useMemo(
@@ -379,6 +384,20 @@ const EditForm: React.FC<EditFormProps> = ({
   const insurerCode = watch("admin_input.insurer_code");
   const brokerCode = watch("admin_input.broker_code");
 
+  const backendAgentCode = normalizeNullableString(
+    initialDbRecord?.admin_input?.agent_code
+  );
+  const backendClaimedBy = normalizeNullableString(initialDbRecord?.claimed_by);
+  const backendInsurerCode = normalizeNullableString(
+    initialDbRecord?.admin_input?.insurer_code
+  );
+  const backendBrokerCode = normalizeNullableString(
+    initialDbRecord?.admin_input?.broker_code
+  );
+  const backendChildId = normalizeNullableString(
+    initialDbRecord?.admin_input?.admin_child_id
+  );
+
   useEffect(() => {
     if (paymentBy === "InsureZeal" && grossPremium) {
       setValue("admin_input.payment_by_office", grossPremium, {
@@ -392,6 +411,9 @@ const EditForm: React.FC<EditFormProps> = ({
   }, [paymentBy, grossPremium, setValue]);
 
   useEffect(() => {
+    // Only update cutpay_received when the field is visible
+    if (!showHiddenFields) return;
+
     if (cutpayReceivedStatus === "No") {
       setValue("cutpay_received", 0, { shouldValidate: true });
     } else if (
@@ -402,7 +424,7 @@ const EditForm: React.FC<EditFormProps> = ({
     } else if (!cutpayReceivedStatus) {
       setValue("cutpay_received", null, { shouldValidate: true });
     }
-  }, [cutpayReceivedStatus, cutPayAmount, setValue]);
+  }, [cutpayReceivedStatus, cutPayAmount, setValue, showHiddenFields]);
 
   useEffect(() => {
     const normalized = productTypeValue
@@ -466,64 +488,80 @@ const EditForm: React.FC<EditFormProps> = ({
     }
   }, [childIdValue, adminChildIds, setValue]);
 
-  useEffect(() => {
-    if (dependencyResetGuard.current) {
-      dependencyResetGuard.current = false;
-      return;
-    }
-    setValue("admin_input.admin_child_id", null, { shouldValidate: true });
-  }, [codeType, insurerCode, brokerCode, setValue]);
-
-  const insurerOptions = useMemo(
-    () =>
+  const insurerOptions = useMemo(() => {
+    const baseOptions =
       insurers
         ?.map((i: Insurer) => ({
-          value: i.insurer_code,
-          label: i.name,
+          value: i.insurer_code ?? "",
+          label: i.name ?? i.insurer_code ?? "",
         }))
-        .filter((option) => option.value && option.value.trim() !== "") || [],
-    [insurers]
-  );
+        .filter((option) => option.value && option.value.trim() !== "") ?? [];
+    return ensureOptionExists(
+      baseOptions,
+      backendInsurerCode,
+      (value) => value
+    );
+  }, [insurers, backendInsurerCode]);
 
-  const brokerOptions = useMemo(
-    () =>
+  const brokerOptions = useMemo(() => {
+    const baseOptions =
       brokers
-        ?.map((b: Broker) => ({ value: b.broker_code, label: b.name }))
-        .filter((option) => option.value && option.value.trim() !== "") || [],
-    [brokers]
-  );
-
-  const agentOptions = useMemo(
-    () =>
-      agents?.agents
-        ?.map((a: AgentSummary) => ({
-          value: a.agent_code ?? "",
-          label: `${a.first_name} ${a.last_name}`,
+        ?.map((b: Broker) => ({
+          value: b.broker_code ?? "",
+          label: b.name ?? b.broker_code ?? "",
         }))
-        .filter((option) => option.value && option.value.trim() !== "") || [],
-    [agents]
-  );
+        .filter((option) => option.value && option.value.trim() !== "") ?? [];
+    return ensureOptionExists(baseOptions, backendBrokerCode, (value) => value);
+  }, [brokers, backendBrokerCode]);
+
+  const agentOptions = useMemo(() => {
+    const baseOptions =
+      agents?.agents
+        ?.map((a: AgentSummary) => {
+          const fullName = `${a.first_name ?? ""} ${a.last_name ?? ""}`
+            .trim()
+            .replace(/\s+/g, " ");
+          return {
+            value: a.agent_code ?? "",
+            label: fullName || a.agent_code || "Agent",
+          };
+        })
+        .filter((option) => option.value && option.value.trim() !== "") ?? [];
+
+    const withAgentCode = ensureOptionExists(baseOptions, backendAgentCode);
+    return ensureOptionExists(withAgentCode, backendClaimedBy);
+  }, [agents, backendAgentCode, backendClaimedBy]);
 
   const adminChildIdOptions = useMemo(() => {
+    let baseOptions: SelectOption[] = [];
+
     if (codeType && insurerCode && (codeType === "Direct" || brokerCode)) {
-      return (
+      baseOptions =
         availableChildIds
           ?.map((c: AdminChildId) => ({
             value: c.child_id,
             label: `${c.child_id} - ${c.manager_name}`,
           }))
-          .filter((option) => option.value && option.value.trim() !== "") || []
-      );
+          .filter((option) => option.value && option.value.trim() !== "") ?? [];
+    } else {
+      baseOptions =
+        adminChildIds
+          ?.map((a: AdminChildId) => ({
+            value: a.child_id,
+            label: `${a.child_id} - ${a.manager_name}`,
+          }))
+          .filter((option) => option.value && option.value.trim() !== "") ?? [];
     }
-    return (
-      adminChildIds
-        ?.map((a: AdminChildId) => ({
-          value: a.child_id,
-          label: `${a.child_id} - ${a.manager_name}`,
-        }))
-        .filter((option) => option.value && option.value.trim() !== "") || []
-    );
-  }, [codeType, insurerCode, brokerCode, availableChildIds, adminChildIds]);
+
+    return ensureOptionExists(baseOptions, backendChildId);
+  }, [
+    codeType,
+    insurerCode,
+    brokerCode,
+    availableChildIds,
+    adminChildIds,
+    backendChildId,
+  ]);
 
   const codeTypeOptions = useMemo(
     () => ["Direct", "Broker"].map((o) => ({ value: o, label: o })),
@@ -646,9 +684,22 @@ const EditForm: React.FC<EditFormProps> = ({
     const normalizedProduct = productTypeValue
       ? String(productTypeValue).trim().toLowerCase()
       : "";
-    const isGcvProduct = ["gcv", "gcv - 3w", "gcv-w"].includes(normalizedProduct);
+    const isGcvProduct = ["gcv", "gcv - 3w", "gcv-w"].includes(
+      normalizedProduct
+    );
 
     if (key === "extracted_data.gvw" && !isGcvProduct) {
+      return null;
+    }
+
+    // Hide specific fields unless showHiddenFields is true
+    const hiddenFields = [
+      "admin_input.payout_on",
+      "admin_input.payment_method",
+      "admin_input.payment_detail",
+    ];
+
+    if (!showHiddenFields && hiddenFields.includes(key)) {
       return null;
     }
 
@@ -825,7 +876,10 @@ const EditForm: React.FC<EditFormProps> = ({
           <div key={key} className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Label htmlFor={key} className="text-sm font-medium text-gray-700">
+                <Label
+                  htmlFor={key}
+                  className="text-sm font-medium text-gray-700"
+                >
                   {label}
                 </Label>
                 {childIdState.disabled && childIdState.tooltip && (
@@ -859,8 +913,8 @@ const EditForm: React.FC<EditFormProps> = ({
                           isLoading
                             ? "Loading..."
                             : childIdState.disabled
-                            ? "Select dependencies first"
-                            : `Select ${label}`
+                              ? "Select dependencies first"
+                              : `Select ${label}`
                         }
                       />
                     </SelectTrigger>
@@ -905,7 +959,9 @@ const EditForm: React.FC<EditFormProps> = ({
               if (
                 allowCustomOptionKeys.includes(key) &&
                 controllerField.value &&
-                !options.some((option) => option.value === controllerField.value)
+                !options.some(
+                  (option) => option.value === controllerField.value
+                )
               ) {
                 finalOptions = [
                   ...options,
@@ -925,7 +981,9 @@ const EditForm: React.FC<EditFormProps> = ({
                   >
                     <SelectTrigger className="h-10 w-fit">
                       <SelectValue
-                        placeholder={isLoading ? "Loading..." : `Select ${label}`}
+                        placeholder={
+                          isLoading ? "Loading..." : `Select ${label}`
+                        }
                       />
                     </SelectTrigger>
                     <SelectContent>
@@ -1013,7 +1071,11 @@ const EditForm: React.FC<EditFormProps> = ({
                     controllerField.onChange(value === "" ? null : value);
                   }
                 }}
-                onWheel={type === "number" ? numberInputOnWheelPreventChange : undefined}
+                onWheel={
+                  type === "number"
+                    ? numberInputOnWheelPreventChange
+                    : undefined
+                }
                 disabled={disabled}
                 className={`h-10 w-fit ${disabled ? "bg-gray-50" : ""}`}
                 step={type === "number" ? "0.01" : undefined}
@@ -1058,7 +1120,9 @@ const EditForm: React.FC<EditFormProps> = ({
       });
       toast.success("Transaction updated successfully");
       router.push(
-        `/admin/cutpay/${encodeURIComponent(policyNumber)}?q=${quarter}&y=${year}`
+        `/admin/cutpay/${encodeURIComponent(
+          policyNumber
+        )}?policy=${encodeURIComponent(policyNumber)}&q=${quarter}&y=${year}`
       );
     } catch (error) {
       console.error("Failed to update transaction", error);
@@ -1085,7 +1149,7 @@ const EditForm: React.FC<EditFormProps> = ({
           <div>
             <h1 className="text-2xl font-bold">Edit Cutpay Transaction</h1>
             <p className="text-sm text-gray-500">
-              Policy #{policyNumber}  Q{quarter} {year}
+              Policy #{policyNumber} Q{quarter} {year}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -1097,8 +1161,14 @@ const EditForm: React.FC<EditFormProps> = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="min-w-[140px]">
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="min-w-[140px]"
+            >
+              {isSubmitting && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </div>
@@ -1124,7 +1194,10 @@ const EditForm: React.FC<EditFormProps> = ({
                         const renderedField = renderField(field);
                         if (!renderedField) return null;
                         return (
-                          <div key={field.key} className="space-y-2 flex-none w-fit">
+                          <div
+                            key={field.key}
+                            className="space-y-2 flex-none w-fit"
+                          >
                             {renderedField}
                           </div>
                         );
@@ -1147,22 +1220,40 @@ const EditForm: React.FC<EditFormProps> = ({
             <div className="w-full md:w-1/2">
               <Card className="shadow-sm border border-l-6 border-green-500 h-full">
                 <CardHeader className="bg-gray-50 border-b">
-                  <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
-                    <span className="h-2 w-2 bg-green-500 rounded-full" />
-                    Admin Input
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg text-gray-800 flex items-center gap-2">
+                      <span className="h-2 w-2 bg-green-500 rounded-full" />
+                      Admin Input
+                    </CardTitle>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowHiddenFields(!showHiddenFields)}
+                      className="flex items-center gap-2"
+                    >
+                      {showHiddenFields ? (
+                        <><Eye className="h-4 w-4" />Hide Hidden Fields</>
+                      ) : (
+                        <><EyeOff className="h-4 w-4" />Show Hidden Fields</>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6">
                   <div className="flex flex-wrap gap-4 items-start">
                     {formFields
-                      .filter((f) => f.section === "admin" && f.key !== "running_bal")
+                      .filter(
+                        (f) => f.section === "admin" && f.key !== "running_bal"
+                      )
                       .map((field) => {
                         const renderedField = renderField(field);
                         if (!renderedField) return null;
 
                         if (
                           field.key === "admin_input.payment_by" &&
-                          paymentBy === "InsureZeal"
+                          paymentBy === "InsureZeal" &&
+                          showHiddenFields
                         ) {
                           return (
                             <Fragment key={field.key}>
@@ -1179,19 +1270,29 @@ const EditForm: React.FC<EditFormProps> = ({
                                 <Controller
                                   name="cutpay_received_status"
                                   control={control}
-                                  render={({ field: controllerField, fieldState }) => (
+                                  render={({
+                                    field: controllerField,
+                                    fieldState,
+                                  }) => (
                                     <>
                                       <Select
                                         onValueChange={controllerField.onChange}
-                                        value={(controllerField.value as string) ?? undefined}
+                                        value={
+                                          (controllerField.value as string) ??
+                                          undefined
+                                        }
                                       >
                                         <SelectTrigger className="h-10 w-fit">
                                           <SelectValue placeholder="Select status" />
                                         </SelectTrigger>
                                         <SelectContent>
                                           <SelectItem value="No">No</SelectItem>
-                                          <SelectItem value="Yes">Yes</SelectItem>
-                                          <SelectItem value="Partial">Partial</SelectItem>
+                                          <SelectItem value="Yes">
+                                            Yes
+                                          </SelectItem>
+                                          <SelectItem value="Partial">
+                                            Partial
+                                          </SelectItem>
                                         </SelectContent>
                                       </Select>
                                       {fieldState.error && (
@@ -1205,48 +1306,61 @@ const EditForm: React.FC<EditFormProps> = ({
                               </div>
                               {(cutpayReceivedStatus === "Yes" ||
                                 cutpayReceivedStatus === "Partial") && (
-                                <div
-                                  className="space-y-2 flex-none w-fit"
-                                  key="cutpay_received_wrapper"
-                                >
-                                  <Label className="text-sm font-medium text-gray-700">
-                                    Cutpay Received Amount
-                                  </Label>
-                                  <Controller
-                                    name="cutpay_received"
-                                    control={control}
-                                    render={({ field: controllerField, fieldState }) => (
-                                      <>
-                                        <Input
-                                          type="number"
-                                          className="h-10 w-fit"
-                                          {...controllerField}
-                                          value={String(controllerField.value ?? "")}
-                                          onChange={(e) => {
-                                            const value = e.target.value;
-                                            const numValue = value === "" ? null : Number(value);
-                                            controllerField.onChange(numValue);
-                                          }}
-                                          onWheel={numberInputOnWheelPreventChange}
-                                          step="0.01"
-                                          placeholder="Enter received amount"
-                                        />
-                                        {fieldState.error && (
-                                          <p className="text-red-500 text-xs mt-1">
-                                            {fieldState.error.message}
-                                          </p>
-                                        )}
-                                      </>
-                                    )}
-                                  />
-                                </div>
-                              )}
+                                  <div
+                                    className="space-y-2 flex-none w-fit"
+                                    key="cutpay_received_wrapper"
+                                  >
+                                    <Label className="text-sm font-medium text-gray-700">
+                                      Cutpay Received Amount
+                                    </Label>
+                                    <Controller
+                                      name="cutpay_received"
+                                      control={control}
+                                      render={({
+                                        field: controllerField,
+                                        fieldState,
+                                      }) => (
+                                        <>
+                                          <Input
+                                            type="number"
+                                            className="h-10 w-fit"
+                                            {...controllerField}
+                                            value={String(
+                                              controllerField.value ?? ""
+                                            )}
+                                            onChange={(e) => {
+                                              const value = e.target.value;
+                                              const numValue =
+                                                value === ""
+                                                  ? null
+                                                  : Number(value);
+                                              controllerField.onChange(numValue);
+                                            }}
+                                            onWheel={
+                                              numberInputOnWheelPreventChange
+                                            }
+                                            step="0.01"
+                                            placeholder="Enter received amount"
+                                          />
+                                          {fieldState.error && (
+                                            <p className="text-red-500 text-xs mt-1">
+                                              {fieldState.error.message}
+                                            </p>
+                                          )}
+                                        </>
+                                      )}
+                                    />
+                                  </div>
+                                )}
                             </Fragment>
                           );
                         }
 
                         return (
-                          <div key={field.key} className="space-y-2 flex-none w-fit">
+                          <div
+                            key={field.key}
+                            className="space-y-2 flex-none w-fit"
+                          >
                             {renderedField}
                           </div>
                         );
@@ -1272,7 +1386,10 @@ const EditForm: React.FC<EditFormProps> = ({
                         const renderedField = renderField(field);
                         if (!renderedField) return null;
                         return (
-                          <div key={field.key} className="space-y-2 flex-none w-fit">
+                          <div
+                            key={field.key}
+                            className="space-y-2 flex-none w-fit"
+                          >
                             {renderedField}
                           </div>
                         );

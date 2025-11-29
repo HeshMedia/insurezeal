@@ -838,9 +838,11 @@ class PolicyHelpers:
             # Normalize policy number (strip whitespace, convert to uppercase)
             normalized_policy_number = policy_number.strip().upper()
 
-            # Build query to check for existing policy number
+            # Build query to check for existing policy number using case-insensitive comparison
+            from sqlalchemy import func
+            
             query = select(Policy).where(
-                Policy.policy_number.ilike(normalized_policy_number)
+                func.upper(Policy.policy_number) == normalized_policy_number
             )
 
             # If excluding a specific policy (for updates), add that condition

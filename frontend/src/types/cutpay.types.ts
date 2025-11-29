@@ -210,10 +210,10 @@ export interface CutPayTransaction {
   extra_amount_receivable_from_broker: number | null
   total_receivable_from_broker: number | null
   total_receivable_from_broker_with_gst: number | null
-  cut_pay_amount: number | null
+  cut_pay_amount_received: number|null;
   agent_po_amt: number | null
   agent_extra_amount: number | null
-  total_agent_po_amt: number | null
+
   claimed_by: string | null
   already_given_to_agent: number | null
   po_paid_to_agent: number | null

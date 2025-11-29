@@ -573,6 +573,23 @@ class CutPayHelpers:
     async def get_cutpay_dropdowns(self, db: AsyncSession) -> Dict[str, List]:
         """Get dropdown options for CutPay form"""
         try:
+            # Get all active agents
+            from models import UserProfile
+            agents_result = await db.execute(
+                select(UserProfile.agent_code, UserProfile.first_name, UserProfile.last_name)
+                .where(UserProfile.agent_code.isnot(None))
+                .order_by(UserProfile.agent_code)
+            )
+            agents_data = agents_result.all()
+            agents = []
+            for row in agents_data:
+                name = f"{row.first_name or ''} {row.last_name or ''}".strip() or row.agent_code
+                agents.append({
+                    "code": row.agent_code,
+                    "name": name,
+                    "label": f"{row.agent_code} - {name}"
+                })
+            
             # Get active insurers
             insurer_result = await db.execute(
                 select(Insurer).where(Insurer.is_active == True).order_by(Insurer.name)
@@ -581,6 +598,7 @@ class CutPayHelpers:
                 {
                     "code": insurer.insurer_code,
                     "name": insurer.name,
+                    "label": f"{insurer.insurer_code} - {insurer.name}",
                     "is_active": insurer.is_active,
                 }
                 for insurer in insurer_result.scalars().all()
@@ -594,6 +612,7 @@ class CutPayHelpers:
                 {
                     "code": broker.broker_code,
                     "name": broker.name,
+                    "label": f"{broker.broker_code} - {broker.name}",
                     "is_active": broker.is_active,
                 }
                 for broker in broker_result.scalars().all()
@@ -617,12 +636,14 @@ class CutPayHelpers:
                         admin_child.broker.name if admin_child.broker else None
                     ),
                     "code_type": admin_child.code_type,
+                    "label": f"{admin_child.child_id} - {admin_child.insurer.name}" + (f" ({admin_child.broker.name})" if admin_child.broker else ""),
                     "is_active": admin_child.is_active,
                 }
                 for admin_child in admin_child_result.scalars().all()
             ]
 
             return {
+                "agents": agents,
                 "insurers": insurers,
                 "brokers": brokers,
                 "admin_child_ids": admin_child_ids,

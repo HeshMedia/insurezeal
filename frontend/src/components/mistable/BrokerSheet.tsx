@@ -131,7 +131,7 @@ export function BrokerSheet({ data, className, loading, sharedSearchQuery }: Bro
       </div>
 
       {/* KPI Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-3 border-b bg-background">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-6 py-3 border-b bg-background">
         <div className="rounded-md bg-blue-50 px-3 py-2">
           <div className="text-[11px] text-blue-700 font-medium">BROKERS</div>
           <div className="text-base font-semibold text-blue-900">{summary.totalBrokers}</div>
@@ -153,6 +153,17 @@ export function BrokerSheet({ data, className, loading, sharedSearchQuery }: Bro
             )}
           >
             {inr.format(summary.totalPaymentPending)}
+          </div>
+        </div>
+        <div className="rounded-md bg-red-50 px-3 py-2">
+          <div className="text-[11px] text-red-700 font-medium">INVOICE PENDING</div>
+          <div
+            className={cn(
+              "text-base font-semibold",
+              summary.totalInvoicePending > 0 ? "text-red-900" : "text-green-900"
+            )}
+          >
+            {inr.format(summary.totalInvoicePending)}
           </div>
         </div>
       </div>

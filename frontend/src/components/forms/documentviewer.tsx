@@ -25,7 +25,7 @@ const isViewable = (fileType?: string): boolean => {
 const DocumentViewer: React.FC = () => {
   const blobUrlsRef = useRef<string[]>([]);
   const [activeDocument, setActiveDocument] = useState<'policy' | 'kyc' | 'rc' | 'previous'>('policy');
-  const [availableDocuments, setAvailableDocuments] = useState<Array<{key: string, label: string, available: boolean, type?: string, name?: string}>>([]);
+  const [availableDocuments, setAvailableDocuments] = useState<Array<{ key: string, label: string, available: boolean, type?: string, name?: string }>>([]);
   const [policyPdfUrl] = useAtom(policyPdfUrlAtom);
   const [additionalDocUrls, setAdditionalDocUrls] = useAtom(additionalDocumentsUrlsAtom);
 
@@ -33,7 +33,7 @@ const DocumentViewer: React.FC = () => {
     const loadDocuments = async () => {
       // Prefer remote URLs from atoms if present; fallback to IndexedDB only when absent
       const hasRemoteAdditional = !!(additionalDocUrls.kyc_documents || additionalDocUrls.rc_document || additionalDocUrls.previous_policy);
-      const docs: Array<{key: string, label: string, available: boolean, type?: string, name?: string}> = [];
+      const docs: Array<{ key: string, label: string, available: boolean, type?: string, name?: string }> = [];
       docs.push({ key: 'policy', label: 'Policy PDF', available: !!policyPdfUrl, type: 'application/pdf' });
 
       if (hasRemoteAdditional) {
@@ -61,7 +61,7 @@ const DocumentViewer: React.FC = () => {
       if (kycDoc && kycDoc.content) urls.kyc_documents = URL.createObjectURL(kycDoc.content);
       if (rcDoc && rcDoc.content) urls.rc_document = URL.createObjectURL(rcDoc.content);
       if (previousDoc && previousDoc.content) urls.previous_policy = URL.createObjectURL(previousDoc.content);
-      
+
       blobUrlsRef.current = Object.values(urls).filter(Boolean) as string[];
       setAdditionalDocUrls(urls);
     };
@@ -74,7 +74,7 @@ const DocumentViewer: React.FC = () => {
         if (url) URL.revokeObjectURL(url);
       });
     };
-  }, [policyPdfUrl, additionalDocUrls, setAdditionalDocUrls]);
+  }, [policyPdfUrl]);
 
   const getDocumentUrl = (docType: string) => {
     switch (docType) {
@@ -98,13 +98,13 @@ const DocumentViewer: React.FC = () => {
           <FileText className="h-5 w-5" />
           Document Viewer
         </CardTitle>
-        
+
         <div className="mt-4">
           <Label htmlFor="document-select" className="text-sm font-medium mb-2 block">
             Select Document to View
           </Label>
-          <Select 
-            value={activeDocument} 
+          <Select
+            value={activeDocument}
             onValueChange={(value) => setActiveDocument(value as 'policy' | 'kyc' | 'rc' | 'previous')}
           >
             <SelectTrigger className="w-full">
@@ -112,8 +112,8 @@ const DocumentViewer: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               {availableDocuments.map((doc) => (
-                <SelectItem 
-                  key={doc.key} 
+                <SelectItem
+                  key={doc.key}
                   value={doc.key}
                   disabled={!doc.available}
                 >

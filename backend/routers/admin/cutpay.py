@@ -1387,6 +1387,10 @@ async def update_cutpay_transaction_by_policy(
             try:
                 if hasattr(cutpay_data, "calculations") and cutpay_data.calculations:
                     calc = cutpay_data.calculations
+                    
+                    # Extract agent_total_po_amount from calculations
+                    if getattr(calc, "total_agent_po_amt", None) is not None:
+                        db_update_fields["agent_total_po_amount"] = calc.total_agent_po_amt
 
                 # cutpay_received is the authoritative source for Cut Pay Amount Received From Agent
                 if getattr(cutpay_data, "cutpay_received", None) is not None:

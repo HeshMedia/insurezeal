@@ -177,7 +177,9 @@ export function SuperAdminCharts() {
         totalBalance: 0,
         activeAgents: 0,
         positiveBalance: 0,
-        negativeBalance: 0
+        negativeBalance: 0,
+        totalCommissionable: 0,
+        totalInvoicePending: 0
       };
     }
 
@@ -195,6 +197,13 @@ export function SuperAdminCharts() {
     const activeAgents = filteredData.filter((record) => toNum(record[premiumKey]) > 0).length;
     const positiveBalance = filteredData.filter((record) => toNum(record[balanceKey]) > 0).length;
     const negativeBalance = filteredData.filter((record) => toNum(record[balanceKey]) < 0).length;
+    
+    const totalCommissionable = filteredData.reduce((sum: number, record) => sum + toNum(record['Commissionable Premium (True&False)']), 0);
+    
+    let totalInvoicePending = 0;
+    if (brokerSheetData?.data) {
+      totalInvoicePending = brokerSheetData.data.reduce((sum: number, record) => sum + toNum(record['IS - Invoice Pending (Total Receivable from Broker)']), 0);
+    }
 
     return {
       totalAgents,
@@ -203,9 +212,11 @@ export function SuperAdminCharts() {
       totalBalance,
       activeAgents,
       positiveBalance,
-      negativeBalance
+      negativeBalance,
+      totalCommissionable,
+      totalInvoicePending
     };
-  }, [balanceSheetData, viewType]);
+  }, [balanceSheetData, brokerSheetData, viewType]);
 
   if (balanceLoading || brokerLoading) {
     return (
@@ -274,24 +285,7 @@ export function SuperAdminCharts() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="flex items-center p-4 sm:p-6">
-            <div className="flex items-center space-x-3 sm:space-x-4 w-full">
-              <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-muted-foreground">
-                  {viewType === 'agent' ? 'Active Agents' : 'Total Users'}
-                </p>
-                <p className="text-xl sm:text-2xl font-bold truncate">{fmt.format(summaryMetrics.totalAgents)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {summaryMetrics.activeAgents} active
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="flex items-center p-4 sm:p-6">
             <div className="flex items-center space-x-3 sm:space-x-4 w-full">
@@ -325,6 +319,21 @@ export function SuperAdminCharts() {
         <Card>
           <CardContent className="flex items-center p-4 sm:p-6">
             <div className="flex items-center space-x-3 sm:space-x-4 w-full">
+              <IndianRupee className="h-6 w-6 sm:h-8 sm:w-8 text-pink-600 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Total Commissionable</p>
+                <p className="text-xl sm:text-2xl font-bold truncate">{inr.format(summaryMetrics.totalCommissionable)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Potential Earnings
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex items-center p-4 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4 w-full">
               <TrendingUp className={`h-6 w-6 sm:h-8 sm:w-8 flex-shrink-0 ${summaryMetrics.totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`} />
               <div className="min-w-0 flex-1">
                 <p className="text-xs sm:text-sm font-medium text-muted-foreground">Net Balance</p>
@@ -333,6 +342,21 @@ export function SuperAdminCharts() {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   +{summaryMetrics.positiveBalance} -{summaryMetrics.negativeBalance}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="flex items-center p-4 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4 w-full">
+              <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-red-600 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Invoice Pending</p>
+                <p className="text-xl sm:text-2xl font-bold truncate text-red-600">{inr.format(summaryMetrics.totalInvoicePending)}</p>
+                <p className="text-xs text-muted-foreground">
+                  Outstanding
                 </p>
               </div>
             </div>

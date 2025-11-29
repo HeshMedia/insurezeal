@@ -89,12 +89,12 @@ export const EditableCell = ({
     if (displayValue === null || displayValue === undefined || displayValue === '') {
       return <span className="text-gray-400">N/A</span>;
     }
-    
+
     // If it's an object, convert to string or handle appropriately
     if (typeof displayValue === 'object') {
       return <span className="text-gray-400">N/A</span>;
     }
-    
+
     return String(displayValue);
   };
 
@@ -104,11 +104,11 @@ export const EditableCell = ({
         setEditingCell!({ rowIndex: row.index, columnId: column.id })
       }
       className={cn(
-        "w-full h-full min-h-[53px] flex items-center px-4 py-2 relative transition-all duration-200", 
+        "w-full h-full min-h-[53px] flex items-center px-4 py-2 relative transition-all duration-200",
         "hover:bg-blue-100/50 cursor-pointer",
         // Add green styling for pending changes
-        hasPendingChange 
-          ? "bg-green-100 border-2 border-green-300 border-solid" 
+        hasPendingChange
+          ? "bg-green-100 border-2 border-green-300 border-solid"
           : "border-2 border-transparent"
       )}
     >

@@ -9,32 +9,52 @@
  */
 export function getGoogleSheetsPrivateKey(): string {
   try {
-    // First try to get the base64 encoded version
-    const base64Key = process.env.NEXT_PUBLIC_GOOGLE_PRIVATE_KEY;
+    // Check both variables
+    // The backend checks GOOGLE_SHEETS_PRIVATE_KEY_BASE64 first, then GOOGLE_SHEETS_PRIVATE_KEY
+    // We'll check our standard frontend vars
+    let rawKey = process.env.NEXT_PUBLIC_GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
     
-    if (!base64Key) {
+    if (!rawKey) {
       console.error('No Google Sheets private key found in environment variables');
       return '';
     }
 
-    // Try to decode as base64 first
-    try {
-      // Check if it looks like a base64 string (no newlines, typical base64 characters)
-      if (!base64Key.includes('\n') && !base64Key.includes('\\n') && base64Key.length > 100) {
-        const decoded = atob(base64Key);
-        
-        // Verify it looks like a private key (contains BEGIN PRIVATE KEY)
-        if (decoded.includes('BEGIN PRIVATE KEY')) {
-          console.info('Using Base64 decoded Google Sheets private key');
-          return decoded;
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to decode as Base64, treating as regular key:', error);
+    // Clean up the raw key first - remove outer quotes if present
+    rawKey = rawKey.trim();
+    if ((rawKey.startsWith('"') && rawKey.endsWith('"')) || 
+        (rawKey.startsWith("'") && rawKey.endsWith("'"))) {
+      rawKey = rawKey.substring(1, rawKey.length - 1);
     }
 
-    // Fallback to regular key processing (handle escaped newlines)
-    const processedKey = base64Key.replace(/\\n/g, '\n');
+    // Backend-style logic: Try to decode as base64 first
+    // The user's base64 string starts with "LS0t...", which decodes to "-----..."
+    // We need to be careful not to false-positive on a regular PEM key which is NOT base64
+    // A regular PEM key starts with "-----BEGIN", which is not valid base64 (contains dashes)
+    // So if it contains dashes (and not just at the start/end?), it might be PEM.
+    // But base64 can contain '+', '/', and '='.
+    
+    // Simple heuristic: If it DOESN'T look like a PEM key (no "-----BEGIN"), try base64
+    if (!rawKey.includes('-----BEGIN')) {
+      try {
+        const decoded = atob(rawKey);
+        // If successful, use the decoded value
+        // And then apply the same newline fix as backend: .replace("\\n", "\n")
+        const processed = decoded.replace(/\\n/g, '\n');
+        console.info('Using Base64 decoded Google Sheets private key');
+        return processed;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        // Not base64, proceed to treat as regular key
+      }
+    }
+
+    // Fallback / Regular key processing
+    // Handle literal \n (common in .env files)
+    let processedKey = rawKey.replace(/\\n/g, '\n');
+
+    // Final cleanup of multiple newlines just in case
+    processedKey = processedKey.replace(/\n+/g, '\n').trim();
+
     console.info('Using regular Google Sheets private key');
     return processedKey;
 

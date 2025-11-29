@@ -238,7 +238,7 @@ export function BalanceSheet({ className, sharedSearchQuery }: BalanceSheetProps
 
         {/* KPI summary cards */}
         {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 py-3 border-b bg-background">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-4 py-3 border-b bg-background">
             <div className="rounded-md bg-blue-50 px-3 py-2">
               <div className="text-[11px] text-blue-700 font-medium">AGENTS</div>
               <div className="text-base font-semibold text-blue-900">{fmt.format(summary.totalAgents)}</div>
@@ -252,6 +252,10 @@ export function BalanceSheet({ className, sharedSearchQuery }: BalanceSheetProps
             <div className="rounded-md bg-purple-50 px-3 py-2">
               <div className="text-[11px] text-purple-700 font-medium">NET PREMIUM</div>
               <div className="text-base font-semibold text-purple-900">{inr.format(summary.totalNetPremium)}</div>
+            </div>
+            <div className="rounded-md bg-pink-50 px-3 py-2">
+              <div className="text-[11px] text-pink-700 font-medium">COMMISSIONABLE</div>
+              <div className="text-base font-semibold text-pink-900">{inr.format(summary.totalCommissionablePremium)}</div>
             </div>
             <div className="rounded-md bg-orange-50 px-3 py-2">
               <div className="text-[11px] text-orange-700 font-medium">POLICIES</div>

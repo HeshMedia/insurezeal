@@ -22,15 +22,33 @@ export class GoogleSheetsMISService {
       console.log('📊 Fetching all quarterly sheet data for client-side filtering');
 
       const startTime = Date.now();
-      
+
       // Get raw sheet data
       const sheetData = await this.sheetsClient.getSheetData();
-      const allRecords = this.sheetsClient.convertSheetDataToObjects<QuarterlySheetRecord>(sheetData);
 
-      const processingTime = (Date.now() - startTime) / 1000;
-      console.log(`✅ Fetched ${allRecords.length} records in ${processingTime}s`);
+      // Use 1st row as header, skip 2nd row, start data from 3rd row
+      if (sheetData.values && sheetData.values.length > 2) {
+        const headers = sheetData.values[0];
+        const dataRows = sheetData.values.slice(2);
 
-      return allRecords;
+        // Create a new SheetData object with headers + data rows (skipping row 2)
+        const slicedSheetData = {
+          ...sheetData,
+          values: [headers, ...dataRows]
+        };
+        const allRecords = this.sheetsClient.convertSheetDataToObjects<QuarterlySheetRecord>(slicedSheetData);
+
+        const processingTime = (Date.now() - startTime) / 1000;
+        console.log(`✅ Fetched ${allRecords.length} records in ${processingTime}s`);
+
+        return allRecords;
+      } else if (sheetData.values && sheetData.values.length > 0) {
+        // Fallback if not enough rows but has at least headers
+        const allRecords = this.sheetsClient.convertSheetDataToObjects<QuarterlySheetRecord>(sheetData);
+        return allRecords;
+      }
+
+      return [];
     } catch (error) {
       console.error('Error fetching all master sheet data:', error);
       throw new Error(`Failed to fetch master sheet data: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -45,18 +63,36 @@ export class GoogleSheetsMISService {
       console.log(`📊 Fetching data from specific sheet: ${sheetName}`);
 
       const startTime = Date.now();
-      
+
       // Construct range for the specific sheet (get all data)
       const range = `${sheetName}!A:ZZ`;
-      
+
       // Get raw sheet data from specific sheet
       const sheetData = await this.sheetsClient.getSheetData(range);
-      const allRecords = this.sheetsClient.convertSheetDataToObjects<QuarterlySheetRecord>(sheetData);
 
-      const processingTime = (Date.now() - startTime) / 1000;
-      console.log(`✅ Fetched ${allRecords.length} records from sheet "${sheetName}" in ${processingTime}s`);
+      // Use 1st row as header, skip 2nd row, start data from 3rd row
+      if (sheetData.values && sheetData.values.length > 2) {
+        const headers = sheetData.values[0];
+        const dataRows = sheetData.values.slice(2);
 
-      return allRecords;
+        // Create a new SheetData object with headers + data rows (skipping row 2)
+        const slicedSheetData = {
+          ...sheetData,
+          values: [headers, ...dataRows]
+        };
+        const allRecords = this.sheetsClient.convertSheetDataToObjects<QuarterlySheetRecord>(slicedSheetData);
+
+        const processingTime = (Date.now() - startTime) / 1000;
+        console.log(`✅ Fetched ${allRecords.length} records from sheet "${sheetName}" in ${processingTime}s`);
+
+        return allRecords;
+      } else if (sheetData.values && sheetData.values.length > 0) {
+        // Fallback
+        const allRecords = this.sheetsClient.convertSheetDataToObjects<QuarterlySheetRecord>(sheetData);
+        return allRecords;
+      }
+
+      return [];
     } catch (error) {
       console.error(`Error fetching data from sheet "${sheetName}":`, error);
       throw new Error(`Failed to fetch data from sheet "${sheetName}": ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -70,6 +106,7 @@ export class GoogleSheetsMISService {
   async fetchMasterSheetFields(): Promise<string[]> {
     try {
       const sheetData = await this.sheetsClient.getSheetData();
+      // Return 1st row as headers (index 0)
       return sheetData.values?.[0] || [];
     } catch (error) {
       console.error('Error fetching master sheet fields:', error);
@@ -83,11 +120,11 @@ export class GoogleSheetsMISService {
   async fetchBalanceSheetStats(): Promise<MasterSheetStats> {
     try {
       console.log('📊 Fetching balance sheet statistics from API');
-      
+
       // Use the existing misApi with proper authentication
       const data = await misApi.getMasterSheetStats();
       console.log('✅ Balance sheet data fetched successfully:', data);
-      
+
       // The API returns the data directly
       return data;
     } catch (error) {
@@ -103,7 +140,7 @@ export class GoogleSheetsMISService {
     try {
       console.log(`🔄 Starting bulk update on sheet "${sheetName}" with ${updates.updates.length} changes`);
       console.log('📋 Updates to apply:', updates.updates);
-      
+
       const startTime = Date.now();
       const results: BulkUpdateResponse['results'] = [];
       let successfulUpdates = 0;
@@ -112,28 +149,30 @@ export class GoogleSheetsMISService {
       // Get current data from the specific sheet
       const range = `${sheetName}!A:ZZ`;
       const sheetData = await this.sheetsClient.getSheetData(range);
+
+      // Use 1st row as header (index 0) and data starts from 3rd row (index 2)
       const headers = sheetData.values?.[0] || [];
-      const rows = sheetData.values?.slice(1) || [];
+      const rows = sheetData.values?.slice(2) || [];
 
       console.log(`📊 Sheet "${sheetName}" has ${headers.length} columns and ${rows.length} rows`);
       console.log(`📋 Headers:`, headers.slice(0, 10)); // Show first 10 headers
-      
+
       // Find the Policy number column index
-      const policyNumberColumnIndex = headers.findIndex(header => 
-        header.toLowerCase().includes('policy number') || 
+      const policyNumberColumnIndex = headers.findIndex(header =>
+        header.toLowerCase().includes('policy number') ||
         header.toLowerCase().includes('policy no') ||
         header === 'Policy number'
       );
-      
+
       console.log(`🔍 Policy number column index: ${policyNumberColumnIndex} (header: "${headers[policyNumberColumnIndex]}")`);
 
       // Group updates by row for efficiency
       const updatesByRow = new Map<number, Array<{ field_name: string; new_value: string; record_id: string }>>();
-      
+
       for (const update of updates.updates) {
         // Find the row index for this record_id using the Policy number column
         console.log(`🔍 Looking for record ID: "${update.record_id}" in ${rows.length} rows`);
-        
+
         const rowIndex = rows.findIndex((row: string[]) => {
           // Use the Policy number column instead of assuming first column
           const policyNumberValue = policyNumberColumnIndex >= 0 ? row[policyNumberColumnIndex] : row[0];
@@ -145,7 +184,7 @@ export class GoogleSheetsMISService {
 
         if (rowIndex === -1) {
           console.log(`❌ Record "${update.record_id}" not found in sheet data`);
-          console.log(`📋 Available policy numbers:`, rows.map(row => 
+          console.log(`📋 Available policy numbers:`, rows.map(row =>
             policyNumberColumnIndex >= 0 ? row[policyNumberColumnIndex] : row[0]
           ).slice(0, 5));
           results.push({
@@ -168,13 +207,13 @@ export class GoogleSheetsMISService {
 
       // Apply updates row by row using batch update for efficiency
       const allUpdates: Array<{ range: string; value: string }> = [];
-      
+
       for (const [rowIndex, rowUpdates] of updatesByRow) {
         const row = [...rows[rowIndex]]; // Create a copy
-        
+
         for (const update of rowUpdates) {
           const columnIndex = headers.indexOf(update.field_name);
-          
+
           if (columnIndex === -1) {
             results.push({
               record_id: update.record_id,
@@ -189,14 +228,21 @@ export class GoogleSheetsMISService {
           }
 
           const oldValue = row[columnIndex] || '';
-          
+
           // Prepare batch update
-          const range = `${sheetName}!${this.getColumnLetter(columnIndex + 1)}${rowIndex + 2}`;
+          // Offset by 3: 1 skipped row (row 2) + 1 header row (row 1) + 1 for 1-based indexing
+          // Wait, let's re-verify.
+          // Row 1: Header
+          // Row 2: Skipped
+          // Row 3: Data 0
+          // If rowIndex is 0 (Data 0), target is Row 3.
+          // rowIndex + 3 = 0 + 3 = 3. Correct.
+          const range = `${sheetName}!${this.getColumnLetter(columnIndex + 1)}${rowIndex + 3}`;
           allUpdates.push({
             range: range,
             value: update.new_value
           });
-          
+
           // Track the result for later processing
           results.push({
             record_id: update.record_id,
@@ -266,7 +312,7 @@ export class GoogleSheetsMISService {
   async bulkUpdateSheet(updates: BulkUpdateRequest): Promise<BulkUpdateResponse> {
     try {
       console.log(`🔄 Starting bulk update with ${updates.updates.length} changes`);
-      
+
       const startTime = Date.now();
       const results: BulkUpdateResponse['results'] = [];
       let successfulUpdates = 0;
@@ -274,23 +320,25 @@ export class GoogleSheetsMISService {
 
       // Get current data to validate updates
       const sheetData = await this.sheetsClient.getSheetData();
+
+      // Use 1st row as header (index 0) and data starts from 3rd row (index 2)
       const headers = sheetData.values?.[0] || [];
-      const rows = sheetData.values?.slice(1) || [];
+      const rows = sheetData.values?.slice(2) || [];
 
       console.log(`📊 Default sheet has ${headers.length} columns and ${rows.length} rows`);
-      
+
       // Find the Policy number column index
-      const policyNumberColumnIndex = headers.findIndex(header => 
-        header.toLowerCase().includes('policy number') || 
+      const policyNumberColumnIndex = headers.findIndex(header =>
+        header.toLowerCase().includes('policy number') ||
         header.toLowerCase().includes('policy no') ||
         header === 'Policy number'
       );
-      
+
       console.log(`🔍 Policy number column index: ${policyNumberColumnIndex} (header: "${headers[policyNumberColumnIndex]}")`);
 
       // Group updates by row for efficiency
       const updatesByRow = new Map<number, Array<{ field_name: string; new_value: string; record_id: string }>>();
-      
+
       for (const update of updates.updates) {
         // Find the row index for this record_id using the Policy number column
         const rowIndex = rows.findIndex((row: string[]) => {
@@ -320,13 +368,13 @@ export class GoogleSheetsMISService {
 
       // Apply updates row by row using batch update for efficiency
       const allUpdates: Array<{ range: string; value: string }> = [];
-      
+
       for (const [rowIndex, rowUpdates] of updatesByRow) {
         const row = [...rows[rowIndex]]; // Create a copy
-        
+
         for (const update of rowUpdates) {
           const columnIndex = headers.indexOf(update.field_name);
-          
+
           if (columnIndex === -1) {
             results.push({
               record_id: update.record_id,
@@ -341,14 +389,15 @@ export class GoogleSheetsMISService {
           }
 
           const oldValue = row[columnIndex] || '';
-          
+
           // Prepare batch update
-          const range = `${this.getColumnLetter(columnIndex + 1)}${rowIndex + 2}`;
+          // Offset by 3: 1 skipped row (row 2) + 1 header row (row 1) + 1 for 1-based indexing
+          const range = `${this.getColumnLetter(columnIndex + 1)}${rowIndex + 3}`;
           allUpdates.push({
             range: range,
             value: update.new_value
           });
-          
+
           // Track the result for later processing
           results.push({
             record_id: update.record_id,
@@ -383,7 +432,7 @@ export class GoogleSheetsMISService {
       }
 
       const processingTime = (Date.now() - startTime) / 1000;
-      
+
       console.log(`✅ Bulk update completed: ${successfulUpdates} successful, ${failedUpdates} failed in ${processingTime}s`);
 
       return {
@@ -400,33 +449,33 @@ export class GoogleSheetsMISService {
     }
   }
 
-//   /**
-//    * Export master sheet data as blob
-//    */
-//   async exportMasterSheet(params: MasterSheetExportParams): Promise<Blob> {
-//     try {
-//       const sheetData = await this.sheetsClient.getSheetData();
-//       const allRecords = this.sheetsClient.convertSheetDataToObjects<MasterSheetRecord>(sheetData);
-      
-//       // Apply filters if specified
-//       let filteredRecords = allRecords;
-//       if (params.search || params.agent_code) {
-//         filteredRecords = this.applyFilters(allRecords, params);
-//       }
-      
-//       // Convert to CSV or JSON based on format
-//       const format = params.format || 'csv';
-      
-//       if (format === 'csv') {
-//         return this.convertToCSV(filteredRecords);
-//       } else {
-//         return this.convertToJSON(filteredRecords);
-//       }
-//     } catch (error) {
-//       console.error('Error exporting master sheet:', error);
-//       throw new Error(`Failed to export master sheet: ${error instanceof Error ? error.message : 'Unknown error'}`);
-//     }
-//   }
+  //   /**
+  //    * Export master sheet data as blob
+  //    */
+  //   async exportMasterSheet(params: MasterSheetExportParams): Promise<Blob> {
+  //     try {
+  //       const sheetData = await this.sheetsClient.getSheetData();
+  //       const allRecords = this.sheetsClient.convertSheetDataToObjects<MasterSheetRecord>(sheetData);
+
+  //       // Apply filters if specified
+  //       let filteredRecords = allRecords;
+  //       if (params.search || params.agent_code) {
+  //         filteredRecords = this.applyFilters(allRecords, params);
+  //       }
+
+  //       // Convert to CSV or JSON based on format
+  //       const format = params.format || 'csv';
+
+  //       if (format === 'csv') {
+  //         return this.convertToCSV(filteredRecords);
+  //       } else {
+  //         return this.convertToJSON(filteredRecords);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error exporting master sheet:', error);
+  //       throw new Error(`Failed to export master sheet: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  //     }
+  //   }
 
   /**
    * Get Google Sheets metadata (sheet info, connection status, etc.)
@@ -491,13 +540,13 @@ export class GoogleSheetsMISService {
       'policy_start_date_from', 'policy_start_date_to', 'policy_end_date_from', 'policy_end_date_to',
       'business_type', 'fuel_type', 'ncb', 'plan_type', 'rto', 'cluster'
     ];
-    
+
     return advancedFields.some(field => params[field as keyof AdvancedFilterOptions] !== undefined);
   }
 
-   /**
-   * Convert records to CSV format
-   */
+  /**
+  * Convert records to CSV format
+  */
   private convertToCSV(records: MasterSheetRecord[]): Blob {
     if (records.length === 0) {
       return new Blob(['No data to export'], { type: 'text/csv' });
