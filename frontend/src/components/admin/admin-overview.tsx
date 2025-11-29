@@ -96,6 +96,10 @@ export default function AdminOverview() {
       (sum, broker) => sum + parseFloat(broker["IS - Payment Pending (Broker PO AMT)"] || "0"),
       0
     );
+    const totalInvoicePending = data.reduce(
+      (sum, broker) => sum + parseFloat(broker["IS - Invoice Pending (Total Receivable from Broker)"] || "0"),
+      0
+    );
 
     return {
       totalReceivable,
@@ -103,6 +107,7 @@ export default function AdminOverview() {
       activeBrokers,
       totalBrokers: data.length,
       totalPaymentPending,
+      totalInvoicePending,
     };
   };
 
@@ -138,7 +143,7 @@ export default function AdminOverview() {
             <Users className="w-4 h-4 text-blue-600" />
             <h2 className="text-sm font-semibold">Agent Summary</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
             <Card className="border-gray-200">
               <CardHeader className="pb-2">
                 <CardTitle className="text-[12px] font-medium text-muted-foreground">TOTAL AGENTS</CardTitle>
@@ -169,6 +174,16 @@ export default function AdminOverview() {
               <CardContent>
                 <div className="text-xl numeric-strong">{formatCurrency(summaryStats.totalNetPremium)}</div>
                 <CardDescription>All policies combined</CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card className="border-gray-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-[12px] font-medium text-muted-foreground">COMMISSIONABLE</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl numeric-strong text-pink-700">{formatCurrency(summaryStats.totalCommissionablePremium)}</div>
+                <CardDescription>Potential Earnings</CardDescription>
               </CardContent>
             </Card>
 
@@ -205,11 +220,11 @@ export default function AdminOverview() {
 
             <Card className="border-gray-200">
               <CardHeader className="pb-2">
-                <CardTitle className="text-[12px] font-medium text-muted-foreground">ACTIVE BROKERS</CardTitle>
+                <CardTitle className="text-[12px] font-medium text-muted-foreground">INVOICE PENDING</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-xl numeric-strong">{formatNumber(brokerStats.activeBrokers)}</div>
-                <CardDescription>With receivables</CardDescription>
+                <div className="text-xl numeric-strong text-red-700">{formatCurrency(brokerStats.totalInvoicePending)}</div>
+                <CardDescription>Outstanding Invoices</CardDescription>
               </CardContent>
             </Card>
 
