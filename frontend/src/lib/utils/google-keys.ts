@@ -42,6 +42,7 @@ export function getGoogleSheetsPrivateKey(): string {
         const processed = decoded.replace(/\\n/g, '\n');
         console.info('Using Base64 decoded Google Sheets private key');
         return processed;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (e) {
         // Not base64, proceed to treat as regular key
       }
